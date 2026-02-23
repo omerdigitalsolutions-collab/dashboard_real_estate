@@ -1,0 +1,24 @@
+הנחיה לכתיבת פונקציות תחת תיקייה deals . כל פונקציה בקובץ נפרד
+
+
+# TASK: Implement Deals Module (Optimistic Kanban & Optimized Queries)
+
+Act as a Senior Frontend Architect. We are building a high-performance Sales Pipeline. 
+
+**1. Types & Schema (`src/types/index.ts`)**
+* Interface `Deal`: id, agencyId, createdBy, leadId, propertyId, notes, createdAt (Timestamp), stage, projectedCommission, actualCommission?.
+
+**2. Client Service: `dealService.ts` (`src/services/dealService.ts`)**
+* `getLiveDeals(agencyId)`: `onSnapshot` query filtered by `agencyId` AND `orderBy('createdAt', 'desc')`. 
+* **Crucial Index Note:** Use ONLY (agencyId ASC, createdAt DESC) composite index. Do NOT order by stage in the query.
+* `updateDealStage`: Optimized `updateDoc`.
+* `deleteDeal`: Standard `deleteDoc`.
+
+**3. UI Component: `<DealsKanban />`**
+* **Library:** Use `@dnd-kit/core` and `@dnd-kit/sortable`.
+* **Grouping Logic:** Fetch all deals via `getLiveDeals` and group them into status columns (qualification, viewing, etc.) CLIENT-SIDE.
+* **Optimistic UI:** Update local state immediately on drop, revert only on Firebase error.
+* **Stage Change Logic:** If dropped in 'won', prompt for `actualCommission`.
+* **Performance:** Join lead/property data client-side from existing listeners.
+
+**4. Analytics:** Implement `calculatePipelineStats` with Success Rate (`won / (won + lost)`) and safe commission summing.

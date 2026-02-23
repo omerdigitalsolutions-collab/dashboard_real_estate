@@ -1,0 +1,31 @@
+# TASK: Implement Shared Catalogs Module (Secure, Snapshot-based Mini-Sites)
+
+Act as a Senior Full-Stack Architect. We are building the public-facing "Webot" engine. Security, performance, and robustness against expired links are top priorities.
+
+**1. Types & Schema (`src/types/index.ts`)**
+* **Property Interface Update:** Add `images?: string[]`.
+* **SharedCatalog Interface:** `id`, `agencyId`, `agentId`, `leadId`, `properties` (snapshotted details), `viewCount`, `createdAt`, `expiresAt` (Timestamp).
+
+**2. Cloud Function: `generateCatalog` (`functions/src/catalogs/sharing.ts`)**
+* Implement `onCall` (v2) function:
+    1. Verify authentication and agency membership.
+    2. Fetch property data. **Fallback Logic:** If a property's `images` array is empty or undefined, inject a professional "No Image Available" placeholder URL.
+    3. **Snapshotting:** Store essential fields (address, price, selected images, rooms) directly in the catalog document.
+    4. Set `expiresAt` to exactly 7 days from `now`.
+    5. Return the `catalogId` and the public URL.
+
+**3. Firestore Security Rules (`firestore.rules`)**
+* Implement strict rules for the `shared_catalogs` collection:
+    - **Secure Read:** `allow read: if resource.data.expiresAt > request.time;` (Inaccessible if expired).
+    - **Atomic Increment:** `allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) && request.resource.data.viewCount == resource.data.viewCount + 1;`
+    - **No other writes:** `allow create, delete: if false;` (Managed by Cloud Functions).
+
+**4. Public UI & Client Logic (`src/pages/PublicCatalog.tsx`)**
+* **`getCatalogData` Logic:**
+    1. Fetch the catalog by ID.
+    2. **Expiry Check:** Immediately check if `expiresAt` is in the past. 
+    3. If expired, do NOT render property data. Instead, show an elegant "link expired" screen: "הקישור פג תוקף. ניתן ליצור קשר עם הסוכן לקבלת קטלוג מעודכן."
+    4. If valid, call `updateDoc` to increment `viewCount` by 1.
+* **UI:** Mobile-first, luxury RTL design. Floating WhatsApp button to contact the agent.
+
+Generate the complete, secure code for the Cloud Function, Security Rules, and the React public view.

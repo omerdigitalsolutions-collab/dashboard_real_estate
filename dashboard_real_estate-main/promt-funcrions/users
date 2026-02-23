@@ -1,0 +1,36 @@
+# TASK: Implement Users & RBAC Module (Optimized Auth & Team Logic)
+
+Act as a Senior Full-Stack Architect. We are building the team invitation and onboarding flow with high performance and security in mind.
+
+**1. Types Update (`src/types/index.ts`)**
+Ensure `AppUser` includes: `id` (docId), `uid` (string | null), `email`, `name`, `phone`, `role`, `isActive`, `agencyId`, and `createdAt` (Timestamp).
+
+**2. Cloud Functions: Users Module (`functions/src/users/team.ts`)**
+* `inviteAgent` (onCall v2): 
+    - Logic: Verify caller is `admin`. Create a stub doc in `users` with `uid: null` and `isActive: true`. Return the `docId` as the token.
+* `getInviteInfo` (Public/Unauthenticated onCall v2):
+    - Input: `{ token: string }`.
+    - Logic: Use `getDoc` on `users/{token}`. If found and `uid` is null, fetch agency name. 
+    - Return ONLY `{ agencyName, agentName }`. Omit email.
+* `completeAgentSetup` (onCall v2):
+    - Input: `{ token: string, name: string, phone: string }`.
+    - Logic: 1. Verify `request.auth`. 
+    - 2. Perform `getDoc` on `users/{token}`. 
+    - 3. Verify `doc.uid === request.auth.uid`. 
+    - 4. If `name` or `phone` already exist, throw `already-exists`. 
+    - 5. Update the document with provided name and phone.
+
+**3. Client Service & Auth Flow (`src/context/AuthContext.tsx` & `userService.ts`)**
+* **Optimized Auth Logic:** When a user signs in with Google:
+    1. **Step 1:** Try `getDoc(doc(db, 'users', auth.currentUser.uid))`. If document exists, proceed to Dashboard.
+    2. **Step 2:** If NOT found, perform a query on `users` where `email == auth.currentUser.email` and `uid == null`.
+    3. If a stub is found:
+        - Call `linkStubAccount(token, uid)` to perform `updateDoc(doc(db, 'users', token), { uid: uid })`.
+        - Redirect to `/agent-setup?token=[token]`.
+    4. If no user or stub is found, redirect to `/onboarding`.
+
+**4. UI Components**
+* Implement the `/join?token=[id]` and `/agent-setup?token=[id]` pages using our Clean Luxury design language.
+* Update `TeamManagement.tsx` to use `users-updateAgentRole` and `users-toggleAgentStatus` Cloud Functions.
+
+Generate the complete TypeScript code for these services and flow.

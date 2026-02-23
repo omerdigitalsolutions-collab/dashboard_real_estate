@@ -1,0 +1,12 @@
+{
+  "name": "dashboard-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "front": "npm run dev --prefix front",
+    "back:build": "npm run build --prefix back/functions",
+    "back:deploy": "npx firebase-tools deploy --only functions",
+    "rules:deploy": "npx firebase-tools deploy --only firestore:rules",
+    "deploy:all": "npx firebase-tools deploy"
+  }
+}

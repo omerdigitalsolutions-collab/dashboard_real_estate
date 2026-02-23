@@ -1,0 +1,264 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Basic auth check
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Returns true if the caller belongs to the given agencyId (via Custom Claims).
+    function inAgency(agencyId) {
+      return isAuthed() && request.auth.token.agencyId == agencyId;
+    }
+
+    // Returns true if the caller is an admin (via Custom Claims).
+    function isAdmin() {
+      return isAuthed() && request.auth.token.role == 'admin';
+    }
+
+    // Returns true if the caller is an admin in the given agency.
+    function isAgencyAdmin(agencyId) {
+      return inAgency(agencyId) && isAdmin();
+    }
+
+    // Data validation helpers
+    function isNonEmptyString(val) {
+      return val is string && val.size() > 0;
+    }
+
+    function isPositiveNumber(val) {
+      return val is number && val > 0;
+    }
+
+    // Prevents moving a document to a different agency on update.
+    function agencyIdUnchanged() {
+      return request.resource.data.agencyId == resource.data.agencyId;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // DEFAULT DENY — all paths not explicitly matched below are denied.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // AGENCIES
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId} {
+      // Members of this agency may read their own agency document.
+      allow read: if isAuthed() && inAgency(agencyId);
+
+      // Clients may update goals, settings, and extended profile fields (during onboarding)
+      allow update: if isAuthed()
+          && inAgency(agencyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'monthlyGoals', 'yearlyGoals', 'settings',
+            'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
+            'whatsappIntegration'
+          ]);
+
+      // Create and delete: Cloud Functions only.
+      allow create, delete: if false;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // AGENCY AGENTS (Subcollection)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/agents/{agentId} {
+      // Inherits the tenant isolation rules of the parent agency
+      allow read: if isAuthed() && inAgency(agencyId);
+      allow create, update, delete: if isAuthed() && isAgencyAdmin(agencyId);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // USERS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      allow read: if isAuthed() && (
+        // Always allow a user to read their own document.
+        request.auth.uid == userId
+        ||
+        // Allow reading a stub document whose email matches the caller's Google email.
+        // This enables the client-side stub-linking auth flow when an invited agent
+        // first signs in and their UID hasn't been written to the doc yet.
+        resource.data.email == request.auth.token.email
+        ||
+        // Allow reading any team member doc within the same agency.
+        inAgency(resource.data.agencyId)
+      );
+
+      // All writes (invites, role changes, UID linking) go through Cloud Functions.
+      // We allow specific client-side updates:
+      allow update: if isAuthed() && (
+        // 1. Stub linking (only uid changing)
+        (
+          resource.data.email == request.auth.token.email
+          && resource.data.uid == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
+        )
+        ||
+        // 2. User updating their own profile details and goals
+        (
+          (request.auth.uid == userId || resource.data.uid == request.auth.uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoURL', 'name', 'phone', 'goals']) 
+        )
+        ||
+        // 3. Agency Admin updating ANY user in the agency
+        (
+          isAgencyAdmin(resource.data.agencyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['goals', 'isActive', 'role', 'name', 'phone', 'photoURL'])
+        )
+      );
+
+      // Create and delete: Cloud Functions only.
+      allow create, delete: if false;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PROPERTIES
+    // ══════════════════════════════════════════════════════════════════════════
+    match /properties/{propertyId} {
+      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          && isNonEmptyString(request.resource.data.city)
+          && isNonEmptyString(request.resource.data.address)
+          && isNonEmptyString(request.resource.data.type)
+          && isPositiveNumber(request.resource.data.price);
+
+      allow update: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && agencyIdUnchanged();
+
+      // מחיקה מאושרת אם: המשתמש הוא אדמין של הסוכנות OR המשתמש הוא זה שיצר את הנכס
+      allow delete: if isAuthed() && (
+        isAgencyAdmin(resource.data.agencyId) || 
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // LEADS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /leads/{leadId} {
+      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          // Required fields validation
+          && isNonEmptyString(request.resource.data.name)
+          && isNonEmptyString(request.resource.data.phone);
+
+      allow update: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && agencyIdUnchanged();
+
+      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // LEAD MESSAGES (Subcollection)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /leads/{leadId}/messages/{messageId} {
+      // Any authenticated user in the agency can read messages for this lead
+      allow read: if isAuthed() 
+          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
+
+      // Same logic for writing messages manually
+      allow create: if isAuthed() 
+          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
+
+      // Allow marking messages as read
+      allow update: if isAuthed()
+          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+
+      allow delete: if isAuthed() && isAgencyAdmin(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // DEALS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /deals/{dealId} {
+      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          // Required fields validation
+          && isNonEmptyString(request.resource.data.stage)
+          && request.resource.data.projectedCommission is number
+          && request.resource.data.projectedCommission >= 0;
+
+      allow update: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && agencyIdUnchanged();
+
+      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // TASKS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /tasks/{taskId} {
+      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          && isNonEmptyString(request.resource.data.title);
+
+      allow update: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && agencyIdUnchanged();
+
+      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ALERTS
+    // Alert lifecycle (create/delete) is managed by Cloud Functions.
+    // Clients may read their own alerts and mark them as read.
+    // ══════════════════════════════════════════════════════════════════
+    match /alerts/{alertId} {
+      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+
+      // Allow client to ONLY flip isRead to true — no other field may change
+      allow update: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+          && request.resource.data.isRead == true;
+
+      allow create, delete: if false; // Managed strictly by Cloud Functions
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SHARED CATALOGS
+    // Public read if not expired. Atomic increment for viewCount.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /shared_catalogs/{catalogId} {
+      allow read: if resource.data.expiresAt > request.time;
+      
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) 
+                    && request.resource.data.viewCount == resource.data.viewCount + 1;
+                    
+      allow create, delete: if false; // Managed by Cloud Functions
+    }
+
+  }
+}

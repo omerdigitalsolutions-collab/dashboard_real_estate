@@ -1,0 +1,33 @@
+קולקשיין leads 
+
+# TASK: Implement Leads Module (Secure CRM, Webhooks & Matching)
+
+Act as a Senior Security & Full-Stack Engineer. We are building a high-security Lead management system. Precision in webhook handling and data isolation is mandatory.
+
+**1. Types & Schema (`src/types/index.ts`)**
+* Interface `Lead`: id, name, phone, email, agencyId, assignedAgentId, createdAt (Timestamp), status ('new' | 'contacted' | 'meeting_set' | 'lost' | 'won'), source, requirements { desiredCity[], maxBudget, minRooms, propertyType[] }, notes.
+
+**2. Cloud Function: `webhookReceiveLead` (`functions/src/leads/webhooks.ts`)**
+* Implement an `onRequest` (v2) HTTPS function:
+    1. **Data Extraction & Validation:** - Extract `agencyId` from URL query parameters (`req.query.agencyId`).
+        - Validate that `agencyId` is a non-empty string. If missing, return 200 (stealth) but log an internal error.
+    2. **Timing-Safe Security:**
+        - Retrieve `secret_key` from headers.
+        - Use `crypto.timingSafeEqual()` to validate against the environment secret.
+        - **Stealth Response:** If the key is invalid, log the attempt but RETURN HTTP 200 to prevent endpoint discovery.
+    3. **Action:** Create a new doc in `leads` with the extracted `agencyId`, `status: 'new'`, and `serverTimestamp()`.
+
+**3. Client Service: `leadService.ts` (`src/services/leadService.ts`)**
+* `getLiveLeads(agencyId)`: `onSnapshot` query (agencyId + orderBy createdAt DESC).
+* **Note for Developer:** Two Composite Indexes are required: 
+    1. (agencyId ASC, createdAt DESC)
+    2. (agencyId ASC, status ASC)
+* **Property Matching Engine (`matchPropertiesForLead`):**
+    - Input: `leadRequirements`, `allProperties`.
+    - Logic (Client-side): Filter by City, Price (<= maxBudget), Property Type, and **Rooms (>= minRooms)**.
+
+**4. UI Components**
+* Implement `<AddLeadModal />` and `<LeadTable />`.
+* **Match UI:** Add a "Match Properties" button that displays a filtered list of properties based on the lead's requirements.
+
+Generate the complete, secure, and type-safe code using our Clean Luxury Tailwind theme.

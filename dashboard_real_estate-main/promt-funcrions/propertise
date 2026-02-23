@@ -1,0 +1,28 @@
+# TASK: Implement Properties Module (Production-Ready & Optimized)
+
+Act as a Senior Full-Stack Developer. We are building a robust property management system. Efficiency and query-limitation awareness are key.
+
+**1. Types & Schema (`src/types/index.ts`)**
+* Interface `Property`: id, address, city, type, price, rooms, floor, sqMeters, status, agencyId, assignedAgentId, createdAt (Timestamp), features[], description?.
+
+**2. Client Service: `propertyService.ts` (`src/services/propertyService.ts`)**
+* `getLiveProperties(agencyId)`: 
+    - Real-time `onSnapshot` query, filtered by `agencyId` and `orderBy('createdAt', 'desc')`.
+    - *Developer Note:* Ensure a Composite Index (agencyId ASC, createdAt DESC) is created.
+* `addProperty(agencyId, data)`: Injects `agencyId`, `status: 'active'`, and `serverTimestamp()`.
+* `updateProperty(propertyId, data)`: Partial updates via `updateDoc`.
+* `deleteProperty(propertyId)`: Standard `deleteDoc`.
+
+**3. UI Logic: Safe Deletion & Data Integrity**
+* **Safe Deletion Check (Client-Side Filtering):** - Inside the delete action UI, before calling `deleteProperty`:
+    - 1. Fetch all deals where `propertyId == currentId`. 
+    - 2. Filter these deals locally (client-side) to check if any have a stage that is NOT 'won' or 'lost'.
+    - 3. If any open deals are found, block the deletion and show a Warning Modal: "לא ניתן למחוק נכס המשויך לעסקאות פעילות."
+* **Modal Integration:** Build `<AddPropertyModal />` with a dropdown for `assignedAgentId`.
+
+**4. UI & Layout**
+* Implement `<PropertyTable />` / `<PropertyGrid />` with status badges.
+* Use RTL layout and our Clean Luxury Tailwind theme.
+* Handle "Permission Denied" errors gracefully.
+
+Generate the complete, type-safe code for these services and UI components.

@@ -1,0 +1,36 @@
+# TASK: Implement Agencies Module (Secure Multi-Tenant Foundation)
+
+Act as a Senior Full-Stack Architect. We are building the core Agency management module. Precision and security are paramount.
+
+**1. Types & Schema (`src/types/index.ts`)**
+* Import { Timestamp } from 'firebase/firestore'.
+* Define `Agency` interface:
+    - id: string
+    - name: string
+    - subscriptionTier: 'free' | 'pro' | 'enterprise'
+    - monthlyGoals: { commissions: number, deals: number, leads: number }
+    - settings: { logoUrl?: string, themeColor?: string }
+    - createdAt: Timestamp
+
+**2. Cloud Function: `createAgencyAccount` (`functions/src/agencies/onboarding.ts`)**
+* Logic for an `onCall` (v2) function:
+    1. Validate `request.auth`.
+    2. **Crucial Check:** Before any write, check if `users/{request.auth.uid}` already exists. If it does, throw `functions.https.HttpsError('already-exists', 'User is already associated with an agency.')`.
+    3. Execute Firestore Transaction:
+        a. Create `agencies` doc with default goals (100k commissions, 5 deals, 20 leads) and 'free' tier.
+        b. Create `users` doc using `request.auth.uid` as ID. Set: `role: 'admin'`, `agencyId: [newAgencyId]`, `isActive: true`, `name: userName`, `phone: phone`, `email: request.auth.token.email`.
+
+**3. Client Service: `agencyService.ts` (`src/services/agencyService.ts`)**
+* `getAgencyData(agencyId)`: Real-time listener (`onSnapshot`) returning the Agency object.
+* `updateAgencyGoals(agencyId, goals)`: Direct Firestore `updateDoc` for `monthlyGoals`.
+* `updateAgencySettings(agencyId, settings)`: Direct Firestore `updateDoc` for the `settings` object.
+
+**4. Security Rules Update (`firestore.rules`)**
+* Update the `agencies` match block. The `allow update` should now permit changes if `request.resource.data.diff(resource.data).affectedKeys().hasOnly(['monthlyGoals', 'settings'])`.
+
+**5. Onboarding Integration (`src/pages/Onboarding.tsx`)**
+* Call `createAgencyAccount` via `httpsCallable`. Handle the 'already-exists' error by redirecting existing users directly to the dashboard with a "Welcome back" toast.
+
+Generate the code for these files following our Clean Luxury design system.
+מה השלב הבא?
+ברגע שאנטיגרביטי יסיים להטמיע את זה, תצטרך להריץ שוב firebase deploy --only functions,firestore:rules כדי שהוולידציה החדשה וחוקי ה-Settings ייכנסו לתוקף.

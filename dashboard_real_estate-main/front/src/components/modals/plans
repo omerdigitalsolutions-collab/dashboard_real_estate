@@ -1,0 +1,141 @@
+AddLeadModal: Advanced Property Profiling
+Goal Description
+Enhance the existing "Property Requirements" tab (דרישות הנכס) inside 
+AddLeadModal
+ for buyers to capture at least 10 critical parameters for a highly specific property search. This will improve AI matching accuracy and agent efficiency. The UI will be structured across logical categories to maintain a clean, high-quality user experience without overwhelming the user with a single long list.
+
+Proposed Changes
+Types (Data Model)
+[MODIFY] 
+index.ts
+Extend the Lead.requirements interface significantly to support comprehensive profiling:
+propertyType: string[] (existing, e.g., 'apartment', 'house', 'penthouse')
+maxBudget: number | null (existing)
+minRooms: number | null (existing)
+desiredCity: string[] (existing)
+[NEW] maxRooms: number | null
+[NEW] minSizeSqf: number | null (מ"ר מינימלי)
+[NEW] floorMin: number | null (קומת מינימום)
+[NEW] floorMax: number | null (קומת מקסימום)
+[NEW] mustHaveElevator: boolean
+[NEW] mustHaveParking: boolean
+[NEW] mustHaveBalcony: boolean
+[NEW] mustHaveSafeRoom: boolean (ממ"ד)
+[NEW] condition: 'new' | 'renovated' | 'needs_renovation' | 'any' (מצב הנכס)
+[NEW] urgency: 'immediate' | '1-3_months' | '3-6_months' | 'flexible' (דחיפות)
+UI Components
+[MODIFY] 
+AddLeadModal.tsx
+Add React state bindings for the 10+ new fields.
+Refactor the Form Tab #2 ("דרישות הנכס") into structured sub-sections using subtle background cards/dividers.
+Section A: מיקום ותקציב (Location & Budget): City, Budget, Urgency.
+Section B: מאפייני הנכס (Property Specs): Property Type (Apartment, Villa, etc.), Rooms (Min-Max), Size (Min Sqm), Floor (Min-Max).
+Section C: תוספות חובה (Must-Haves): Grid of beautiful toggle buttons (Elevator, Parking, Balcony, Safe Room).
+Section D: מצב הנכס (Property Condition): Dropdown/Radio for New, Renovated, Needs Renovation.
+Ensure state bindings map correctly to the payload object requirements when 
+addLead()
+ is invoked.
+[MODIFY] 
+Leads.tsx
+Optional: Add subtle UI indicators (icons) in the table row if certain absolute must-haves are requested (like a Parking or Balcony icon).
+Verification Plan
+Open the Leads page and click "הוסף ליד".
+Select "קונה / שוכר".
+Navigate to "דרישות הנכס" and verify the 10+ parameters are gracefully separated into logical sections (Location, Specs, Must-haves, Condition).
+Fill out a comprehensive buyer profile and save the lead.
+Verify the data successfully persists inside Firestore by reloading the dash or checking the AI matcher.
+*********
+# TASK: Fix Kanban RTL Drag-and-Drop Mapping
+
+The Kanban board is experiencing an RTL coordinate mismatch. When dragging a card to a column, it often assigns the wrong status because the layout is RTL but the drag calculations might be LTR.
+
+**1. Check Droppable IDs (`src/components/deals/DealsKanban.tsx`)**
+* Ensure each `Column` component has an `id` that matches the exact `DealStage` type (e.g., 'qualification', 'viewing', 'negotiation', 'contract', 'won', 'lost'). 
+* Verify that the `id` passed to `useDroppable` is correctly mapped.
+
+**2. Fix `handleDragEnd` Logic**
+* In the `handleDragEnd` function, log the `over.id` (the target column) and `active.id` (the dragged deal).
+* If the `over.id` does not match the visual column the user is hovering over, we need to explicitly handle the RTL index.
+* Ensure `updateDealStage` is called with the `id` of the container (the stage) and NOT the index of the column.
+
+**3. RTL Wrapper Fix**
+* If using `@dnd-kit`, check if the `SortableContext` or `DndContext` needs a coordinate transformation for RTL. 
+* Ensure the columns are rendered in the correct order in the code: `['qualification', 'viewing', 'negotiation', 'contract', 'won', 'lost']`.
+
+Apply the fix so that dropping a card in "סיור" always updates the status to "viewing".
+
+*****
+
+Dashboard UI De-clutter & Dynamic Layout Optimization
+To create a cleaner, luxury design with less cognitive overload, we'll implement the following structural updates to the dashboard components.
+
+Proposed Changes
+[MODIFY] 
+Dashboard.tsx
+Remove Redundancy: Delete the 
+DealsKanban
+ import and its rendering block to reduce vertical scrolling, since it already exists on the Transactions page.
+Reposition Property Map: Move 
+PropertyMap
+ to sit directly underneath the KPI cards (Row 1.5). Set its initial inline height to 180px rather than 400px.
+Grid Adjustments: Group the remaining widgets cleanly:
+Row 1: KPI Cards
+Row 2: Property Map (Initial h-[180px])
+Row 3: Collapsible AI Insights
+Row 4: Financial Chart [span 2], Tasks [span 1], Recent Activity [span 1]
+Row 5: Inventory [span 1], Operations [span 1], Agent Leaderboard [span 2]
+[MODIFY] 
+AIInsights.tsx
+Collapsible State: Add const [isExpanded, setIsExpanded] = useState(false);.
+Sleek Header: Re-design the header to feel like a sleek thin bar. Include an "Expand/הרחב" button (using Chevron arrows) that toggles the isExpanded state.
+Content Visibility: Conditionally render the grid of insight cards only when isExpanded is true.
+[MODIFY] 
+InventorySnapshot.tsx
+Remove Map: Delete the Israel SVG map rendering, grid background, 
+buildMapPins
+ logic, and map legends.
+Focus on Data: Keep the widget entirely data-driven, highlighting the total properties and the Sales/Rent Pie chart.
+[MODIFY] 
+PropertyMap.tsx
+The component already has a built-in fullscreen Modal expansion widget (isFullscreen). We'll ensure it renders cleanly at the new default 180px height passed from the Dashboard without breaking the leaflet container.
+Verification Plan
+Manual Verification
+Navigate to the Dashboard.
+Verify that the Deals Kanban is no longer visible.
+Check the Inventory widget to ensure it only shows numerical data and the Pie Chart without the stylistic SVG map.
+Verify the AI Co-Pilot appears as a thin bar by default. Click "הרחב" to ensure the insights drop down correctly.
+Verify the Property Map sits cleanly at the top with a shorter height (180px). Click the expand button (Maximize icon) on the map to ensure it opens full-screen.
+Check that the remaining grid components (Tasks, Activity, Chart, Leaderboard) fill the available remaining space cleanly.
+
+***
+# TASK: Enhance Agency Onboarding Flow
+
+Act as a Senior Fullstack Developer. We need to expand the `CompleteOnboarding.tsx` flow to gather more detailed professional information about the agency.
+
+**1. Data Schema Update (`src/types/index.ts`)**
+* Update the `Agency` interface to include:
+  - `agencyName: string` (Required)
+  - `mainServiceArea: string` (Required)
+  - `logoUrl: string` (Optional)
+  - `licenseNumber: string` (Optional)
+  - `slogan: string` (Optional)
+  - `officePhone: string` (Required)
+  - `specialization: 'residential' | 'commercial' | 'luxury' | 'new_projects'` (Required)
+
+**2. UI Enhancements (`src/pages/onboarding/CompleteOnboarding.tsx`)**
+* **Branding:** Add an Image Upload component (using Firebase Storage) for the Agency Logo. Show a preview before uploading.
+* **Form Sections:**
+  - **Basic Info:** Agency Name, Slogan, and Office Phone.
+  - **Professional Info:** License Number, Main Service Area (Autocomplete or Text), and a Select Dropdown for Specialization.
+* **Styling:** Use a multi-step form or clear visual sections to avoid overwhelming the user. Maintain the "Clean Luxury" Tailwind design.
+
+**3. Backend Logic (`src/services/agencyService.ts`)**
+* Update `completeOnboarding` to save all these new fields into the `agencies` collection in Firestore.
+* If a logo is uploaded, handle the Firebase Storage path and save the resulting URL to the agency document.
+
+**4. Post-Onboarding Verification**
+* Ensure that after the user finishes onboarding, the Dashboard correctly reflects the Agency Name and Logo in the header/sidebar.
+
+Please ensure all labels are in Hebrew and the layout is fully RTL.
+
+

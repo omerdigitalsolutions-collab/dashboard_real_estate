@@ -1,0 +1,30 @@
+הנחיה מפורטת לבניית פונקציות תחת תיקייה task 
+
+# TASK: Implement Tasks Module (v2 Cloud Functions & Secure Workflow)
+
+Act as a Senior Backend & Frontend Engineer. We are building a high-performance task management system. Use Firebase Functions v2 syntax throughout.
+
+**1. Types & Schema (`src/types/index.ts`)**
+* Interface `AppTask`: id, agencyId, createdBy (agentId), title, description?, dueDate (Timestamp), priority, isCompleted, relatedTo { id, type }, createdAt.
+
+**2. Client Service: `taskService.ts` (`src/services/taskService.ts`)**
+* `getLiveTasks(agencyId, userId, isAdmin)`: 
+    - If `isAdmin`, query by `agencyId`. If not, query by `agencyId` AND `createdBy == userId`.
+    - Order by `dueDate` ASC.
+    - **Indexes:** (agencyId, dueDate) and (agencyId, createdBy, dueDate).
+
+**3. Server-Side Cleanup: Cloud Functions v2 (`functions/src/tasks/cleanup.ts`)**
+* **Syntax:** Use `onDocumentDeleted` from `firebase-functions/v2/firestore`.
+* **Triggers:** Create triggers for `leads/{leadId}` and `properties/{propertyId}`.
+* **Logic:** Access the deleted ID via `event.params.leadId` or `event.params.propertyId`. 
+* **Action:** Perform a query and delete all tasks where `relatedTo.id` matches the deleted ID.
+
+**4. UI Component: `<TaskDashboardWidget />`**
+* Show tasks where `dueDate <= end of today` AND `isCompleted == false`.
+* Order by priority (High -> Low), limit 5 items.
+* Highlight overdue tasks in red.
+
+**5. UI Component: `<AddTaskModal />`**
+* Include entity selector for `relatedTo` links.
+
+Generate type-safe code for services, UI, and v2 Cloud Functions.

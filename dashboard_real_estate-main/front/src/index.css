@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Heebo', sans-serif;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Leaflet popup overrides */
+  .leaflet-popup-content {
+    font-family: 'Heebo', sans-serif !important;
+    margin: 10px 14px !important;
+    min-width: 170px !important;
+  }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14) !important;
+    padding: 0 !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  .leaflet-popup-tip-container {
+    margin-top: -1px;
+  }
+}
+
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 2px;
+  }
+
+  /* AI Insights animated gradient border */
+  .ai-gradient-border {
+    background: linear-gradient(135deg,
+        #6366f1,
+        #8b5cf6,
+        #a78bfa,
+        #6366f1);
+    background-size: 300% 300%;
+    animation: ai-border-shift 4s ease infinite;
+  }
+
+  @keyframes ai-border-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+}
