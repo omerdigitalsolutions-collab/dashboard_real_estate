@@ -36,14 +36,15 @@ export async function inviteAgent(
     name: string,
     email: string,
     role: UserRole
-): Promise<void> {
+): Promise<{ stubId: string }> {
     const callInviteAgent = httpsCallable<
         { email: string; name: string; role: string },
         { success: boolean; stubId: string }
     >(functions, 'users-inviteAgent');
 
     // Let any HttpsError propagate — the UI catches and surfaces it via toast
-    await callInviteAgent({ email, name, role });
+    const res = await callInviteAgent({ email, name, role });
+    return { stubId: res.data.stubId };
 }
 
 /**

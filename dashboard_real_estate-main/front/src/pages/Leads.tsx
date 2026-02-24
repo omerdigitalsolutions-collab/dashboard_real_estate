@@ -1,13 +1,14 @@
-import { useState, useMemo } from 'react';
-import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import PropertyMatcherModal from '../components/leads/PropertyMatcherModal';
 import LeadProfilePanel from '../components/leads/LeadProfilePanel';
 import AddLeadModal from '../components/modals/AddLeadModal';
 import ImportModal from '../components/modals/ImportModal';
+import BulkWhatsAppModal from '../components/modals/BulkWhatsAppModal';
 import { Toast, ToastState } from '../components/ui/Toast';
-import { sendWhatsAppWebhook } from '../utils/webhookClient';
 import { Lead } from '../types';
 import { deleteLead } from '../services/leadService';
 
@@ -48,7 +49,21 @@ export default function Leads() {
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isBulkWhatsAppModalOpen, setIsBulkWhatsAppModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (location.state?.openId && leads.length > 0) {
+      const targetLead = leads.find(l => l.id === location.state.openId);
+      if (targetLead && profileLead?.id !== targetLead.id) {
+        setProfileLead(targetLead);
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [location.state, leads, profileLead, navigate, location.pathname]);
 
   const handleSort = (key: any) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -110,19 +125,12 @@ export default function Leads() {
     });
   };
 
-  const handleBroadcast = async () => {
-    const selectedLeadsPayload = leads.filter(l => selectedLeadIds.has(l.id)).map(l => ({ phone: l.phone, name: l.name }));
-    const success = await sendWhatsAppWebhook({
-      action: 'bulk_broadcast',
-      message: 'הודעת תפוצה מרוכזת (טיוטה)',
-      leads: selectedLeadsPayload
-    });
+  const handleBroadcast = () => {
+    setIsBulkWhatsAppModalOpen(true);
+  };
 
-    if (success) {
-      setToast({ show: true, message: 'הודעות ווטסאפ נשלחו בהצלחה', type: 'success' });
-    } else {
-      setToast({ show: true, message: 'שגיאה בשליחת הודעות ווטסאפ', type: 'error' });
-    }
+  const handleBulkWhatsAppSuccess = () => {
+    setToast({ show: true, message: 'הודעות ווטסאפ נשלחו בהצלחה', type: 'success' });
     setSelectedLeadIds(new Set());
   };
 
@@ -214,6 +222,12 @@ export default function Leads() {
 
       <AddLeadModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} defaultEntityType="lead" />
+      <BulkWhatsAppModal
+        isOpen={isBulkWhatsAppModalOpen}
+        onClose={() => setIsBulkWhatsAppModalOpen(false)}
+        selectedLeads={processedLeads.filter(l => selectedLeadIds.has(l.id))}
+        onSuccess={handleBulkWhatsAppSuccess}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -433,6 +447,19 @@ export default function Leads() {
                             התאמות
                           </button>
                         )}
+                        {/* WhatsApp direct message button */}
+                        {lead.phone && (
+                          <a
+                            href={`https://wa.me/${lead.phone.replace(/^0/, '972').replace(/[^\d]/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            title="שלח הודעת ווטסאפ"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <MessageSquare size={16} />
+                          </a>
+                        )}
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
@@ -455,6 +482,13 @@ export default function Leads() {
       </div>
 
       {matchingLead && <PropertyMatcherModal lead={matchingLead} onClose={() => setMatchingLead(null)} />}
+
+      <BulkWhatsAppModal
+        isOpen={isBulkWhatsAppModalOpen}
+        onClose={() => setIsBulkWhatsAppModalOpen(false)}
+        selectedLeads={leads.filter(l => selectedLeadIds.has(l.id))}
+        onSuccess={handleBulkWhatsAppSuccess}
+      />
       {profileLead && (
         <LeadProfilePanel
           lead={profileLead}

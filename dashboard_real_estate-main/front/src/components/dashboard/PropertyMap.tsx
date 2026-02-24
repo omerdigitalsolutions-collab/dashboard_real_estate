@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Property } from '../../types';
@@ -260,8 +261,8 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
         <>
             {mapContent(false)}
 
-            {isFullscreen && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+            {isFullscreen && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" dir="rtl">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col p-5 relative">
                         <button
                             onClick={() => setIsFullscreen(false)}
@@ -269,14 +270,15 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
                         >
                             <X size={18} />
                         </button>
-                        <h3 className="text-base font-bold text-slate-900 mb-4 text-right">
+                        <h3 className="text-base font-bold text-slate-900 mb-4 text-right pr-2">
                             🗺 מפת נכסים
                         </h3>
-                        <div className="flex-1 min-h-0">
+                        <div className="flex-1 min-h-0 bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm relative isolate">
                             {mapContent(true)}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

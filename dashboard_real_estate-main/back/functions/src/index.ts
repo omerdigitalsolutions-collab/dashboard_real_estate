@@ -27,7 +27,7 @@ import { addProperty } from './properties/addProperty';
 import { updateProperty } from './properties/updateProperty';
 import { deleteProperty } from './properties/deleteProperty';
 import { importPropertyFromUrl } from './properties/importProperty';
-import { getCoordinates, getAddressSuggestions } from './properties/geocode';
+import { getCoordinates, getAddressSuggestions, geocodeNewProperty } from './properties/geocode';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -51,14 +51,14 @@ import { getWhatsAppQrCode, whatsappWebhook } from './whatsapp';
 //   users-inviteAgent  |  users-getInviteInfo  |  users-updateAgentRole
 //   users-toggleAgentStatus  |  users-completeAgentSetup
 //   properties-getLiveProperties  |  properties-addProperty
-//   properties-updateProperty  |  properties-deleteProperty
+//   properties-updateProperty  |  properties-deleteProperty  |  properties-geocodeNewProperty
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
 export const agencies = { createAgencyAccount };
 export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, completeAgentSetup };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog };
 export const alerts = { triggerSystemAlert };

@@ -44,14 +44,14 @@ const whatsapp_1 = require("./whatsapp");
 //   users-inviteAgent  |  users-getInviteInfo  |  users-updateAgentRole
 //   users-toggleAgentStatus  |  users-completeAgentSetup
 //   properties-getLiveProperties  |  properties-addProperty
-//   properties-updateProperty  |  properties-deleteProperty
+//   properties-updateProperty  |  properties-deleteProperty  |  properties-geocodeNewProperty
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount };
 exports.users = { inviteAgent: team_1.inviteAgent, getInviteInfo: team_1.getInviteInfo, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, completeAgentSetup: team_1.completeAgentSetup };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
-exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, importPropertyFromUrl: importProperty_1.importPropertyFromUrl, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions };
+exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, importPropertyFromUrl: importProperty_1.importPropertyFromUrl, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, geocodeNewProperty: geocode_1.geocodeNewProperty };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };

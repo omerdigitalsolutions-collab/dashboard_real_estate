@@ -55,19 +55,28 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
             // Build task payload
             const taskData: any = {
                 title: title.trim(),
-                description: description.trim() || undefined,
                 createdBy: userData.uid,
                 priority,
                 isCompleted: false,
-                // store as JS Date (Firestore addDoc will handle it if we don't mix up Timestamp conversion)
-                // actually, passing Date object is supported by Firebase SDK 9+ for addDoc
                 dueDate: new Date(dueDate),
             };
 
-            if (relatedEntityType !== 'none') {
+            if (description.trim()) {
+                taskData.description = description.trim();
+            }
+
+            if (relatedEntityType !== 'none' && relatedEntityId) {
+                let entityName = '';
+                if (relatedEntityType === 'lead') {
+                    entityName = leads.find(l => l.id === relatedEntityId)?.name || '';
+                } else if (relatedEntityType === 'property') {
+                    entityName = properties.find(p => p.id === relatedEntityId)?.address || '';
+                }
+
                 taskData.relatedTo = {
                     type: relatedEntityType,
-                    id: relatedEntityId
+                    id: relatedEntityId,
+                    name: entityName
                 };
             }
 

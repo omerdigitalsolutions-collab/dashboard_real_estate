@@ -14,6 +14,9 @@ import Transactions from './pages/Transactions';
 import Agents from './pages/Agents';
 import Settings from './pages/Settings';
 import SharedCatalogPage from './pages/SharedCatalog';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import SuperAdminRoute from './components/routing/SuperAdminRoute';
+import { PreferencesProvider } from './context/PreferencesContext';
 
 function App() {
   return (
@@ -53,7 +56,9 @@ function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <DashboardLayout />
+              <PreferencesProvider>
+                <DashboardLayout />
+              </PreferencesProvider>
             </ProtectedRoute>
           }
         >
@@ -63,6 +68,11 @@ function App() {
           <Route path="transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
           <Route path="agents" element={<ErrorBoundary><Agents /></ErrorBoundary>} />
           <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="super-admin" element={
+            <SuperAdminRoute>
+              <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>
+            </SuperAdminRoute>
+          } />
         </Route>
       </Routes>
     </BrowserRouter>

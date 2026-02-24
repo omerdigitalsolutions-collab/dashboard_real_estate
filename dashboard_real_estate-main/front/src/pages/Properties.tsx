@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Plus, Building, Trash2, LayoutGrid, List, MessageCircle, User as UserIcon, Building2, Upload } from 'lucide-react';
 import { useProperties, useAgents, useLeads, useDeals } from '../hooks/useFirestoreData';
 import AddPropertyModal from '../components/modals/AddPropertyModal';
@@ -20,6 +21,19 @@ export default function Properties() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
+
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (location.state?.openId && properties.length > 0) {
+            const targetProp = properties.find((p: Property) => p.id === location.state.openId);
+            if (targetProp && selectedProperty?.id !== targetProp.id) {
+                setSelectedProperty(targetProp);
+                navigate(location.pathname, { replace: true, state: {} });
+            }
+        }
+    }, [location.state, properties, selectedProperty, navigate, location.pathname]);
 
     const handleSelectAll = () => {
         if (selectedPropertyIds.size === filtered.length) {

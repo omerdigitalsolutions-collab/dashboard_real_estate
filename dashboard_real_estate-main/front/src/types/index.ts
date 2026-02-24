@@ -27,8 +27,18 @@ export interface Agency {
     settings: {
         logoUrl?: string;
         themeColor?: string;
+        customDealStages?: CustomDealStage[];
     };
     createdAt: Timestamp;
+}
+
+export interface CustomDealStage {
+    id: string;          // A unique string identifier, e.g., 'stage_123'
+    label: string;       // User-facing name, e.g., 'ממתין לחתימה'
+    color: string;       // Text color class (e.g. 'text-indigo-700')
+    bg: string;          // Background class (e.g. 'bg-indigo-100')
+    border: string;      // Border class (e.g. 'border-indigo-200')
+    headerBg: string;    // Header class (e.g. 'bg-indigo-50')
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -54,7 +64,16 @@ export interface AppUser {
             deals: number;
         };
     };
+    preferences?: UserPreferences;
+    whatsappTemplates?: { id: string; name: string; content: string }[];
     createdAt?: Timestamp;
+}
+
+export interface UserPreferences {
+    theme?: 'light' | 'dark';
+    sidebarOpen?: boolean;
+    dashboardLayout?: any[]; // layout items for react-grid-layout
+    lastUpdated?: Timestamp | null;
 }
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
@@ -123,7 +142,7 @@ export interface Property {
 }
 
 // ─── Deals ────────────────────────────────────────────────────────────────────
-export type DealStage = 'qualification' | 'viewing' | 'offer' | 'negotiation' | 'contract' | 'won' | 'lost';
+export type DealStage = string; // Permits dynamic custom stages
 
 export interface Deal {
     id: string;
@@ -155,6 +174,7 @@ export interface AppTask {
     relatedTo?: {
         id: string;
         type: 'lead' | 'property';
+        name?: string;
     };
     createdAt?: Timestamp;
 }

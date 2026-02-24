@@ -22,20 +22,29 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Clock, CheckCircle, Trash2 } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { updateDealStage, deleteDeal } from '../../services/dealService';
-import { Deal, DealStage } from '../../types';
+import { Deal, DealStage, CustomDealStage, Property, Lead } from '../../types';
+import { Link } from 'react-router-dom';
 
 // ─── Constants & Types ────────────────────────────────────────────────────────
-const STAGES: { id: DealStage; label: string; color: string; bg: string; border: string; headerBg: string }[] = [
-    { id: 'qualification', label: 'בירור צרכים', color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-200', headerBg: 'bg-slate-50' },
-    { id: 'viewing', label: 'סיור בנכס', color: 'text-sky-700', bg: 'bg-sky-100', border: 'border-sky-200', headerBg: 'bg-sky-50' },
-    { id: 'offer', label: 'הגשת הצעה', color: 'text-amber-700', bg: 'bg-amber-100', border: 'border-amber-200', headerBg: 'bg-amber-50' },
-    { id: 'negotiation', label: 'משא ומתן', color: 'text-purple-700', bg: 'bg-purple-100', border: 'border-purple-200', headerBg: 'bg-purple-50' },
-    { id: 'contract', label: 'טיוטות וחוזים', color: 'text-blue-700', bg: 'bg-blue-100', border: 'border-blue-200', headerBg: 'bg-blue-50' },
+export const MANDATORY_STAGES: { id: DealStage; label: string; color: string; bg: string; border: string; headerBg: string }[] = [
     { id: 'won', label: 'נסגר בהצלחה', color: 'text-emerald-700', bg: 'bg-emerald-100', border: 'border-emerald-200', headerBg: 'bg-emerald-50' },
-    { id: 'lost', label: 'לא רלוונטי / הופסד', color: 'text-rose-700', bg: 'bg-rose-100', border: 'border-rose-200', headerBg: 'bg-rose-50' },
 ];
 
-function DealCard({ deal, leadName, propertyAddress, isOverlay, onDelete }: { deal: Deal; leadName: string; propertyAddress: string; isOverlay?: boolean; onDelete: (id: string) => void }) {
+function DealCard({
+    deal,
+    lead,
+    property,
+    isOverlay,
+    onDelete,
+    onClick
+}: {
+    deal: Deal;
+    lead?: Lead;
+    property?: Property;
+    isOverlay?: boolean;
+    onDelete: (id: string) => void;
+    onClick?: (deal: Deal) => void;
+}) {
     const {
         attributes,
         listeners,
@@ -55,12 +64,29 @@ function DealCard({ deal, leadName, propertyAddress, isOverlay, onDelete }: { de
         <div
             ref={setNodeRef}
             style={style}
-            className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm group hover:border-blue-300 hover:shadow-md transition-all relative ${isOverlay ? 'rotate-2 shadow-2xl cursor-grabbing' : 'cursor-grab'}`}
+            onClick={(e) => {
+                // Prevent click if we are clicking a button or link
+                if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
+                if (onClick) onClick(deal);
+            }}
+            className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm group hover:border-blue-300 hover:shadow-md transition-all relative ${isOverlay ? 'rotate-2 shadow-2xl cursor-grabbing' : 'cursor-grab'} ${onClick ? 'cursor-pointer hover:bg-slate-50' : ''}`}
         >
+            {property?.images?.[0] && (
+                <div className="w-full h-32 rounded-lg mb-4 bg-slate-100 overflow-hidden relative">
+                    <img src={property.images[0]} alt={property.address} className="w-full h-full object-cover" />
+                </div>
+            )}
+
             <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1 min-w-0">
-                    <p className="text-base font-bold text-slate-900 leading-snug truncate" title={propertyAddress}>{propertyAddress}</p>
-                    <p className="text-sm text-slate-500 mt-0.5 truncate" title={leadName}>{leadName}</p>
+                    <p className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={property?.address || 'נכס לא ידוע'}>{property?.address || 'נכס לא ידוע'}</p>
+                    {lead ? (
+                        <Link to={`/leads?search=${encodeURIComponent(lead.name)}`} className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline mt-0.5 block truncate" title={lead.name} onClick={(e) => e.stopPropagation()}>
+                            {lead.name}
+                        </Link>
+                    ) : (
+                        <p className="text-sm text-slate-500 mt-0.5 truncate">ליד לא ידוע</p>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
@@ -94,12 +120,26 @@ function DealCard({ deal, leadName, propertyAddress, isOverlay, onDelete }: { de
     );
 }
 
-function DealsColumn({ stage, deals, leads, properties, onDelete }: { stage: typeof STAGES[0]; deals: Deal[]; leads: any[]; properties: any[]; onDelete: (id: string) => void }) {
+function DealsColumn({
+    stage,
+    deals,
+    leads,
+    properties,
+    onDelete,
+    onOpenProfile
+}: {
+    stage: CustomDealStage;
+    deals: Deal[];
+    leads: Lead[];
+    properties: Property[];
+    onDelete: (id: string) => void;
+    onOpenProfile: (deal: Deal) => void;
+}) {
     const { setNodeRef } = useDroppable({ id: stage.id });
     const totalCommission = deals.reduce((sum, d) => sum + (d.actualCommission ?? d.projectedCommission ?? 0), 0);
 
     return (
-        <div ref={setNodeRef} className="w-[320px] flex-shrink-0 flex flex-col h-[480px] bg-slate-50/70 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div ref={setNodeRef} className="w-[320px] 2xl:w-[340px] flex-shrink-0 flex flex-col h-[650px] 2xl:h-[750px] bg-slate-50/70 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className={`p-4 border-b ${stage.border} ${stage.headerBg}`}>
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
@@ -118,9 +158,10 @@ function DealsColumn({ stage, deals, leads, properties, onDelete }: { stage: typ
                         <DealCard
                             key={deal.id}
                             deal={deal}
-                            leadName={leads.find(l => l.id === deal.leadId)?.name || 'ליד לא ידוע'}
-                            propertyAddress={properties.find(p => p.id === deal.propertyId)?.address || 'נכס לא ידוע'}
+                            lead={leads.find(l => l.id === deal.leadId)}
+                            property={properties.find(p => p.id === deal.propertyId)}
                             onDelete={onDelete}
+                            onClick={onOpenProfile}
                         />
                     ))}
                 </SortableContext>
@@ -130,9 +171,29 @@ function DealsColumn({ stage, deals, leads, properties, onDelete }: { stage: typ
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+import { Settings } from 'lucide-react';
+import DealStagesModal from '../modals/DealStagesModal';
+import DealProfileModal from '../modals/DealProfileModal';
+
 export default function DealsKanban() {
-    const { deals: liveDeals, leads, properties } = useLiveDashboardData();
+    const { deals: liveDeals, leads, properties, agencySettings } = useLiveDashboardData();
     const [deals, setDeals] = useState<Deal[]>([]);
+
+    const activeStages = useMemo(() => {
+        const customStages = agencySettings?.customDealStages || [];
+        const won = MANDATORY_STAGES[0];
+
+        if (customStages.length === 0) {
+            // Provide sensible defaults if they haven't set any up yet
+            return [
+                { id: 'qualification', label: 'בירור צרכים', color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-200', headerBg: 'bg-slate-50' },
+                { id: 'negotiation', label: 'משא ומתן', color: 'text-purple-700', bg: 'bg-purple-100', border: 'border-purple-200', headerBg: 'bg-purple-50' },
+                won
+            ];
+        }
+
+        return [...customStages, won];
+    }, [agencySettings?.customDealStages]);
 
     // For Drag and Drop
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -141,6 +202,12 @@ export default function DealsKanban() {
     // For "Won" Modal Workflow
     const [wonModalDeal, setWonModalDeal] = useState<Deal | null>(null);
     const [actualCommissionInput, setActualCommissionInput] = useState('');
+
+    // For Settings Modal
+    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+    // For Deal Profile
+    const [profileModalDeal, setProfileModalDeal] = useState<Deal | null>(null);
 
     useEffect(() => {
         setDeals(liveDeals);
@@ -167,7 +234,7 @@ export default function DealsKanban() {
         // over.id may be either a stage id (column droppable) or a deal id (card).
         // Resolve to a stage: check column first, then look up from card.
         let targetStage: DealStage;
-        if (STAGES.some(s => s.id === (over.id as string))) {
+        if (activeStages.some(s => s.id === (over.id as string))) {
             // Dropped directly on a column droppable
             targetStage = over.id as DealStage;
         } else {
@@ -238,12 +305,19 @@ export default function DealsKanban() {
     };
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[700px] h-[calc(100vh-12rem)]">
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[800px] h-[calc(100vh-8rem)] relative">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">לוח עסקאות דינמי</h2>
                     <p className="text-sm font-medium text-slate-500 mt-1">גרור עסקאות בין השלבים השונים למעקב חכם אחריהן</p>
                 </div>
+                <button
+                    onClick={() => setIsSettingsModalOpen(true)}
+                    className="p-2 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200"
+                    title="הגדרות סטטוסים"
+                >
+                    <Settings size={20} />
+                </button>
             </div>
 
             <div className="p-6 flex-grow overflow-y-auto bg-slate-50/30">
@@ -258,7 +332,7 @@ export default function DealsKanban() {
                 >
                     {/* FLEX WRAP container for 2 rows effect */}
                     <div className="flex flex-wrap gap-6 items-start pb-4">
-                        {STAGES.map(stage => (
+                        {activeStages.map(stage => (
                             <SortableContext
                                 key={stage.id}
                                 id={stage.id}
@@ -271,6 +345,7 @@ export default function DealsKanban() {
                                     leads={leads}
                                     properties={properties}
                                     onDelete={handleDelete}
+                                    onOpenProfile={setProfileModalDeal}
                                 />
                             </SortableContext>
                         ))}
@@ -280,8 +355,8 @@ export default function DealsKanban() {
                         {activeDeal ? (
                             <DealCard
                                 deal={activeDeal}
-                                leadName={leads.find(l => l.id === activeDeal.leadId)?.name || 'ליד לא ידוע'}
-                                propertyAddress={properties.find(p => p.id === activeDeal.propertyId)?.address || 'נכס לא ידוע'}
+                                lead={leads.find(l => l.id === activeDeal.leadId)}
+                                property={properties.find(p => p.id === activeDeal.propertyId)}
                                 isOverlay
                                 onDelete={handleDelete}
                             />
@@ -328,6 +403,24 @@ export default function DealsKanban() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {profileModalDeal && (
+                <DealProfileModal
+                    deal={profileModalDeal}
+                    lead={leads.find(l => l.id === profileModalDeal.leadId)}
+                    property={properties.find(p => p.id === profileModalDeal.propertyId)}
+                    stages={activeStages}
+                    isOpen={!!profileModalDeal}
+                    onClose={() => setProfileModalDeal(null)}
+                />
+            )}
+
+            {isSettingsModalOpen && (
+                <DealStagesModal
+                    isOpen={isSettingsModalOpen}
+                    onClose={() => setIsSettingsModalOpen(false)}
+                />
             )}
         </div>
     );

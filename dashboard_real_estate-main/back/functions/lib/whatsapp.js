@@ -89,11 +89,19 @@ exports.getWhatsAppQrCode = (0, https_1.onCall)({ region: 'europe-west1' }, asyn
 exports.whatsappWebhook = (0, https_2.onRequest)({ region: 'europe-west1' }, async (req, res) => {
     var _a, _b, _c;
     try {
+        // 1. Webhook Security: Validate custom secret header
+        // In production, define GREEN_API_WEBHOOK_SECRET in your Firebase env config (.env file)
+        const secret = req.headers['x-greenapi-webhook-secret'];
+        if (secret !== process.env.GREEN_API_WEBHOOK_SECRET) {
+            res.status(401).send("Unauthorized");
+            return;
+        }
         const body = req.body;
         // חובה להחזיר 200 ל-Green API מיד כדי שלא ישלחו שוב ושוב
         res.status(200).send("OK");
         const idInstance = body === null || body === void 0 ? void 0 : body.idInstance;
         const typeWebhook = body === null || body === void 0 ? void 0 : body.typeWebhook;
+        const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
         // אנחנו מעוניינים רק בהודעות נכנסות כרגע
         if (!idInstance || typeWebhook !== "incomingMessageReceived")
             return;
@@ -129,8 +137,20 @@ exports.whatsappWebhook = (0, https_2.onRequest)({ region: 'europe-west1' }, asy
             return;
         }
         const leadId = leadsSnapshot.docs[0].id;
-        // 3. שמירת ההודעה בתת-הקולקציה של הליד
+        // 3. Idempotency Check (Concurrency): ensure we don't save the same message twice
+        if (idMessage) {
+            const existingMessage = await db.collection(`leads/${leadId}/messages`)
+                .where("idMessage", "==", idMessage)
+                .limit(1)
+                .get();
+            if (!existingMessage.empty) {
+                console.log(`Webhook Idempotency: Duplicate message ignored -> ${idMessage}`);
+                return; // function completes silently since 200 OK was already sent
+            }
+        }
+        // 4. שמירת ההודעה בתת-הקולקציה של הליד
         await db.collection(`leads/${leadId}/messages`).add({
+            idMessage: idMessage || null, // store for future idempotency checks
             text: textMessage,
             direction: 'inbound', // הודעה נכנסת
             senderPhone: cleanPhone,

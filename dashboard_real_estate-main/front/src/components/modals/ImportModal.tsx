@@ -27,8 +27,8 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
     ],
     property: [
         { key: 'address', label: 'כתובת רחוב', required: true },
-        { key: 'city', label: 'עיר', required: true },
-        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה)', required: true },
+        { key: 'city', label: 'עיר' },
+        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה)' },
         { key: 'price', label: 'מחיר', required: true },
         { key: 'rooms', label: 'מספר חדרים' },
         { key: 'kind', label: 'סוג נכס (דירת גן, פנטהוז...)' },
@@ -86,7 +86,7 @@ const HEBREW_MAP: Record<string, string> = {
     'אימייל': 'email', 'מייל': 'email', 'דואל': 'email', 'דוא"ל': 'email',
     'עיר': 'city', 'יישוב': 'city', 'שכונה': 'city',
     'כתובת': 'address', 'רחוב': 'address', 'כתובת הנכס': 'address',
-    'מחיר': 'price', 'סכום': 'price', 'מחיר מבוקש': 'price',
+    'מחיר': 'price', 'סכום': 'price', 'מחיר מבוקש': 'price', 'מחיר שיווק': 'price',
     'סוג עסקה': 'type', 'סוג מכירה': 'type', 'עסקה': 'type',
     'סוג נכס': 'kind', 'סוג': 'kind', 'סוג הנכס': 'kind', 'קטגוריה': 'kind',
     'חדרים': 'rooms', 'מספר חדרים': 'rooms',
@@ -193,9 +193,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             const { headers, rows } = await parseFile(file);
             setRawHeaders(headers);
             setRawRows(rows);
-            setMapping({});
-            setLeadMapping({});
-            setPropertyMapping({});
+
+            if (entityType === 'mixed') {
+                const { nl, np } = buildMixedMapping(headers);
+                setLeadMapping(nl);
+                setPropertyMapping(np);
+            } else {
+                setMapping(buildAutoMapping(headers, entityType as EntityType));
+            }
+
             setDiscriminatorCol('');
             setStep(2);
         } catch (err: any) {
@@ -216,30 +222,43 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         if (file) await processFile(file);
     };
 
+    const buildMixedMapping = (headers: string[]) => {
+        const leadOpts = FIELD_OPTIONS.lead;
+        const propOpts = FIELD_OPTIONS.property;
+        const nl: Record<string, string> = {};
+        const np: Record<string, string> = {};
+        headers.forEach(h => {
+            const clean = h.trim();
+            const dictMap = HEBREW_MAP[clean] || HEBREW_MAP[clean.toLowerCase()];
+            let leadMatch = leadOpts.find(o => o.key === dictMap || o.label === clean)?.key;
+            let propMatch = propOpts.find(o => o.key === dictMap || o.label === clean)?.key;
+            if (leadMatch) nl[h] = leadMatch; else nl[h] = `__custom__${h}`;
+            if (propMatch) np[h] = propMatch; else np[h] = `__custom__${h}`;
+        });
+        return { nl, np };
+    };
+
+    const buildAutoMapping = (headers: string[], type: EntityType) => {
+        const newMapping: Record<string, string> = {};
+        const opts = FIELD_OPTIONS[type];
+        headers.forEach(h => {
+            const clean = h.trim();
+            const dictMap = HEBREW_MAP[clean] || HEBREW_MAP[clean.toLowerCase()];
+            const match = opts.find(o => o.key === dictMap || o.label === clean)?.key;
+            if (match) newMapping[h] = match;
+            else newMapping[h] = `__custom__${h}`;
+        });
+        return newMapping;
+    };
+
     const handleAutoMap = () => {
         if (entityType === 'mixed') {
-            const leadKeys = new Set(FIELD_OPTIONS.lead.map(f => f.key));
-            const propKeys = new Set(FIELD_OPTIONS.property.map(f => f.key));
-            const nl: Record<string, string> = {};
-            const np: Record<string, string> = {};
-            rawHeaders.forEach(h => {
-                const mapped = HEBREW_MAP[h.trim()] || HEBREW_MAP[h.trim().toLowerCase()];
-                if (mapped) {
-                    if (leadKeys.has(mapped)) nl[h] = mapped;
-                    if (propKeys.has(mapped)) np[h] = mapped;
-                }
-            });
+            const { nl, np } = buildMixedMapping(rawHeaders);
             setLeadMapping(nl);
             setPropertyMapping(np);
             return;
         }
-        const newMapping: Record<string, string> = {};
-        const validKeys = new Set(FIELD_OPTIONS[entityType as EntityType].map(f => f.key));
-        rawHeaders.forEach(h => {
-            const mapped = HEBREW_MAP[h.trim()] || HEBREW_MAP[h.trim().toLowerCase()];
-            if (mapped && validKeys.has(mapped)) newMapping[h] = mapped;
-        });
-        setMapping(newMapping);
+        setMapping(buildAutoMapping(rawHeaders, entityType as EntityType));
     };
 
     const handleValidate = () => {
@@ -395,16 +414,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                             </td>
                             <td className="px-4 py-2.5">
                                 <select
-                                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
-                                    value={currentMapping[header] || ''}
+                                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all font-medium"
+                                    value={currentMapping[header] !== undefined ? currentMapping[header] : `__custom__${header}`}
                                     onChange={e => { setErrorMsg(''); onChange(header, e.target.value); }}
                                 >
+                                    <option value={`__custom__${header}`}>{header}</option>
+                                    <optgroup label="שדות מערכת">
+                                        {options.map(opt => (
+                                            <option key={opt.key} value={opt.key}>
+                                                {opt.label}{opt.required ? ' *' : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
                                     <option value="">— התעלם מעמודה זו —</option>
-                                    {options.map(opt => (
-                                        <option key={opt.key} value={opt.key}>
-                                            {opt.label}{opt.required ? ' *' : ''}
-                                        </option>
-                                    ))}
                                 </select>
                             </td>
                         </tr>

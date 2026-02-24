@@ -1,0 +1,54 @@
+# TASK: Build the Super Admin (Backoffice) Dashboard for Multi-Tenant SaaS
+
+Act as a Senior Full-Stack Engineer. We need to build a "Super Admin" backoffice for our Real Estate OS. The system owner needs a master dashboard to oversee all tenant agencies, agents, properties, leads, and billing/subscriptions.
+
+## 1. Security Rules (`firestore.rules`)
+Update the Firestore rules to allow a super admin to read ALL data, bypassing the standard Tenant Isolation.
+- Add a helper function: `function isSuperAdmin() { return request.auth.token.superadmin == true; }`
+- Update the read rules for `agencies`, `users`, `properties`, `leads`, and `deals` to allow read if `isSuperAdmin() || (request.auth.token.agencyId == resource.data.agencyId)`.
+- Keep write/update/delete strictly isolated unless explicitly needed by the admin.
+
+## 2. Super Admin Data Layer (`src/services/superAdminService.ts`)
+Create a new service dedicated to the Backoffice.
+- It should fetch all data across the platform (without the `where("agencyId", "==", ...)` filter that regular agents use).
+- `getAllAgencies()`: Fetches all documents from the `agencies` collection.
+- `getAllSystemUsers()`, `getAllSystemProperties()`, `getAllSystemLeads()`: Fetch records, preferably with the ability to pass an optional `filterByAgencyId` parameter to view data for a specific agency.
+- `getBillingOverview()`: A mock or structured function to fetch subscription/payment status from the `agencies` collection (e.g., looking at a `subscriptionStatus` or `mrr` field).
+
+## 3. Frontend UI (`src/pages/SuperAdminDashboard.tsx`)
+Create a comprehensive React page with a sidebar layout specifically for the Super Admin.
+- **Protection:** Wrap this page in a route guard that checks if `currentUser.isSuperAdmin` (or similar custom claim) is true. If not, redirect to the regular dashboard.
+- **Layout:** Use Tailwind CSS (RTL). A sidebar on the right with navigation tabs: "סקירה כללית" (Overview), "סוכנויות" (Agencies), "סוכנים" (Agents), "נכסים" (Properties), "לידים" (Leads), "תשלומים ומנויים" (Billing).
+- **Overview Tab:** KPI cards showing Total Agencies, Total Active Agents, Total Properties in the system, and Monthly Recurring Revenue (MRR).
+- **Agencies Tab:** A data table listing all agencies, their creation date, number of agents, subscription status (Active/Trial/Suspended).
+- **Global Data Tabs (Agents/Properties/Leads):** Tables displaying the respective data, BUT crucially adding an "Agency Name" column so the admin knows which item belongs to which tenant. Include a filter dropdown at the top to filter the table by a specific Agency. Use `lucide-react` icons for a polished look.
+
+Generate the code for the rules, the service, and the UI component. Ensure it's modular and handles loading states cleanly.
+
+
+****
+# TASK: Implement "LEGO" Draggable & Resizable Dashboard (react-grid-layout)
+
+Act as a Senior Frontend Engineer. We want to upgrade our `Dashboard.tsx` in our Firebase Real Estate OS to a modular, "LEGO-style" customizable layout. Users should be able to drag, drop, and resize their dashboard widgets. The layout preferences must be saved to the user's document in Firestore.
+
+Please ensure `react-grid-layout` and `react-resizable` are installed.
+
+## 1. Firestore Data Layer (`src/services/userService.ts`)
+Add a new function to update the user's layout preferences:
+- Function: `updateDashboardLayout(userId: string, layout: any[])`
+- Logic: Updates the `users/{userId}` document with a new field `dashboardLayout`.
+- Add `dashboardLayout?: any[]` to the `User` interface in `src/types/index.ts`.
+
+## 2. Frontend (`src/pages/Dashboard.tsx`)
+Refactor the Dashboard to use `Responsive, WidthProvider` from `react-grid-layout`.
+
+**Key Requirements:**
+- **Edit Mode:** Add a toggle button (e.g., "ערוך דאשבורד" / "שמור עיצוב") at the top right. 
+- **Draggable/Resizable:** Widgets should ONLY be draggable and resizable when "Edit Mode" is active (`isDraggable={isEditing}`, `isResizable={isEditing}`).
+- **Default Layout:** Provide a sensible default grid layout (array of objects with `i`, `x`, `y`, `w`, `h`) for widgets like: "StatsCards", "TasksList", "PropertiesMap", "DealsPipeline".
+- **State Management:** Load the user's saved layout from their Firestore user document on mount. If it exists, use it; otherwise, use the default.
+- **Save Functionality:** When the user clicks "שמור עיצוב" (Save Layout), call `userService.updateDashboardLayout` with the current grid state.
+- **Styling:** Use Tailwind CSS. When in Edit Mode, add a subtle border or visual cue to the widgets (e.g., a dashed border or a "grab" cursor) to indicate they can be moved. 
+- RTL Support: `react-grid-layout` has a prop `isBounded` or standard CSS tricks. Ensure the grid behaves well in our RTL UI.
+
+Please generate the updated `Dashboard.tsx` and the corresponding additions to `userService.ts` and `types`.

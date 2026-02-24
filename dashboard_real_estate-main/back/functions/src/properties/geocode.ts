@@ -5,7 +5,11 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import axios from 'axios';
+
+const db = getFirestore();
 
 export const getCoordinates = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
@@ -127,5 +131,62 @@ export const getAddressSuggestions = onCall({ cors: true }, async (request) => {
     } catch (error: any) {
         console.error('[geocode] Failed to fetch suggestions:', error.message);
         throw new HttpsError('internal', 'Fetching suggestions failed.');
+    }
+});
+
+/**
+ * Automatically attempt to geocode newly imported/created properties
+ * that have the exact default Israel center coordinates.
+ */
+export const geocodeNewProperty = onDocumentCreated('properties/{propertyId}', async (event) => {
+    const doc = event.data;
+    if (!doc) return;
+
+    const prop = doc.data();
+    const loc = prop.location;
+
+    // Check if location matches the default placeholder used in excel imports (31.5, 34.75)
+    // Or if location is missing completely.
+    const isPlaceholder = !loc || (loc.lat === 31.5 && loc.lng === 34.75);
+
+    if (!isPlaceholder) {
+        return; // Already has real coordinates
+    }
+
+    const { address, city } = prop;
+    if (!address || !city) {
+        return; // Need address and city to geocode
+    }
+
+    const fullSearch = `${address}, ${city}, Israel`;
+
+    try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullSearch)}&limit=1`;
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'OmerDigitalCRM/1.0', 'Accept': 'application/json', 'Accept-Language': 'he' },
+            timeout: 5000
+        });
+
+        const data = response.data;
+        if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lng = parseFloat(data[0].lon);
+
+            await db.doc(`properties/${event.params.propertyId}`).update({
+                location: { lat, lng },
+                geocode: {
+                    lat,
+                    lng,
+                    formattedAddress: data[0].display_name,
+                    placeId: data[0].place_id?.toString() || '',
+                    lastUpdated: FieldValue.serverTimestamp()
+                }
+            });
+            console.log(`[geocodeNewProperty] Successfully geocoded property ${event.params.propertyId} to [${lat}, ${lng}]`);
+        } else {
+            console.warn(`[geocodeNewProperty] No coordinates found for address: ${fullSearch}`);
+        }
+    } catch (error: any) {
+        console.error(`[geocodeNewProperty] Geocoding failed for ${fullSearch}:`, error.message);
     }
 });

@@ -5,18 +5,18 @@ import { getLiveAlerts, markAlertAsRead } from '../../services/alertService';
 import { Alert } from '../../types';
 
 export default function HeaderAlerts() {
-    const { currentUser } = useAuth();
+    const { userData } = useAuth();
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!currentUser?.agencyId || !currentUser?.uid) return;
+        if (!userData?.agencyId || !userData?.uid) return;
 
         // Subscribe to live alerts
         const unsubscribe = getLiveAlerts(
-            currentUser.agencyId,
-            currentUser.uid,
+            userData.agencyId,
+            userData.uid,
             20, // get last 20
             (liveAlerts) => {
                 setAlerts(liveAlerts);
@@ -24,7 +24,7 @@ export default function HeaderAlerts() {
         );
 
         return () => unsubscribe();
-    }, [currentUser?.agencyId, currentUser?.uid]);
+    }, [userData?.agencyId, userData?.uid]);
 
     // Handle clicking outside to close
     useEffect(() => {

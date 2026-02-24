@@ -1,0 +1,26 @@
+
+> vite-react-typescript-starter@0.0.0 dev
+> vite --port 5180
+
+
+  VITE v5.4.8  ready in 752 ms
+
+  ➜  Local:   http://localhost:5180/
+  ➜  Network: use --host to expose
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+10:38:19 PM [vite] .env changed, restarting server...
+10:38:19 PM [vite] server restarted.
+10:39:05 PM [vite] hmr update /src/components/dashboard/AddPropertyModal.tsx, /src/index.css
+10:44:36 PM [vite] hmr update /src/components/layout/Header.tsx, /src/index.css
+10:44:37 PM [vite] ✨ new dependencies optimized: firebase/firestore, firebase/auth, firebase/app
+10:44:37 PM [vite] ✨ optimized dependencies changed. reloading
+10:44:49 PM [vite] hmr update /src/components/layout/Header.tsx, /src/index.css
+10:44:54 PM [vite] page reload src/main.tsx
+10:45:58 PM [vite] hmr update /src/App.tsx, /src/index.css
+10:48:57 PM [vite] hmr update /src/index.css, /src/components/layout/Header.tsx, /src/context/AuthContext.tsx, /src/pages/Login.tsx, /src/layouts/DashboardLayout.tsx
+10:49:29 PM [vite] hmr update /src/index.css, /src/components/layout/Header.tsx, /src/context/AuthContext.tsx, /src/pages/Login.tsx, /src/layouts/DashboardLayout.tsx
+10:49:30 PM [vite] hmr invalidate /src/context/AuthContext.tsx Could not Fast Refresh ("useAuth" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+10:49:30 PM [vite] page reload src/context/AuthContext.tsx
+10:49:31 PM [vite] hmr update /src/pages/Login.tsx, /src/index.css

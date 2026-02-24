@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Property, Deal, AppTask, Alert, Lead } from '../types';
+import { Property, Deal, AppTask, Alert, Lead, Agency } from '../types';
 
 interface LiveDashboardData {
     properties: Property[];
@@ -10,6 +10,7 @@ interface LiveDashboardData {
     tasks: AppTask[];
     alerts: Alert[];
     leads: Lead[];
+    agencySettings: Agency['settings'] | null;
     loading: boolean;
     error: Error | null;
 }
@@ -22,12 +23,13 @@ export function useLiveDashboardData(): LiveDashboardData {
     const [tasks, setTasks] = useState<AppTask[]>([]);
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
+    const [agencySettings, setAgencySettings] = useState<Agency['settings'] | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
-        if (!userData?.agencyId) {
+        if (!userData?.agencyId || !userData?.uid) {
             setLoading(false);
             return;
         }
@@ -131,6 +133,14 @@ export function useLiveDashboardData(): LiveDashboardData {
             updateAlertsState();
         }, (err) => setError(err));
 
+        // 6. Agency Settings Query
+        const agencyRef = doc(db, 'agencies', agencyId);
+        const unsubAgency = onSnapshot(agencyRef, (snap) => {
+            if (snap.exists()) {
+                setAgencySettings(snap.data()?.settings || {});
+            }
+        }, (err) => setError(err));
+
 
         return () => {
             unsubProperties();
@@ -139,6 +149,7 @@ export function useLiveDashboardData(): LiveDashboardData {
             unsubLeads();
             unsubAlertsPersonal();
             unsubAlertsBroadcast();
+            unsubAgency();
         };
     }, [userData?.agencyId, userData?.uid]);
 
@@ -179,5 +190,5 @@ export function useLiveDashboardData(): LiveDashboardData {
         }
     }, [tasks]);
 
-    return { properties, deals, tasks, alerts, leads, loading, error };
+    return { properties, deals, tasks, alerts, leads, agencySettings, loading, error };
 }

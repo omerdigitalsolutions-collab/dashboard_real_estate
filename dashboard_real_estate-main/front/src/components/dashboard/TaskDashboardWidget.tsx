@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { format, isBefore, startOfToday, isToday, isTomorrow } from 'date-fns';
 import { he } from 'date-fns/locale';
+import { Link } from 'react-router-dom';
 
 interface TaskDashboardWidgetProps {
     tasks: AppTask[];
@@ -22,28 +23,19 @@ interface TaskDashboardWidgetProps {
 }
 
 const PRIORITIES = {
-    High: { color: 'text-red-600', bg: 'bg-red-50', label: 'גבוה' },
-    Medium: { color: 'text-amber-600', bg: 'bg-amber-50', label: 'בינוני' },
-    Low: { color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'נמוך' }
+    High: { dot: 'bg-red-500', label: 'גבוה' },
+    Medium: { dot: 'bg-amber-500', label: 'בינוני' },
+    Low: { dot: 'bg-emerald-500', label: 'נמוך' }
 };
 
 export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboardWidgetProps) {
     const [toggling, setToggling] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
 
-    // Filter: due <= today OR completed
+    // Filter: Show all tasks
     // Sort: High -> Medium -> Low -> Date for open; Completed tasks at the end
     const displayData = useMemo(() => {
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-
-        // Keep all tasks (we only get current user's tasks anyway)
-        // Only condition: if it's open, is it due today or overdue?
-        const filtered = tasks.filter(t => {
-            if (t.isCompleted) return true;
-            const dueStr = (t.dueDate as any)?.toDate ? (t.dueDate as any).toDate() : new Date(t.dueDate as any);
-            return dueStr <= todayEnd;
-        });
+        const filtered = tasks;
 
         // Priority weighting
         const weight = { High: 3, Medium: 2, Low: 1 };
@@ -98,7 +90,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                        משימות להיום
+                        המשימות שלי
                         {displayData.openCount > 0 && (
                             <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
                                 {displayData.openCount}
@@ -113,7 +105,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                 {displayData.total === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center py-10 text-slate-400">
                         <CheckCircle2 size={40} strokeWidth={1.5} className="mb-3 text-slate-300" />
-                        <p className="text-sm">אין משימות דחופות להיום</p>
+                        <p className="text-sm">אין משימות פתוחות</p>
                         <p className="text-xs">הכל מטופל, מצוין!</p>
                     </div>
                 ) : (
@@ -143,9 +135,10 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                                                 {task.title}
                                             </p>
                                             {!task.isCompleted && (
-                                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md whitespace-nowrap ${PRIORITIES[task.priority].bg} ${PRIORITIES[task.priority].color}`}>
-                                                    {PRIORITIES[task.priority].label}
-                                                </span>
+                                                <div
+                                                    className={`w-2.5 h-2.5 rounded-full ${PRIORITIES[task.priority].dot} shadow-sm shrink-0 mt-1`}
+                                                    title={`עדיפות: ${PRIORITIES[task.priority].label}`}
+                                                />
                                             )}
                                         </div>
 
@@ -159,15 +152,20 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                                             ) : (
                                                 <span className={`flex items-center gap-1 ${due.color}`}>
                                                     <DueIcon size={12} />
-                                                    {due.text}
+                                                    {due.text === 'היום' || due.text === 'מחר' || due.text === 'באיחור' ? due.text : `תאריך יעד: ${due.text}`}
                                                 </span>
                                             )}
 
                                             {task.relatedTo && (
-                                                <span className={`flex items-center gap-1 border-r pr-2 ${task.isCompleted ? 'text-slate-300 border-slate-200' : 'text-slate-500 border-slate-200'}`}>
+                                                <Link
+                                                    to={task.relatedTo.type === 'lead' ? '/leads' : '/properties'}
+                                                    state={{ openId: task.relatedTo.id }}
+                                                    className={`flex items-center gap-1 border-r pr-2 hover:underline hover:text-blue-600 transition-colors ${task.isCompleted ? 'text-slate-300 border-slate-200' : 'text-slate-500 border-slate-200'}`}
+                                                >
                                                     {task.relatedTo.type === 'lead' ? <User size={12} /> : <Home size={12} />}
-                                                    {task.relatedTo.type === 'lead' ? 'ליד מחובר' : 'נכס מחובר'}
-                                                </span>
+                                                    {task.relatedTo.type === 'lead' ? 'ליד - ' : 'נכס - '}
+                                                    {task.relatedTo.name || 'מחובר'}
+                                                </Link>
                                             )}
                                         </div>
                                     </div>

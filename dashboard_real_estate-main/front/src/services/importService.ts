@@ -6,6 +6,7 @@ import {
     getDocs,
     writeBatch,
     doc,
+    updateDoc,
     serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -72,9 +73,9 @@ export async function parseFile(file: File): Promise<{ headers: string[]; rows: 
 
 const REQUIRED_FIELDS: Record<EntityType, string[]> = {
     lead: ['name', 'phone'],
-    property: ['address', 'city', 'price'],
+    property: ['address', 'price'],
     agent: ['name', 'email'],
-    combined: ['name', 'phone', 'address', 'city', 'price'],
+    combined: ['name', 'phone', 'address', 'price'],
     deal: ['propertyName', 'price', 'stage', 'projectedCommission'],
 };
 
@@ -98,12 +99,22 @@ export function validateAndTransform(
 
     rows.forEach((rawRow, idx) => {
         const transformed: TransformedRow = {};
+        const customData: Record<string, any> = {};
 
         // Apply mapping
         for (const [excelCol, firestoreField] of Object.entries(mapping)) {
             if (firestoreField && rawRow[excelCol] !== undefined) {
-                transformed[firestoreField] = rawRow[excelCol];
+                if (firestoreField.startsWith('__custom__')) {
+                    const customKey = firestoreField.substring(10); // remove __custom__
+                    customData[customKey] = rawRow[excelCol];
+                } else {
+                    transformed[firestoreField] = rawRow[excelCol];
+                }
             }
+        }
+
+        if (Object.keys(customData).length > 0) {
+            transformed.customData = customData;
         }
 
         // Validate required fields
@@ -342,7 +353,7 @@ export async function importLeads(
 }
 
 function buildLeadDefaults(row: TransformedRow): TransformedRow {
-    return {
+    const defaults: TransformedRow = {
         name: row.name ?? '',
         phone: row.phone ?? '',
         email: row.email ?? null,
@@ -366,6 +377,10 @@ function buildLeadDefaults(row: TransformedRow): TransformedRow {
             urgency: 'flexible',
         },
     };
+    if (row.customData) {
+        defaults.customData = row.customData;
+    }
+    return defaults;
 }
 
 // ─── Import Properties ────────────────────────────────────────────────────────
@@ -428,6 +443,15 @@ export async function importProperties(
                     status: 'active',
                     daysOnMarket: 0,
                     isExclusive: false,
+                    location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
+                    geocode: {
+                        lat: 31.5,
+                        lng: 34.75,
+                        formattedAddress: `${row.address ?? ''}, ${row.city ?? ''}`,
+                        placeId: '',
+                        lastUpdated: serverTimestamp()
+                    },
+                    ...(row.customData ? { customData: row.customData } : {}),
                     createdAt: serverTimestamp(),
                 });
             }
@@ -506,6 +530,15 @@ export async function importMixed(
                 status: 'active',
                 daysOnMarket: 0,
                 isExclusive: false,
+                location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
+                geocode: {
+                    lat: 31.5,
+                    lng: 34.75,
+                    formattedAddress: `${row.address ?? ''}, ${row.city ?? ''}`,
+                    placeId: '',
+                    lastUpdated: serverTimestamp()
+                },
+                ...(row.customData ? { customData: row.customData } : {}),
                 createdAt: serverTimestamp(),
             });
 
@@ -622,6 +655,7 @@ export async function importDeals(
                 agencyId,
                 createdBy,
                 agentId: assignedAgentId,
+                ...(row.customData ? { customData: row.customData } : {}),
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
@@ -649,12 +683,15 @@ export async function importAgents(
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         try {
-            await inviteAgent(
+            const { stubId } = await inviteAgent(
                 agencyId,
                 String(row.name ?? '').trim(),
                 String(row.email ?? '').trim().toLowerCase(),
                 row.role === 'admin' ? 'admin' : 'agent'
             );
+            if (row.customData) {
+                await updateDoc(doc(db, 'users', stubId), { customData: row.customData });
+            }
             importedCount++;
         } catch (err: any) {
             console.warn(`[importAgents] Failed to invite ${row.email}:`, err?.message);

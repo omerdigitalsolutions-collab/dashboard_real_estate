@@ -107,16 +107,16 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
         )
         ||
-        // 2. User updating their own profile details and goals
+        // 2. User updating their own profile details, goals, templates, and dashboard layout
         (
           (request.auth.uid == userId || resource.data.uid == request.auth.uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoURL', 'name', 'phone', 'goals']) 
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoURL', 'name', 'phone', 'goals', 'dashboardLayout', 'whatsappTemplates', 'preferences', 'customData']) 
         )
         ||
         // 3. Agency Admin updating ANY user in the agency
         (
           isAgencyAdmin(resource.data.agencyId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['goals', 'isActive', 'role', 'name', 'phone', 'photoURL'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['goals', 'isActive', 'role', 'name', 'phone', 'photoURL', 'dashboardLayout', 'whatsappTemplates', 'customData'])
         )
       );
 

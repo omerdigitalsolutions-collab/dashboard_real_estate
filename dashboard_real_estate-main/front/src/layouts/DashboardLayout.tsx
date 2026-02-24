@@ -3,8 +3,8 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
-import { seedInitialData } from '../utils/seedDatabase';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
+import { useSuperAdmin } from '../hooks/useSuperAdmin';
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import AddLeadModal from '../components/modals/AddLeadModal';
 import {
@@ -16,9 +16,9 @@ import {
     Search,
     Bell,
     LogOut,
-    Database,
     Contact,
     Plus,
+    Shield,
 } from 'lucide-react';
 
 const navigation = [
@@ -31,30 +31,19 @@ const navigation = [
 ];
 
 export default function DashboardLayout() {
-    const { userData, currentUser } = useAuth();
+    const { userData } = useAuth();
+    const { isSuperAdmin } = useSuperAdmin();
     const { alerts } = useLiveDashboardData();
     const navigate = useNavigate();
-    const [isSeeding, setIsSeeding] = useState(false);
     const [showAddProperty, setShowAddProperty] = useState(false);
     const [showAddLead, setShowAddLead] = useState(false);
     const [quickAddOpen, setQuickAddOpen] = useState(false);
-
-    const handleSeed = async () => {
-        if (!currentUser) return;
-        setIsSeeding(true);
-        const result = await seedInitialData(currentUser.uid);
-        setIsSeeding(false);
-        if (result.success) {
-            alert('✅ הנתונים נטענו בהצלחה! רענן את הדף כדי לראות אותם.');
-        } else {
-            alert('❌ שגיאה בטעינת הנתונים. בדוק את הקונסול.');
-        }
-    };
+    const [notificationsOpen, setNotificationsOpen] = useState(false);
 
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            navigate('/login');
+            navigate('/');
         } catch (error) {
             console.error('Logout error:', error);
         }
@@ -84,6 +73,21 @@ export default function DashboardLayout() {
                             {item.name}
                         </NavLink>
                     ))}
+
+                    {isSuperAdmin && (
+                        <NavLink
+                            to="/super-admin"
+                            className={({ isActive }) =>
+                                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors mt-6 ${isActive
+                                    ? 'bg-indigo-50 text-indigo-700'
+                                    : 'text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800'
+                                }`
+                            }
+                        >
+                            <Shield className="w-5 h-5 flex-shrink-0" />
+                            לוח בקרת מערכת
+                        </NavLink>
+                    )}
                 </nav>
             </aside>
 
@@ -141,25 +145,46 @@ export default function DashboardLayout() {
                             />
                         </div>
 
-                        <button className="text-slate-500 hover:text-slate-700 transition-colors relative">
-                            <Bell className="w-5 h-5" />
-                            {alerts.length > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white border border-white">
-                                    {alerts.length}
-                                </span>
-                            )}
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => setNotificationsOpen(v => !v)}
+                                className="text-slate-500 hover:text-slate-700 transition-colors relative"
+                            >
+                                <Bell className="w-5 h-5" />
+                                {alerts.length > 0 && (
+                                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white border border-white">
+                                        {alerts.length}
+                                    </span>
+                                )}
+                            </button>
 
-                        {/* DEV ONLY — Remove before production */}
-                        <button
-                            onClick={handleSeed}
-                            disabled={isSeeding}
-                            title="Seed Database (Dev)"
-                            className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1.5 rounded-md disabled:opacity-50 transition-colors"
-                        >
-                            <Database className="w-3.5 h-3.5" />
-                            {isSeeding ? 'טוען...' : 'Seed DB'}
-                        </button>
+                            {notificationsOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setNotificationsOpen(false)} />
+                                    <div className="absolute left-0 top-10 z-20 bg-white rounded-xl shadow-xl border border-slate-100 min-w-[280px] w-max max-w-sm">
+                                        <div className="p-3 border-b border-slate-100 font-semibold text-sm text-slate-800">
+                                            התראות
+                                        </div>
+                                        <div className="p-2 max-h-80 overflow-y-auto">
+                                            {alerts.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {alerts.map((alert: any) => (
+                                                        <div key={alert.id || Math.random()} className="p-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg flex flex-col gap-1">
+                                                            <span className="font-medium text-slate-800">{alert.title || 'התראה חדשה'}</span>
+                                                            <span className="text-xs">{alert.message || 'יש לך התראה חדשה במערכת.'}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-4 text-center text-sm text-slate-500">
+                                                    אין התראות חדשות
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
 
                         <div className="h-8 w-px bg-slate-200 mx-2"></div>
 

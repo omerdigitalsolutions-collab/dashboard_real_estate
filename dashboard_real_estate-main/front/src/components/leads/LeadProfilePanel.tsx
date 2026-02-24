@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     X, Phone, Mail, MapPin, Wallet, BedDouble,
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
+    MessageSquare, Send, Loader2,
 } from 'lucide-react';
 import { Lead, AppUser } from '../../types';
 import { updateLead } from '../../services/leadService';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
@@ -86,13 +89,60 @@ interface LeadProfilePanelProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+interface Message {
+    id: string;
+    text: string;
+    direction: 'inbound' | 'outbound';
+    timestamp: any;
+}
+
 export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: LeadProfilePanelProps) {
     const r = lead.requirements ?? {} as Lead['requirements'];
     const [assignedId, setAssignedId] = useState(lead.assignedAgentId ?? '');
     const [assigning, setAssigning] = useState(false);
     const [agentOpen, setAgentOpen] = useState(false);
+    const [activeSection, setActiveSection] = useState<'details' | 'whatsapp'>('details');
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [msgText, setMsgText] = useState('');
+    const [sending, setSending] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const assignedAgent = agents.find(a => a.uid === assignedId || a.id === assignedId);
+
+    // Load WhatsApp messages from Firestore subcollection
+    useEffect(() => {
+        if (!lead.id) return;
+        const q = query(
+            collection(db, `leads/${lead.id}/messages`),
+            orderBy('timestamp', 'asc')
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as Message)));
+            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        });
+        return () => unsub();
+    }, [lead.id]);
+
+    // Format WhatsApp phone number
+    const waPhone = lead.phone?.replace(/^0/, '972').replace(/[^\d]/g, '');
+
+    const handleSendWaMessage = async () => {
+        if (!msgText.trim()) return;
+        setSending(true);
+        // Save outbound message to Firestore for record
+        try {
+            await addDoc(collection(db, `leads/${lead.id}/messages`), {
+                text: msgText.trim(),
+                direction: 'outbound',
+                timestamp: serverTimestamp(),
+                isRead: true,
+            });
+        } catch (e) { /* silent */ }
+        // Open WhatsApp web with the message
+        window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msgText.trim())}`, '_blank');
+        setMsgText('');
+        setSending(false);
+    };
 
     const handleAssignAgent = async (agentId: string) => {
         setAssignedId(agentId);
@@ -130,8 +180,40 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                             <p className="text-blue-100 text-xs mt-0.5" dir="ltr">{lead.phone}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
-                        <X size={18} />
+                    <div className="flex items-center gap-2">
+                        {waPhone && (
+                            <a
+                                href={`https://wa.me/${waPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="פתח ווטסאפ"
+                                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white"
+                            >
+                                <MessageSquare size={18} />
+                            </a>
+                        )}
+                        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tab bar */}
+                <div className="flex border-b border-slate-100 bg-slate-50">
+                    <button
+                        onClick={() => setActiveSection('details')}
+                        className={`flex-1 py-2.5 text-xs font-bold transition-colors ${activeSection === 'details' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        פרטי ליד
+                    </button>
+                    <button
+                        onClick={() => setActiveSection('whatsapp')}
+                        className={`flex-1 py-2.5 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${activeSection === 'whatsapp' ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white' : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        <MessageSquare size={13} />
+                        ווטסאפ {messages.length > 0 && <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{messages.length}</span>}
                     </button>
                 </div>
 
@@ -148,7 +230,59 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                     </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                {/* WhatsApp Tab */}
+                {activeSection === 'whatsapp' && (
+                    <div className="flex flex-col flex-1 overflow-hidden">
+                        {/* Messages list */}
+                        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
+                            {messages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 py-10">
+                                    <MessageSquare size={36} className="mb-3 opacity-40" />
+                                    <p className="text-sm font-medium">אין הודעות עדיין</p>
+                                    <p className="text-xs mt-1">הודעות נכנסות מ-Green API יופיעו כאן</p>
+                                </div>
+                            ) : (
+                                messages.map(msg => (
+                                    <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${msg.direction === 'outbound'
+                                                ? 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'
+                                                : 'bg-emerald-500 text-white rounded-tl-sm'
+                                            }`}>
+                                            <p>{msg.text}</p>
+                                            {msg.timestamp?.toDate && (
+                                                <p className={`text-[10px] mt-1 ${msg.direction === 'outbound' ? 'text-slate-400' : 'text-emerald-100'}`} dir="ltr">
+                                                    {msg.timestamp.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                        {/* Compose bar */}
+                        <div className="border-t border-slate-100 bg-white px-3 py-3 flex items-center gap-2">
+                            <input
+                                value={msgText}
+                                onChange={e => setMsgText(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendWaMessage(); } }}
+                                placeholder="כתוב הודעה..."
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400"
+                                dir="rtl"
+                            />
+                            <button
+                                onClick={handleSendWaMessage}
+                                disabled={sending || !msgText.trim()}
+                                className="p-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-colors disabled:opacity-50 shrink-0"
+                            >
+                                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Details Tab */}
+                {activeSection === 'details' && <div className="flex-1 overflow-y-auto">
                     {/* Agent assignment */}
                     <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
@@ -306,7 +440,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                             value={lead.createdAt?.toDate().toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' })}
                         />
                     </div>
-                </div>
+                </div>}
             </div>
         </>
     );

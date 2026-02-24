@@ -62,14 +62,14 @@ function ActionMenu({
                     <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
                     <div className="absolute left-0 top-8 z-20 bg-white rounded-xl shadow-xl border border-slate-100 py-1 min-w-[160px]">
                         <button
-                            onClick={() => { onRoleChange(member.uid, member.role); setOpen(false); }}
+                            onClick={() => { if (member.uid) onRoleChange(member.uid, member.role); setOpen(false); }}
                             className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                         >
                             <RefreshCw size={14} className="text-slate-400" />
                             שנה ל{member.role === 'admin' ? 'סוכן' : 'מנהל'}
                         </button>
                         <button
-                            onClick={() => { onStatusToggle(member.uid, isActive); setOpen(false); }}
+                            onClick={() => { if (member.uid) onStatusToggle(member.uid, isActive); setOpen(false); }}
                             className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors ${isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                         >
                             {isActive ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
