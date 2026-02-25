@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.stripeWebhook = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 require("./config/admin");
 // ── Agencies Module ────────────────────────────────────────────────────────────
@@ -55,5 +55,7 @@ exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties,
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
-exports.whatsapp = { getWhatsAppQrCode: whatsapp_1.getWhatsAppQrCode, whatsappWebhook: whatsapp_1.whatsappWebhook };
+exports.whatsapp = { generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
+var stripeWebhook_1 = require("./stripeWebhook");
+Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 //# sourceMappingURL=index.js.map

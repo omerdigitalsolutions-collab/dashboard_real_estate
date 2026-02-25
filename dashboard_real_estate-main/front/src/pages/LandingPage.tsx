@@ -12,18 +12,17 @@ import {
 
 export default function LandingPage() {
     return (
-        <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden text-slate-900" dir="rtl">
+        <div className="min-h-screen bg-[#eff5f5] font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden text-slate-900" dir="rtl">
             {/* Navigation */}
-            <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 md:px-12 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-                <div className="flex items-baseline text-3xl tracking-tight" dir="ltr">
-                    <span className="font-black text-blue-900">hOME</span>
-                    <span className="font-black text-emerald-500">R</span>
+            <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 md:px-12 flex justify-between items-center bg-[#eff5f5]/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center" dir="ltr">
+                    <img src="/homer-logo.png" alt="Homer CRM" className="h-14 md:h-20 w-auto" />
                 </div>
                 <div className="flex items-center gap-4 md:gap-6">
                     <Link to="/login" className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors">
                         התחברות
                     </Link>
-                    <Link to="/join" className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                    <Link to="/register" className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
                         הירשם עכשיו
                     </Link>
                 </div>
@@ -37,11 +36,10 @@ export default function LandingPage() {
 
                 <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100 max-w-4xl">
                     <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-tight text-slate-900 mb-6 flex flex-col items-center">
-                        <div className="flex justify-center items-baseline mb-2" dir="ltr">
-                            <span className="text-blue-900">HOME</span>
-                            <span className="text-emerald-500">R</span>
+                        <div className="flex justify-center items-center mb-6" dir="ltr">
+                            <img src="/homer-logo.png" alt="Homer CRM" className="h-28 md:h-40 lg:h-52 w-auto" />
                         </div>
-                        <span className="text-3xl md:text-5xl lg:text-6xl mt-2 text-slate-800">- הבית של המתווכים</span>
+                        <span className="text-3xl md:text-5xl lg:text-6xl mt-2 text-slate-800"> הבית של המתווכים</span>
                     </h1>
 
                     <p className="text-lg md:text-xl lg:text-2xl text-slate-600 leading-relaxed max-w-3xl mx-auto font-medium mb-10">
@@ -50,7 +48,7 @@ export default function LandingPage() {
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <Link to="/join" className="w-full sm:w-auto px-8 py-4 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-xl shadow-emerald-500/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
+                        <Link to="/register" className="w-full sm:w-auto px-8 py-4 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-xl shadow-emerald-500/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
                             הירשם עכשיו
                             <ArrowLeft size={20} />
                         </Link>
@@ -72,11 +70,14 @@ export default function LandingPage() {
                                 <div className="w-3.5 h-3.5 rounded-full bg-slate-200"></div>
                                 <div className="w-3.5 h-3.5 rounded-full bg-slate-200"></div>
                             </div>
-                            {/* App Content Mockup Image */}
+                            {/* App Content Mockup Video */}
                             <div className="flex-1 w-full bg-slate-50 relative border-t border-slate-200 overflow-hidden flex items-start justify-center">
-                                <img
-                                    src="/dashboard-mockup.png"
-                                    alt="hOMER Dashboard Mockup"
+                                <video
+                                    src="/dashboard-animation.mp4"
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
                                     className="w-full h-auto object-cover object-top opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
                                 />
                             </div>
@@ -97,7 +98,7 @@ export default function LandingPage() {
             </section>
 
             {/* Features Overview */}
-            <section className="py-24 bg-white relative border-t border-slate-100">
+            <section className="py-24 bg-[#eff5f5] relative border-t border-slate-100/50">
                 <div className="max-w-7xl mx-auto px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-16">
                         <h2 className="text-3xl md:text-5xl font-black text-blue-900 mb-6">
@@ -107,7 +108,7 @@ export default function LandingPage() {
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
                         {/* Feature 1 */}
-                        <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <Home size={28} />
                             </div>
@@ -117,7 +118,7 @@ export default function LandingPage() {
                             </p>
                         </div>
                         {/* Feature 2 */}
-                        <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <MessageCircle size={28} />
                             </div>
@@ -127,7 +128,7 @@ export default function LandingPage() {
                             </p>
                         </div>
                         {/* Feature 3 */}
-                        <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <FileSignature size={28} />
                             </div>
@@ -137,7 +138,7 @@ export default function LandingPage() {
                             </p>
                         </div>
                         {/* Feature 4 */}
-                        <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <FileSpreadsheet size={28} />
                             </div>
@@ -151,7 +152,7 @@ export default function LandingPage() {
             </section>
 
             {/* Pricing Section */}
-            <section className="py-24 bg-slate-50 relative border-t border-slate-200">
+            <section className="py-24 bg-[#eff5f5] relative border-t border-slate-200/50">
                 <div className="max-w-7xl mx-auto px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-16">
                         <h2 className="text-3xl md:text-5xl font-black text-blue-900 mb-4">תוכניות ומחירים</h2>
@@ -179,7 +180,7 @@ export default function LandingPage() {
                                     <span>ניהול לידים ונכסים אישי</span>
                                 </li>
                             </ul>
-                            <Link to="/join" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
+                            <Link to="/register" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
                                 הירשם עכשיו
                             </Link>
                         </div>
@@ -215,7 +216,7 @@ export default function LandingPage() {
                                     <span>מחולל קטלוגים לנכסים</span>
                                 </li>
                             </ul>
-                            <Link to="/join" className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg text-center rounded-xl shadow-lg transition-colors">
+                            <Link to="/register" className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg text-center rounded-xl shadow-lg transition-colors">
                                 הירשם עכשיו
                             </Link>
                         </div>
@@ -244,7 +245,7 @@ export default function LandingPage() {
                                     <span>מנהל תיק אישי</span>
                                 </li>
                             </ul>
-                            <Link to="/join" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
+                            <Link to="/register" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
                                 הירשם עכשיו
                             </Link>
                         </div>
@@ -253,11 +254,10 @@ export default function LandingPage() {
             </section>
 
             {/* Footer */}
-            <footer className="bg-white border-t border-slate-200 py-12">
+            <footer className="bg-[#eff5f5] border-t border-slate-200/50 py-12">
                 <div className="max-w-7xl mx-auto px-6 lg:px-8 flex flex-col items-center">
-                    <div className="flex items-baseline text-2xl tracking-tight mb-6 opacity-80" dir="ltr">
-                        <span className="font-black text-blue-900">hOME</span>
-                        <span className="font-black text-emerald-500">R</span>
+                    <div className="flex items-center mb-6 opacity-80 hover:opacity-100 transition-opacity" dir="ltr">
+                        <img src="/homer-logo.png" alt="Homer CRM" className="h-16 md:h-20 w-auto grayscale hover:grayscale-0 transition-all" />
                     </div>
 
                     <div className="flex gap-6 mb-8 text-sm font-semibold text-slate-600">

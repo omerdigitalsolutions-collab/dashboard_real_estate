@@ -3,6 +3,7 @@ import { X, UserPlus, MapPin, DollarSign, Home, Zap, Car, Wind, Shield, Layers, 
 import { addLead } from '../../services/leadService';
 import { useAuth } from '../../context/AuthContext';
 import { useAgents } from '../../hooks/useFirestoreData';
+import { isValidPhone } from '../../utils/validation';
 
 interface AddLeadModalProps {
     isOpen: boolean;
@@ -82,6 +83,11 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userData?.agencyId) return;
+
+        if (!isValidPhone(phone)) {
+            showToast('מספר הטלפון שהוזן אינו תקין', false);
+            return;
+        }
 
         try {
             setLoading(true);

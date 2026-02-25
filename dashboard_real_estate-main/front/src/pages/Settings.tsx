@@ -5,7 +5,8 @@ import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { useAuth } from '../context/AuthContext';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, updateAgencySettings } from '../services/agencyService';
+import { isValidPhone } from '../utils/validation';
 
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
@@ -23,11 +24,11 @@ function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
   return (
     <button
       onClick={() => setOn(!on)}
-      className={`relative w-10 h-5.5 rounded-full transition-colors duration-200 flex-shrink-0 ${on ? 'bg-blue-600' : 'bg-slate-200'}`}
+      className={`relative w - 10 h - 5.5 rounded - full transition - colors duration - 200 flex - shrink - 0 ${on ? 'bg-blue-600' : 'bg-slate-200'} `}
       style={{ height: '22px', width: '40px' }}
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-4.5 h-4.5 rounded-full bg-white shadow transition-transform duration-200 ${on ? 'translate-x-[18px]' : 'translate-x-0'}`}
+        className={`absolute top - 0.5 left - 0.5 w - 4.5 h - 4.5 rounded - full bg - white shadow transition - transform duration - 200 ${on ? 'translate-x-[18px]' : 'translate-x-0'} `}
         style={{ width: '18px', height: '18px' }}
       />
     </button>
@@ -115,6 +116,12 @@ export default function Settings() {
   const handleSaveProfile = async () => {
     const docId = userData?.id ?? userData?.uid;
     if (!docId) return;
+
+    if (profilePhone && !isValidPhone(profilePhone)) {
+      alert('מספר הטלפון שהוזן אינו תקין');
+      return;
+    }
+
     setProfileSaving(true);
     try {
       await updateUserProfile(docId, {
@@ -144,10 +151,10 @@ export default function Settings() {
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === id
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
+                className={`flex items - center gap - 3 w - full px - 3 py - 2.5 rounded - xl text - sm font - medium transition - all ${activeSection === id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  } `}
               >
                 <Icon size={16} />
                 {label}

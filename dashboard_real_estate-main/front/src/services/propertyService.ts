@@ -127,3 +127,24 @@ export async function deleteProperty(propertyId: string): Promise<void> {
     const ref = doc(db, COLLECTION, propertyId);
     await deleteDoc(ref);
 }
+
+/**
+ * Uploads additional images for a property and returns their URLs.
+ */
+export async function uploadPropertyImages(
+    agencyId: string,
+    propertyId: string,
+    imageFiles: File[]
+): Promise<string[]> {
+    if (!imageFiles || imageFiles.length === 0) return [];
+
+    const uploadPromises = imageFiles.map(async (file) => {
+        const ext = file.name.split('.').pop() ?? 'jpg';
+        const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+        const storageRef = ref(storage, `agencies/${agencyId}/properties/${propertyId}/images/${uniqueFilename}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        return getDownloadURL(snapshot.ref);
+    });
+
+    return await Promise.all(uploadPromises);
+}

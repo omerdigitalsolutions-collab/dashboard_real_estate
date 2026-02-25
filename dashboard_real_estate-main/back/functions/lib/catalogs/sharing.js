@@ -59,8 +59,8 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
             .get();
         for (const doc of snap.docs) {
             const data = doc.data();
-            // Fallback Logic: Check images array
-            const images = data.images;
+            // Check both 'images' (legacy) and 'imageUrls' (from Storage upload)
+            const images = data.imageUrls || data.images;
             const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
             snapshottedProperties.push({
                 id: doc.id,
@@ -70,6 +70,8 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
                 rooms: data.rooms || null,
                 images: finalImages,
                 type: data.type || 'sale',
+                kind: data.kind || null,
+                description: data.description || null,
             });
         }
     }

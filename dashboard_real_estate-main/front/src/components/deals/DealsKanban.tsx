@@ -349,7 +349,33 @@ export default function DealsKanban() {
                                 />
                             </SortableContext>
                         ))}
+
+                        {/* Fallback column for deals with an unrecognised stage */}
+                        {(() => {
+                            const knownStageIds = new Set(activeStages.map(s => s.id));
+                            const orphaned = deals.filter(d => !knownStageIds.has(d.stage));
+                            if (orphaned.length === 0) return null;
+                            const fallbackStage = { id: '__orphan__' as any, label: 'חדש / לא מסווג', color: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-300', headerBg: 'bg-slate-100' };
+                            return (
+                                <SortableContext
+                                    key="__orphan__"
+                                    id="__orphan__"
+                                    items={orphaned.map(d => d.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <DealsColumn
+                                        stage={fallbackStage}
+                                        deals={orphaned}
+                                        leads={leads}
+                                        properties={properties}
+                                        onDelete={handleDelete}
+                                        onOpenProfile={setProfileModalDeal}
+                                    />
+                                </SortableContext>
+                            );
+                        })()}
                     </div>
+
 
                     <DragOverlay>
                         {activeDeal ? (

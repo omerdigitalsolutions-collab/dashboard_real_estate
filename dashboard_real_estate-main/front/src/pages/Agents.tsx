@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useAgentPerformance } from '../hooks/useFirestoreData';
 import InviteAgentModal from '../components/settings/InviteAgentModal';
 import EditAgentGoalsModal from '../components/modals/EditAgentGoalsModal';
-import { Star, UserPlus, Pencil } from 'lucide-react';
+import EditAgentModal from '../components/modals/EditAgentModal';
+import { Star, UserPlus, Pencil, UserCog } from 'lucide-react';
 import { AppUser } from '../types';
 
 export default function Agents() {
@@ -11,6 +12,7 @@ export default function Agents() {
   const { data: agentsData, loading } = useAgentPerformance();
   const [showInvite, setShowInvite] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AppUser | null>(null);
+  const [editingAgentDetails, setEditingAgentDetails] = useState<AppUser | null>(null);
   const [toast, setToast] = useState('');
 
   if (loading) {
@@ -96,16 +98,28 @@ export default function Agents() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400 font-medium font-mono">{(agent.id ?? '').slice(0, 8).toUpperCase()}</span>
                   {userData?.role === 'admin' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingAgent(agent.agentDoc);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100"
-                      title="עריכת יעדים אישיים"
-                    >
-                      <Pencil size={16} />
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingAgentDetails(agent.agentDoc);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                        title="ערוך פרטי סוכן"
+                      >
+                        <UserCog size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingAgent(agent.agentDoc);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        title="עריכת יעדים אישיים"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -133,6 +147,19 @@ export default function Agents() {
           onSuccess={() => {
             setEditingAgent(null);
             setToast('היעדים עודכנו בהצלחה! 🎯');
+            setTimeout(() => setToast(''), 3500);
+          }}
+        />
+      )}
+
+      {editingAgentDetails && (
+        <EditAgentModal
+          agent={editingAgentDetails}
+          isOpen={true}
+          onClose={() => setEditingAgentDetails(null)}
+          onSuccess={(msg) => {
+            setEditingAgentDetails(null);
+            setToast(msg);
             setTimeout(() => setToast(''), 3500);
           }}
         />

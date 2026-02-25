@@ -1,6 +1,9 @@
 import { Property } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon } from 'lucide-react';
-import { useState } from 'react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { useAgents, useLeads } from '../../hooks/useFirestoreData';
+import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
+import { useAuth } from '../../context/AuthContext';
 
 interface PropertyDetailsModalProps {
     property: Property;
@@ -8,8 +11,14 @@ interface PropertyDetailsModalProps {
 }
 
 export default function PropertyDetailsModal({ property, onClose }: PropertyDetailsModalProps) {
+    const { userData } = useAuth();
+    const { data: agents = [] } = useAgents();
+    const { data: leads = [] } = useLeads();
+
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const hasImages = property.imageUrls && property.imageUrls.length > 0;
     const images = hasImages ? property.imageUrls! : [];
@@ -17,6 +26,58 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
     const isRent = property.type === 'rent';
     const typeLabel = isRent ? 'להשכרה' : 'למכירה';
     const typeColor = isRent ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100';
+
+    const handleUploadClick = () => {
+        if (images.length >= 5) {
+            alert('לא ניתן להוסיף מעל השניה 5 תמונות לנכס.');
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        if (images.length + files.length > 5) {
+            alert(`ניתן להעלות עד 5 תמונות סך הכל. נותרו לך ${5 - images.length} תמונות.`);
+            return;
+        }
+
+        if (!userData?.agencyId) return;
+
+        try {
+            setIsUploading(true);
+            const newUrls = await uploadPropertyImages(userData.agencyId, property.id, files);
+            const combinedUrls = [...images, ...newUrls];
+            await updateProperty(property.id, { imageUrls: combinedUrls });
+            // Let the real-time listener update the local property obj eventually, or we could optimistic update.
+            // But since this receives `property` from parent which has `useProperties` real-time, it will update automatically.
+        } catch (error) {
+            console.error('Error uploading images:', error);
+            alert('אירעה שגיאה בהעלאת התמונות.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleAgentChange = async (newAgentId: string) => {
+        try {
+            await updateProperty(property.id, { agentId: newAgentId });
+        } catch (err) {
+            console.error('Error updating agent:', err);
+            alert('שגיאה בשיוך סוכן.');
+        }
+    };
+
+    const handleLeadChange = async (newLeadId: string) => {
+        try {
+            await updateProperty(property.id, { leadId: newLeadId });
+        } catch (err) {
+            console.error('Error updating lead:', err);
+            alert('שגיאה בשיוך ליד.');
+        }
+    };
 
     return (
         <>
@@ -82,9 +143,8 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                             </div>
                         )}
 
-                        {/* Thumbnail Gallery */}
-                        {hasImages && images.length > 1 && (
-                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar">
+                        {hasImages && (
+                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar items-center">
                                 {images.map((img, idx) => (
                                     <button
                                         key={idx}
@@ -94,8 +154,41 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                                         <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
+                                {images.length < 5 && (
+                                    <button
+                                        onClick={handleUploadClick}
+                                        disabled={isUploading}
+                                        className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                                    >
+                                        {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                                        <span className="text-[10px] font-medium leading-tight">
+                                            {isUploading ? 'מעלה...' : 'הוסף תמונה'}
+                                        </span>
+                                    </button>
+                                )}
                             </div>
                         )}
+
+                        {!hasImages && (
+                            <div className="flex justify-center mb-6">
+                                <button
+                                    onClick={handleUploadClick}
+                                    disabled={isUploading}
+                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+                                >
+                                    {isUploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                    הוסף תמונות ({images.length}/5)
+                                </button>
+                            </div>
+                        )}
+                        <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleFileChange}
+                        />
 
                         {/* Property Details Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -137,9 +230,42 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                             )}
                         </div>
 
-                        {/* Footer Info */}
-                        <div className="mt-8 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                            <div>פורסם על ידי מזהה סוכן: <span className="font-mono">{property.agentId?.slice(0, 8)}</span></div>
+                        {/* Footer Info / Associations */}
+                        <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row gap-6 text-sm">
+                            <div className="flex-1 space-y-2">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    שיוך סוכן מטפל
+                                </label>
+                                <select
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                                    value={property.agentId || ""}
+                                    onChange={(e) => handleAgentChange(e.target.value)}
+                                >
+                                    <option value="" disabled>בחר סוכן...</option>
+                                    {agents.map(a => (
+                                        <option key={a.id} value={a.uid || a.id || ""}>{a.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1 space-y-2">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    שיוך ליד פוטנציאלי
+                                </label>
+                                <select
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                                    value={property.leadId || ""}
+                                    onChange={(e) => handleLeadChange(e.target.value)}
+                                >
+                                    <option value="">ללא שיוך</option>
+                                    {leads.map(l => (
+                                        <option key={l.id} value={l.id}>{l.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                            <div>מזהה נכס: <span className="font-mono">{property.id?.slice(0, 8)}</span></div>
                             {property.daysOnMarket !== undefined && (
                                 <div>בשוק: {property.daysOnMarket} ימים</div>
                             )}

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     X, Phone, Mail, MapPin, Wallet, BedDouble,
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
-    MessageSquare, Send, Loader2,
+    MessageSquare, Send, Loader2, Heart,
 } from 'lucide-react';
-import { Lead, AppUser } from '../../types';
+import { Lead, AppUser, SharedCatalog } from '../../types';
 import { updateLead } from '../../services/leadService';
+import { getCatalogsByLeadId } from '../../services/catalogService';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
@@ -106,6 +107,34 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [msgText, setMsgText] = useState('');
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Liked properties from catalogs
+    type LikedPropertySnapshot = SharedCatalog['properties'][0];
+    const [likedProperties, setLikedProperties] = useState<LikedPropertySnapshot[]>([]);
+    const [loadingLikes, setLoadingLikes] = useState(false);
+
+    // Fetch catalogs for this lead and extract liked properties
+    useEffect(() => {
+        if (!lead.id || !lead.agencyId) return;
+        setLoadingLikes(true);
+        getCatalogsByLeadId(lead.id, lead.agencyId)
+            .then(catalogs => {
+                const liked: LikedPropertySnapshot[] = [];
+                const seenIds = new Set<string>();
+                for (const catalog of catalogs) {
+                    const likedIds = catalog.likedPropertyIds ?? [];
+                    for (const prop of catalog.properties) {
+                        if (likedIds.includes(prop.id) && !seenIds.has(prop.id)) {
+                            liked.push(prop);
+                            seenIds.add(prop.id);
+                        }
+                    }
+                }
+                setLikedProperties(liked);
+            })
+            .catch(err => console.warn('[LeadProfilePanel] Could not load liked properties:', err))
+            .finally(() => setLoadingLikes(false));
+    }, [lead.id, lead.agencyId]);
 
     const assignedAgent = agents.find(a => a.uid === assignedId || a.id === assignedId);
 
@@ -245,8 +274,8 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 messages.map(msg => (
                                     <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
                                         <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${msg.direction === 'outbound'
-                                                ? 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'
-                                                : 'bg-emerald-500 text-white rounded-tl-sm'
+                                            ? 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'
+                                            : 'bg-emerald-500 text-white rounded-tl-sm'
                                             }`}>
                                             <p>{msg.text}</p>
                                             {msg.timestamp?.toDate && (
@@ -419,6 +448,47 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                         <BoolBadge active={r.mustHaveBalcony} label="☀️ מרפסת" />
                                         <BoolBadge active={r.mustHaveSafeRoom} label='🛡️ ממ"ד' />
                                     </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Liked Properties from catalog */}
+                    {(loadingLikes || likedProperties.length > 0) && (
+                        <div className="px-5 pb-5">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                <Heart size={13} className="text-rose-400" />
+                                נכסים שאהב בקטלוג
+                                {likedProperties.length > 0 && (
+                                    <span className="bg-rose-100 text-rose-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{likedProperties.length}</span>
+                                )}
+                            </p>
+                            {loadingLikes ? (
+                                <div className="text-xs text-slate-400 py-2">טוען...</div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {likedProperties.map(prop => (
+                                        <div key={prop.id} className="flex items-center gap-3 bg-rose-50 border border-rose-100 rounded-xl p-2.5">
+                                            {/* Thumbnail */}
+                                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-rose-100 shrink-0">
+                                                {prop.images?.[0] ? (
+                                                    <img src={prop.images[0]} alt={prop.address} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-rose-300">
+                                                        <Building2 size={18} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 truncate">
+                                                    {prop.address.replace(/\s+\d+[א-ת]?\s*$/, '').trim()}{prop.city ? `, ${prop.city}` : ''}
+                                                </p>
+                                                <p className="text-xs font-semibold text-rose-600">₪{prop.price.toLocaleString()}</p>
+                                            </div>
+                                            <Heart size={14} className="text-rose-400 fill-rose-400 shrink-0" />
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>

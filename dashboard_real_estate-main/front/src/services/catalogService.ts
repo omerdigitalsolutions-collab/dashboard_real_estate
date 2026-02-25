@@ -65,6 +65,26 @@ export async function getCatalog(token: string): Promise<SharedCatalog | null> {
     return data;
 }
 
+/**
+ * Persists the liked property IDs to the catalog document.
+ * No auth required — public anonymous update allowed by Firestore rules.
+ */
+export async function saveCatalogLikes(token: string, likedPropertyIds: string[]): Promise<void> {
+    const docRef = doc(db, COLLECTION, token);
+    await updateDoc(docRef, { likedPropertyIds });
+}
+
+/**
+ * Fetches only the liked property IDs for a catalog, used by the admin panel.
+ */
+export async function getCatalogsByLeadId(leadId: string, agencyId: string): Promise<import('../types').SharedCatalog[]> {
+    const { getDocs, query: fsQuery, where, collection: col } = await import('firebase/firestore');
+    const snap = await getDocs(
+        fsQuery(col(db, COLLECTION), where('leadId', '==', leadId), where('agencyId', '==', agencyId))
+    );
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as import('../types').SharedCatalog));
+}
+
 // Keeping this for backwards compatibility if any components still import it
 export const getCatalogWithQueries = getCatalog;
 export type { SharedCatalog } from '../types';

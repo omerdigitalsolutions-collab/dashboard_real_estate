@@ -50,11 +50,13 @@ export default function DashboardLayout() {
     };
 
     return (
-        <div className="flex h-screen overflow-hidden bg-slate-50" dir="rtl">
+        <div className="flex h-screen overflow-hidden bg-[#0a0f1c]" dir="rtl">
             {/* Sidebar */}
-            <aside className="w-64 flex-shrink-0 bg-white border-l border-slate-200 flex flex-col z-20">
-                <div className="shrink-0 h-16 flex items-center px-6 border-b border-slate-200">
-                    <span className="text-xl font-bold text-slate-800">Omer Digital</span>
+            <aside className="w-64 flex-shrink-0 bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col z-20">
+                <div className="shrink-0 h-16 flex items-center px-6 border-b border-slate-800">
+                    <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                        <img src="/homer-logo.png" alt="Homer" className="h-8 w-auto mix-blend-screen brightness-200" />
+                    </span>
                 </div>
 
                 <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1">
@@ -63,9 +65,9 @@ export default function DashboardLayout() {
                             key={item.name}
                             to={item.href}
                             className={({ isActive }) =>
-                                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${isActive
-                                    ? 'bg-blue-50 text-blue-700'
-                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-300 ${isActive
+                                    ? 'bg-blue-500/10 border border-blue-500/20 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                                 }`
                             }
                         >
@@ -78,26 +80,29 @@ export default function DashboardLayout() {
                         <NavLink
                             to="/super-admin"
                             className={({ isActive }) =>
-                                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors mt-6 ${isActive
-                                    ? 'bg-indigo-50 text-indigo-700'
-                                    : 'text-indigo-600 hover:bg-indigo-50 hover:text-indigo-800'
+                                `flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold transition-all duration-300 mt-6 ${isActive
+                                    ? 'bg-purple-500/10 border border-purple-500/30 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
+                                    : 'text-purple-400 hover:bg-purple-500/10 hover:text-purple-300 border border-transparent'
                                 }`
                             }
                         >
                             <Shield className="w-5 h-5 flex-shrink-0" />
-                            לוח בקרת מערכת
+                            SUPER ADMIN
                         </NavLink>
                     )}
                 </nav>
             </aside>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                {/* Subtle background glow */}
+                <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+
                 {/* Header */}
-                <header className="shrink-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-10">
+                <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 z-10">
                     <div className="flex items-center gap-6">
-                        <h1 className="text-lg font-medium text-slate-800">
-                            בוקר טוב, {userData?.name || 'אורח'}
+                        <h1 className="text-lg font-medium text-white">
+                            בוקר טוב, <span className="text-cyan-400">{userData?.name || 'אורח'}</span>
                         </h1>
                     </div>
 
@@ -106,7 +111,7 @@ export default function DashboardLayout() {
                         <div className="relative">
                             <button
                                 onClick={() => setQuickAddOpen(v => !v)}
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+                                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
                             >
                                 <Plus size={16} />
                                 חדש
@@ -115,17 +120,17 @@ export default function DashboardLayout() {
                             {quickAddOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setQuickAddOpen(false)} />
-                                    <div className="absolute left-0 top-11 z-20 bg-white rounded-xl shadow-xl border border-slate-100 py-1 min-w-[170px]">
+                                    <div className="absolute left-0 top-11 z-20 bg-slate-900 rounded-xl shadow-2xl border border-slate-800 py-1 min-w-[170px] backdrop-blur-xl">
                                         <button
                                             onClick={() => { setShowAddProperty(true); setQuickAddOpen(false); }}
-                                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-cyan-400 transition-colors"
                                         >
-                                            <Building2 size={15} className="text-blue-500" />
+                                            <Building2 size={15} className="text-cyan-500" />
                                             הוסף נכס חדש
                                         </button>
                                         <button
                                             onClick={() => { setShowAddLead(true); setQuickAddOpen(false); }}
-                                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-emerald-400 transition-colors"
                                         >
                                             <Contact size={15} className="text-emerald-500" />
                                             הוסף ליד חדש
@@ -136,12 +141,12 @@ export default function DashboardLayout() {
                         </div>
                         <div className="relative">
                             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-slate-400" />
+                                <Search className="h-4 w-4 text-slate-500" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="חיפוש..."
-                                className="block w-64 pl-3 pr-10 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50 transition-all focus:bg-white"
+                                className="block w-64 pl-3 pr-10 py-2 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 bg-slate-900/50 backdrop-blur-sm transition-all focus:bg-slate-900"
                             />
                         </div>
 
@@ -161,22 +166,23 @@ export default function DashboardLayout() {
                             {notificationsOpen && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setNotificationsOpen(false)} />
-                                    <div className="absolute left-0 top-10 z-20 bg-white rounded-xl shadow-xl border border-slate-100 min-w-[280px] w-max max-w-sm">
-                                        <div className="p-3 border-b border-slate-100 font-semibold text-sm text-slate-800">
+                                    <div className="absolute left-0 top-10 z-20 bg-slate-900 rounded-xl shadow-2xl border border-slate-800 min-w-[280px] w-max max-w-sm backdrop-blur-xl">
+                                        <div className="p-3 border-b border-slate-800 font-semibold text-sm text-white flex items-center justify-between">
                                             התראות
+                                            {alerts.length > 0 && <span className="text-xs font-normal text-slate-400">{alerts.length} חדשות</span>}
                                         </div>
                                         <div className="p-2 max-h-80 overflow-y-auto">
                                             {alerts.length > 0 ? (
                                                 <div className="space-y-1">
                                                     {alerts.map((alert: any) => (
-                                                        <div key={alert.id || Math.random()} className="p-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg flex flex-col gap-1">
-                                                            <span className="font-medium text-slate-800">{alert.title || 'התראה חדשה'}</span>
-                                                            <span className="text-xs">{alert.message || 'יש לך התראה חדשה במערכת.'}</span>
+                                                        <div key={alert.id || Math.random()} className="p-2.5 text-sm text-slate-400 hover:bg-slate-800 rounded-lg flex flex-col gap-1 transition-colors cursor-pointer">
+                                                            <span className="font-medium text-slate-200">{alert.title || 'התראה חדשה'}</span>
+                                                            <span className="text-xs bg-slate-800/50 p-1.5 rounded-md mt-1">{alert.message || 'יש לך התראה חדשה במערכת.'}</span>
                                                         </div>
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <div className="p-4 text-center text-sm text-slate-500">
+                                                <div className="p-6 text-center text-sm text-slate-500">
                                                     אין התראות חדשות
                                                 </div>
                                             )}

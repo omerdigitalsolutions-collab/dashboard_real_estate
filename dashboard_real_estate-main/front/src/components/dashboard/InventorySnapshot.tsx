@@ -6,9 +6,9 @@ import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white rounded-xl px-3 py-2 shadow-xl border border-slate-100">
-                <p className="text-xs font-bold text-slate-800">{payload[0].name}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{payload[0].value} נכסים</p>
+            <div className="bg-slate-900/90 backdrop-blur-md rounded-xl px-3 py-2 shadow-2xl border border-slate-700">
+                <p className="text-xs font-bold text-white">{payload[0].name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{payload[0].value} נכסים</p>
             </div>
         );
     }
@@ -22,28 +22,28 @@ export default function InventorySnapshot() {
     const forRent = properties.filter(p => p.type === 'rent').length;
 
     const pieData = [
-        { name: 'למכירה', value: forSale, color: '#3b82f6' },
-        { name: 'להשכרה', value: forRent, color: '#8b5cf6' },
+        { name: 'למכירה', value: forSale, color: '#06b6d4' },
+        { name: 'להשכרה', value: forRent, color: '#10b981' },
     ];
 
     return (
         <>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
+            <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 flex flex-col gap-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-base font-bold text-slate-900">מלאי נכסים</h2>
+                        <h2 className="text-base font-bold text-white">מלאי נכסים</h2>
                         <p className="text-sm text-slate-400 mt-0.5">סקירת מצב עדכנית</p>
                     </div>
                 </div>
 
                 {/* Total counter */}
-                <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <div className="flex items-center gap-3 bg-slate-900/50 rounded-xl p-3 border border-slate-800">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center flex-shrink-0">
                         <Building2 size={20} />
                     </div>
                     <div>
-                        <p className="text-2xl font-bold text-slate-900">{properties.length}</p>
+                        <p className="text-2xl font-black text-white">{properties.length}</p>
                         <p className="text-xs text-slate-500">סה"כ נכסים בניהול</p>
                     </div>
                 </div>
@@ -73,10 +73,10 @@ export default function InventorySnapshot() {
                         {pieData.map(item => (
                             <div key={item.name} className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                                    <span className="text-xs text-slate-600 font-medium">{item.name}</span>
+                                    <span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: item.color, color: item.color }} />
+                                    <span className="text-xs text-slate-300 font-medium">{item.name}</span>
                                 </div>
-                                <span className="text-xs font-bold text-slate-800">{item.value}</span>
+                                <span className="text-xs font-bold text-white">{item.value}</span>
                             </div>
                         ))}
                     </div>

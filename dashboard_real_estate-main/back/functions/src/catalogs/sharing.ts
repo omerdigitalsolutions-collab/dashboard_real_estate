@@ -70,8 +70,8 @@ export const generateCatalog = onCall(async (request) => {
         for (const doc of snap.docs) {
             const data = doc.data();
 
-            // Fallback Logic: Check images array
-            const images = data.images as string[] | undefined;
+            // Check both 'images' (legacy) and 'imageUrls' (from Storage upload)
+            const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
             const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
 
             snapshottedProperties.push({
@@ -82,6 +82,8 @@ export const generateCatalog = onCall(async (request) => {
                 rooms: data.rooms || null,
                 images: finalImages,
                 type: data.type || 'sale',
+                kind: data.kind || null,
+                description: data.description || null,
             });
         }
     }

@@ -116,8 +116,8 @@ export default function Dashboard() {
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">לוח בקרה</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-xl font-bold text-white">לוח בקרה</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
             ברוך שובך{userData?.name ? `, ${userData.name}` : ''}. הנה מה שקורה היום.
           </p>
         </div>
@@ -126,7 +126,7 @@ export default function Dashboard() {
           {/* Import button – always visible */}
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+            className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-lg"
           >
             <Upload size={16} />
             ייבוא מאקסל
@@ -136,7 +136,7 @@ export default function Dashboard() {
             <button
               onClick={handleResetLayout}
               disabled={isResetting}
-              className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-60"
+              className="inline-flex items-center gap-2 bg-slate-900/50 border border-slate-800 text-slate-400 hover:text-slate-300 hover:bg-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-lg disabled:opacity-60"
             >
               {isResetting ? <Loader2 size={16} className="animate-spin" /> : <LayoutGrid size={16} />}
               איפוס לעיצוב מקורי
@@ -146,7 +146,7 @@ export default function Dashboard() {
           {isEditing ? (
             <button
               onClick={() => setIsEditing(false)}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm shadow-emerald-600/30"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
             >
               <Save size={16} />
               נשמר אוטומטית. סיים עריכה
@@ -154,7 +154,7 @@ export default function Dashboard() {
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-lg"
             >
               <Edit3 size={16} />
               ערוך דאשבורד
@@ -165,9 +165,9 @@ export default function Dashboard() {
 
       {/* ── Edit Mode Banner ─────────────────────────────────────────── */}
       {isEditing && (
-        <div className="mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 flex items-center gap-2">
+        <div className="mb-4 px-4 py-2.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-400 flex items-center gap-2 shadow-[0_0_10px_rgba(59,130,246,0.1)]">
           <Edit3 size={14} className="shrink-0" />
-          מצב עריכה פעיל — גרור ושנה גודל ווידג'טים לפי רצונך, לאחר מכן לחץ <strong className="mr-1">"שמור עיצוב"</strong>.
+          מצב עריכה פעיל — גרור ושנה גודל ווידג'טים לפי רצונך, לאחר מכן לחץ <strong className="mr-1 text-blue-300">"שמור עיצוב"</strong>.
         </div>
       )}
 

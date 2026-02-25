@@ -43,7 +43,8 @@ import { generateCatalog } from './catalogs/sharing';
 import { triggerSystemAlert } from './alerts/triggers';
 
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
-import { getWhatsAppQrCode, whatsappWebhook } from './whatsapp';
+import { generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
+
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
@@ -62,4 +63,7 @@ export const properties = { getLiveProperties, addProperty, updateProperty, dele
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog };
 export const alerts = { triggerSystemAlert };
-export const whatsapp = { getWhatsAppQrCode, whatsappWebhook };
+export const whatsapp = { generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook };
+
+
+export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';

@@ -5,7 +5,6 @@ import {
   ArrowLeftRight,
   UserCheck,
   Settings,
-  Building2,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -39,13 +38,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           ${open ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700/60">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-              <Building2 size={18} className="text-white" />
-            </div>
-            <div>
-              <p className="text-white font-semibold text-sm leading-tight">NovaCorp</p>
-              <p className="text-slate-400 text-xs">נדל"ן</p>
+          <div className="flex items-center pr-1">
+            <div className="bg-white px-3 py-1.5 rounded-xl flex items-center justify-center shadow-sm">
+              <img src="/homer-logo.png" alt="Homer CRM" className="h-7 w-auto mix-blend-multiply" />
             </div>
           </div>
           <button

@@ -26,6 +26,11 @@ service cloud.firestore {
       return inAgency(agencyId) && isAdmin();
     }
 
+    // Returns true if the caller is a system-wide super admin.
+    function isSuperAdmin() {
+      return isAuthed() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
     // Data validation helpers
     function isNonEmptyString(val) {
       return val is string && val.size() > 0;
@@ -53,8 +58,8 @@ service cloud.firestore {
     // AGENCIES
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId} {
-      // Members of this agency may read their own agency document.
-      allow read: if isAuthed() && inAgency(agencyId);
+      // Members of this agency and super admins may read agency documents.
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
 
       // Clients may update goals, settings, and extended profile fields (during onboarding)
       allow update: if isAuthed()
@@ -85,6 +90,8 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId} {
       allow read: if isAuthed() && (
+        isSuperAdmin()
+        ||
         // Always allow a user to read their own document.
         request.auth.uid == userId
         ||
@@ -254,11 +261,23 @@ service cloud.firestore {
     match /shared_catalogs/{catalogId} {
       allow read: if resource.data.expiresAt > request.time;
       
+      // Allow anonymous increments of viewCount (existing)
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) 
                     && request.resource.data.viewCount == resource.data.viewCount + 1;
+      
+      // Allow anonymous update of likedPropertyIds — any visitor can like/unlike properties
+      // Only the likedPropertyIds field may change, and it must be a list.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
+                    && request.resource.data.likedPropertyIds is list;
                     
       allow create, delete: if false; // Managed by Cloud Functions
     }
-
+    // ══════════════════════════════════════════════════════════════════════════
+    // SUPER ADMINS (System-wide Administrators)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /superAdmins/{userId} {
+      allow read: if isAuthed() && request.auth.uid == userId;
+      allow write: if false; // Only modified directly via Firebase Console
+    }
   }
 }

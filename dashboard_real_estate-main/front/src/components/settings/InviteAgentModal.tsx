@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
+import { isValidEmail, isValidPhone } from '../../utils/validation';
 
 interface InviteAgentModalProps {
     onClose: () => void;
@@ -37,9 +38,13 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
         e.preventDefault();
         setError('');
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+        if (!isValidEmail(email)) {
             setError('כתובת האימייל אינה תקינה');
+            return;
+        }
+
+        if (phone && !isValidPhone(phone)) {
+            setError('מספר הטלפון שהוזן אינו תקין');
             return;
         }
 

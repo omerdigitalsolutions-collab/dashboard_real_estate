@@ -11,6 +11,7 @@ import {
 import { completeOnboarding, uploadAgencyLogo, updateAgencyGoals } from '../services/agencyService';
 import { updateUserProfile } from '../services/userService';
 import type { AgencySpecialization } from '../types';
+import { isValidPhone } from '../utils/validation';
 
 const inputCls = 'appearance-none block w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-slate-50 focus:bg-white text-sm transition-all';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
@@ -85,6 +86,18 @@ export default function Onboarding() {
         e.preventDefault();
         setError('');
         if (!currentUser) return;
+
+        if (!isValidPhone(phone)) {
+            setError('מספר הטלפון (פרטים אישיים) אינו תקין');
+            setStep(0);
+            return;
+        }
+
+        if (!isValidPhone(officePhone)) {
+            setError('טלפון המשרד שהוזן אינו תקין');
+            setStep(1);
+            return;
+        }
 
         setIsLoading(true);
         let newAgencyId = '';

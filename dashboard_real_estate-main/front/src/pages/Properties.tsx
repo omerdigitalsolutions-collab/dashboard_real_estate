@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, Building, Trash2, LayoutGrid, List, MessageCircle, User as UserIcon, Building2, Upload } from 'lucide-react';
+import { Search, Plus, Building, Trash2, LayoutGrid, List, MessageCircle, User as UserIcon, Building2, Upload, Pencil } from 'lucide-react';
 import { useProperties, useAgents, useLeads, useDeals } from '../hooks/useFirestoreData';
 import AddPropertyModal from '../components/modals/AddPropertyModal';
+import EditPropertyModal from '../components/modals/EditPropertyModal';
 import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import ImportModal from '../components/modals/ImportModal';
 import { Property, AppUser, Lead, Deal } from '../types';
@@ -20,7 +21,9 @@ export default function Properties() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+    const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
+    const [toast, setToast] = useState('');
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -268,6 +271,16 @@ export default function Properties() {
                                                 </div>
                                             </div>
                                         </div>
+                                        {/* Edit button overlaid on the grid card */}
+                                        <div className="absolute bottom-3 left-3">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
+                                                className="bg-white/90 backdrop-blur-sm shadow text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
+                                                title="ערוך נכס"
+                                            >
+                                                <Pencil size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -351,23 +364,32 @@ export default function Properties() {
                                                     <div className="text-sm font-medium text-slate-700">{client?.name || '-'}</div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
-                                                    <button
-                                                        onClick={async (e) => {
-                                                            e.stopPropagation();
-                                                            if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
-                                                                try {
-                                                                    await deleteProperty(prop.id);
-                                                                } catch (err) {
-                                                                    console.error('Failed to delete property', err);
-                                                                    alert('שגיאה במחיקת הנכס. נסה שוב.');
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            title="ערוך נכס"
+                                                        >
+                                                            <Pencil size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
+                                                                    try {
+                                                                        await deleteProperty(prop.id);
+                                                                    } catch (err) {
+                                                                        console.error('Failed to delete property', err);
+                                                                        alert('שגיאה במחיקת הנכס. נסה שוב.');
+                                                                    }
                                                                 }
-                                                            }
-                                                        }}
-                                                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                                                        title="מחק נכס"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                            }}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                            title="מחק נכס"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -391,6 +413,19 @@ export default function Properties() {
                 onClose={() => setShowAddModal(false)}
             />
 
+            {editingProperty && (
+                <EditPropertyModal
+                    property={editingProperty}
+                    isOpen={true}
+                    onClose={() => setEditingProperty(null)}
+                    onSuccess={(msg) => {
+                        setEditingProperty(null);
+                        setToast(msg);
+                        setTimeout(() => setToast(''), 3500);
+                    }}
+                />
+            )}
+
             <ImportModal
                 isOpen={showImportModal}
                 onClose={() => setShowImportModal(false)}
@@ -402,6 +437,12 @@ export default function Properties() {
                     property={selectedProperty}
                     onClose={() => setSelectedProperty(null)}
                 />
+            )}
+
+            {toast && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50">
+                    {toast}
+                </div>
             )}
         </div>
     );

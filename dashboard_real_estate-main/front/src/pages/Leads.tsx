@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare, Pencil } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import PropertyMatcherModal from '../components/leads/PropertyMatcherModal';
 import LeadProfilePanel from '../components/leads/LeadProfilePanel';
 import AddLeadModal from '../components/modals/AddLeadModal';
+import EditLeadModal from '../components/modals/EditLeadModal';
 import ImportModal from '../components/modals/ImportModal';
 import BulkWhatsAppModal from '../components/modals/BulkWhatsAppModal';
 import { Toast, ToastState } from '../components/ui/Toast';
@@ -46,6 +47,7 @@ export default function Leads() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [matchingLead, setMatchingLead] = useState<Lead | null>(null);
   const [profileLead, setProfileLead] = useState<Lead | null>(null);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -455,14 +457,21 @@ export default function Leads() {
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             title="שלח הודעת ווטסאפ"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors opacity-0 group-hover:opacity-100"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
                           >
                             <MessageSquare size={16} />
                           </a>
                         )}
                         <button
+                          onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="ערוך ליד"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                           title="מחק ליד"
                         >
                           <Trash2 size={16} />
@@ -495,6 +504,17 @@ export default function Leads() {
           agents={agents}
           onClose={() => setProfileLead(null)}
           onUpdated={(msg) => {
+            setToast({ show: true, message: msg, type: 'success' });
+          }}
+        />
+      )}
+      {editingLead && (
+        <EditLeadModal
+          lead={editingLead}
+          isOpen={true}
+          onClose={() => setEditingLead(null)}
+          onSuccess={(msg) => {
+            setEditingLead(null);
             setToast({ show: true, message: msg, type: 'success' });
           }}
         />

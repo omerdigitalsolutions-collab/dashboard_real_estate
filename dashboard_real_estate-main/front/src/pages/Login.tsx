@@ -162,6 +162,15 @@ export default function Login() {
                         </div>
                     </div>
                 </div>
+
+                <div className="mt-6 text-center">
+                    <p className="text-sm text-slate-600">
+                        עדיין אין לך חשבון?{' '}
+                        <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+                            הירשם עכשיו
+                        </a>
+                    </p>
+                </div>
             </div>
         </div>
     );

@@ -13,11 +13,11 @@ const formatCurrency = (v: number) => {
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white rounded-xl px-4 py-3 shadow-xl border border-slate-100 text-right" dir="rtl">
-                <p className="text-sm font-bold text-slate-800 mb-1">{label}</p>
+            <div className="bg-slate-900/90 backdrop-blur-md rounded-xl px-4 py-3 shadow-2xl border border-slate-700 text-right" dir="rtl">
+                <p className="text-sm font-bold text-white mb-1">{label}</p>
                 <div className="space-y-1">
-                    <p className="text-xs text-blue-600 font-medium">
-                        הכנסות: <span className="font-bold">₪{payload[0].value.toLocaleString()}</span>
+                    <p className="text-xs text-cyan-400 font-medium">
+                        הכנסות: <span className="font-bold text-white">₪{payload[0].value.toLocaleString()}</span>
                     </p>
                 </div>
             </div>
@@ -32,8 +32,8 @@ export default function FinancialChart() {
 
     if (loading) {
         return (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 lg:p-6 h-full flex flex-col justify-center items-center">
-                <div className="animate-pulse flex gap-2"><div className="w-2 h-2 bg-slate-200 rounded-full"></div></div>
+            <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 lg:p-6 h-full flex flex-col justify-center items-center">
+                <div className="animate-pulse flex gap-2"><div className="w-2 h-2 bg-slate-700 rounded-full"></div></div>
             </div>
         );
     }
@@ -46,13 +46,13 @@ export default function FinancialChart() {
             : revenueData;
 
     return (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 lg:p-6 h-full flex flex-col">
+        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 lg:p-6 h-full flex flex-col">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h2 className="text-lg font-bold text-slate-900">מגמות פיננסיות</h2>
-                    <p className="text-sm text-slate-500 mt-0.5">עמלות והכנסות צפויות (בזמן אמת)</p>
+                    <h2 className="text-lg font-bold text-white">מגמות פיננסיות</h2>
+                    <p className="text-sm text-slate-400 mt-0.5">עמלות והכנסות צפויות (בזמן אמת)</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
+                <div className="flex bg-slate-900 p-1 rounded-xl self-start sm:self-auto border border-slate-800">
                     {[
                         { k: '3M', l: '3 חודשים' },
                         { k: '6M', l: '6 חודשים' },
@@ -61,7 +61,7 @@ export default function FinancialChart() {
                         <button
                             key={opt.k}
                             onClick={() => setTimeRange(opt.k as any)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${timeRange === opt.k ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${timeRange === opt.k ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-slate-500 hover:text-slate-300'}`}
                         >
                             {opt.l}
                         </button>
@@ -74,15 +74,15 @@ export default function FinancialChart() {
                     <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8', fontWeight: 500 }} axisLine={false} tickLine={false} dy={10} />
-                        <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#e2e8f0', strokeWidth: 1 }} />
-                        <Area type="monotone" dataKey="revenue" name="הכנסות" stroke="#10b981" strokeWidth={2.5} fill="url(#colorRevenue)" dot={false} activeDot={{ r: 5, fill: '#10b981', stroke: 'white', strokeWidth: 2 }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} axisLine={false} tickLine={false} dy={10} />
+                        <YAxis tickFormatter={formatCurrency} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#334155', strokeWidth: 1 }} />
+                        <Area type="monotone" dataKey="revenue" name="הכנסות" stroke="#06b6d4" strokeWidth={3} fill="url(#colorRevenue)" dot={false} activeDot={{ r: 6, fill: '#06b6d4', stroke: '#0a0f1c', strokeWidth: 3 }} style={{ filter: `drop-shadow(0px 0px 8px rgba(6,182,212,0.5))` }} />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>

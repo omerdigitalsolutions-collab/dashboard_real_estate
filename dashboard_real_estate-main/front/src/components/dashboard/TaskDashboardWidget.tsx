@@ -23,9 +23,9 @@ interface TaskDashboardWidgetProps {
 }
 
 const PRIORITIES = {
-    High: { dot: 'bg-red-500', label: 'גבוה' },
-    Medium: { dot: 'bg-amber-500', label: 'בינוני' },
-    Low: { dot: 'bg-emerald-500', label: 'נמוך' }
+    High: { dot: 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]', label: 'גבוה' },
+    Medium: { dot: 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]', label: 'בינוני' },
+    Low: { dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]', label: 'נמוך' }
 };
 
 export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboardWidgetProps) {
@@ -79,32 +79,32 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
 
     const getDueLabel = (dateRaw: any) => {
         const date = dateRaw?.toDate ? dateRaw.toDate() : new Date(dateRaw);
-        if (isBefore(date, startOfToday())) return { text: 'באיחור', color: 'text-red-600 font-bold', icon: AlertCircle };
-        if (isToday(date)) return { text: 'היום', color: 'text-amber-600', icon: Clock };
-        if (isTomorrow(date)) return { text: 'מחר', color: 'text-blue-600', icon: CalendarClock };
-        return { text: format(date, 'd MMM', { locale: he }), color: 'text-slate-500', icon: CalendarClock };
+        if (isBefore(date, startOfToday())) return { text: 'באיחור', color: 'text-red-400 font-bold', icon: AlertCircle };
+        if (isToday(date)) return { text: 'היום', color: 'text-orange-400', icon: Clock };
+        if (isTomorrow(date)) return { text: 'מחר', color: 'text-cyan-400', icon: CalendarClock };
+        return { text: format(date, 'd MMM', { locale: he }), color: 'text-slate-400', icon: CalendarClock };
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl shadow-xl border border-slate-800 overflow-hidden flex flex-col h-full">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
                 <div>
-                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                    <h3 className="font-bold text-white flex items-center gap-2">
                         המשימות שלי
                         {displayData.openCount > 0 && (
-                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">
+                            <span className="bg-cyan-500/20 text-cyan-400 text-xs px-2 py-0.5 rounded-full">
                                 {displayData.openCount}
                             </span>
                         )}
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">משימות פתוחות ותיעוד משימות שבוצעו</p>
+                    <p className="text-xs text-slate-400 mt-0.5">משימות פתוחות ותיעוד משימות שבוצעו</p>
                 </div>
             </div>
 
-            <div className="p-2 flex-grow overflow-y-auto">
+            <div className="p-2 flex-grow overflow-y-auto custom-scrollbar">
                 {displayData.total === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center py-10 text-slate-400">
-                        <CheckCircle2 size={40} strokeWidth={1.5} className="mb-3 text-slate-300" />
+                    <div className="h-full flex flex-col items-center justify-center py-10 text-slate-500">
+                        <CheckCircle2 size={40} strokeWidth={1.5} className="mb-3 text-slate-600" />
                         <p className="text-sm">אין משימות פתוחות</p>
                         <p className="text-xs">הכל מטופל, מצוין!</p>
                     </div>
@@ -117,13 +117,13 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                             return (
                                 <div
                                     key={task.id}
-                                    className={`flex items-start gap-3 p-3 rounded-xl transition-all border border-transparent group ${task.isCompleted ? 'bg-slate-50 opacity-75' : 'hover:bg-slate-50 hover:border-slate-100'
+                                    className={`flex items-start gap-3 p-3 rounded-xl transition-all border border-transparent group ${task.isCompleted ? 'bg-slate-800/50 opacity-75' : 'hover:bg-slate-800/50 hover:border-slate-700'
                                         } ${toggling === task.id ? 'opacity-50' : ''}`}
                                 >
                                     <button
                                         onClick={() => handleToggle(task)}
                                         disabled={toggling === task.id}
-                                        className={`mt-0.5 flex-shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-slate-300 hover:text-blue-500'
+                                        className={`mt-0.5 flex-shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-400' : 'text-slate-600 hover:text-cyan-400'
                                             }`}
                                     >
                                         {task.isCompleted ? <CheckCircle size={20} /> : <Circle size={20} />}
@@ -131,24 +131,24 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
 
                                     <div className="flex-grow min-w-0 pr-1">
                                         <div className="flex items-start justify-between gap-2">
-                                            <p className={`text-sm font-semibold line-clamp-1 ${task.isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                            <p className={`text-sm font-semibold line-clamp-1 ${task.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>
                                                 {task.title}
                                             </p>
                                             {!task.isCompleted && (
                                                 <div
-                                                    className={`w-2.5 h-2.5 rounded-full ${PRIORITIES[task.priority].dot} shadow-sm shrink-0 mt-1`}
+                                                    className={`w-2 h-2 rounded-full ${PRIORITIES[task.priority].dot} shrink-0 mt-1.5`}
                                                     title={`עדיפות: ${PRIORITIES[task.priority].label}`}
                                                 />
                                             )}
                                         </div>
 
                                         {task.description && (
-                                            <p className={`text-xs mt-1 line-clamp-1 ${task.isCompleted ? 'text-slate-400' : 'text-slate-500'}`}>{task.description}</p>
+                                            <p className={`text-xs mt-1 line-clamp-1 ${task.isCompleted ? 'text-slate-600' : 'text-slate-400'}`}>{task.description}</p>
                                         )}
 
                                         <div className="flex items-center gap-3 mt-2 text-xs">
                                             {task.isCompleted ? (
-                                                <span className="text-slate-400 text-[11px]">בוצע ב-{format(task.completedAt?.toDate() || new Date(), 'd MMM', { locale: he })}</span>
+                                                <span className="text-slate-500 text-[11px]">בוצע ב-{format(task.completedAt?.toDate() || new Date(), 'd MMM', { locale: he })}</span>
                                             ) : (
                                                 <span className={`flex items-center gap-1 ${due.color}`}>
                                                     <DueIcon size={12} />
@@ -160,7 +160,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                                                 <Link
                                                     to={task.relatedTo.type === 'lead' ? '/leads' : '/properties'}
                                                     state={{ openId: task.relatedTo.id }}
-                                                    className={`flex items-center gap-1 border-r pr-2 hover:underline hover:text-blue-600 transition-colors ${task.isCompleted ? 'text-slate-300 border-slate-200' : 'text-slate-500 border-slate-200'}`}
+                                                    className={`flex items-center gap-1 border-r pr-2 hover:underline hover:text-cyan-400 transition-colors ${task.isCompleted ? 'text-slate-600 border-slate-700' : 'text-slate-400 border-slate-700'}`}
                                                 >
                                                     {task.relatedTo.type === 'lead' ? <User size={12} /> : <Home size={12} />}
                                                     {task.relatedTo.type === 'lead' ? 'ליד - ' : 'נכס - '}
@@ -179,7 +179,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
             {displayData.total > 5 && (
                 <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="flex text-xs items-center justify-center gap-1 py-2 text-slate-500 hover:bg-slate-50 border-t border-slate-100 transition-colors shrink-0"
+                    className="flex text-xs items-center justify-center gap-1 py-2 text-slate-400 hover:bg-slate-800/50 border-t border-slate-800 transition-colors shrink-0"
                 >
                     {isExpanded ? (
                         <>הצג פחות <ChevronUp size={14} /></>
@@ -189,12 +189,12 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                 </button>
             )}
 
-            <div className="p-3 border-t border-slate-100 bg-slate-50/50">
+            <div className="p-3 border-t border-slate-800 bg-slate-900/50">
                 <button
                     onClick={onAddClick}
-                    className="w-full py-2 text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                    className="w-full py-2 text-sm font-bold text-slate-900 bg-emerald-500 hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)] rounded-lg transition-colors inline-flex items-center justify-center gap-2"
                 >
-                    + משימה חדשה
+                    משימה חדשה
                 </button>
             </div>
         </div>

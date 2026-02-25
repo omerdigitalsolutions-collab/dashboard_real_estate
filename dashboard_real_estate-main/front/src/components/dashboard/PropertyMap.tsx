@@ -27,12 +27,12 @@ function createHouseIcon(listingType: 'sale' | 'rent', kind?: string) {
     const isCommercial = kind === 'מסחרי';
     const isRent = listingType === 'rent';
 
-    let bg = '#3b82f6';     // blue → for sale
-    let shadow = '#1d4ed8';
+    let bg = '#06b6d4';     // cyan → for sale
+    let shadow = '#0891b2';
 
     if (isCommercial) {
-        bg = '#eab308';     // yellow → commercial
-        shadow = '#ca8a04';
+        bg = '#f97316';     // orange → commercial
+        shadow = '#ea580c';
     } else if (isRent) {
         bg = '#10b981';     // emerald → rent
         shadow = '#059669';
@@ -80,8 +80,8 @@ function MapAutoCenter({ center, zoom }: { center: [number, number]; zoom: numbe
 function PropertyPopupContent({ p }: { p: Property }) {
     const isRent = p.type === 'rent';
     const color = isRent
-        ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
-        : 'text-blue-600 bg-blue-50 border-blue-200';
+        ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30'
+        : 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30';
     const label = isRent ? 'להשכרה' : 'למכירה';
     const price = isRent
         ? `₪${p.price.toLocaleString()}/חודש`
@@ -96,7 +96,7 @@ function PropertyPopupContent({ p }: { p: Property }) {
                 <span className="text-sm font-bold text-slate-900">{price}</span>
             </div>
             {p.rooms && (
-                <p className="text-xs text-slate-400 mt-1">{p.rooms} חדרים</p>
+                <p className="text-xs text-slate-500 mt-1">{p.rooms} חדרים</p>
             )}
             {p.exclusivityEndDate && (
                 <p className="text-[10px] text-amber-600 mt-1 font-medium">
@@ -171,9 +171,9 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
         <div className={`flex flex-col ${fullscreen ? 'h-full' : ''}`} style={fullscreen ? {} : { height }}>
             {/* Legend + controls */}
             <div className="flex items-center justify-between mb-2 flex-shrink-0 flex-wrap gap-2">
-                <div className="flex items-center gap-1 text-xs text-slate-500">
+                <div className="flex items-center gap-1 text-xs text-slate-400">
                     {centerLabel && (
-                        <span className="flex items-center gap-1 text-slate-400">
+                        <span className="flex items-center gap-1 text-slate-500">
                             <MapPin size={11} />
                             {centerLabel}
                         </span>
@@ -182,31 +182,25 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
 
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0" />
-                        <span className="text-xs text-slate-600">למכירה ({saleCount})</span>
+                        <span className="w-3 h-3 rounded-full bg-cyan-500 flex-shrink-0 shadow-[0_0_5px_currentColor]" />
+                        <span className="text-xs text-slate-300">למכירה ({saleCount})</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full bg-emerald-500 flex-shrink-0" />
-                        <span className="text-xs text-slate-600">להשכרה ({rentCount})</span>
+                        <span className="w-3 h-3 rounded-full bg-emerald-500 flex-shrink-0 shadow-[0_0_5px_currentColor]" />
+                        <span className="text-xs text-slate-300">להשכרה ({rentCount})</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0" />
-                        <span className="text-xs text-slate-600">מסחרי</span>
+                        <span className="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0 shadow-[0_0_5px_currentColor]" />
+                        <span className="text-xs text-slate-300">מסחרי</span>
                     </div>
 
-                    <div className="flex items-center gap-1 mr-2 bg-slate-100 rounded-lg p-1 text-slate-500">
-                        <button
-                            onClick={recenterMap}
-                            className="p-1 rounded-md hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all"
-                            title="מרכז מפה לאזור השירות"
-                        >
-                            <Target size={14} />
-                        </button>
+                    <div className="flex items-center gap-1 mr-2 bg-slate-900/80 rounded-lg p-1 text-slate-400 border border-slate-800">
                         <button
                             onClick={() => setIsFullscreen(v => !v)}
-                            className="p-1 rounded-md hover:bg-white hover:text-slate-700 hover:shadow-sm transition-all"
+                            className="p-1 rounded-md hover:bg-slate-800 hover:text-cyan-400 transition-all flex items-center gap-1.5 px-2"
                             title={fullscreen ? 'צמצם' : 'הרחב מסך'}
                         >
+                            <span className="text-xs font-medium">{fullscreen ? 'צמצם מסך' : 'הרחב מסך'}</span>
                             {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
                         </button>
                     </div>
@@ -215,29 +209,44 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
 
             {/* Map */}
             <div
-                className="flex-1 rounded-xl overflow-hidden border border-slate-200 shadow-sm relative isolate"
+                className="flex-1 rounded-xl overflow-hidden border border-slate-800 shadow-xl relative isolate"
                 style={{
                     height: fullscreen ? '100%' : `calc(${height} - 32px)`,
                     minHeight: fullscreen ? 'auto' : '300px',
                     zIndex: 0 // Creates local stacking context to prevent leaflet from bleeding into z-50 modals
                 }}
             >
+                {/* Floating Centering Button */}
+                <div className="absolute top-3 right-3 z-[400]">
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            recenterMap();
+                        }}
+                        className="bg-white/90 backdrop-blur-sm border border-slate-200 p-2 rounded-lg shadow-md text-slate-700 hover:text-blue-600 hover:bg-white transition-all flex items-center gap-2 group cursor-pointer"
+                        title="מרכז מפה לאזור השירות או לנכס הקרוב"
+                    >
+                        <Target size={16} className="group-hover:scale-110 transition-transform text-blue-600" />
+                        <span className="text-xs font-bold pr-1">מיקוד מפה</span>
+                    </button>
+                </div>
                 {/* No coords fallback message inside map container */}
                 {geoProps.length === 0 && properties.length > 0 && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm">
-                        <MapPin size={32} className="opacity-40 text-slate-600 mb-2" />
-                        <p className="text-sm font-semibold text-slate-600">לא נמצאו נכסים עם כתובת ניתנת למיקום.</p>
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0f172a]/70 backdrop-blur-sm">
+                        <MapPin size={32} className="opacity-40 text-slate-400 mb-2" />
+                        <p className="text-sm font-semibold text-slate-300">לא נמצאו נכסים עם כתובת ניתנת למיקום.</p>
                     </div>
                 )}
                 <MapContainer
                     center={ISRAEL_CENTER}
                     zoom={9}
                     scrollWheelZoom={true}
-                    style={{ height: '100%', width: '100%' }}
+                    style={{ height: '100%', width: '100%', backgroundColor: '#f8fafc' }}
                 >
                     <MapAutoCenter center={mapCenter} zoom={mapZoom} />
                     <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
 
@@ -263,17 +272,17 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
 
             {isFullscreen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" dir="rtl">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col p-5 relative">
+                    <div className="bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col p-5 relative">
                         <button
                             onClick={() => setIsFullscreen(false)}
-                            className="absolute top-4 left-4 z-10 p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                            className="absolute top-4 left-4 z-10 p-2 rounded-xl bg-slate-900 border border-slate-800 shadow-md hover:bg-slate-800 text-slate-300 transition-colors"
                         >
                             <X size={18} />
                         </button>
-                        <h3 className="text-base font-bold text-slate-900 mb-4 text-right pr-2">
+                        <h3 className="text-base font-bold text-white mb-4 text-right pr-2">
                             🗺 מפת נכסים
                         </h3>
-                        <div className="flex-1 min-h-0 bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm relative isolate">
+                        <div className="flex-1 min-h-0 bg-[#0f172a] rounded-xl overflow-hidden border border-slate-800 shadow-xl relative isolate">
                             {mapContent(true)}
                         </div>
                     </div>

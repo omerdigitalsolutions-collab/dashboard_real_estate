@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Sparkles, MapPin, BedDouble, X, CheckSquare, MessageCircle, AlertCircle } from 'lucide-react';
+import { Sparkles, MapPin, BedDouble, X, CheckSquare, MessageCircle, AlertCircle, Link, Copy, Check, Send } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { createCatalog } from '../../services/catalogService';
 import { matchPropertiesForLead } from '../../services/leadService';
 import { Lead } from '../../types';
-
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
 
 interface PropertyMatcherModalProps {
@@ -21,6 +20,9 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
     const matchedProperties = matchPropertiesForLead(lead.requirements, properties);
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [catalogUrl, setCatalogUrl] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
@@ -39,46 +41,73 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
         });
     };
 
+    // Step 1: Create catalog and get the link
     const handleGenerateCatalog = async () => {
         if (selectedPropertyIds.size === 0) return;
-
         setIsGenerating(true);
         try {
-            // Need the agencyId from auth context or lead.
-            // Using lead.agencyId assuming leads must have it.
             const token = await createCatalog(
                 lead.agencyId,
                 lead.id,
                 lead.name,
                 Array.from(selectedPropertyIds)
             );
-
             const baseUrl = window.location.origin;
-            const catalogUrl = `${baseUrl}/catalog/${token}`;
-
-            const success = await sendWhatsAppWebhook({
-                action: 'send_catalog',
-                leadPhone: lead.phone,
-                leadName: lead.name,
-                catalogUrl: catalogUrl
-            });
-
-            if (success) {
-                if (onSuccess) {
-                    onSuccess('הקטלוג נוצר ונשלח ללקוח בהצלחה');
-                } else {
-                    alert(`הקטלוג נוצר בהצלחה!\nלינק: ${catalogUrl}`);
-                    onClose();
-                }
-            } else {
-                alert('הקטלוג נוצר, אך שגיאה אירעה בשליחת הווב-הוק.');
-                onClose();
-            }
+            setCatalogUrl(`${baseUrl}/catalog/${token}`);
         } catch (error) {
             console.error('Failed to generate catalog', error);
             alert('שגיאה ביצירת הקטלוג.');
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    // Copy link to clipboard
+    const handleCopyLink = async () => {
+        if (!catalogUrl) return;
+        try {
+            await navigator.clipboard.writeText(catalogUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Fallback
+            const input = document.createElement('input');
+            input.value = catalogUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    // Step 2: Send via WhatsApp
+    const handleSendWhatsApp = async () => {
+        if (!catalogUrl) return;
+        setIsSending(true);
+        try {
+            const success = await sendWhatsAppWebhook({
+                action: 'send_catalog',
+                leadPhone: lead.phone,
+                leadName: lead.name,
+                catalogUrl,
+            });
+
+            if (success) {
+                if (onSuccess) {
+                    onSuccess('הקטלוג נוצר ונשלח ללקוח בהצלחה');
+                }
+                onClose();
+            } else {
+                alert('הקטלוג נוצר, אך שגיאה אירעה בשליחת הווב-הוק.');
+                onClose();
+            }
+        } catch (error) {
+            console.error('Failed to send WhatsApp', error);
+            alert('שגיאה בשליחת הקטלוג בוואטסאפ.');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -168,12 +197,18 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                                         </div>
 
                                         <div className="w-24 h-24 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden relative border border-slate-100">
-                                            {/* Placeholder Image */}
-                                            <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100" />
+                                            {property.imageUrls && property.imageUrls.length > 0 ? (
+                                                <img src={property.imageUrls[0]} alt={property.address} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100" />
+                                            )}
                                         </div>
 
                                         <div className="flex-1 flex flex-col justify-center">
-                                            <h3 className="font-bold text-slate-800 leading-tight mb-1 pr-6">{property.address}</h3>
+                                            <h3 className="font-bold text-slate-800 leading-tight mb-1 pr-6">
+                                                {/* Show only street + city without house number */}
+                                                {property.address.replace(/\s+\d+[א-ת]?\s*$/, '').trim()}{property.city ? `, ${property.city}` : ''}
+                                            </h3>
                                             <p className="text-sm font-semibold text-blue-600 mb-2">₪{property.price.toLocaleString()}</p>
 
                                             <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
@@ -198,24 +233,85 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-5 border-t border-slate-100 bg-white flex justify-between items-center shrink-0">
-                    <button
-                        onClick={onClose}
-                        className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                    >
-                        ביטול
-                    </button>
-                    <button
-                        onClick={handleGenerateCatalog}
-                        disabled={selectedPropertyIds.size === 0}
-                        className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${selectedPropertyIds.size > 0
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            }`}
-                    >
-                        <CheckSquare size={16} />
-                        צור קטלוג דיגיטלי ושלח ({selectedPropertyIds.size})
-                    </button>
+                <div className="p-5 border-t border-slate-100 bg-white shrink-0">
+                    {/* Step 2: catalog link created — show link + send */}
+                    {catalogUrl ? (
+                        <div className="space-y-3">
+                            <div className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-2">
+                                <Link size={16} className="text-green-500" />
+                                קטלוג נוצר בהצלחה! העתק את הקישור או שלח ישירות:
+                            </div>
+                            {/* Link field with copy */}
+                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                                <span className="flex-1 text-xs text-slate-600 truncate font-mono">{catalogUrl}</span>
+                                <button
+                                    onClick={handleCopyLink}
+                                    className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
+                                >
+                                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                                    {copied ? 'הועתק!' : 'העתק'}
+                                </button>
+                            </div>
+                            {/* Action buttons */}
+                            <div className="flex justify-between items-center pt-1">
+                                <button
+                                    onClick={onClose}
+                                    className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                                >
+                                    סגור
+                                </button>
+                                <button
+                                    onClick={handleSendWhatsApp}
+                                    disabled={isSending}
+                                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-[#25D366] hover:bg-[#1db954] text-white shadow-md transition-all disabled:opacity-60"
+                                >
+                                    {isSending ? (
+                                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <Send size={16} />
+                                    )}
+                                    שלח ללקוח בוואטסאפ
+                                </button>
+                            </div>
+                            {/* Direct WhatsApp link fallback */}
+                            <div className="text-center pt-1">
+                                <a
+                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`שלום ${lead.name}, הכנתי עבורך קטלוג נכסים אישי: ${catalogUrl}`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-slate-400 hover:text-green-600 underline transition-colors"
+                                >
+                                    <MessageCircle size={12} className="inline ml-1" />
+                                    פתח וואטסאפ ישירות
+                                </a>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Step 1: Choose properties and create catalog */
+                        <div className="flex justify-between items-center">
+                            <button
+                                onClick={onClose}
+                                className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                            >
+                                ביטול
+                            </button>
+                            <button
+                                onClick={handleGenerateCatalog}
+                                disabled={selectedPropertyIds.size === 0 || isGenerating}
+                                className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${selectedPropertyIds.size > 0 && !isGenerating
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
+                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    }`}
+                            >
+                                {isGenerating ? (
+                                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <CheckSquare size={16} />
+                                )}
+                                {isGenerating ? 'יוצר קטלוג...' : `צור קטלוג דיגיטלי (${selectedPropertyIds.size})`}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

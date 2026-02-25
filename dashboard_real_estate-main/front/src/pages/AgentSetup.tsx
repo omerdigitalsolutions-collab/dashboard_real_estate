@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, auth } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { User, CheckCircle2 } from 'lucide-react';
+import { isValidPhone } from '../utils/validation';
 
 /**
  * /agent-setup?token=<stubId>
@@ -39,8 +40,8 @@ export default function AgentSetup() {
         e.preventDefault();
         setError('');
 
-        if (!phone.trim()) {
-            setError('נא להזין מספר טלפון');
+        if (!isValidPhone(phone)) {
+            setError('מספר הטלפון אינו תקין');
             return;
         }
 

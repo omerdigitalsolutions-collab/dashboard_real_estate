@@ -139,6 +139,7 @@ export interface Property {
     imageUrls?: string[];
     lat?: number;
     lng?: number;
+    leadId?: string;
 }
 
 // ─── Deals ────────────────────────────────────────────────────────────────────
@@ -194,8 +195,11 @@ export interface SharedCatalog {
         rooms: number | null;
         images: string[];
         type: PropertyType;
+        kind?: string | null;
+        description?: string | null;
     }[];
     viewCount: number;
+    likedPropertyIds?: string[];
     createdAt: Timestamp;
     expiresAt: Timestamp;
 }

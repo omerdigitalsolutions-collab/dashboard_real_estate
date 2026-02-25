@@ -4,6 +4,7 @@ import PublicLayout from './layouts/PublicLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Onboarding from './pages/Onboarding';
 import AgentJoin from './pages/AgentJoin';
 import AgentSetup from './pages/AgentSetup';
@@ -23,6 +24,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* Public Routes */}
         <Route element={<PublicLayout />}>

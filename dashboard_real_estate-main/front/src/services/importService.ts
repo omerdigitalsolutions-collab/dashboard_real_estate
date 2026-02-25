@@ -428,11 +428,11 @@ export async function importProperties(
             } else {
                 const ref = doc(collection(db, 'properties'));
                 batch.set(ref, {
-                    address: row.address ?? '',
-                    city: row.city ?? '',
-                    type: row.type ?? 'sale',
-                    kind: row.kind ?? 'דירה',
-                    price: row.price ?? 0,
+                    address: row.address || 'לא צויין רחוב',
+                    city: row.city || 'לא צויינה עיר',
+                    type: row.type || 'sale',
+                    kind: row.kind || 'דירה',
+                    price: row.price || 1, // Fallback to 1 since rules require > 0
                     rooms: row.rooms ?? null,
                     floor: row.floor ?? null,
                     description: row.description ?? null,
@@ -514,11 +514,11 @@ export async function importMixed(
 
             // Build property manually (since we don't have buildPropertyDefaults)
             batch.set(propertyRef, {
-                address: row.address ?? '',
-                city: row.city ?? '',
-                type: row.type ?? 'sale',
-                kind: row.kind ?? 'דירה',
-                price: row.price ?? 0,
+                address: row.address || 'לא צויין רחוב',
+                city: row.city || 'לא צויינה עיר',
+                type: row.type || 'sale',
+                kind: row.kind || 'דירה',
+                price: row.price || 1, // Fallback to 1 since rules require > 0
                 rooms: row.rooms ?? null,
                 floor: row.floor ?? null,
                 description: row.description ?? null,
@@ -593,11 +593,11 @@ export async function importDeals(
             // 1. Create Property
             const propertyRef = doc(collection(db, 'properties'));
             batch.set(propertyRef, {
-                address: row.propertyName ?? '',
-                city: row.city ?? '',
+                address: row.propertyName || 'לא צויין רחוב',
+                city: row.city || 'לא צויינה עיר',
                 type: 'sale',
                 kind: 'דירה',
-                price: row.price ?? 0,
+                price: row.price || 1,
                 rooms: null,
                 floor: null,
                 description: null,
