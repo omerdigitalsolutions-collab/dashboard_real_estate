@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
+import { Toast, ToastState } from '../ui/Toast';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
-import { httpsCallable } from 'firebase/functions';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 import { functions } from '../../config/firebase';
-
 interface AddPropertyModalProps {
     isOpen: boolean;
     onClose: () => void;
+    leadId?: string;
 }
 
 const PROPERTY_KINDS = ['דירה', 'בית פרטי', 'פנטהאוז', 'מסחרי'];
@@ -15,7 +16,7 @@ const PROPERTY_KINDS = ['דירה', 'בית פרטי', 'פנטהאוז', 'מסח
 const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50 focus:bg-white';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
-export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalProps) {
+export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropertyModalProps) {
     const { userData } = useAuth();
 
     const [addressQuery, setAddressQuery] = useState('');
@@ -37,12 +38,19 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
-    // Magic Import States
     const [importUrl, setImportUrl] = useState('');
     const [isImporting, setIsImporting] = useState(false);
 
+    // AI Extraction State
+    const [rawText, setRawText] = useState('');
+    const [isExtracting, setIsExtracting] = useState(false);
+
     const [loading, setLoading] = useState(false);
-    const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+    const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
+
+    const showToast = (message: string, isOk: boolean = true) => {
+        setToast({ show: true, message, type: isOk ? 'success' : 'error' });
+    };
 
     const fetchSuggestions = async (query: string) => {
         if (!query || query.length < 3) {
@@ -51,7 +59,8 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
         }
         setIsSearching(true);
         try {
-            const getSuggestions = httpsCallable(functions, 'properties-getAddressSuggestions');
+            const fns = getFunctions(undefined, 'europe-west1');
+            const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
             const res = await getSuggestions({ query });
             const data = res.data as any[];
             setSuggestions(data.slice(0, 5));
@@ -91,10 +100,7 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
 
     if (!isOpen) return null;
 
-    const showToast = (msg: string, ok = true) => {
-        setToast({ msg, ok });
-        setTimeout(() => setToast(null), 3500);
-    };
+
 
     const resetForm = () => {
         setAddressQuery(''); setCity(''); setType('sale'); setKind('דירה');
@@ -164,6 +170,41 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
         }
     };
 
+    const handleAIExtract = async () => {
+        if (!rawText.trim()) {
+            showToast('יש להזין טקסט לחילוץ', false);
+            return;
+        }
+
+        setIsExtracting(true);
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const extractFunction = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any }>(fns, 'ai-extractAiData');
+            const result = await extractFunction({ payload: rawText.trim(), mode: 'single', entityType: 'properties' });
+
+            if (result.data.success && result.data.data) {
+                const d = result.data.data;
+                if (d.city) setCity(d.city);
+                if (d.address) setAddressQuery(d.address);
+                if (d.price) setPrice(d.price.toString());
+                if (d.rooms) setRooms(d.rooms.toString());
+                if (d.kind) setKind(d.kind);
+                if (d.type) setType(d.type);
+                if (d.description) setDescription(d.description);
+
+                showToast('✅ הנתונים חולצו בהצלחה בעזרת AI');
+                setRawText(''); // Clear the textarea
+            } else {
+                showToast('לא הצלחנו לחלץ נתונים מהטקסט, נא לנסות שוב', false);
+            }
+        } catch (err) {
+            console.error('Extraction error:', err);
+            showToast('שגיאה בתקשורת מול AI. אנא נסו שוב.', false);
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userData?.agencyId) return;
@@ -182,7 +223,8 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
 
             // Fallback: If no suggestion was selected, or it's missing coords, geocode on backend
             if (!lat || !lng) {
-                const getCoords = httpsCallable(functions, 'properties-getCoordinates');
+                const fns = getFunctions(undefined, 'europe-west1');
+                const getCoords = httpsCallable(fns, 'properties-getCoordinates');
                 const addrToGeocode = [addressQuery, city].filter(Boolean).join(', ');
                 const geoRes = await getCoords({ address: addrToGeocode });
                 const coords = geoRes.data as { lat: number, lng: number } | null;
@@ -202,9 +244,11 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
                 ...(floor ? { floor: parseFloat(floor) } : {}),
                 ...(lat && lng ? { lat, lng } : {}),
                 ...(description ? { description: description.trim() } : {}),
+                // Normalize: magic import images become the base image list
                 ...(importedImages.length > 0 ? { images: importedImages } : {}),
                 isExclusive,
                 ...(isExclusive && imageFiles.length > 0 ? { imageFiles } : {}),
+                ...(leadId ? { leadId } : {}),
                 agentId: userData.uid || '',
             });
             showToast('הנכס נוסף בהצלחה ✓');
@@ -244,13 +288,45 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
 
                 <div className="p-6 space-y-5">
 
-                    {/* --- Magic Import Section --- */}
-                    <div className="p-4 bg-gradient-to-br from-indigo-50 to-blue-50/50 rounded-2xl border border-indigo-100 shadow-sm relative overflow-hidden">
+                    {/* --- AI Text Extraction Section --- */}
+                    <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
-                            <Wand2 size={64} />
+                            <Wand2 size={64} className="text-purple-600" />
                         </div>
-                        <label className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 uppercase tracking-wider mb-2.5">
-                            <Wand2 size={14} />
+                        <label className="flex items-center justify-between text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2.5">
+                            <span className="flex items-center gap-1.5">
+                                <Wand2 size={14} />
+                                חילוץ אוטומטי מטקסט פתוח (AI)
+                            </span>
+                        </label>
+                        <div className="flex flex-col gap-2 relative z-10 text-right">
+                            <textarea
+                                value={rawText}
+                                onChange={e => setRawText(e.target.value)}
+                                placeholder="הדבק כאן הודעת פייסבוק, ווצאפ או כל טקסט אחר (למשל: למכירה בחיפה, דירת 4 חדרים, 2 מיליון שח...)"
+                                className="w-full border border-indigo-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white min-h-[80px] resize-y"
+                                dir="rtl"
+                            />
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-indigo-600 font-medium bg-indigo-100/50 px-2 py-1 rounded-lg">
+                                    Flash ✨ מערכת בינה מלאכותית
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleAIExtract}
+                                    disabled={isExtracting || !rawText.trim()}
+                                    className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+                                >
+                                    {isExtracting ? <Loader2 size={16} className="animate-spin" /> : 'חלץ נתונים'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* --- Magic Import Section --- */}
+                    <div className="p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden">
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
+                            <Building2 size={14} />
                             ייבוא מהיר מלינק (yad2 / madlan)
                         </label>
                         <div className="flex gap-2 relative z-10">
@@ -258,23 +334,18 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
                                 value={importUrl}
                                 onChange={e => setImportUrl(e.target.value)}
                                 placeholder="https://www.yad2.co.il/item/..."
-                                className="flex-1 border border-indigo-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white"
+                                className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
                                 dir="ltr"
                             />
                             <button
                                 type="button"
                                 onClick={handleMagicImport}
                                 disabled={isImporting || !importUrl.startsWith('http')}
-                                className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+                                className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
                             >
-                                {isImporting ? <Loader2 size={16} className="animate-spin" /> : 'ייבוא'}
+                                {isImporting ? <Loader2 size={16} className="animate-spin" /> : 'ייבוא לינק'}
                             </button>
                         </div>
-                        {isImporting && (
-                            <div className="mt-2 text-xs font-semibold text-indigo-500 animate-pulse">
-                                מנתח את פרטי הנכס...
-                            </div>
-                        )}
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -430,13 +501,6 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
                             )}
                         </div>
 
-                        {/* Toast */}
-                        {toast && (
-                            <div className={`text-xs font-medium px-4 py-3 rounded-xl border ${toast.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                {toast.msg}
-                            </div>
-                        )}
-
                         {/* Actions */}
                         <div className="flex gap-3 pt-2">
                             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
@@ -449,6 +513,7 @@ export default function AddPropertyModal({ isOpen, onClose }: AddPropertyModalPr
                     </form>
                 </div>
             </div>
+            <Toast {...toast} onClose={() => setToast(prev => ({ ...prev, show: false }))} />
         </div>
     );
 }

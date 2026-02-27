@@ -11,6 +11,7 @@ interface LiveDashboardData {
     alerts: Alert[];
     leads: Lead[];
     agencySettings: Agency['settings'] | null;
+    agencyName: string | null;
     loading: boolean;
     error: Error | null;
 }
@@ -24,6 +25,7 @@ export function useLiveDashboardData(): LiveDashboardData {
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [agencySettings, setAgencySettings] = useState<Agency['settings'] | null>(null);
+    const [agencyName, setAgencyName] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -47,7 +49,10 @@ export function useLiveDashboardData(): LiveDashboardData {
 
         const unsubProperties = onSnapshot(qProperties, (snap) => {
             setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property)));
-        }, (err) => setError(err));
+        }, (err) => {
+            console.error('[useLiveDashboardData] Properties Error:', err);
+            setError(err);
+        });
 
         // 2. Deals Query
         const qDeals = query(
@@ -57,7 +62,10 @@ export function useLiveDashboardData(): LiveDashboardData {
 
         const unsubDeals = onSnapshot(qDeals, (snap) => {
             setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
-        }, (err) => setError(err));
+        }, (err) => {
+            console.error('[useLiveDashboardData] Deals Error:', err);
+            setError(err);
+        });
 
         // 3. Tasks Query (Only for current user)
         const qTasks = query(
@@ -68,7 +76,10 @@ export function useLiveDashboardData(): LiveDashboardData {
 
         const unsubTasks = onSnapshot(qTasks, (snap) => {
             setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppTask)));
-        }, (err) => setError(err));
+        }, (err) => {
+            console.error('[useLiveDashboardData] Tasks Error:', err);
+            setError(err);
+        });
 
         // 3.5. Leads Query (Sort client-side to avoid composite index requirement)
         const qLeads = query(
@@ -137,9 +148,24 @@ export function useLiveDashboardData(): LiveDashboardData {
         const agencyRef = doc(db, 'agencies', agencyId);
         const unsubAgency = onSnapshot(agencyRef, (snap) => {
             if (snap.exists()) {
-                setAgencySettings(snap.data()?.settings || {});
+                const data = snap.data();
+                const settings = data?.settings || {};
+
+                // Merge legacy root-level logoUrl if it's missing from settings
+                let logo = settings.logoUrl || data?.logoUrl;
+
+                if (logo) {
+                    // console.log('[useLiveDashboardData] Agency Logo found:', logo);
+                    settings.logoUrl = logo;
+                }
+
+                setAgencySettings(settings);
+                setAgencyName(data?.agencyName || data?.name || null);
             }
-        }, (err) => setError(err));
+        }, (err) => {
+            console.error('[useLiveDashboardData] Agency Error:', err);
+            setError(err);
+        });
 
 
         return () => {
@@ -190,5 +216,5 @@ export function useLiveDashboardData(): LiveDashboardData {
         }
     }, [tasks]);
 
-    return { properties, deals, tasks, alerts, leads, agencySettings, loading, error };
+    return { properties, deals, tasks, alerts, leads, agencySettings, agencyName, loading, error };
 }

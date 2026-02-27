@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
     X, Phone, Mail, MapPin, Wallet, BedDouble,
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
-    MessageSquare, Send, Loader2, Heart,
+    MessageSquare, Send, Loader2, Heart, Link, Copy, Check, ExternalLink
 } from 'lucide-react';
 import { Lead, AppUser, SharedCatalog } from '../../types';
 import { updateLead } from '../../services/leadService';
 import { getCatalogsByLeadId } from '../../services/catalogService';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-
-// ─── Labels ───────────────────────────────────────────────────────────────────
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const conditionLabels: Record<string, string> = {
     new: 'חדש מקבלן',
@@ -107,6 +107,23 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [msgText, setMsgText] = useState('');
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyCatalogLink = async () => {
+        if (!lead.catalogUrl) return;
+        try {
+            await navigator.clipboard.writeText(lead.catalogUrl);
+        } catch {
+            const input = document.createElement('input');
+            input.value = lead.catalogUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     // Liked properties from catalogs
     type LikedPropertySnapshot = SharedCatalog['properties'][0];
@@ -152,25 +169,32 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
         return () => unsub();
     }, [lead.id]);
 
-    // Format WhatsApp phone number
-    const waPhone = lead.phone?.replace(/^0/, '972').replace(/[^\d]/g, '');
+    // Format WhatsApp phone number (unused for now, kept logic inside if needed later)
 
     const handleSendWaMessage = async () => {
-        if (!msgText.trim()) return;
+        if (!msgText.trim() || sending) return;
         setSending(true);
-        // Save outbound message to Firestore for record
+
         try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const sendFn = httpsCallable<{ phone: string, message: string }, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
+            await sendFn({ phone: lead.phone, message: msgText.trim() });
+
+            // Only save outbound message to Firestore AFTER successful send
             await addDoc(collection(db, `leads/${lead.id}/messages`), {
                 text: msgText.trim(),
                 direction: 'outbound',
                 timestamp: serverTimestamp(),
                 isRead: true,
             });
-        } catch (e) { /* silent */ }
-        // Open WhatsApp web with the message
-        window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msgText.trim())}`, '_blank');
-        setMsgText('');
-        setSending(false);
+
+            setMsgText('');
+        } catch (e: any) {
+            console.error('Failed to send WhatsApp message:', e);
+            onUpdated(`שגיאה בשליחת ההודעה: ${e.message}`);
+        } finally {
+            setSending(false);
+        }
     };
 
     const handleAssignAgent = async (agentId: string) => {
@@ -210,17 +234,6 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        {waPhone && (
-                            <a
-                                href={`https://wa.me/${waPhone}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="פתח ווטסאפ"
-                                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white"
-                            >
-                                <MessageSquare size={18} />
-                            </a>
-                        )}
                         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
                             <X size={18} />
                         </button>
@@ -453,6 +466,38 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                         </div>
                     )}
 
+                    {/* Catalog Link */}
+                    {lead.catalogUrl && (
+                        <div className="px-5 pb-5">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                <Link size={13} className="text-blue-500" />
+                                קטלוג נכסים אישי
+                            </p>
+
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 flex flex-col gap-2.5">
+                                <span className="text-xs text-slate-600 font-mono truncate" dir="ltr">{lead.catalogUrl}</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleCopyCatalogLink}
+                                        className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold px-2 py-1.5 rounded-lg transition-colors border ${copied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        {copied ? <Check size={12} /> : <Copy size={12} />}
+                                        {copied ? 'הועתק!' : 'העתק'}
+                                    </button>
+                                    <a
+                                        href={lead.catalogUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-bold px-2 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                                    >
+                                        <ExternalLink size={12} />
+                                        צפה
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Liked Properties from catalog */}
                     {(loadingLikes || likedProperties.length > 0) && (
                         <div className="px-5 pb-5">
@@ -468,26 +513,33 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                             ) : (
                                 <div className="space-y-2">
                                     {likedProperties.map(prop => (
-                                        <div key={prop.id} className="flex items-center gap-3 bg-rose-50 border border-rose-100 rounded-xl p-2.5">
+                                        <RouterLink
+                                            key={prop.id}
+                                            to={`/properties?id=${prop.id}`}
+                                            className="flex items-center gap-3 bg-rose-50 border border-rose-100 rounded-xl p-2.5 hover:bg-rose-100/50 transition-colors group"
+                                        >
                                             {/* Thumbnail */}
                                             <div className="w-12 h-12 rounded-lg overflow-hidden bg-rose-100 shrink-0">
-                                                {prop.images?.[0] ? (
-                                                    <img src={prop.images[0]} alt={prop.address} className="w-full h-full object-cover" />
+                                                {(prop.images?.[0]) ? (
+                                                    <img
+                                                        src={prop.images[0]}
+                                                        alt={prop.address}
+                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                                    />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-rose-300">
                                                         <Building2 size={18} />
                                                     </div>
                                                 )}
                                             </div>
-                                            {/* Info */}
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold text-slate-800 truncate">
-                                                    {prop.address.replace(/\s+\d+[א-ת]?\s*$/, '').trim()}{prop.city ? `, ${prop.city}` : ''}
-                                                </p>
-                                                <p className="text-xs font-semibold text-rose-600">₪{prop.price.toLocaleString()}</p>
+                                                <p className="text-[13px] font-bold text-slate-800 truncate">{prop.address}</p>
+                                                <p className="text-[11px] font-medium text-rose-600">₪{prop.price.toLocaleString()}</p>
                                             </div>
-                                            <Heart size={14} className="text-rose-400 fill-rose-400 shrink-0" />
-                                        </div>
+                                            <div className="text-rose-300 group-hover:text-rose-500 transition-colors">
+                                                <ExternalLink size={14} />
+                                            </div>
+                                        </RouterLink>
                                     ))}
                                 </div>
                             )}

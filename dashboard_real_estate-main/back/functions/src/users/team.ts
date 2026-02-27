@@ -143,6 +143,70 @@ export const toggleAgentStatus = onCall(async (request) => {
   return { success: true };
 });
 
+
+/**
+ * deleteAgent — Permanently removes a team member's Firestore document.
+ *
+ * Security:
+ *   - Caller must be authenticated and have role === 'admin'.
+ *   - Caller cannot delete themselves.
+ *   - Target user must be in the same agency.
+ *
+ * Input:  { userId: string }
+ * Output: { success: true }
+ */
+export const deleteAgent = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+
+  const { userId } = request.data as { userId?: string };
+
+  if (!userId?.trim()) {
+    throw new HttpsError('invalid-argument', 'userId is required.');
+  }
+
+  // ── Prevent self-deletion ────────────────────────────────────────────────────
+  if (request.auth.uid === userId.trim()) {
+    throw new HttpsError('permission-denied', 'You cannot delete yourself.');
+  }
+
+  // ── Verify caller is admin ───────────────────────────────────────────────────
+  const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
+  if (!callerDoc.exists) {
+    throw new HttpsError('not-found', 'Caller user document not found.');
+  }
+  const caller = callerDoc.data() as { role: Role; agencyId: string; isActive?: boolean };
+
+  if (caller.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only admins can delete agents.');
+  }
+  if (caller.isActive === false) {
+    throw new HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
+  }
+
+  // ── Verify target belongs to same agency ────────────────────────────────────
+  const targetDoc = await db.doc(`users/${userId.trim()}`).get();
+  if (!targetDoc.exists) {
+    throw new HttpsError('not-found', 'Target user not found.');
+  }
+  const target = targetDoc.data() as { agencyId: string; uid?: string | null };
+
+  if (target.agencyId !== caller.agencyId) {
+    throw new HttpsError('permission-denied', 'Cannot modify users in a different agency.');
+  }
+
+  // ── DELETE ──────────────────────────────────────────────────────────────────
+  await db.doc(`users/${userId.trim()}`).delete();
+
+  // If the user was already linked to an Auth account, we *could* delete it here,
+  // but usually it's better to just remove their access via Custom Claims or 
+  // just Firestore doc deletion which is checked by security rules. 
+  // For now, simple Firestore deletion satisfies the requirement.
+
+  return { success: true };
+});
+
 // ─── HTML Email Template ──────────────────────────────────────────────────────
 function buildInviteEmail(agentName: string, agencyName: string, joinLink: string): string {
   return `

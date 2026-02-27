@@ -13,12 +13,18 @@ service cloud.firestore {
 
     // Returns true if the caller belongs to the given agencyId (via Custom Claims).
     function inAgency(agencyId) {
-      return isAuthed() && request.auth.token.agencyId == agencyId;
+      return isAuthed() && (
+        request.auth.token.agencyId == agencyId
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.agencyId == agencyId)
+      );
     }
 
     // Returns true if the caller is an admin (via Custom Claims).
     function isAdmin() {
-      return isAuthed() && request.auth.token.role == 'admin';
+      return isAuthed() && (
+        request.auth.token.role == 'admin'
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // Returns true if the caller is an admin in the given agency.
@@ -58,10 +64,8 @@ service cloud.firestore {
     // AGENCIES
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId} {
-      // Members of this agency and super admins may read agency documents.
       allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
-
-      // Clients may update goals, settings, and extended profile fields (during onboarding)
+      allow create: if false; // Agencies can only be created via Cloud Functions (Stripe Webhook or Onboarding)
       allow update: if isAuthed()
           && inAgency(agencyId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -69,9 +73,7 @@ service cloud.firestore {
             'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
             'whatsappIntegration'
           ]);
-
-      // Create and delete: Cloud Functions only.
-      allow create, delete: if false;
+      allow delete: if false;
     }
 
 
@@ -90,45 +92,14 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId} {
       allow read: if isAuthed() && (
-        isSuperAdmin()
-        ||
-        // Always allow a user to read their own document.
-        request.auth.uid == userId
-        ||
-        // Allow reading a stub document whose email matches the caller's Google email.
-        // This enables the client-side stub-linking auth flow when an invited agent
-        // first signs in and their UID hasn't been written to the doc yet.
-        resource.data.email == request.auth.token.email
-        ||
-        // Allow reading any team member doc within the same agency.
-        inAgency(resource.data.agencyId)
+        request.auth.uid == userId // can read own profile
+        || isSuperAdmin()          // system admins
+        || (resource != null && inAgency(resource.data.agencyId)) // anyone in same agency
       );
-
-      // All writes (invites, role changes, UID linking) go through Cloud Functions.
-      // We allow specific client-side updates:
-      allow update: if isAuthed() && (
-        // 1. Stub linking (only uid changing)
-        (
-          resource.data.email == request.auth.token.email
-          && resource.data.uid == null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid'])
-        )
-        ||
-        // 2. User updating their own profile details, goals, templates, and dashboard layout
-        (
-          (request.auth.uid == userId || resource.data.uid == request.auth.uid)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoURL', 'name', 'phone', 'goals', 'dashboardLayout', 'whatsappTemplates', 'preferences', 'customData']) 
-        )
-        ||
-        // 3. Agency Admin updating ANY user in the agency
-        (
-          isAgencyAdmin(resource.data.agencyId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['goals', 'isActive', 'role', 'name', 'phone', 'photoURL', 'dashboardLayout', 'whatsappTemplates', 'customData'])
-        )
-      );
-
-      // Create and delete: Cloud Functions only.
-      allow create, delete: if false;
+      // Stub creation and UID linking must go through Cloud Functions. 
+      allow create: if false;
+      allow update: if isAuthed() && (request.auth.uid == userId || isAdmin());
+      allow delete: if false;
     }
 
 
@@ -136,8 +107,7 @@ service cloud.firestore {
     // PROPERTIES
     // ══════════════════════════════════════════════════════════════════════════
     match /properties/{propertyId} {
-      allow read: if isAuthed() && inAgency(resource.data.agencyId);
-
+      allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
           && isNonEmptyString(request.resource.data.city)
@@ -149,9 +119,8 @@ service cloud.firestore {
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged();
 
-      // מחיקה מאושרת אם: המשתמש הוא אדמין של הסוכנות OR המשתמש הוא זה שיצר את הנכס
       allow delete: if isAuthed() && (
-        isAgencyAdmin(resource.data.agencyId) || 
+        isAgencyAdmin(resource.data.agencyId) ||
         resource.data.createdBy == request.auth.uid
       );
     }
@@ -161,11 +130,9 @@ service cloud.firestore {
     // LEADS
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId} {
-      allow read: if isAuthed() && inAgency(resource.data.agencyId);
-
+      allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
-          // Required fields validation
           && isNonEmptyString(request.resource.data.name)
           && isNonEmptyString(request.resource.data.phone);
 
@@ -181,15 +148,8 @@ service cloud.firestore {
     // LEAD MESSAGES (Subcollection)
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId}/messages/{messageId} {
-      // Any authenticated user in the agency can read messages for this lead
-      allow read: if isAuthed() 
-          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
-
-      // Same logic for writing messages manually
-      allow create: if isAuthed() 
-          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
-
-      // Allow marking messages as read
+      allow read: if isAuthed() && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
+      allow create: if isAuthed() && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
       allow update: if isAuthed()
           && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
@@ -203,14 +163,11 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /deals/{dealId} {
       allow read: if isAuthed() && inAgency(resource.data.agencyId);
-
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
-          // Required fields validation
           && isNonEmptyString(request.resource.data.stage)
           && request.resource.data.projectedCommission is number
           && request.resource.data.projectedCommission >= 0;
-
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged();
@@ -224,11 +181,9 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /tasks/{taskId} {
       allow read: if isAuthed() && inAgency(resource.data.agencyId);
-
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
           && isNonEmptyString(request.resource.data.title);
-
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged();
@@ -259,7 +214,9 @@ service cloud.firestore {
     // Public read if not expired. Atomic increment for viewCount.
     // ══════════════════════════════════════════════════════════════════════════
     match /shared_catalogs/{catalogId} {
-      allow read: if resource.data.expiresAt > request.time;
+      // 1. Allow public read if not expired (for clients viewing the catalog link)
+      // 2. Allow agents in the same agency to read/query all catalogs for their agency (needed for LeadProfilePanel)
+      allow read: if (resource.data.expiresAt > request.time) || (isAuthed() && inAgency(resource.data.agencyId));
       
       // Allow anonymous increments of viewCount (existing)
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) 
@@ -272,6 +229,33 @@ service cloud.firestore {
                     
       allow create, delete: if false; // Managed by Cloud Functions
     }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PENDING LEADS (Inbound WhatsApp messages from unknown numbers)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /pending_leads/{leadId} {
+      allow read, delete: if isAuthed() && inAgency(resource.data.agencyId);
+      
+      // Clients shouldn't typically create these directly (Cloud Functions/Webhooks do),
+      // but if we need a manual "Add Unknown" later:
+      allow create: if isAuthed() && inAgency(request.resource.data.agencyId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PRIVATE CREDENTIALS (Secure Subcollection)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/private_credentials/{document=**} {
+      allow read, write: if false; // Only accessible via Cloud Functions (Admin SDK)
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // AVAILABLE INSTANCES (WhatsApp Pool)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /available_instances/{document=**} {
+      allow read, write: if false; // Only accessible via Cloud Functions (Admin SDK)
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // SUPER ADMINS (System-wide Administrators)
     // ══════════════════════════════════════════════════════════════════════════

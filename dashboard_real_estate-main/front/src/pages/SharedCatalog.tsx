@@ -153,7 +153,7 @@ export default function SharedCatalogPage() {
         );
     }
 
-    const { leadName, properties = [] } = catalog;
+    const { leadName, properties = [], agencyName, agencyLogoUrl } = catalog;
 
     const agencyPhone = '972501234567'; // Placeholder — could be stored in catalog doc
     const waMessage = encodeURIComponent(
@@ -173,9 +173,21 @@ export default function SharedCatalogPage() {
                 </div>
 
                 <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
-                        <Home size={28} className="text-blue-300" />
-                    </div>
+                    {/* Agency logo */}
+                    {agencyLogoUrl ? (
+                        <img
+                            src={agencyLogoUrl}
+                            alt={agencyName || 'Agency'}
+                            className="h-14 w-auto object-contain mb-3 drop-shadow-sm"
+                        />
+                    ) : (
+                        <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-3 border border-white/20 shadow-inner">
+                            <Home size={28} className="text-blue-300" />
+                        </div>
+                    )}
+                    {agencyName && (
+                        <p className="text-blue-200 text-xs font-semibold tracking-widest uppercase mb-1 opacity-80">{agencyName}</p>
+                    )}
                     <h1 className="text-2xl font-bold mb-1">
                         {leadName ? `הנכסים שנבחרו עבור ${leadName}` : 'קטלוג נכסים אישי'}
                     </h1>
@@ -257,6 +269,13 @@ export default function SharedCatalogPage() {
                                     <p className="text-sm text-slate-500 leading-relaxed border-t border-slate-50 pt-3 mt-1">
                                         {property.description}
                                     </p>
+                                )}
+                                {/* Agent name */}
+                                {property.agentName && (
+                                    <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                        <span className="inline-block w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">{property.agentName.charAt(0)}</span>
+                                        סוכן: {property.agentName}
+                                    </div>
                                 )}
                             </div>
                         </div>

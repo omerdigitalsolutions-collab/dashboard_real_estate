@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, Shield, Globe, Palette, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4 } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
+import { Toast, ToastState } from '../components/ui/Toast';
 import { useAuth } from '../context/AuthContext';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals, updateAgencySettings } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo } from '../services/agencyService';
 import { isValidPhone } from '../utils/validation';
 
 const sections = [
@@ -24,11 +25,11 @@ function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
   return (
     <button
       onClick={() => setOn(!on)}
-      className={`relative w - 10 h - 5.5 rounded - full transition - colors duration - 200 flex - shrink - 0 ${on ? 'bg-blue-600' : 'bg-slate-200'} `}
+      className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 ${on ? 'bg-blue-600' : 'bg-slate-200'}`}
       style={{ height: '22px', width: '40px' }}
     >
       <span
-        className={`absolute top - 0.5 left - 0.5 w - 4.5 h - 4.5 rounded - full bg - white shadow transition - transform duration - 200 ${on ? 'translate-x-[18px]' : 'translate-x-0'} `}
+        className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform duration-200 ${on ? 'translate-x-[18px]' : 'translate-x-0'}`}
         style={{ width: '18px', height: '18px' }}
       />
     </button>
@@ -41,6 +42,9 @@ export default function Settings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [agencyGoalsSaving, setAgencyGoalsSaving] = useState(false);
+  const [agencyLogoUploading, setAgencyLogoUploading] = useState(false);
+  const agencyLogoInputRef = useRef<HTMLInputElement>(null);
+  const [agencyLogoUrl, setAgencyLogoUrl] = useState<string>('');
 
   // Form states for goals
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
@@ -52,6 +56,11 @@ export default function Settings() {
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+  };
 
   // Fetch Agency Data for goals and user data for profile
   useEffect(() => {
@@ -64,6 +73,7 @@ export default function Settings() {
       setMonthlyDeals(agency.monthlyGoals?.deals || 0);
       setYearlyRevenue(agency.yearlyGoals?.commissions || 0);
       setYearlyDeals(agency.yearlyGoals?.deals || 0);
+      setAgencyLogoUrl(agency.settings?.logoUrl || agency.logoUrl || '');
     });
     return () => unsub();
   }, [userData?.agencyId]);
@@ -77,10 +87,10 @@ export default function Settings() {
         { commissions: monthlyRevenue, deals: monthlyDeals, leads: 0 },
         { commissions: yearlyRevenue, deals: yearlyDeals, leads: 0 }
       );
-      alert('יעדי המשרד עודכנו בהצלחה! 🎯');
+      showToast('יעדי המשרד עודכנו בהצלחה! 🎯');
     } catch (err) {
       console.error('Failed to update agency goals', err);
-      alert('שגיאה בשמירת יעדי המשרד.');
+      showToast('שגיאה בשמירת יעדי המשרד.', 'error');
     } finally {
       setAgencyGoalsSaving(false);
     }
@@ -92,7 +102,7 @@ export default function Settings() {
     if (!file || !docId) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert('התמונה גדולה מ-2MB. אנא בחר תמונה קטנה יותר.');
+      showToast('התמונה גדולה מ-2MB. אנא בחר תמונה קטנה יותר.', 'error');
       return;
     }
 
@@ -103,13 +113,37 @@ export default function Settings() {
       // Update the Firestore doc using the actual document ID
       await updateUserProfile(docId!, { photoURL });
       // The auth context listener should automatically pick up the new photoURL and update the UI
-      alert('תמונת הפרופיל עודכנה בהצלחה 🎉');
+      showToast('תמונת הפרופיל עודכנה בהצלחה 🎉');
     } catch (err) {
       console.error('Failed to upload profile picture:', err);
-      alert('שגיאה בהעלאת התמונה. נסה שוב מאוחר יותר.');
+      showToast('שגיאה בהעלאת התמונה. נסה שוב מאוחר יותר.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAgencyLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const agencyId = userData?.agencyId;
+    if (!file || !agencyId) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('התמונה גדולה מ-2MB. אנא בחר תמונה קטנה יותר.', 'error');
+      return;
+    }
+
+    try {
+      setAgencyLogoUploading(true);
+      const newUrl = await uploadAndSaveAgencyLogo(agencyId, file);
+      setAgencyLogoUrl(newUrl);
+      showToast('לוגו הסוכנות עודכן בהצלחה! 🏢');
+    } catch (err) {
+      console.error('Failed to upload agency logo:', err);
+      showToast('שגיאה בהעלאת לוגו הסוכנות. נסה שוב מאוחר יותר.', 'error');
+    } finally {
+      setAgencyLogoUploading(false);
+      if (agencyLogoInputRef.current) agencyLogoInputRef.current.value = '';
     }
   };
 
@@ -118,7 +152,7 @@ export default function Settings() {
     if (!docId) return;
 
     if (profilePhone && !isValidPhone(profilePhone)) {
-      alert('מספר הטלפון שהוזן אינו תקין');
+      showToast('מספר הטלפון שהוזן אינו תקין', 'error');
       return;
     }
 
@@ -128,10 +162,10 @@ export default function Settings() {
         name: profileName,
         phone: profilePhone
       });
-      alert('הפרופיל עודכן בהצלחה! ✅');
+      showToast('הפרופיל עודכן בהצלחה! ✅');
     } catch (err) {
       console.error('Failed to update profile:', err);
-      alert('שגיאה בעדכון הפרופיל.');
+      showToast('שגיאה בעדכון הפרופיל.', 'error');
     } finally {
       setProfileSaving(false);
     }
@@ -151,10 +185,10 @@ export default function Settings() {
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                className={`flex items - center gap - 3 w - full px - 3 py - 2.5 rounded - xl text - sm font - medium transition - all ${activeSection === id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  } `}
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
               >
                 <Icon size={16} />
                 {label}
@@ -361,7 +395,53 @@ export default function Settings() {
             <WhatsAppSettings />
           )}
 
-          {(activeSection === 'appearance' || activeSection === 'billing') && (
+          {activeSection === 'appearance' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-8 animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">מראה ומיתוג</h2>
+                <p className="text-sm text-slate-500 mt-0.5">התאם את המראה והלוגו של הסוכנות שיופיע במערכת</p>
+              </div>
+
+              {/* Agency Logo Upload */}
+              <div className="pt-4 border-t border-slate-100">
+                <h3 className="font-semibold text-slate-800 text-sm mb-4">לוגו סוכנות ראשי</h3>
+                <div className="flex items-center gap-6">
+                  {/* Logo Preview */}
+                  <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                    {agencyLogoUploading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                    ) : agencyLogoUrl ? (
+                      <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
+                    ) : (
+                      <Palette className="w-8 h-8 text-slate-300" />
+                    )}
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/jpeg, image/png, image/webp"
+                      className="hidden"
+                      ref={agencyLogoInputRef}
+                      onChange={handleAgencyLogoUpload}
+                    />
+                    <button
+                      onClick={() => agencyLogoInputRef.current?.click()}
+                      disabled={agencyLogoUploading}
+                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Camera size={16} className="text-slate-500" />
+                      {agencyLogoUploading ? 'מעלה לוגו...' : 'העלה לוגו חדש'}
+                    </button>
+                    <p className="text-xs text-slate-400">מומלץ תמונת PNG שקופה (עד 2MB)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(activeSection === 'billing') && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
               <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 {(() => {
@@ -376,6 +456,7 @@ export default function Settings() {
           )}
         </div>
       </div>
+      <Toast {...toast} onClose={() => setToast(prev => ({ ...prev, show: false }))} />
     </div>
   );
 }

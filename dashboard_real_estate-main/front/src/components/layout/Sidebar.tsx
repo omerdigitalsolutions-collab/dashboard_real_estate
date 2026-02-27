@@ -6,12 +6,14 @@ import {
   UserCheck,
   Settings,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
+  onAskAI: () => void;
 }
 
 const navItems = [
@@ -22,7 +24,7 @@ const navItems = [
   { to: '/settings', label: 'הגדרות', icon: Settings },
 ];
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
   const { userData } = useAuth();
   return (
     <>
@@ -40,7 +42,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700/60">
           <div className="flex items-center pr-1">
             <div className="bg-white px-3 py-1.5 rounded-xl flex items-center justify-center shadow-sm">
-              <img src="/homer-logo.png" alt="Homer CRM" className="h-7 w-auto mix-blend-multiply" />
+              <img src="/homer-logo.png" alt="Homer CRM" className="h-12 w-auto mix-blend-multiply" />
             </div>
           </div>
           <button
@@ -73,6 +75,17 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               {label}
             </NavLink>
           ))}
+
+          <button
+            onClick={() => {
+              onAskAI();
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group text-indigo-400 hover:text-white hover:bg-slate-800"
+          >
+            <Sparkles size={17} />
+            העוזר החכם
+          </button>
         </nav>
 
         <div className="px-4 py-4 border-t border-slate-700/60">

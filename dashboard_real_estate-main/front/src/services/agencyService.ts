@@ -108,3 +108,22 @@ export async function uploadAgencyLogo(
     const snapshot = await uploadBytes(storageRef, file);
     return getDownloadURL(snapshot.ref);
 }
+
+/**
+ * Uploads the agency logo and immediately saves its URL to both
+ * root and settings paths in Firestore to ensure consistency.
+ */
+export async function uploadAndSaveAgencyLogo(
+    agencyId: string,
+    file: File
+): Promise<string> {
+    const url = await uploadAgencyLogo(agencyId, file);
+    const docRef = doc(db, 'agencies', agencyId);
+
+    await updateDoc(docRef, {
+        logoUrl: url,
+        'settings.logoUrl': url
+    });
+
+    return url;
+}

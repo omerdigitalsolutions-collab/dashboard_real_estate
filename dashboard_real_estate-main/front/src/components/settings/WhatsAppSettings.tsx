@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -11,9 +10,10 @@ import {
 
 // ─── Cloud Function Callables ─────────────────────────────────────────────────
 const fns = getFunctions(undefined, 'europe-west1');
+const cfConnectInstance = httpsCallable<{}, { success: boolean, message: string }>(fns, 'whatsapp-connectAgencyWhatsApp');
 const cfGenerateQR = httpsCallable<{}, { qrCode: string }>(fns, 'whatsapp-generateWhatsAppQR');
 const cfCheckStatus = httpsCallable<{}, { status: string }>(fns, 'whatsapp-checkWhatsAppStatus');
-const cfDisconnect = httpsCallable<{}, { success: boolean }>(fns, 'whatsapp-disconnectWhatsApp');
+const cfDisconnect = httpsCallable<{}, { success: boolean }>(fns, 'whatsapp-disconnectAgencyWhatsApp');
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -46,8 +46,14 @@ export const WhatsAppSettings = () => {
         if (!userData?.agencyId) return;
         const unsub = onSnapshot(doc(db, 'agencies', userData.agencyId), (snap) => {
             if (snap.exists()) {
-                const wa = snap.data().whatsappIntegration;
-                if (wa?.status) setStatus(wa.status);
+                const data = snap.data();
+                if (data.isWhatsappConnected) {
+                    setStatus('connected');
+                } else if (data.whatsappIntegration?.status === 'PENDING_SCAN') {
+                    setStatus('pending');
+                } else {
+                    setStatus('disconnected');
+                }
             }
         });
         return () => unsub();
@@ -74,7 +80,7 @@ export const WhatsAppSettings = () => {
 
     useEffect(() => () => stopPoll(), []); // cleanup on unmount
 
-    // ── Generate QR ───────────────────────────────────────────────────────────
+    // ── Generate QR & Connect Instance ───────────────────────────────────────────
     const handleConnect = async () => {
         setShowModal(true);
         setQrCode(null);
@@ -82,12 +88,15 @@ export const WhatsAppSettings = () => {
         setLoadingQR(true);
 
         try {
+            // 1. Allocate Instance
+            await cfConnectInstance({});
+            // 2. Generate QR
             const result = await cfGenerateQR({});
             setQrCode(result.data.qrCode);
             startPolling();
         } catch (err: any) {
             console.error(err);
-            setError(err?.message || 'שגיאה ביצירת קוד QR. נסה שוב.');
+            setError(err?.message || 'שגיאה ביצירת קוד QR. יש לוודא שיש Instances זמינים במאגר.');
         } finally {
             setLoadingQR(false);
         }
@@ -99,8 +108,10 @@ export const WhatsAppSettings = () => {
         setDisconnecting(true);
         try {
             await cfDisconnect({});
+            // Success assumes the real-time listener will update the status and unmount this view
         } catch (err) {
-            console.error(err);
+            console.error('Failed to disconnect:', err);
+            alert('שגיאה בניתוק הווצאפ. נסה שוב מאוחר יותר.');
         } finally {
             setDisconnecting(false);
         }
@@ -254,7 +265,11 @@ export const WhatsAppSettings = () => {
                                     {/* animated top border */}
                                     <div className="absolute top-0 left-0 w-full h-1 bg-emerald-500 rounded-full animate-pulse" />
                                     <div className="bg-white p-3 rounded-2xl shadow border border-slate-100">
-                                        <QRCodeCanvas value={qrCode} size={220} level="H" />
+                                        <img
+                                            src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                                            alt="WhatsApp QR Code"
+                                            className="w-[220px] h-[220px] object-contain"
+                                        />
                                     </div>
                                 </div>
 

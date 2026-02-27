@@ -143,11 +143,12 @@ export const geocodeNewProperty = onDocumentCreated('properties/{propertyId}', a
     if (!doc) return;
 
     const prop = doc.data();
-    const loc = prop.location;
+    const latVal = prop.lat ?? prop.location?.lat;
+    const lngVal = prop.lng ?? prop.location?.lng;
 
     // Check if location matches the default placeholder used in excel imports (31.5, 34.75)
     // Or if location is missing completely.
-    const isPlaceholder = !loc || (loc.lat === 31.5 && loc.lng === 34.75);
+    const isPlaceholder = !latVal || (latVal === 31.5 && lngVal === 34.75);
 
     if (!isPlaceholder) {
         return; // Already has real coordinates
@@ -173,7 +174,9 @@ export const geocodeNewProperty = onDocumentCreated('properties/{propertyId}', a
             const lng = parseFloat(data[0].lon);
 
             await db.doc(`properties/${event.params.propertyId}`).update({
-                location: { lat, lng },
+                lat,
+                lng,
+                location: { lat, lng }, // Keep for backwards compatibility
                 geocode: {
                     lat,
                     lng,

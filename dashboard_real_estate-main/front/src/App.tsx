@@ -17,6 +17,7 @@ import Settings from './pages/Settings';
 import SharedCatalogPage from './pages/SharedCatalog';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import SuperAdminRoute from './components/routing/SuperAdminRoute';
+import LandingPage from './pages/LandingPage';
 import { PreferencesProvider } from './context/PreferencesContext';
 
 function App() {
@@ -53,9 +54,11 @@ function App() {
           }
         />
 
+        <Route path="/" element={<LandingPage />} />
+
         {/* Dashboard Routes are protected */}
         <Route
-          path="/"
+          path="/dashboard"
           element={
             <ProtectedRoute>
               <PreferencesProvider>

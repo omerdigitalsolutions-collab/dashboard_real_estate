@@ -1,4 +1,4 @@
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, googleProvider, functions } from '../config/firebase';
@@ -8,11 +8,26 @@ import { auth, db, googleProvider, functions } from '../config/firebase';
  */
 export const signInWithGoogle = async () => {
     try {
-        const result = await signInWithPopup(auth, googleProvider);
-        return result.user;
+        await signInWithRedirect(auth, googleProvider);
+        // The result will be handled after the redirect in getGoogleRedirectResult()
+        return null as any; // will never reach here
     } catch (error) {
         console.error("Error signing in with Google", error);
         throw error;
+    }
+};
+
+/**
+ * Call this on app load to handle the result after a Google redirect.
+ * Returns the user if a redirect login just completed, otherwise null.
+ */
+export const getGoogleRedirectResult = async () => {
+    try {
+        const result = await getRedirectResult(auth);
+        return result?.user ?? null;
+    } catch (error) {
+        console.error("Error getting redirect result", error);
+        return null;
     }
 };
 

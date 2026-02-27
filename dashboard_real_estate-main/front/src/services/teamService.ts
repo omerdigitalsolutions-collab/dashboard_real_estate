@@ -18,7 +18,7 @@ export function getAgencyTeam(
 ): () => void {
     const q = query(collection(db, 'users'), where('agencyId', '==', agencyId));
     return onSnapshot(q, (snap) => {
-        const members = snap.docs.map((d) => ({ uid: d.id, ...d.data() } as AppUser));
+        const members = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppUser));
         callback(members);
     });
 }
@@ -67,4 +67,14 @@ export async function toggleAgentStatus(userId: string, isActive: boolean): Prom
         functions, 'users-toggleAgentStatus'
     );
     await fn({ userId, isActive });
+}
+
+/**
+ * [Cloud Function] Permanently deletes a team member's account.
+ */
+export async function deleteAgent(userId: string): Promise<void> {
+    const fn = httpsCallable<{ userId: string }, { success: boolean }>(
+        functions, 'users-deleteAgent'
+    );
+    await fn({ userId });
 }

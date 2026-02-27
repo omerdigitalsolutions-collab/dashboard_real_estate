@@ -8,6 +8,7 @@ export interface Agency {
     name: string;
     // Extended professional profile (set during onboarding)
     agencyName?: string;
+    logoUrl?: string; // added to support the root-level logoUrl duplication
     slogan?: string;
     officePhone?: string;
     licenseNumber?: string;
@@ -105,6 +106,8 @@ export interface Lead {
         condition: 'new' | 'renovated' | 'needs_renovation' | 'any';
         urgency: 'immediate' | '1-3_months' | '3-6_months' | 'flexible';
     };
+    catalogId?: string | null;
+    catalogUrl?: string | null;
     notes?: string | null;
     createdAt: Timestamp;
 }
@@ -118,7 +121,8 @@ export type PropertyStatus =
     | 'sold'
     | 'rented'
     | 'expired'
-    | 'withdrawn';
+    | 'withdrawn'
+    | 'draft'; // Added for WhatsApp group parsed drafts
 
 export interface Property {
     id: string;
@@ -135,6 +139,13 @@ export interface Property {
     isExclusive?: boolean;
     daysOnMarket: number;
     description?: string;
+
+    // Draft properties (WhatsApp parsing)
+    rawDescription?: string;
+    groupId?: string;
+    externalAgentPhone?: string;
+    originalSource?: string;
+
     images?: string[];
     imageUrls?: string[];
     lat?: number;
@@ -184,6 +195,8 @@ export interface AppTask {
 export interface SharedCatalog {
     id: string;
     agencyId: string;
+    agencyName?: string;
+    agencyLogoUrl?: string;
     agentId: string;
     leadId: string | null;
     leadName?: string;
@@ -197,6 +210,7 @@ export interface SharedCatalog {
         type: PropertyType;
         kind?: string | null;
         description?: string | null;
+        agentName?: string;
     }[];
     viewCount: number;
     likedPropertyIds?: string[];

@@ -14,8 +14,8 @@ export async function createCatalog(
     leadName: string | undefined, // Not used in the CF directly, but you can pass it if you update the CF
     propertyIds: string[]
 ): Promise<string> {
-    const functions = getFunctions();
-    const generateCatalogCF = httpsCallable(functions, 'catalogs-generateCatalog');
+    const fns = getFunctions(undefined, 'europe-west1');
+    const generateCatalogCF = httpsCallable<{ agencyId: string, leadId: string, leadName: string | undefined, propertyIds: string[] }, { success: boolean, catalogId: string, url: string }>(fns, 'catalogs-generateCatalog');
 
     // Call the Cloud Function
     const result = await generateCatalogCF({
@@ -25,7 +25,7 @@ export async function createCatalog(
         propertyIds
     });
 
-    const data = result.data as { success: boolean, catalogId: string, url: string };
+    const data = result.data;
 
     if (!data.success) {
         throw new Error('Failed to generate catalog from server');

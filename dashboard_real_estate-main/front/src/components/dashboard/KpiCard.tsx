@@ -30,7 +30,7 @@ export default function KpiCard({ title, value, rawValue, target, change, positi
     const onTrack = pct >= 70;
 
     return (
-        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 flex flex-col gap-4 hover:border-slate-700 transition-colors duration-200">
+        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-4 sm:p-5 flex flex-col justify-between h-full hover:border-slate-700 transition-colors duration-200">
             <div className="flex items-start justify-between">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.icon}`}>
                     <Icon size={20} />
@@ -42,14 +42,17 @@ export default function KpiCard({ title, value, rawValue, target, change, positi
             </div>
 
             <div>
-                <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-black text-white tracking-tight">{value}</p>
+                    <span className="text-sm font-medium text-slate-400">/ {target.toLocaleString()}</span>
+                </div>
                 <p className="text-sm font-medium text-slate-300 mt-0.5">{title}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
             </div>
 
             {/* Progress bar */}
-            <div>
-                <div className="flex items-center justify-between mb-1.5">
+            <div className="mt-auto pt-2">
+                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                     <span className="text-xs text-slate-400 font-medium">{pct}% מהיעד</span>
                     <span className={`text-xs font-bold ${onTrack ? 'text-emerald-400' : 'text-red-400'}`}>
                         {onTrack ? '✓ במסלול' : '⚠ מאחור'}

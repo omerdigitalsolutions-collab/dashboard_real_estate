@@ -1,17 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { Loader2, Mail, Lock } from 'lucide-react';
-import { signInWithGoogle, checkUserExists } from '../services/authService';
+import { signInWithGoogle, getGoogleRedirectResult, checkUserExists } from '../services/authService';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(true); // starts true while checking redirect
     const navigate = useNavigate();
+
+    // Handle Google redirect result when this page loads after redirect
+    useEffect(() => {
+        const handleRedirectResult = async () => {
+            try {
+                const user = await getGoogleRedirectResult();
+                if (user) {
+                    const exists = await checkUserExists(user.uid);
+                    navigate(exists ? '/dashboard' : '/onboarding');
+                }
+            } catch (err: any) {
+                console.error('Google redirect result error:', err);
+                setError('שגיאה בהתחברות עם חשבון גוגל');
+            } finally {
+                setIsGoogleLoading(false);
+            }
+        };
+        handleRedirectResult();
+    }, [navigate]);
 
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -20,7 +39,7 @@ export default function Login() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            navigate('/');
+            navigate('/dashboard');
         } catch (err: any) {
             console.error('Login error:', err);
             setError('אימייל או סיסמה שגויים');
@@ -32,22 +51,15 @@ export default function Login() {
     const handleGoogleLogin = async () => {
         setError('');
         setIsGoogleLoading(true);
-
         try {
-            const user = await signInWithGoogle();
-            const exists = await checkUserExists(user.uid);
-            if (exists) {
-                navigate('/');
-            } else {
-                navigate('/onboarding');
-            }
+            await signInWithGoogle(); // triggers redirect, page will reload
         } catch (err: any) {
             console.error('Google login error:', err);
             setError('שגיאה בהתחברות עם חשבון גוגל');
-        } finally {
             setIsGoogleLoading(false);
         }
     };
+
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8" dir="rtl">

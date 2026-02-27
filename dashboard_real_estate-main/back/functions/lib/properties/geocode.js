@@ -125,15 +125,16 @@ exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true }, async (reque
  * that have the exact default Israel center coordinates.
  */
 exports.geocodeNewProperty = (0, firestore_1.onDocumentCreated)('properties/{propertyId}', async (event) => {
-    var _a;
+    var _a, _b, _c, _d, _e;
     const doc = event.data;
     if (!doc)
         return;
     const prop = doc.data();
-    const loc = prop.location;
+    const latVal = (_a = prop.lat) !== null && _a !== void 0 ? _a : (_b = prop.location) === null || _b === void 0 ? void 0 : _b.lat;
+    const lngVal = (_c = prop.lng) !== null && _c !== void 0 ? _c : (_d = prop.location) === null || _d === void 0 ? void 0 : _d.lng;
     // Check if location matches the default placeholder used in excel imports (31.5, 34.75)
     // Or if location is missing completely.
-    const isPlaceholder = !loc || (loc.lat === 31.5 && loc.lng === 34.75);
+    const isPlaceholder = !latVal || (latVal === 31.5 && lngVal === 34.75);
     if (!isPlaceholder) {
         return; // Already has real coordinates
     }
@@ -153,12 +154,14 @@ exports.geocodeNewProperty = (0, firestore_1.onDocumentCreated)('properties/{pro
             const lat = parseFloat(data[0].lat);
             const lng = parseFloat(data[0].lon);
             await db.doc(`properties/${event.params.propertyId}`).update({
-                location: { lat, lng },
+                lat,
+                lng,
+                location: { lat, lng }, // Keep for backwards compatibility
                 geocode: {
                     lat,
                     lng,
                     formattedAddress: data[0].display_name,
-                    placeId: ((_a = data[0].place_id) === null || _a === void 0 ? void 0 : _a.toString()) || '',
+                    placeId: ((_e = data[0].place_id) === null || _e === void 0 ? void 0 : _e.toString()) || '',
                     lastUpdated: firestore_2.FieldValue.serverTimestamp()
                 }
             });

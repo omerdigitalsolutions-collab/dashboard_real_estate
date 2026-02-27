@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.completeAgentSetup = exports.getInviteInfo = exports.inviteAgent = exports.toggleAgentStatus = exports.updateAgentRole = void 0;
+exports.completeAgentSetup = exports.getInviteInfo = exports.inviteAgent = exports.deleteAgent = exports.toggleAgentStatus = exports.updateAgentRole = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
@@ -152,6 +152,58 @@ exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
     }
     await db.doc(`users/${userId.trim()}`).update({ isActive });
+    return { success: true };
+});
+/**
+ * deleteAgent — Permanently removes a team member's Firestore document.
+ *
+ * Security:
+ *   - Caller must be authenticated and have role === 'admin'.
+ *   - Caller cannot delete themselves.
+ *   - Target user must be in the same agency.
+ *
+ * Input:  { userId: string }
+ * Output: { success: true }
+ */
+exports.deleteAgent = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
+    }
+    const { userId } = request.data;
+    if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'userId is required.');
+    }
+    // ── Prevent self-deletion ────────────────────────────────────────────────────
+    if (request.auth.uid === userId.trim()) {
+        throw new https_1.HttpsError('permission-denied', 'You cannot delete yourself.');
+    }
+    // ── Verify caller is admin ───────────────────────────────────────────────────
+    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
+    if (!callerDoc.exists) {
+        throw new https_1.HttpsError('not-found', 'Caller user document not found.');
+    }
+    const caller = callerDoc.data();
+    if (caller.role !== 'admin') {
+        throw new https_1.HttpsError('permission-denied', 'Only admins can delete agents.');
+    }
+    if (caller.isActive === false) {
+        throw new https_1.HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
+    }
+    // ── Verify target belongs to same agency ────────────────────────────────────
+    const targetDoc = await db.doc(`users/${userId.trim()}`).get();
+    if (!targetDoc.exists) {
+        throw new https_1.HttpsError('not-found', 'Target user not found.');
+    }
+    const target = targetDoc.data();
+    if (target.agencyId !== caller.agencyId) {
+        throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
+    }
+    // ── DELETE ──────────────────────────────────────────────────────────────────
+    await db.doc(`users/${userId.trim()}`).delete();
+    // If the user was already linked to an Auth account, we *could* delete it here,
+    // but usually it's better to just remove their access via Custom Claims or 
+    // just Firestore doc deletion which is checked by security rules. 
+    // For now, simple Firestore deletion satisfies the requirement.
     return { success: true };
 });
 // ─── HTML Email Template ──────────────────────────────────────────────────────

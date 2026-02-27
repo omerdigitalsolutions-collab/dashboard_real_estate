@@ -1,7 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import LandingPage from '../../pages/LandingPage';
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { currentUser, loading, requireOnboarding } = useAuth();
@@ -16,9 +15,6 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
 
     if (!currentUser) {
-        if (location.pathname === '/') {
-            return <LandingPage />;
-        }
         return <Navigate to="/login" replace />;
     }
 

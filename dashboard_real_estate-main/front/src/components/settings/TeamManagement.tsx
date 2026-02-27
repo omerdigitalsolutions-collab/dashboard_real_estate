@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw } from 'lucide-react';
+import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AppUser, UserRole } from '../../types';
-import { getAgencyTeam, updateAgentRole, toggleAgentStatus } from '../../services/teamService';
+import { getAgencyTeam, updateAgentRole, toggleAgentStatus, deleteAgent } from '../../services/teamService';
 import InviteAgentModal from './InviteAgentModal';
 
 const RoleBadge = ({ role }: { role: UserRole }) =>
@@ -33,11 +33,13 @@ function ActionMenu({
     isSelf,
     onRoleChange,
     onStatusToggle,
+    onDelete,
 }: {
     member: AppUser;
     isSelf: boolean;
     onRoleChange: (uid: string, current: UserRole) => void;
     onStatusToggle: (uid: string, current: boolean) => void;
+    onDelete: (uid: string) => void;
 }) {
     const [open, setOpen] = useState(false);
     const isActive = member.isActive !== false;
@@ -62,18 +64,26 @@ function ActionMenu({
                     <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
                     <div className="absolute left-0 top-8 z-20 bg-white rounded-xl shadow-xl border border-slate-100 py-1 min-w-[160px]">
                         <button
-                            onClick={() => { if (member.uid) onRoleChange(member.uid, member.role); setOpen(false); }}
+                            onClick={() => { if (member.id) onRoleChange(member.id, member.role); setOpen(false); }}
                             className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                         >
                             <RefreshCw size={14} className="text-slate-400" />
                             שנה ל{member.role === 'admin' ? 'סוכן' : 'מנהל'}
                         </button>
                         <button
-                            onClick={() => { if (member.uid) onStatusToggle(member.uid, isActive); setOpen(false); }}
+                            onClick={() => { if (member.id) onStatusToggle(member.id, isActive); setOpen(false); }}
                             className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors ${isActive ? 'text-red-600 hover:bg-red-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                         >
                             {isActive ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
                             {isActive ? 'השעה' : 'הפעל מחדש'}
+                        </button>
+                        <div className="h-px bg-slate-100 my-1" />
+                        <button
+                            onClick={() => { if (member.id) onDelete(member.id); setOpen(false); }}
+                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                            <Trash2 size={14} />
+                            מחק לצמיתות
                         </button>
                     </div>
                 </>
@@ -122,6 +132,16 @@ export default function TeamManagement() {
         }
     };
 
+    const handleDelete = async (docId: string) => {
+        if (!window.confirm('האם אתה בטוח שברצונך למחוק את הסוכן? פעולה זו היא בלתי הפיכה.')) return;
+        try {
+            await deleteAgent(docId);
+            showToast('הסוכן נמחק מהמערכת');
+        } catch {
+            showToast('מחיקת הסוכן נכשלה');
+        }
+    };
+
     return (
         <div className="space-y-5">
             {/* Header */}
@@ -165,7 +185,7 @@ export default function TeamManagement() {
                                 const isLinked = !!member.uid;
 
                                 return (
-                                    <tr key={member.uid || member.email} className="hover:bg-slate-50/50 transition-colors">
+                                    <tr key={member.id || member.email} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -188,6 +208,7 @@ export default function TeamManagement() {
                                                 isSelf={isSelf}
                                                 onRoleChange={handleRoleChange}
                                                 onStatusToggle={handleStatusToggle}
+                                                onDelete={handleDelete}
                                             />
                                         </td>
                                     </tr>

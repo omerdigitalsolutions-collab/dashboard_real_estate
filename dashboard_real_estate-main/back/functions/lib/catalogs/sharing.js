@@ -26,7 +26,7 @@ const db = (0, firestore_1.getFirestore)();
 // Using a high-quality professional placeholder
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
 exports.generateCatalog = (0, https_1.onCall)(async (request) => {
-    var _a;
+    var _a, _b, _c;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -43,6 +43,27 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
     if (!callerDoc.exists || ((_a = callerDoc.data()) === null || _a === void 0 ? void 0 : _a.agencyId) !== agencyId) {
         throw new https_1.HttpsError('permission-denied', 'You do not belong to this agency.');
     }
+    // ── Fetch Agency branding ────────────────────────────────────────────────────
+    const agencyDoc = await db.doc(`agencies/${agencyId}`).get();
+    const agencyData = (_b = agencyDoc.data()) !== null && _b !== void 0 ? _b : {};
+    const agencyName = agencyData.agencyName || agencyData.name || '';
+    const agencyLogoUrl = ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.logoUrl) || '';
+    // ── Pre-fetch agent names (unique agentIds in property list) ─────────────────
+    const agentNameCache = {};
+    const fetchAgentName = async (agentId) => {
+        var _a;
+        if (agentNameCache[agentId])
+            return agentNameCache[agentId];
+        try {
+            const agentDoc = await db.collection('users').doc(agentId).get();
+            const name = ((_a = agentDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || '';
+            agentNameCache[agentId] = name;
+            return name;
+        }
+        catch (_b) {
+            return '';
+        }
+    };
     // ── Fetch Properties and Snapshot ───────────────────────────────────────────
     const snapshottedProperties = [];
     // We fetch properties one by one or in batches. Since propertyIds length is usually small (<10),
@@ -62,6 +83,8 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
             // Check both 'images' (legacy) and 'imageUrls' (from Storage upload)
             const images = data.imageUrls || data.images;
             const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
+            // Look up agent name
+            const agentName = data.agentId ? await fetchAgentName(data.agentId) : '';
             snapshottedProperties.push({
                 id: doc.id,
                 address: data.address || 'כתובת חסויה',
@@ -72,6 +95,7 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
                 type: data.type || 'sale',
                 kind: data.kind || null,
                 description: data.description || null,
+                agentName,
             });
         }
     }
@@ -85,6 +109,8 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
     expiresAt.setDate(now.getDate() + 7); // Exactly 7 days from now
     await catalogRef.set({
         agencyId,
+        agencyName,
+        agencyLogoUrl,
         agentId: request.auth.uid,
         leadId,
         leadName: leadName || '',

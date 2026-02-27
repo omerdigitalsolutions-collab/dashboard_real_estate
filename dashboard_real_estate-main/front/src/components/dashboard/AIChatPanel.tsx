@@ -1,5 +1,6 @@
 import { X, Sparkles, Send } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 
 interface Message {
     id: number;
@@ -40,7 +41,7 @@ export default function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isTyping]);
 
-    const handleSend = (text?: string) => {
+    const handleSend = async (text?: string) => {
         const msg = text ?? input;
         if (!msg.trim()) return;
 
@@ -49,18 +50,34 @@ export default function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
         setInput('');
         setIsTyping(true);
 
-        setTimeout(() => {
-            setIsTyping(false);
+        try {
+            const askAgencyAgent = httpsCallable(getFunctions(undefined, 'europe-west1'), 'ai-askAgencyAgent');
+            const result = await askAgencyAgent({ message: msg });
+            const reply = (result.data as any).reply;
+
             setMessages((prev) => [
                 ...prev,
                 {
                     id: Date.now() + 1,
                     role: 'ai',
-                    text: 'אני בודק את הנתונים... 📊 בקרוב שאפשרות זו תהיה מחוברת למנוע ה-AI האמיתי. בינתיים, אני מציין שהשאלה שלך ממש חשובה ונרשמת!',
+                    text: reply,
                     time: 'עכשיו',
                 },
             ]);
-        }, 1500);
+        } catch (error) {
+            console.error('AI Chat Error:', error);
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: Date.now() + 1,
+                    role: 'ai',
+                    text: 'מצטער, אירעה שגיאה בתקשורת עם השרת. אנא נסה שוב מאוחר יותר.',
+                    time: 'עכשיו',
+                },
+            ]);
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     return (

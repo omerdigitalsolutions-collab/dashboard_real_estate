@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, Building, Trash2, LayoutGrid, List, MessageCircle, User as UserIcon, Building2, Upload, Pencil } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building } from 'lucide-react';
 import { useProperties, useAgents, useLeads, useDeals } from '../hooks/useFirestoreData';
+
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import EditPropertyModal from '../components/modals/EditPropertyModal';
 import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
@@ -29,14 +30,22 @@ export default function Properties() {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (location.state?.openId && properties.length > 0) {
-            const targetProp = properties.find((p: Property) => p.id === location.state.openId);
-            if (targetProp && selectedProperty?.id !== targetProp.id) {
+        const params = new URLSearchParams(location.search);
+        const queryId = params.get('id');
+        const openId = location.state?.openId || queryId;
+
+        if (openId && properties.length > 0) {
+            const targetProp = properties.find((p: Property) => p.id === openId);
+            if (targetProp && (!selectedProperty || selectedProperty.id !== targetProp.id)) {
                 setSelectedProperty(targetProp);
-                navigate(location.pathname, { replace: true, state: {} });
+                // Clear state or params to avoid re-opening if needed, 
+                // but keep it for query params if we want shareable links.
+                if (location.state?.openId) {
+                    navigate(location.pathname + location.search, { replace: true, state: {} });
+                }
             }
         }
-    }, [location.state, properties, selectedProperty, navigate, location.pathname]);
+    }, [location.state, location.search, properties, selectedProperty, navigate, location.pathname]);
 
     const handleSelectAll = () => {
         if (selectedPropertyIds.size === filtered.length) {
@@ -114,7 +123,7 @@ export default function Properties() {
                         className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
                     >
                         <Upload size={16} />
-                        ייבוא מאקסל
+                        ייבוא מאקסל / תמונה
                     </button>
                     <button
                         onClick={() => setShowAddModal(true)}
@@ -158,13 +167,13 @@ export default function Properties() {
                         </div>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                        {['All', 'sale', 'rent'].map((f) => (
+                        {['All', 'sale', 'rent', 'draft'].map((f) => (
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
                                 className={'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ' + (filter === f ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
                             >
-                                {f === 'All' ? 'הכל' : f === 'sale' ? 'למכירה' : 'להשכרה'}
+                                {f === 'All' ? 'הכל' : f === 'sale' ? 'למכירה' : f === 'rent' ? 'להשכרה' : 'טיוטות (WhatsApp)'}
                             </button>
                         ))}
                     </div>
@@ -188,7 +197,7 @@ export default function Properties() {
                                     <div
                                         key={prop.id}
                                         onClick={() => setSelectedProperty(prop)}
-                                        className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col group"
+                                        className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col group"
                                     >
                                         {/* Thumbnail */}
                                         <div className="relative h-48 overflow-hidden bg-slate-100">
@@ -198,11 +207,11 @@ export default function Properties() {
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />
                                             <div className="absolute top-3 right-3 flex flex-col gap-2">
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                    {prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : prop.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                    {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
                                                 </span>
                                             </div>
-                                            {prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && (
+                                            {prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && prop.status !== 'draft' && (
                                                 <div className="absolute top-3 left-3 bg-amber-500/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
                                                     בלעדיות
                                                 </div>
@@ -211,14 +220,25 @@ export default function Properties() {
 
                                         {/* Details */}
                                         <div className="p-4 flex-1">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h3 className="font-bold text-lg text-slate-800 line-clamp-1">{prop.address}</h3>
-                                                <span className="font-bold text-lg text-blue-600">₪{prop.price.toLocaleString()}</span>
-                                            </div>
-                                            <p className="text-sm text-slate-500 font-medium mb-4 flex items-center gap-1.5">
-                                                <Building2 size={14} className="text-slate-400" />
-                                                {prop.city || 'עיר לא צוינה'} {prop.rooms ? `• ${prop.rooms} חדרים` : ''}
-                                            </p>
+                                            {prop.status === 'draft' ? (
+                                                <div className="mb-4">
+                                                    <h3 className="font-bold text-lg text-amber-700 mb-1">הודעה מקבוצת WhatsApp</h3>
+                                                    <p className="text-sm text-slate-600 line-clamp-3 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                                                        "{prop.rawDescription}"
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h3 className="font-bold text-lg text-slate-800 line-clamp-1">{prop.address}</h3>
+                                                        <span className="font-bold text-lg text-blue-600">₪{(prop.price || 0).toLocaleString()}</span>
+                                                    </div>
+                                                    <p className="text-sm text-slate-500 font-medium mb-4 flex items-center gap-1.5">
+                                                        <Building2 size={14} className="text-slate-400" />
+                                                        {prop.city || 'עיר לא צוינה'} {prop.rooms ? `• ${prop.rooms} חדרים` : ''}
+                                                    </p>
+                                                </>
+                                            )}
 
                                             {/* Contacts Area */}
                                             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100 mt-auto">
@@ -246,23 +266,27 @@ export default function Properties() {
                                                     </div>
                                                 </div>
 
-                                                {/* Client */}
+                                                {/* Client / Ext. Agent */}
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">פרטי לקוח</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                                                        {prop.status === 'draft' ? 'סוכן עמית (WhatsApp)' : 'פרטי לקוח'}
+                                                    </p>
                                                     <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                                                         <div className="flex items-center gap-2 truncate">
-                                                            <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[10px] font-bold">
-                                                                {client?.name ? client.name.charAt(0) : <UserIcon size={12} />}
+                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${prop.status === 'draft' ? 'bg-amber-100 text-amber-600' : 'bg-violet-100 text-violet-600'}`}>
+                                                                {prop.status === 'draft' ? 'ע' : client?.name ? client.name.charAt(0) : <UserIcon size={12} />}
                                                             </div>
-                                                            <span className="text-xs font-semibold text-slate-700 truncate">{client?.name || 'לא שויך'}</span>
+                                                            <span className="text-xs font-semibold text-slate-700 truncate" dir="ltr">
+                                                                {prop.status === 'draft' ? (prop.externalAgentPhone || 'לא ידוע') : (client?.name || 'לא שויך')}
+                                                            </span>
                                                         </div>
-                                                        {client?.phone && (
+                                                        {(prop.status === 'draft' ? prop.externalAgentPhone : client?.phone) && (
                                                             <a
-                                                                href={`https://wa.me/${formatPhoneForWhatsApp(client.phone)}`}
+                                                                href={`https://wa.me/${formatPhoneForWhatsApp(prop.status === 'draft' ? prop.externalAgentPhone : client!.phone)}`}
                                                                 target="_blank" rel="noreferrer"
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 className="text-emerald-500 hover:text-emerald-600 p-1 hover:bg-emerald-50 rounded-md transition-colors flex-shrink-0"
-                                                                title={`שלח הודעה ללקוח`}
+                                                                title={`שלח הודעה בווטסאפ`}
                                                             >
                                                                 <MessageCircle size={14} />
                                                             </a>
@@ -327,11 +351,15 @@ export default function Properties() {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                            <Building size={18} />
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${prop.status === 'draft' ? 'bg-amber-50 text-amber-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                            {prop.status === 'draft' ? <MessageCircle size={18} /> : <Building size={18} />}
                                                         </div>
                                                         <div>
-                                                            <span className="block text-sm font-semibold text-slate-800">{prop.address} {prop.city ? `, ${prop.city}` : ''}</span>
+                                                            {prop.status === 'draft' ? (
+                                                                <span className="block text-sm font-semibold text-amber-800">ממתין לאישור (WhatsApp)</span>
+                                                            ) : (
+                                                                <span className="block text-sm font-semibold text-slate-800">{prop.address} {prop.city ? `, ${prop.city}` : ''}</span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>

@@ -10,7 +10,7 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onAskAI={() => setAiChatOpen(true)} />
 
       <div className="flex-1 flex flex-col min-w-0 lg:mr-64">
         <Header onMenuClick={() => setSidebarOpen(true)} onAskAI={() => setAiChatOpen(true)} />

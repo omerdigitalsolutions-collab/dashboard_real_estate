@@ -1,6 +1,8 @@
-import * as functions from "firebase-functions";
+import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import Stripe from "stripe";
+import { defineSecret } from "firebase-functions/params";
+import { Resend } from 'resend';
 
 // אתחול של פיירבייס אדמין (אם טרם בוצע בקובץ הראשי)
 if (admin.apps.length === 0) {
@@ -9,29 +11,26 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 const auth = admin.auth();
 
-// משתני סביבה - נגדיר אותם בהמשך בפיירבייס
-// חשוב: לעולם אל תכתוב את המפתחות האמיתיים ישירות בקוד!
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const resendApiKey = process.env.RESEND_API_KEY;
-
-// אתחול ספריית סטרייפ רק אם המפתח קיים
-let stripe: Stripe | undefined;
-if (stripeSecretKey) {
-    stripe = new Stripe(stripeSecretKey, {
-        apiVersion: '2026-01-28.clover', // מומלץ להשתמש בגרסה העדכנית ביותר
-    });
-}
-
-// אתחול Resend
-import { Resend } from 'resend';
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
+// Secure Firebase Params (Secret Manager)
+// Removed STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and RESEND_API_KEY temporarily to allow deployment
 
 /**
  * פונקציית ה-Webhook הראשית
  * מאזינה לבקשות HTTP POST שמגיעות מ-Stripe
  */
-export const stripeWebhookHandler = functions.https.onRequest(async (req, res) => {
+export const stripeWebhookHandler = onRequest({}, async (req, res) => {
+    // 1. Fetch decrypted values
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+    const resendApiKey = process.env.RESEND_API_KEY || "";
+
+    let stripe: Stripe | undefined;
+    if (stripeSecretKey) {
+        stripe = new Stripe(stripeSecretKey, {
+            apiVersion: '2026-01-28.clover',
+        });
+    }
+
     // 1. בדיקות אבטחה ראשוניות
     if (!stripeSecretKey || !webhookSecret || !stripe) {
         console.error("❌ Stripe API keys missing in environment variables.");
@@ -69,7 +68,7 @@ export const stripeWebhookHandler = functions.https.onRequest(async (req, res) =
 
             // ביצוע תהליך ההקמה (Provisioning)
             try {
-                await provisionNewAgency(session);
+                await provisionNewAgency(session, resendApiKey);
                 console.log("✨ Agency provisioning completed successfully.");
             } catch (error) {
                 console.error("❌ Error during agency provisioning:", error);
@@ -95,7 +94,7 @@ export const stripeWebhookHandler = functions.https.onRequest(async (req, res) =
 /**
  * פונקציית עזר: הקמת המשרד והמשתמש במערכת
  */
-async function provisionNewAgency(session: Stripe.Checkout.Session) {
+async function provisionNewAgency(session: Stripe.Checkout.Session, resendApiKey: string) {
     const customerEmail = session.customer_details?.email;
     const customerName = session.customer_details?.name || "Agency Admin";
 
@@ -168,13 +167,13 @@ async function provisionNewAgency(session: Stripe.Checkout.Session) {
     if (resendApiKey) {
         try {
             const resetLink = await auth.generatePasswordResetLink(customerEmail);
+            const resend = new Resend(resendApiKey);
 
-            if (resend) {
-                await resend.emails.send({
-                    from: 'hOMER CRM <noreply@omer-crm.co.il>', // עדכן את הכתובת לכתובת המאומתת שלך ב-Resend
-                    to: [customerEmail],
-                    subject: 'ברוכים הבאים ל-hOMER CRM! הגדר את הסיסמה שלך',
-                    html: `
+            await resend.emails.send({
+                from: 'hOMER CRM <noreply@omer-crm.co.il>', // עדכן את הכתובת לכתובת המאומתת שלך ב-Resend
+                to: [customerEmail],
+                subject: 'ברוכים הבאים ל-hOMER CRM! הגדר את הסיסמה שלך',
+                html: `
                     <div dir="rtl" style="font-family: sans-serif; color: #333;">
                         <h1>ברוכים הבאים, ${customerName}! 👋</h1>
                         <p>שמחים שהצטרפתם ל-hOMER CRM, המערכת החכמה לניהול משרד התיווך שלכם.</p>
@@ -187,9 +186,8 @@ async function provisionNewAgency(session: Stripe.Checkout.Session) {
                         <p>בברכה,<br>צוות hOMER</p>
                     </div>
                 `
-                });
-                console.log(`✅ Welcome email sent to ${customerEmail}`);
-            }
+            });
+            console.log(`✅ Welcome email sent to ${customerEmail}`);
         } catch (emailError) {
             console.error(`❌ Failed to send welcome email to ${customerEmail}:`, emailError);
             // לא נזרוק שגיאה כדי לא להכשיל את תהליך ה-Webhook כולו, המשרד כבר הוקם.

@@ -36,10 +36,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsappWebhook = exports.disconnectWhatsApp = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = void 0;
+exports.whatsappWebhook = exports.disconnectWhatsApp = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
+const crypto = __importStar(require("crypto"));
+const params_1 = require("firebase-functions/params");
+const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
 /**
  * ─── WhatsApp Managed Architecture (WAHA / Green API) ───────────────────────
  *
@@ -59,6 +62,14 @@ const axios_1 = __importDefault(require("axios"));
  */
 const db = admin.firestore();
 const REGION = 'europe-west1';
+// Allowed CORS origins — add your production domain here when deploying
+const CORS_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://dashboard-6f9d1.web.app',
+    'https://dashboard-6f9d1.firebaseapp.com',
+    true, // Allow all origins (for callable functions, the SDK handles auth)
+];
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getWahaBaseUrl() {
     const url = process.env.WAHA_BASE_URL;
@@ -88,126 +99,253 @@ async function getAgencyWhatsApp(agencyId) {
     const agencyDoc = await db.collection('agencies').doc(agencyId).get();
     return (_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.whatsappIntegration;
 }
-// ─── 1. generateWhatsAppQR ───────────────────────────────────────────────────
+// ─── Cryptography Helpers (AES-256-CBC) ──────────────────────────────────────
+const ALGORITHM = 'aes-256-cbc';
+function encryptToken(text, secret) {
+    // Ensure secret is 32 bytes for aes-256
+    const key = crypto.createHash('sha256').update(String(secret)).digest('base64').substring(0, 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(key), iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return { encryptedToken: encrypted, iv: iv.toString('hex') };
+}
+function decryptToken(encryptedData, ivText, secret) {
+    const key = crypto.createHash('sha256').update(String(secret)).digest('base64').substring(0, 32);
+    const iv = Buffer.from(ivText, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(key), iv);
+    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+/** Retrieve and decrypt Green API credentials for an agency */
+async function getGreenApiCredentials(agencyId, secretValue) {
+    const doc = await db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp').get();
+    if (!doc.exists)
+        return null;
+    const data = doc.data();
+    if (!data.idInstance || !data.encryptedToken || !data.iv)
+        return null;
+    try {
+        const apiTokenInstance = decryptToken(data.encryptedToken, data.iv, secretValue);
+        return { idInstance: data.idInstance, apiTokenInstance };
+    }
+    catch (err) {
+        console.error(`[WhatsApp] Failed to decrypt credentials for agency ${agencyId}`, err);
+        return null;
+    }
+}
+// ─── Instance Recycling (Business Plan) ──────────────────────────────────────
 /**
- * Called by the frontend when the user clicks "Connect WhatsApp".
- * Creates / restarts a WAHA session (or fetches QR from Green API) and
- * returns ONLY the QR code string — never any tokens.
+ * connectAgencyWhatsApp:
+ * Pulls an available Green API instance from the `available_instances` pool,
+ * encrypts the API token, assigns it to `agencies/{agencyId}/private_credentials/whatsapp`,
+ * and removes it from the pool.
  */
-exports.generateWhatsAppQR = (0, https_1.onCall)({ region: REGION }, async (request) => {
-    var _a, _b;
+exports.connectAgencyWhatsApp = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: [masterKey],
+}, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
-    const wahaBase = getWahaBaseUrl();
-    const masterKey = process.env.WAHA_MASTER_KEY;
-    // ── Green API mode (no master key) ───────────────────────────────────────
-    if (!masterKey) {
-        const wa = await getAgencyWhatsApp(agencyId);
-        const idInstance = wa === null || wa === void 0 ? void 0 : wa.idInstance;
-        const apiToken = wa === null || wa === void 0 ? void 0 : wa.apiTokenInstance;
-        if (!idInstance || !apiToken) {
-            throw new https_1.HttpsError('failed-precondition', 'Green API credentials not configured for this agency. Contact support.');
-        }
-        const url = `${wahaBase}/waInstance${idInstance}/qr/${apiToken}`;
-        const resp = await axios_1.default.get(url);
-        if (((_a = resp.data) === null || _a === void 0 ? void 0 : _a.type) !== 'qrCode') {
-            throw new https_1.HttpsError('internal', 'Green API did not return a QR code.');
-        }
-        await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'pending', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
-        return { qrCode: resp.data.message };
-    }
-    // ── WAHA self-hosted mode ─────────────────────────────────────────────────
-    const sessionName = `agency_${agencyId}`;
-    // Stop existing session silently (ignore errors — might not exist yet)
+    // Check if agency already has keys in the private vault
+    const credsRef = db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp');
+    const agencyRef = db.collection('agencies').doc(agencyId);
     try {
-        await axios_1.default.post(`${wahaBase}/api/sessions/stop`, { name: sessionName }, {
-            headers: { Authorization: `Bearer ${masterKey}` }
-        });
-    }
-    catch (_) { /* ignore */ }
-    // Start (or restart) session
-    await axios_1.default.post(`${wahaBase}/api/sessions/start`, {
-        name: sessionName,
-        config: { webhooks: [] } // webhooks configured separately on WAHA side
-    }, { headers: { Authorization: `Bearer ${masterKey}` } });
-    // Poll for QR (WAHA takes a few seconds to produce it)
-    let qrCode = null;
-    for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-            const statusResp = await axios_1.default.get(`${wahaBase}/api/sessions/${sessionName}/qr`, {
-                headers: { Authorization: `Bearer ${masterKey}` }
-            });
-            if ((_b = statusResp.data) === null || _b === void 0 ? void 0 : _b.value) {
-                qrCode = statusResp.data.value;
-                break;
+        await db.runTransaction(async (t) => {
+            var _a;
+            const credsDoc = await t.get(credsRef);
+            if (credsDoc.exists && ((_a = credsDoc.data()) === null || _a === void 0 ? void 0 : _a.idInstance)) {
+                throw new https_1.HttpsError('already-exists', 'Agency already has an allocated WhatsApp instance.');
             }
-        }
-        catch (_) { /* not ready yet */ }
+            // Find an available instance
+            const availableSnap = await t.get(db.collection('available_instances').limit(1));
+            if (availableSnap.empty) {
+                throw new https_1.HttpsError('resource-exhausted', 'No available WhatsApp instances at the moment. Please contact support.');
+            }
+            const instanceDoc = availableSnap.docs[0];
+            const instanceData = instanceDoc.data();
+            // Encrypt the token
+            const { encryptedToken, iv } = encryptToken(instanceData.apiTokenInstance, masterKey.value());
+            // Save encrypted credentials to private subcollection
+            t.set(credsRef, {
+                idInstance: instanceData.idInstance,
+                encryptedToken,
+                iv,
+                assignedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            // Update agency public metadata (remove plain-text keys if any existed, and set status)
+            t.set(agencyRef, {
+                greenApiKeys: admin.firestore.FieldValue.delete(),
+                whatsappIntegration: {
+                    status: 'PENDING_SCAN', // Force them to scan QR next
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }
+            }, { merge: true });
+            // Remove from pool
+            t.delete(instanceDoc.ref);
+        });
+        return { success: true, message: 'Instance allocated securely.' };
     }
-    if (!qrCode)
-        throw new https_1.HttpsError('deadline-exceeded', 'QR code took too long to generate. Try again.');
-    // Persist session name (not the key!) in Firestore
+    catch (err) {
+        console.error('Failed to allocate instance:', err);
+        throw new https_1.HttpsError(err.code || 'internal', err.message || 'Failed to allocate instance');
+    }
+});
+/**
+ * disconnectAgencyWhatsApp:
+ * Removes keys from private subcollection, decrypts to send /LogOut to Green API,
+ * and puts plain-text keys back in pool.
+ */
+exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: [masterKey],
+}, async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
+    const agencyId = await getAgencyId(request.auth.uid);
+    const credsRef = db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp');
+    const agencyRef = db.collection('agencies').doc(agencyId);
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        throw new https_1.HttpsError('not-found', 'No encrypted instance allocated to this agency.');
+    }
+    // 1. Send LogOut to Green API to clear the current WhatsApp session
+    try {
+        await axios_1.default.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`);
+        console.log(`[WhatsApp] Logged out instance ${keys.idInstance}`);
+    }
+    catch (err) {
+        console.warn(`[WhatsApp] Failed to cleanly logout instance ${keys.idInstance}:`, err === null || err === void 0 ? void 0 : err.message);
+        // Continue anyway to recycle it
+    }
+    // 2. Transaction: Return to pool, remove from private subcollection and agency doc
+    try {
+        await db.runTransaction(async (t) => {
+            // Put plain-text back in pool
+            const poolRef = db.collection('available_instances').doc();
+            t.set(poolRef, {
+                idInstance: keys.idInstance,
+                apiTokenInstance: keys.apiTokenInstance,
+                returnedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            // Delete from private subcollection
+            t.delete(credsRef);
+            // Wipe status from agency doc
+            t.set(agencyRef, {
+                isWhatsappConnected: false,
+                whatsappIntegration: null
+            }, { merge: true });
+        });
+        return { success: true, message: 'Disconnected and safely returned instance to pool.' };
+    }
+    catch (err) {
+        console.error('Failed to disconnect/recycle instance:', err);
+        throw new https_1.HttpsError('internal', 'Internal error while recycling instance.');
+    }
+});
+// ─── 1. generateWhatsAppQR ───────────────────────────────────────────────────
+/**
+ * Called by the frontend when the user clicks "Connect WhatsApp" / "Show QR".
+ * Requires that `connectAgencyWhatsApp` was called first so the agency has `greenApiKeys`.
+ */
+exports.generateWhatsAppQR = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: [masterKey],
+}, async (request) => {
+    var _a, _b, _c, _d;
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
+    const agencyId = await getAgencyId(request.auth.uid);
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        throw new https_1.HttpsError('failed-precondition', 'No WhatsApp instance allocated. Call connectAgencyWhatsApp first.');
+    }
+    const qrUrl = `https://api.green-api.com/waInstance${keys.idInstance}/qr/${keys.apiTokenInstance}`;
+    let qrCode;
+    try {
+        const resp = await axios_1.default.get(qrUrl, { timeout: 15000 });
+        if (((_a = resp.data) === null || _a === void 0 ? void 0 : _a.type) === 'alreadyLogged') {
+            throw new https_1.HttpsError('already-exists', 'WhatsApp is already connected. Disconnect first.');
+        }
+        if (((_b = resp.data) === null || _b === void 0 ? void 0 : _b.type) !== 'qrCode' || !((_c = resp.data) === null || _c === void 0 ? void 0 : _c.message)) {
+            throw new https_1.HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
+        }
+        qrCode = resp.data.message;
+    }
+    catch (err) {
+        if (err instanceof https_1.HttpsError)
+            throw err;
+        throw new https_1.HttpsError('internal', `Failed to fetch QR: ${(_d = err === null || err === void 0 ? void 0 : err.message) !== null && _d !== void 0 ? _d : err}`);
+    }
+    // Ensure status reflects pending scan
     await db.collection('agencies').doc(agencyId).set({
         whatsappIntegration: {
-            sessionName,
-            status: 'pending',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }
+            status: 'PENDING_SCAN',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
     }, { merge: true });
     return { qrCode };
 });
 // ─── 2. checkWhatsAppStatus ──────────────────────────────────────────────────
 /**
- * Polled every 5 sec by the frontend QR modal until status is 'connected'.
- * Updates the agency Firestore doc and returns the current status.
+ * Checks WhatsApp status cleanly reading keys from the dynamically assigned greenApiKeys
  */
-exports.checkWhatsAppStatus = (0, https_1.onCall)({ region: REGION }, async (request) => {
-    var _a, _b;
+exports.checkWhatsAppStatus = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: [masterKey],
+}, async (request) => {
+    var _a, _b, _c, _d, _e;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
-    const wa = await getAgencyWhatsApp(agencyId);
-    if (!wa)
-        return { status: 'disconnected' };
-    const masterKey = process.env.WAHA_MASTER_KEY;
-    // ── Green API mode ────────────────────────────────────────────────────────
-    if (!masterKey) {
-        const idInstance = wa.idInstance;
-        const apiToken = wa.apiTokenInstance;
-        if (!idInstance || !apiToken)
-            return { status: 'disconnected' };
-        const wahaBase = getWahaBaseUrl();
-        const resp = await axios_1.default.get(`${wahaBase}/waInstance${idInstance}/getStateInstance/${apiToken}`);
-        const state = ((_a = resp.data) === null || _a === void 0 ? void 0 : _a.stateInstance) || 'notAuthorized';
-        const connected = state === 'authorized';
-        if (connected && wa.status !== 'connected') {
-            await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'connected', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+    const agencyDoc = await db.collection('agencies').doc(agencyId).get();
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        return { status: 'DISCONNECTED' };
+    }
+    const statusUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getStateInstance/${keys.apiTokenInstance}`;
+    try {
+        const resp = await axios_1.default.get(statusUrl, { timeout: 10000 });
+        const state = (_a = resp.data) === null || _a === void 0 ? void 0 : _a.stateInstance;
+        let mappedStatus = 'DISCONNECTED';
+        if (state === 'authorized')
+            mappedStatus = 'CONNECTED';
+        else if (state === 'notAuthorized')
+            mappedStatus = 'PENDING_SCAN';
+        // Update the agency doc if status changed
+        const currentStatus = (_c = (_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.whatsappIntegration) === null || _c === void 0 ? void 0 : _c.status;
+        if (currentStatus !== mappedStatus) {
+            await db.collection('agencies').doc(agencyId).set({
+                isWhatsappConnected: mappedStatus === 'CONNECTED',
+                whatsappIntegration: {
+                    status: mappedStatus,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                },
+            }, { merge: true });
         }
-        return { status: connected ? 'connected' : wa.status || 'pending' };
+        return { status: mappedStatus, greenApiState: state };
     }
-    // ── WAHA self-hosted mode ────────────────────────────────────────────────
-    const wahaBase = getWahaBaseUrl();
-    const sessionName = wa.sessionName;
-    if (!sessionName)
-        return { status: 'disconnected' };
-    const resp = await axios_1.default.get(`${wahaBase}/api/sessions/${sessionName}`, {
-        headers: { Authorization: `Bearer ${masterKey}` }
-    });
-    const rawStatus = ((_b = resp.data) === null || _b === void 0 ? void 0 : _b.status) || 'STOPPED';
-    const connected = ['WORKING', 'CONNECTED', 'AUTHORIZED'].includes(rawStatus.toUpperCase());
-    if (connected && wa.status !== 'connected') {
-        await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'connected', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+    catch (err) {
+        console.warn('Status check network/timeout issue, returning stored state.');
+        return { status: ((_e = (_d = agencyDoc.data()) === null || _d === void 0 ? void 0 : _d.whatsappIntegration) === null || _e === void 0 ? void 0 : _e.status) || 'PENDING_SCAN' };
     }
-    return { status: connected ? 'connected' : wa.status || 'pending' };
 });
 // ─── 3. sendWhatsappMessage ──────────────────────────────────────────────────
 /**
  * Secure message dispatch. Frontend sends only { phone, message } — never any tokens.
  * The function resolves the agency's WAHA credentials server-side.
  */
-exports.sendWhatsappMessage = (0, https_1.onCall)({ region: REGION }, async (request) => {
+exports.sendWhatsappMessage = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY', masterKey]
+}, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const { phone, message } = request.data;
@@ -218,44 +356,31 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({ region: REGION }, async (req
     if (!wa || wa.status !== 'connected') {
         throw new https_1.HttpsError('failed-precondition', 'WhatsApp is not connected. Please connect first in Settings.');
     }
-    const wahaBase = getWahaBaseUrl();
-    const masterKey = process.env.WAHA_MASTER_KEY;
-    const chatId = toWaId(phone);
-    // ── Green API mode ────────────────────────────────────────────────────────
-    if (!masterKey) {
-        const idInstance = wa.idInstance;
-        const apiToken = wa.apiTokenInstance;
-        await axios_1.default.post(`${wahaBase}/waInstance${idInstance}/sendMessage/${apiToken}`, { chatId, message });
+    // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+        await axios_1.default.post(sendUrl, {
+            chatId: toWaId(phone),
+            message: message
+        }, { timeout: 10000 });
+        console.log(`[Green API] Message sent to ${phone}`);
         return { success: true };
     }
-    // ── WAHA self-hosted mode ─────────────────────────────────────────────────
-    const sessionName = wa.sessionName;
-    if (!sessionName)
-        throw new https_1.HttpsError('failed-precondition', 'Session not found.');
-    await axios_1.default.post(`${wahaBase}/api/sendText`, {
-        session: sessionName,
-        chatId,
-        text: message,
-    }, { headers: { Authorization: `Bearer ${masterKey}` } });
-    return { success: true };
+    throw new https_1.HttpsError('failed-precondition', 'Session not found.');
 });
 // ─── 4. disconnectWhatsApp ───────────────────────────────────────────────────
-exports.disconnectWhatsApp = (0, https_1.onCall)({ region: REGION }, async (request) => {
+exports.disconnectWhatsApp = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY']
+}, async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
-    const wa = await getAgencyWhatsApp(agencyId);
-    const masterKey = process.env.WAHA_MASTER_KEY;
-    if (masterKey && (wa === null || wa === void 0 ? void 0 : wa.sessionName)) {
-        const wahaBase = getWahaBaseUrl();
-        try {
-            await axios_1.default.post(`${wahaBase}/api/sessions/stop`, { name: wa.sessionName }, {
-                headers: { Authorization: `Bearer ${masterKey}` }
-            });
-        }
-        catch (_) { /* ignore */ }
-    }
-    await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'disconnected', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+    // Note: True recycling happens in "disconnectAgencyWhatsApp"
+    // This just wipes front-end statuses
+    await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'DISCONNECTED', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
     return { success: true };
 });
 // ─── 5. whatsappWebhook ───────────────────────────────────────────────────────
@@ -265,8 +390,11 @@ exports.disconnectWhatsApp = (0, https_1.onCall)({ region: REGION }, async (requ
  *
  * Security: validates X-Webhook-Secret header against WAHA_WEBHOOK_SECRET env var.
  */
-exports.whatsappWebhook = (0, https_1.onRequest)({ region: REGION }, async (req, res) => {
-    var _a, _b, _c, _d, _e, _f;
+exports.whatsappWebhook = (0, https_1.onRequest)({
+    region: REGION,
+    secrets: ['WAHA_WEBHOOK_SECRET']
+}, async (req, res) => {
+    var _a, _b;
     // Always ACK first to prevent retries
     res.status(200).send('OK');
     try {
@@ -288,11 +416,12 @@ exports.whatsappWebhook = (0, https_1.onRequest)({ region: REGION }, async (req,
         // ── Find the agency ───────────────────────────────────────────────────
         let agencyId;
         if (idInstance) {
-            const snap = await db.collection('agencies')
-                .where('whatsappIntegration.idInstance', '==', idInstance)
+            const snap = await db.collectionGroup('private_credentials')
+                .where('idInstance', '==', idInstance)
                 .limit(1).get();
-            if (!snap.empty)
-                agencyId = snap.docs[0].id;
+            if (!snap.empty) {
+                agencyId = (_a = snap.docs[0].ref.parent.parent) === null || _a === void 0 ? void 0 : _a.id;
+            }
         }
         else if (sessionName) {
             const snap = await db.collection('agencies')
@@ -306,48 +435,117 @@ exports.whatsappWebhook = (0, https_1.onRequest)({ region: REGION }, async (req,
             return;
         }
         // ── Extract sender and message text ────────────────────────────────────
-        const rawSender = ((_a = body === null || body === void 0 ? void 0 : body.senderData) === null || _a === void 0 ? void 0 : _a.sender) || // Green API
-            ((_b = body === null || body === void 0 ? void 0 : body.payload) === null || _b === void 0 ? void 0 : _b.from) || // WAHA
-            '';
-        const textMessage = ((_d = (_c = body === null || body === void 0 ? void 0 : body.messageData) === null || _c === void 0 ? void 0 : _c.textMessageData) === null || _d === void 0 ? void 0 : _d.textMessage) || // Green API
-            ((_e = body === null || body === void 0 ? void 0 : body.payload) === null || _e === void 0 ? void 0 : _e.body) || // WAHA
-            '';
-        const idMessage = (body === null || body === void 0 ? void 0 : body.idMessage) || ((_f = body === null || body === void 0 ? void 0 : body.payload) === null || _f === void 0 ? void 0 : _f.id);
+        const senderData = (body === null || body === void 0 ? void 0 : body.senderData) || {};
+        const messageData = (body === null || body === void 0 ? void 0 : body.messageData) || {};
+        // Determine chat type and actual sender
+        const chatId = senderData.chatId || '';
+        const isGroup = chatId.endsWith('@g.us');
+        const isDirect = chatId.endsWith('@c.us');
+        // Real sender is the person who sent the message (in a group, it's senderData.sender. In direct, it's the chatId itself)
+        const rawSender = senderData.sender || chatId || '';
+        const textMessage = ((_b = messageData.textMessageData) === null || _b === void 0 ? void 0 : _b.textMessage) || '';
+        const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
         if (!rawSender || !textMessage)
             return;
         // ── Normalise phone ─────────────────────────────────────────────────────
         let cleanPhone = rawSender.replace('@c.us', '');
         if (cleanPhone.startsWith('972'))
             cleanPhone = '0' + cleanPhone.substring(3);
-        // ── Find lead ───────────────────────────────────────────────────────────
-        const leadsSnap = await db.collection('leads')
-            .where('agencyId', '==', agencyId)
-            .where('phone', '==', cleanPhone)
-            .limit(1).get();
-        if (leadsSnap.empty) {
-            console.log(`Webhook: No lead for phone ${cleanPhone} in agency ${agencyId}`);
-            return;
+        // ============================================================================
+        // 1. B2B GROUP MESSAGES (Property Hunting)
+        // ============================================================================
+        if (isGroup) {
+            const propertyKeywords = ['למכירה', 'להשכרה', 'נכס', 'דירה', 'מ"ר', 'חדרים', 'מחיר'];
+            const textLower = textMessage.toLowerCase();
+            // Basic heuristic: must contain at least two property-related words
+            const matches = propertyKeywords.filter(kw => textLower.includes(kw));
+            if (matches.length >= 2) {
+                // Create draft property
+                await db.collection('properties').add({
+                    agencyId,
+                    source: 'whatsapp_group',
+                    groupId: chatId,
+                    externalAgentPhone: cleanPhone,
+                    rawDescription: textMessage,
+                    status: 'draft', // Waiting for manual approval
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                console.log(`Webhook: Parsed draft property from group ${chatId} by ${cleanPhone}`);
+            }
+            return; // Done with group message
         }
-        const leadId = leadsSnap.docs[0].id;
-        // ── Idempotency ─────────────────────────────────────────────────────────
-        if (idMessage) {
-            const dup = await db.collection(`leads/${leadId}/messages`)
-                .where('idMessage', '==', idMessage).limit(1).get();
-            if (!dup.empty) {
-                console.log('Webhook: duplicate message ignored');
+        // ============================================================================
+        // 2. DIRECT MESSAGES (Smart Lead Detection)
+        // ============================================================================
+        if (isDirect) {
+            // ── Find existing lead ───────────────────────────────────────────────────
+            const leadsSnap = await db.collection('leads')
+                .where('agencyId', '==', agencyId)
+                .where('phone', '==', cleanPhone)
+                .limit(1).get();
+            if (leadsSnap.empty) {
+                // Unknown number - scan for lead keywords
+                const leadKeywords = ['נכס', 'דירה', 'מחיר', 'למכירה', 'להשכרה', 'פרטים', 'תיווך'];
+                const textLower = textMessage.toLowerCase();
+                const hasKeyword = leadKeywords.some(kw => textLower.includes(kw));
+                if (!hasKeyword) {
+                    console.log(`Webhook: Ignored spam/irrelevant DM from ${cleanPhone}`);
+                    return;
+                }
+                // Check for existing pending lead to avoid duplicates
+                const pendingSnap = await db.collection('pending_leads')
+                    .where('agencyId', '==', agencyId)
+                    .where('phone', '==', cleanPhone)
+                    .limit(1).get();
+                if (pendingSnap.empty) {
+                    // Calculate exactly 14 days from now as a proper Firestore Timestamp for TTL
+                    const expireDate = new Date();
+                    expireDate.setDate(expireDate.getDate() + 14);
+                    const expiresAt = admin.firestore.Timestamp.fromDate(expireDate);
+                    await db.collection('pending_leads').add({
+                        agencyId,
+                        phone: cleanPhone,
+                        initialMessage: textMessage,
+                        status: 'pending',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        expiresAt: expiresAt, // Native TTL policy field
+                    });
+                    console.log(`Webhook: New pending lead created for ${cleanPhone}`);
+                    // Create notification for the agency
+                    await db.collection('alerts').add({
+                        agencyId,
+                        targetAgentId: 'all', // Send to everyone in the agency
+                        type: 'new_pending_lead',
+                        title: 'ליד חדש זוהה מ-WhatsApp',
+                        message: `הודעה חדשה ממספר לא מוכר (${cleanPhone}) ממתינה לאישורך.`,
+                        isRead: false,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        link: '/dashboard/leads?tab=pending'
+                    });
+                }
                 return;
             }
+            // Existing lead - save message to their thread
+            const leadId = leadsSnap.docs[0].id;
+            // ── Idempotency ─────────────────────────────────────────────────────────
+            if (idMessage) {
+                const dup = await db.collection(`leads/${leadId}/messages`)
+                    .where('idMessage', '==', idMessage).limit(1).get();
+                if (!dup.empty) {
+                    console.log('Webhook: duplicate message ignored');
+                    return;
+                }
+            }
+            await db.collection(`leads/${leadId}/messages`).add({
+                idMessage: idMessage || null,
+                text: textMessage,
+                direction: 'inbound',
+                senderPhone: cleanPhone,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                isRead: false,
+            });
+            console.log(`Webhook: message routed to lead ${leadId}`);
         }
-        // ── Save inbound message ─────────────────────────────────────────────────
-        await db.collection(`leads/${leadId}/messages`).add({
-            idMessage: idMessage || null,
-            text: textMessage,
-            direction: 'inbound',
-            senderPhone: cleanPhone,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            isRead: false,
-        });
-        console.log(`Webhook: message routed to lead ${leadId}`);
     }
     catch (err) {
         console.error('Webhook fatal error:', err);

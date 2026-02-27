@@ -5,7 +5,7 @@
 
 ## 1. Stripe (סליקה, מנויים והקמת סוכנויות)
 מערכת Stripe משמשת לסליקה ולהקמה אוטומטית של משרדים ומשתמשי תשתית כשהם רוכשים מנוי.
-* **`STRIPE_SECRET_KEY`**: המפתח הסודי של Stripe (מתחיל ב-`sk_test_` או `sk_live_`). מאפשר לשרת לבצע פעולות מול Stripe.
+* **`STRIPE_SECRET_KEY`**: המפתח הסודי של Stripe (מתחיל ב-`sk_test_` או `sk_live_`).א ר מאפשר לשרת לבצע פעולות מול Stripe.
 * **`STRIPE_WEBHOOK_SECRET`**: סוד החתימה של ה-Webhook של Stripe (מתחיל ב-`whsec_`). משמש לאימות שהקריאה אכן הגיעה מ-Stripe.
 * **כתובת ה-Webhook להזנה ב-Stripe**:
   ```text

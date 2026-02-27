@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
@@ -22,18 +21,17 @@ import {
 } from 'lucide-react';
 
 const navigation = [
-    { name: 'לוח בקרה', href: '/', icon: LayoutDashboard },
-    { name: 'לידים', href: '/leads', icon: Contact },
-    { name: 'עסקאות', href: '/transactions', icon: Handshake },
-    { name: 'נכסים', href: '/properties', icon: Building2 },
-    { name: 'סוכנים', href: '/agents', icon: Users },
-    { name: 'הגדרות', href: '/settings', icon: Settings },
+    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'לידים', href: '/dashboard/leads', icon: Contact },
+    { name: 'עסקאות', href: '/dashboard/transactions', icon: Handshake },
+    { name: 'נכסים', href: '/dashboard/properties', icon: Building2 },
+    { name: 'סוכנים', href: '/dashboard/agents', icon: Users },
+    { name: 'הגדרות', href: '/dashboard/settings', icon: Settings },
 ];
 
 export default function DashboardLayout() {
-    const { userData } = useAuth();
     const { isSuperAdmin } = useSuperAdmin();
-    const { alerts } = useLiveDashboardData();
+    const { alerts, agencySettings, agencyName } = useLiveDashboardData();
     const navigate = useNavigate();
     const [showAddProperty, setShowAddProperty] = useState(false);
     const [showAddLead, setShowAddLead] = useState(false);
@@ -53,9 +51,9 @@ export default function DashboardLayout() {
         <div className="flex h-screen overflow-hidden bg-[#0a0f1c]" dir="rtl">
             {/* Sidebar */}
             <aside className="w-64 flex-shrink-0 bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col z-20">
-                <div className="shrink-0 h-16 flex items-center px-6 border-b border-slate-800">
+                <div className="shrink-0 h-20 flex items-center px-6 border-b border-slate-800">
                     <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                        <img src="/homer-logo.png" alt="Homer" className="h-8 w-auto mix-blend-screen brightness-200" />
+                        <img src="/homer-logo.png" alt="Homer" className="h-12 w-auto mix-blend-screen brightness-200" />
                     </span>
                 </div>
 
@@ -78,7 +76,7 @@ export default function DashboardLayout() {
 
                     {isSuperAdmin && (
                         <NavLink
-                            to="/super-admin"
+                            to="/dashboard/super-admin"
                             className={({ isActive }) =>
                                 `flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold transition-all duration-300 mt-6 ${isActive
                                     ? 'bg-purple-500/10 border border-purple-500/30 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
@@ -100,11 +98,25 @@ export default function DashboardLayout() {
 
                 {/* Header */}
                 <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 z-10">
-                    <div className="flex items-center gap-6">
-                        <h1 className="text-lg font-medium text-white">
-                            בוקר טוב, <span className="text-cyan-400">{userData?.name || 'אורח'}</span>
+                    <button
+                        onClick={() => navigate('/dashboard/settings')}
+                        className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
+                    >
+                        {agencySettings?.logoUrl ? (
+                            <img
+                                src={agencySettings.logoUrl}
+                                alt="לוגו סוכנות"
+                                className="h-8 w-auto object-contain mix-blend-screen brightness-200"
+                            />
+                        ) : (
+                            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                                <Building2 className="w-4 h-4 text-cyan-400" />
+                            </div>
+                        )}
+                        <h1 className="text-lg font-semibold text-white tracking-tight">
+                            {agencyName || 'הסוכנות שלי'}
                         </h1>
-                    </div>
+                    </button>
 
                     <div className="flex items-center gap-4">
                         {/* Quick Add Dropdown */}

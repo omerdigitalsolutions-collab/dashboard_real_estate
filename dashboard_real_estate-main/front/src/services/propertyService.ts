@@ -32,6 +32,7 @@ export interface NewPropertyData {
     images?: string[];
     isExclusive?: boolean;
     imageFiles?: File[];
+    leadId?: string;
 }
 
 /**

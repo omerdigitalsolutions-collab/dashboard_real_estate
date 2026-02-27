@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, QueryConstraint, DocumentData } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, QueryConstraint, DocumentData, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Property, Deal, Lead, AppUser, AppTask, Alert } from '../types';
@@ -73,6 +73,46 @@ export const useAgents = () => useAgencyCollection<AppUser>('users', [where('rol
 export const useTasks = () => useAgencyCollection<AppTask>('tasks');   // sorted client-side below
 export const useAlerts = () => useAgencyCollection<Alert>('alerts');
 
+export function useAgency() {
+    const { userData } = useAuth();
+    const agencyId = userData?.agencyId;
+
+    const [agency, setAgency] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (!agencyId) {
+            setAgency(null);
+            setLoading(false);
+            return;
+        }
+
+        const ref_ = doc(db, 'agencies', agencyId);
+        const unsubscribe = onSnapshot(
+            ref_,
+            (snap) => {
+                if (snap.exists()) {
+                    setAgency({ id: snap.id, ...snap.data() });
+                } else {
+                    setAgency(null);
+                }
+                setLoading(false);
+                setError(null);
+            },
+            (err) => {
+                console.error('[useAgency] Error fetching agency:', err);
+                setError(err);
+                setLoading(false);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [agencyId]);
+
+    return { agency, loading, error };
+}
+
 // ─── Derived Data Hooks ───────────────────────────────────────────────────────
 
 /**
@@ -104,9 +144,9 @@ export function useRevenueData() {
             };
         });
 
-        // Sum expected revenue from all active/won deals
+        // Sum actual revenue from won deals only
         deals.forEach(deal => {
-            if (deal.stage === 'lost') return;
+            if (deal.stage !== 'won') return;
 
             const timestampObj = deal.updatedAt || deal.createdAt;
             if (!timestampObj) return;
@@ -117,12 +157,7 @@ export function useRevenueData() {
 
             const targetMonth = last12Months.find(m => m.monthIndex === mIdx && m.year === yr);
             if (targetMonth) {
-                if (['contract', 'won'].includes(deal.stage)) {
-                    targetMonth.revenue += (deal.actualCommission || deal.projectedCommission || 0);
-                } else {
-                    const prob = deal.probability ?? 10; // Default open deals to 10% expected value if not set
-                    targetMonth.revenue += (deal.projectedCommission || 0) * (prob / 100);
-                }
+                targetMonth.revenue += (deal.actualCommission || deal.projectedCommission || 0);
             }
         });
 

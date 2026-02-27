@@ -7,10 +7,12 @@ exports.importPropertyFromUrl = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const axios_1 = __importDefault(require("axios"));
 const generative_ai_1 = require("@google/generative-ai");
-// Initialize Gemini API
-// Make sure to add GEMINI_API_KEY to your functions/.env file
-const genAI = new generative_ai_1.GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-exports.importPropertyFromUrl = (0, https_1.onCall)(async (request) => {
+const params_1 = require("firebase-functions/params");
+// Initialize Gemini API Key via Secret Manager
+const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
+exports.importPropertyFromUrl = (0, https_1.onCall)({
+    secrets: [geminiApiKey]
+}, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -18,7 +20,8 @@ exports.importPropertyFromUrl = (0, https_1.onCall)(async (request) => {
     if (!url || typeof url !== 'string' || !url.startsWith('http')) {
         throw new https_1.HttpsError('invalid-argument', 'A valid URL is required.');
     }
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
         throw new https_1.HttpsError('failed-precondition', 'GEMINI_API_KEY is not configured in environment.');
     }
     try {
@@ -44,6 +47,7 @@ exports.importPropertyFromUrl = (0, https_1.onCall)(async (request) => {
         // Extract a subset of characters to avoid token limits (e.g. max 15,000 chars)
         const htmlSnippet = html.slice(0, 15000);
         // 3. Ask Gemini Flash to extract the details
+        const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `
 You are a real estate data extraction assistant.

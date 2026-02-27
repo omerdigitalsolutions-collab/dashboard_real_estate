@@ -49,6 +49,26 @@ export const generateCatalog = onCall(async (request) => {
         throw new HttpsError('permission-denied', 'You do not belong to this agency.');
     }
 
+    // ── Fetch Agency branding ────────────────────────────────────────────────────
+    const agencyDoc = await db.doc(`agencies/${agencyId}`).get();
+    const agencyData = agencyDoc.data() ?? {};
+    const agencyName: string = agencyData.agencyName || agencyData.name || '';
+    const agencyLogoUrl: string = agencyData.settings?.logoUrl || '';
+
+    // ── Pre-fetch agent names (unique agentIds in property list) ─────────────────
+    const agentNameCache: Record<string, string> = {};
+    const fetchAgentName = async (agentId: string): Promise<string> => {
+        if (agentNameCache[agentId]) return agentNameCache[agentId];
+        try {
+            const agentDoc = await db.collection('users').doc(agentId).get();
+            const name = agentDoc.data()?.name || '';
+            agentNameCache[agentId] = name;
+            return name;
+        } catch {
+            return '';
+        }
+    };
+
     // ── Fetch Properties and Snapshot ───────────────────────────────────────────
     const snapshottedProperties = [];
 
@@ -74,6 +94,9 @@ export const generateCatalog = onCall(async (request) => {
             const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
             const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
 
+            // Look up agent name
+            const agentName = data.agentId ? await fetchAgentName(data.agentId) : '';
+
             snapshottedProperties.push({
                 id: doc.id,
                 address: data.address || 'כתובת חסויה',
@@ -84,6 +107,7 @@ export const generateCatalog = onCall(async (request) => {
                 type: data.type || 'sale',
                 kind: data.kind || null,
                 description: data.description || null,
+                agentName,
             });
         }
     }
@@ -101,6 +125,8 @@ export const generateCatalog = onCall(async (request) => {
 
     await catalogRef.set({
         agencyId,
+        agencyName,
+        agencyLogoUrl,
         agentId: request.auth.uid,
         leadId,
         leadName: leadName || '',

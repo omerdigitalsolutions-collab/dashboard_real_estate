@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
@@ -9,8 +9,36 @@ import {
     Star,
     ArrowLeft
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+// ─── Max payment terminal identifier ─────────────────────────────────────────
+// Replace this with your actual Max Terminal ID (from the merchant portal).
+const MAX_TERMINAL_ID = import.meta.env.VITE_MAX_TERMINAL_ID || 'YOUR_TERMINAL_ID';
 
 export default function LandingPage() {
+    const navigate = useNavigate();
+    const { userData } = useAuth();
+
+    /**
+     * Redirects the user to Max's Hosted Payment Page.
+     * URL params are passed through to the IPN webhook via Max's
+     * "Additional Data" / "Custom Fields" configuration in the merchant portal.
+     */
+    const handleSubscribe = (plan: 'solo' | 'boutique') => {
+        if (!userData) {
+            // Guest — send to register first
+            navigate('/register');
+            return;
+        }
+        const params = new URLSearchParams({
+            terminal: MAX_TERMINAL_ID,
+            plan,
+            uid: userData.uid ?? '',
+            email: userData.email ?? '',
+            name: userData.name ?? '',
+        });
+        window.location.href = `https://pay.max.co.il/payment?${params.toString()}`;
+    };
     return (
         <div className="min-h-screen bg-[#eff5f5] font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden text-slate-900" dir="rtl">
             {/* Navigation */}
@@ -19,12 +47,20 @@ export default function LandingPage() {
                     <img src="/homer-logo.png" alt="Homer CRM" className="h-14 md:h-20 w-auto" />
                 </div>
                 <div className="flex items-center gap-4 md:gap-6">
-                    <Link to="/login" className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors">
-                        התחברות
-                    </Link>
-                    <Link to="/register" className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
-                        הירשם עכשיו
-                    </Link>
+                    {userData ? (
+                        <Link to="/dashboard" className="text-sm md:text-base font-bold bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-blue-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                            אל המערכת
+                        </Link>
+                    ) : (
+                        <>
+                            <Link to="/login" className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors">
+                                התחברות
+                            </Link>
+                            <Link to="/register" className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                                הירשם עכשיו
+                            </Link>
+                        </>
+                    )}
                 </div>
             </header>
 
@@ -48,8 +84,8 @@ export default function LandingPage() {
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <Link to="/register" className="w-full sm:w-auto px-8 py-4 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-xl shadow-emerald-500/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
-                            הירשם עכשיו
+                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-8 py-4 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-xl shadow-emerald-500/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
+                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
                             <ArrowLeft size={20} />
                         </Link>
                         <button className="w-full sm:w-auto px-8 py-4 rounded-full bg-white border-2 border-slate-200 hover:border-blue-900 hover:text-blue-900 text-slate-700 font-bold text-lg shadow-sm transition-all flex items-center justify-center gap-2 group">
@@ -180,9 +216,12 @@ export default function LandingPage() {
                                     <span>ניהול לידים ונכסים אישי</span>
                                 </li>
                             </ul>
-                            <Link to="/register" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
+                            <button
+                                onClick={() => handleSubscribe('solo')}
+                                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors"
+                            >
                                 הירשם עכשיו
-                            </Link>
+                            </button>
                         </div>
 
                         {/* Tier 2 (Recommended) */}
@@ -216,9 +255,12 @@ export default function LandingPage() {
                                     <span>מחולל קטלוגים לנכסים</span>
                                 </li>
                             </ul>
-                            <Link to="/register" className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg text-center rounded-xl shadow-lg transition-colors">
+                            <button
+                                onClick={() => handleSubscribe('boutique')}
+                                className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg text-center rounded-xl shadow-lg transition-colors"
+                            >
                                 הירשם עכשיו
-                            </Link>
+                            </button>
                         </div>
 
                         {/* Tier 3 */}
@@ -245,9 +287,14 @@ export default function LandingPage() {
                                     <span>מנהל תיק אישי</span>
                                 </li>
                             </ul>
-                            <Link to="/register" className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors">
-                                הירשם עכשיו
-                            </Link>
+                            <a
+                                href="https://wa.me/972500000000?text=%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%9C%20%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%AA%20hOMER%20%D7%A8%D7%A9%D7%AA%20%D7%91%D7%A8%D7%95%D7%A7%D7%A8%D7%99%D7%9D"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors block"
+                            >
+                                צור קשר
+                            </a>
                         </div>
                     </div>
                 </div>

@@ -10,13 +10,15 @@
  */
 
 // Initialize Admin SDK first (order matters)
+import { setGlobalOptions } from 'firebase-functions/v2';
+setGlobalOptions({ region: 'europe-west1' });
 import './config/admin';
 
 // ── Agencies Module ────────────────────────────────────────────────────────────
 import { createAgencyAccount } from './agencies/onboarding';
 
 // ── Users Module ───────────────────────────────────────────────────────────────
-import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, completeAgentSetup } from './users/team';
+import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup } from './users/team';
 
 // ── Tasks Module ───────────────────────────────────────────────────────────────
 import { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete } from './tasks/cleanup';
@@ -28,6 +30,7 @@ import { updateProperty } from './properties/updateProperty';
 import { deleteProperty } from './properties/deleteProperty';
 import { importPropertyFromUrl } from './properties/importProperty';
 import { getCoordinates, getAddressSuggestions, geocodeNewProperty } from './properties/geocode';
+import { onPropertyCreatedMatchmaking } from './properties/matchmaking';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -43,27 +46,33 @@ import { generateCatalog } from './catalogs/sharing';
 import { triggerSystemAlert } from './alerts/triggers';
 
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
-import { generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
+import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
+
+// ── AI Module ──────────────────────────────────────────────────────────────────
+import { askAgencyAgent } from './ai/agent';
+import { extractAiData } from './ai/extractAiData';
 
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
 //   agencies-createAgencyAccount
 //   users-inviteAgent  |  users-getInviteInfo  |  users-updateAgentRole
-//   users-toggleAgentStatus  |  users-completeAgentSetup
+//   users-toggleAgentStatus  |  users-completeAgentSetup | users-deleteAgent
 //   properties-getLiveProperties  |  properties-addProperty
 //   properties-updateProperty  |  properties-deleteProperty  |  properties-geocodeNewProperty
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
 export const agencies = { createAgencyAccount };
-export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, completeAgentSetup };
+export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog };
 export const alerts = { triggerSystemAlert };
-export const whatsapp = { generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook };
+export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook };
+export const ai = { askAgencyAgent, extractAiData };
 
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
+export { maxPaymentWebhook } from './maxWebhook';

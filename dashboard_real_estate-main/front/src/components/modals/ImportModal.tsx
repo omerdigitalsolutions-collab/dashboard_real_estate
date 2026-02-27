@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import {
     Upload, Table as TableIcon, CheckCircle, AlertCircle,
-    ChevronLeft, ChevronRight, Download, X, FileSpreadsheet, Sparkles
+    X, FileSpreadsheet, Sparkles, ImagePlus, Loader2, Download, ChevronRight, ChevronLeft
 } from 'lucide-react';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth } from '../../context/AuthContext';
 import {
     parseFile, validateAndTransform, importLeads, importProperties,
@@ -181,11 +182,73 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const [errorMsg, setErrorMsg] = useState('');
     const [summary, setSummary] = useState({ success: 0, failed: 0, leads: 0, properties: 0 });
     const [isDragging, setIsDragging] = useState(false);
+    const [isExtracting, setIsExtracting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const imageInputRef = useRef<HTMLInputElement>(null);
 
     if (!isOpen) return null;
 
     // ── Handlers ──────────────────────────────────────────────────────────────
+
+    const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) await processImage(file);
+        e.target.value = '';
+    };
+
+    const processImage = async (file: File) => {
+        setErrorMsg('');
+        setIsExtracting(true);
+        try {
+            // Convert file to base64
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = async () => {
+                const base64data = reader.result as string;
+
+                // Determine target entity type
+                let targetEntity = entityType;
+                if (targetEntity === 'mixed' || targetEntity === 'combined') {
+                    // AI mixed extraction might be slightly complex, default to the page context or properties
+                    targetEntity = defaultEntityType;
+                }
+
+                const fns = getFunctions(undefined, 'europe-west1');
+                const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
+
+                const result = await extractAiData({
+                    payload: base64data,
+                    mode: 'bulk',
+                    entityType: targetEntity === 'lead' ? 'leads' : 'properties'
+                });
+
+                if (result.data.success && Array.isArray(result.data.data) && result.data.data.length > 0) {
+                    const rows = result.data.data;
+                    // Auto-generate headers from the keys of the first row
+                    const headers = Object.keys(rows[0]);
+
+                    setRawHeaders(headers);
+                    setRawRows(rows);
+
+                    // Try to auto-map based on the headers
+                    setMapping(buildAutoMapping(headers, targetEntity as EntityType));
+                    setDiscriminatorCol('');
+                    setStep(2);
+                } else {
+                    setErrorMsg('ה-AI לא הצליח לזהות נתונים בתמונה. נסה תמונה ברורה יותר.');
+                }
+                setIsExtracting(false);
+            };
+            reader.onerror = () => {
+                setErrorMsg('שגיאה בקריאת התמונה.');
+                setIsExtracting(false);
+            };
+        } catch (err: any) {
+            console.error(err);
+            setErrorMsg(err.message || 'אירעה שגיאה בחילוץ הנתונים מהתמונה.');
+            setIsExtracting(false);
+        }
+    };
 
     const processFile = async (file: File) => {
         setErrorMsg('');
@@ -194,6 +257,53 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setRawHeaders(headers);
             setRawRows(rows);
 
+            // HYBRID LOGIC: If <= 1500 data rows and entityType is property or lead, use AI.
+            if (rows.length > 0 && rows.length <= 1500 && (entityType === 'property' || entityType === 'lead')) {
+                setIsExtracting(true); // Re-using isExtracting state for loading UI
+                try {
+                    // 1. Rebuild a lightweight CSV representation (headers + stringified rows)
+                    const csvLines = [headers.join(',')];
+                    rows.forEach((r: any) => {
+                        const line = headers.map((h: string) => {
+                            const val = r[h] ?? '';
+                            return typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val;
+                        }).join(',');
+                        csvLines.push(line);
+                    });
+                    const payloadCsv = csvLines.join('\n');
+
+                    // 2. Call the AI Function
+                    const fns = getFunctions(undefined, 'europe-west1');
+                    const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
+
+                    const targetEntity = entityType === 'property' ? 'properties' : 'leads';
+
+                    const result = await extractAiData({
+                        payload: payloadCsv,
+                        mode: 'bulk',
+                        entityType: targetEntity
+                    });
+
+                    if (result.data.success && Array.isArray(result.data.data)) {
+                        // 3. Skip Mapping Step -> Go straight to Validation (Step 3)
+                        const extractedRows = result.data.data;
+
+                        // We must format them as ValidationResult shape
+                        const validRows: TransformedRow[] = extractedRows.map(r => ({ ...r, _status: 'valid' } as TransformedRow));
+
+                        setValidation({ valid: validRows, invalid: [] }); // Assume AI cleaned it perfectly for now
+                        setStep(3);
+                        setIsExtracting(false);
+                        return; // Early return to completely bypass standard flow!
+                    }
+                } catch (aiErr: any) {
+                    console.error('AI Hybrid mapping failed, falling back to traditional routing:', aiErr);
+                    // Silently fall through to standard mapping if AI errors out (rate limits, context limits etc)
+                }
+                setIsExtracting(false);
+            }
+
+            // TRADITIONAL FALLBACK LOGIC
             if (entityType === 'mixed') {
                 const { nl, np } = buildMixedMapping(headers);
                 setLeadMapping(nl);
@@ -206,6 +316,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setStep(2);
         } catch (err: any) {
             setErrorMsg(err.message);
+            setIsExtracting(false);
         }
     };
 
@@ -219,7 +330,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         e.preventDefault();
         setIsDragging(false);
         const file = e.dataTransfer.files?.[0];
-        if (file) await processFile(file);
+        if (file) {
+            if (file.type.startsWith('image/')) {
+                await processImage(file);
+            } else {
+                await processFile(file);
+            }
+        }
     };
 
     const buildMixedMapping = (headers: string[]) => {
@@ -531,22 +648,48 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                 )}
                             </div>
 
-                            <div
-                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={handleDrop}
-                                onClick={() => fileInputRef.current?.click()}
-                                className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'}`}
-                            >
-                                <div className="w-16 h-16 rounded-2xl bg-blue-100 flex items-center justify-center">
-                                    <Upload size={28} className="text-blue-600" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Standard Excel Box */}
+                                <div
+                                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDrop={handleDrop}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 cursor-pointer transition-all ${isDragging ? 'border-blue-400 bg-blue-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'}`}
+                                >
+                                    <div className="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center">
+                                        <FileSpreadsheet size={24} className="text-blue-600" />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="font-bold text-slate-700 text-sm">ייבוא קובץ טבלה</p>
+                                        <p className="text-slate-400 text-xs mt-1">.xlsx, .xls, .csv</p>
+                                    </div>
+                                    <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileInput} />
                                 </div>
-                                <div className="text-center">
-                                    <p className="font-bold text-blue-600 text-base">לחץ לבחירת קובץ</p>
-                                    <p className="text-slate-500 text-sm mt-1">או גרור לכאן</p>
-                                    <p className="text-slate-400 text-xs mt-1">תומך בפורמטים: .xlsx, .xls, .csv</p>
+
+                                {/* AI Image Box */}
+                                <div
+                                    onClick={() => { if (!isExtracting) imageInputRef.current?.click(); }}
+                                    className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all ${isExtracting ? 'border-purple-300 bg-purple-50/50 cursor-not-allowed opacity-80' : 'border-purple-200 cursor-pointer hover:border-purple-400 hover:bg-purple-50/50'}`}
+                                >
+                                    <div className="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center relative">
+                                        {isExtracting ? (
+                                            <Loader2 size={24} className="text-purple-600 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <ImagePlus size={24} className="text-purple-600" />
+                                                <div className="absolute -top-1 -right-1 bg-white rounded-full">
+                                                    <Sparkles size={12} className="text-purple-500" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="font-bold text-slate-700 text-sm">{isExtracting ? 'מפענח תמונה...' : 'ייבוא חכם מתמונה (AI)'}</p>
+                                        <p className="text-slate-400 text-xs mt-1">צילום מסך או תמונה של טבלה</p>
+                                    </div>
+                                    <input ref={imageInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageInput} disabled={isExtracting} />
                                 </div>
-                                <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileInput} />
                             </div>
                         </div>
                     )}

@@ -37,35 +37,33 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.stripeWebhookHandler = void 0;
-const functions = __importStar(require("firebase-functions"));
+const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const stripe_1 = __importDefault(require("stripe"));
+const resend_1 = require("resend");
 // אתחול של פיירבייס אדמין (אם טרם בוצע בקובץ הראשי)
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
 const db = admin.firestore();
 const auth = admin.auth();
-// משתני סביבה - נגדיר אותם בהמשך בפיירבייס
-// חשוב: לעולם אל תכתוב את המפתחות האמיתיים ישירות בקוד!
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const resendApiKey = process.env.RESEND_API_KEY;
-// אתחול ספריית סטרייפ רק אם המפתח קיים
-let stripe;
-if (stripeSecretKey) {
-    stripe = new stripe_1.default(stripeSecretKey, {
-        apiVersion: '2026-01-28.clover', // מומלץ להשתמש בגרסה העדכנית ביותר
-    });
-}
-// אתחול Resend
-const resend_1 = require("resend");
-const resend = resendApiKey ? new resend_1.Resend(resendApiKey) : null;
+// Secure Firebase Params (Secret Manager)
+// Removed STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and RESEND_API_KEY temporarily to allow deployment
 /**
  * פונקציית ה-Webhook הראשית
  * מאזינה לבקשות HTTP POST שמגיעות מ-Stripe
  */
-exports.stripeWebhookHandler = functions.https.onRequest(async (req, res) => {
+exports.stripeWebhookHandler = (0, https_1.onRequest)({}, async (req, res) => {
+    // 1. Fetch decrypted values
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
+    const resendApiKey = process.env.RESEND_API_KEY || "";
+    let stripe;
+    if (stripeSecretKey) {
+        stripe = new stripe_1.default(stripeSecretKey, {
+            apiVersion: '2026-01-28.clover',
+        });
+    }
     // 1. בדיקות אבטחה ראשוניות
     if (!stripeSecretKey || !webhookSecret || !stripe) {
         console.error("❌ Stripe API keys missing in environment variables.");
@@ -99,7 +97,7 @@ exports.stripeWebhookHandler = functions.https.onRequest(async (req, res) => {
             console.log(`💰 Payment successful for session ID: ${session.id}`);
             // ביצוע תהליך ההקמה (Provisioning)
             try {
-                await provisionNewAgency(session);
+                await provisionNewAgency(session, resendApiKey);
                 console.log("✨ Agency provisioning completed successfully.");
             }
             catch (error) {
@@ -122,7 +120,7 @@ exports.stripeWebhookHandler = functions.https.onRequest(async (req, res) => {
 /**
  * פונקציית עזר: הקמת המשרד והמשתמש במערכת
  */
-async function provisionNewAgency(session) {
+async function provisionNewAgency(session, resendApiKey) {
     var _a, _b;
     const customerEmail = (_a = session.customer_details) === null || _a === void 0 ? void 0 : _a.email;
     const customerName = ((_b = session.customer_details) === null || _b === void 0 ? void 0 : _b.name) || "Agency Admin";
@@ -187,12 +185,12 @@ async function provisionNewAgency(session) {
     if (resendApiKey) {
         try {
             const resetLink = await auth.generatePasswordResetLink(customerEmail);
-            if (resend) {
-                await resend.emails.send({
-                    from: 'hOMER CRM <noreply@omer-crm.co.il>', // עדכן את הכתובת לכתובת המאומתת שלך ב-Resend
-                    to: [customerEmail],
-                    subject: 'ברוכים הבאים ל-hOMER CRM! הגדר את הסיסמה שלך',
-                    html: `
+            const resend = new resend_1.Resend(resendApiKey);
+            await resend.emails.send({
+                from: 'hOMER CRM <noreply@omer-crm.co.il>', // עדכן את הכתובת לכתובת המאומתת שלך ב-Resend
+                to: [customerEmail],
+                subject: 'ברוכים הבאים ל-hOMER CRM! הגדר את הסיסמה שלך',
+                html: `
                     <div dir="rtl" style="font-family: sans-serif; color: #333;">
                         <h1>ברוכים הבאים, ${customerName}! 👋</h1>
                         <p>שמחים שהצטרפתם ל-hOMER CRM, המערכת החכמה לניהול משרד התיווך שלכם.</p>
@@ -205,9 +203,8 @@ async function provisionNewAgency(session) {
                         <p>בברכה,<br>צוות hOMER</p>
                     </div>
                 `
-                });
-                console.log(`✅ Welcome email sent to ${customerEmail}`);
-            }
+            });
+            console.log(`✅ Welcome email sent to ${customerEmail}`);
         }
         catch (emailError) {
             console.error(`❌ Failed to send welcome email to ${customerEmail}:`, emailError);

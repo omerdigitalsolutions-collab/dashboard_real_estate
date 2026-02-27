@@ -25,22 +25,22 @@ import 'react-resizable/css/styles.css';
 // container so the visual left matches the coordinate left, then each widget
 // uses dir=rtl internally.
 const DEFAULT_LAYOUT: LayoutItem[] = [
-  // Row 1 – KPI cards (each 3 cols wide, 2 rows tall)
-  { i: 'kpi_value', x: 9, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: 'kpi_active', x: 6, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: 'kpi_leads', x: 3, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: 'kpi_tasks', x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+  // Row 1 – KPI cards (each 3 cols wide, 3 rows tall)
+  { i: 'kpi_value', x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'kpi_active', x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'kpi_leads', x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
+  { i: 'kpi_tasks', x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
   // Row 2 – Inventory | Financial Chart | Tasks
-  { i: 'inventory', x: 9, y: 2, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'financial', x: 3, y: 2, w: 6, h: 5, minW: 3, minH: 3 },
-  { i: 'task_widget', x: 0, y: 2, w: 3, h: 5, minW: 2, minH: 3 },
+  { i: 'inventory', x: 9, y: 3, w: 3, h: 5, minW: 2, minH: 3 },
+  { i: 'financial', x: 3, y: 3, w: 6, h: 5, minW: 3, minH: 3 },
+  { i: 'task_widget', x: 0, y: 3, w: 3, h: 5, minW: 2, minH: 3 },
   // Row 3 – Operations | Activity | Leaderboard
-  { i: 'operations', x: 9, y: 7, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'activity', x: 6, y: 7, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'leaderboard', x: 0, y: 7, w: 6, h: 5, minW: 3, minH: 3 },
+  { i: 'operations', x: 9, y: 8, w: 3, h: 5, minW: 2, minH: 3 },
+  { i: 'activity', x: 6, y: 8, w: 3, h: 5, minW: 2, minH: 3 },
+  { i: 'leaderboard', x: 0, y: 8, w: 6, h: 5, minW: 3, minH: 3 },
   // Row 4 – Map | AI Insights
-  { i: 'map', x: 9, y: 12, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'ai_insights', x: 0, y: 12, w: 9, h: 5, minW: 3, minH: 3 },
+  { i: 'map', x: 9, y: 13, w: 3, h: 5, minW: 2, minH: 3 },
+  { i: 'ai_insights', x: 0, y: 13, w: 9, h: 5, minW: 3, minH: 3 },
 ];
 
 export default function Dashboard() {
@@ -111,7 +111,7 @@ export default function Dashboard() {
   const innerWrap = isEditing ? 'pointer-events-none select-none h-full' : 'h-full';
 
   return (
-    <div className="max-w-[1600px] mx-auto w-full pb-10 overflow-x-hidden" dir="rtl">
+    <div className="max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 overflow-x-hidden" dir="rtl">
 
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">

@@ -1,12 +1,14 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import axios from 'axios';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { defineSecret } from 'firebase-functions/params';
 
-// Initialize Gemini API
-// Make sure to add GEMINI_API_KEY to your functions/.env file
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Initialize Gemini API Key via Secret Manager
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
-export const importPropertyFromUrl = onCall(async (request) => {
+export const importPropertyFromUrl = onCall({
+    secrets: [geminiApiKey]
+}, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -16,7 +18,8 @@ export const importPropertyFromUrl = onCall(async (request) => {
         throw new HttpsError('invalid-argument', 'A valid URL is required.');
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) {
         throw new HttpsError('failed-precondition', 'GEMINI_API_KEY is not configured in environment.');
     }
 
@@ -47,6 +50,7 @@ export const importPropertyFromUrl = onCall(async (request) => {
         const htmlSnippet = html.slice(0, 15000);
 
         // 3. Ask Gemini Flash to extract the details
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `

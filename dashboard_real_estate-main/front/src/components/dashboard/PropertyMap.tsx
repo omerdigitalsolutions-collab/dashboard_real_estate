@@ -7,8 +7,8 @@ import { Maximize2, Minimize2, X, MapPin, Target } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
-import { db, functions } from '../../config/firebase';
-import { httpsCallable } from 'firebase/functions';
+import { db } from '../../config/firebase';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 
 
 // ─── Fix Leaflet's default marker icon path issue in Vite ─────────────────────
@@ -132,7 +132,8 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
             const area = agencyData?.mainServiceArea;
 
             if (area) {
-                const getCoords = httpsCallable(functions, 'properties-getCoordinates');
+                const fns = getFunctions(undefined, 'europe-west1');
+                const getCoords = httpsCallable(fns, 'properties-getCoordinates');
                 const geoRes = await getCoords({ address: area });
                 const coords = geoRes.data as { lat: number, lng: number } | null;
                 if (coords) {

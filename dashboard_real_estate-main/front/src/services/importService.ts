@@ -443,6 +443,8 @@ export async function importProperties(
                     status: 'active',
                     daysOnMarket: 0,
                     isExclusive: false,
+                    lat: 31.5,
+                    lng: 34.75,
                     location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
                     geocode: {
                         lat: 31.5,
@@ -530,6 +532,8 @@ export async function importMixed(
                 status: 'active',
                 daysOnMarket: 0,
                 isExclusive: false,
+                lat: 31.5,
+                lng: 34.75,
                 location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
                 geocode: {
                     lat: 31.5,
@@ -608,6 +612,16 @@ export async function importDeals(
                 status: 'pending', // Deals usually map to active/pending properties
                 daysOnMarket: 0,
                 isExclusive: false,
+                lat: 31.5,
+                lng: 34.75,
+                location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
+                geocode: {
+                    lat: 31.5,
+                    lng: 34.75,
+                    formattedAddress: `${row.propertyName ?? ''}, ${row.city ?? ''}`,
+                    placeId: '',
+                    lastUpdated: serverTimestamp()
+                },
                 createdAt: serverTimestamp(),
             });
 

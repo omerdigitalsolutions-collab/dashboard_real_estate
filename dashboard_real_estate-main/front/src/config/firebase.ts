@@ -23,6 +23,7 @@ const app = initializeApp(firebaseConfig);
 // Export pre-initialized service instances
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, 'europe-west1');
+export const functionsEU = functions; // Alias for compatibility
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();

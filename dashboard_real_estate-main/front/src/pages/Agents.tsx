@@ -4,8 +4,9 @@ import { useAgentPerformance } from '../hooks/useFirestoreData';
 import InviteAgentModal from '../components/settings/InviteAgentModal';
 import EditAgentGoalsModal from '../components/modals/EditAgentGoalsModal';
 import EditAgentModal from '../components/modals/EditAgentModal';
-import { Star, UserPlus, Pencil, UserCog } from 'lucide-react';
+import { Star, UserPlus, Pencil, UserCog, Trash2 } from 'lucide-react';
 import { AppUser } from '../types';
+import { deleteAgent } from '../services/teamService';
 
 export default function Agents() {
   const { userData } = useAuth();
@@ -22,6 +23,18 @@ export default function Agents() {
       </div>
     );
   }
+
+  const handleDeleteCall = async (docId: string) => {
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק את הסוכן? פעולה זו היא בלתי הפיכה.')) return;
+    try {
+      await deleteAgent(docId);
+      setToast('הסוכן נמחק מהמערכת');
+      setTimeout(() => setToast(''), 3500);
+    } catch {
+      setToast('מחיקת הסוכן נכשלה');
+      setTimeout(() => setToast(''), 3500);
+    }
+  };
 
   const formatSales = (v: number) => {
     if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
@@ -118,6 +131,16 @@ export default function Agents() {
                         title="עריכת יעדים אישיים"
                       >
                         <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (agent.id) handleDeleteCall(agent.id);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="מחק סוכן"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </>
                   )}

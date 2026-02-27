@@ -1,16 +1,19 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare, Pencil } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare, Pencil, Home } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import PropertyMatcherModal from '../components/leads/PropertyMatcherModal';
 import LeadProfilePanel from '../components/leads/LeadProfilePanel';
 import AddLeadModal from '../components/modals/AddLeadModal';
 import EditLeadModal from '../components/modals/EditLeadModal';
+import AddPropertyModal from '../components/modals/AddPropertyModal';
 import ImportModal from '../components/modals/ImportModal';
 import BulkWhatsAppModal from '../components/modals/BulkWhatsAppModal';
+import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
+import PendingLeadsInbox from '../components/leads/PendingLeadsInbox';
 import { Toast, ToastState } from '../components/ui/Toast';
-import { Lead } from '../types';
+import { Lead, Property } from '../types';
 import { deleteLead } from '../services/leadService';
 
 const statusColors: Record<string, string> = {
@@ -36,7 +39,7 @@ type SortConfig = {
 } | null;
 
 export default function Leads() {
-  const { leads = [], loading } = useLiveDashboardData();
+  const { leads = [], properties = [], loading } = useLiveDashboardData();
   const { data: agents } = useAgents();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
@@ -48,6 +51,8 @@ export default function Leads() {
   const [matchingLead, setMatchingLead] = useState<Lead | null>(null);
   const [profileLead, setProfileLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [addingPropertyForLeadId, setAddingPropertyForLeadId] = useState<string | null>(null);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -181,10 +186,11 @@ export default function Leads() {
               <button
                 onClick={async () => {
                   if (!window.confirm(`למחוק ${selectedLeadIds.size} לידים? הפעולה אינה הפיכה.`)) return;
+                  const count = selectedLeadIds.size;
                   try {
                     await Promise.all([...selectedLeadIds].map(id => deleteLead(id)));
                     setSelectedLeadIds(new Set());
-                    setToast({ show: true, message: `${selectedLeadIds.size} לידים נמחקו`, type: 'success' });
+                    setToast({ show: true, message: `${count} לידים נמחקו`, type: 'success' });
                   } catch {
                     setToast({ show: true, message: 'שגיאה במחיקה', type: 'error' });
                   }
@@ -249,6 +255,8 @@ export default function Leads() {
           </div>
         ))}
       </div>
+
+      <PendingLeadsInbox />
 
       {/* Tabs */}
       <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
@@ -395,15 +403,31 @@ export default function Leads() {
                           </>
                         ) : (
                           <>
-                            {lead.requirements?.desiredCity && lead.requirements.desiredCity.length > 0 && (
-                              <span className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-100 rounded px-2 py-0.5">
-                                <MapPin size={10} />
-                                {lead.requirements.desiredCity.join(', ')}
-                              </span>
-                            )}
-                            {lead.requirements?.maxBudget && (
-                              <span className="block text-xs font-medium text-slate-700">₪{lead.requirements.maxBudget.toLocaleString()}</span>
-                            )}
+                            {(() => {
+                              const sellerProperty = properties.find(p => p.leadId === lead.id);
+                              if (sellerProperty) {
+                                return (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setSelectedProperty(sellerProperty); }}
+                                    className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors border border-blue-100"
+                                    title="צפה בפרופיל הנכס"
+                                  >
+                                    <Home size={12} className="text-blue-500" />
+                                    <span className="font-semibold truncate max-w-[150px]">{sellerProperty.address}</span>
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setAddingPropertyForLeadId(lead.id); }}
+                                  className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-700 px-2.5 py-1 rounded-lg transition-colors border border-slate-200"
+                                  title="צור נכס חדש עבור ליד זה"
+                                >
+                                  <Plus size={12} />
+                                  <span className="font-semibold">שייך נכס</span>
+                                </button>
+                              );
+                            })()}
                           </>
                         )}
                       </div>
@@ -492,12 +516,6 @@ export default function Leads() {
 
       {matchingLead && <PropertyMatcherModal lead={matchingLead} onClose={() => setMatchingLead(null)} />}
 
-      <BulkWhatsAppModal
-        isOpen={isBulkWhatsAppModalOpen}
-        onClose={() => setIsBulkWhatsAppModalOpen(false)}
-        selectedLeads={leads.filter(l => selectedLeadIds.has(l.id))}
-        onSuccess={handleBulkWhatsAppSuccess}
-      />
       {profileLead && (
         <LeadProfilePanel
           lead={profileLead}
@@ -506,6 +524,13 @@ export default function Leads() {
           onUpdated={(msg) => {
             setToast({ show: true, message: msg, type: 'success' });
           }}
+        />
+      )}
+      {addingPropertyForLeadId && (
+        <AddPropertyModal
+          isOpen={true}
+          onClose={() => setAddingPropertyForLeadId(null)}
+          leadId={addingPropertyForLeadId}
         />
       )}
       {editingLead && (
@@ -517,6 +542,12 @@ export default function Leads() {
             setEditingLead(null);
             setToast({ show: true, message: msg, type: 'success' });
           }}
+        />
+      )}
+      {selectedProperty && (
+        <PropertyDetailsModal
+          property={selectedProperty}
+          onClose={() => setSelectedProperty(null)}
         />
       )}
       <Toast show={toast.show} message={toast.message} type={toast.type} onClose={() => setToast(prev => ({ ...prev, show: false }))} />

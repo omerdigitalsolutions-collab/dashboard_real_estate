@@ -1,0 +1,50 @@
+{"users": [
+{
+  "localId": "58CcSTx29Egg1ZZYBNpbJAAwbaG2",
+  "email": "omerfm4444@gmail.com",
+  "emailVerified": true,
+  "displayName": "עומר עסיס",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLclKxuu3vnpCR8ggFTm4iXF3U2G47AO3jrUpaITTRFOxeIow=s96-c",
+  "lastSignedInAt": "1772045707162",
+  "createdAt": "1771963851789",
+  "customAttributes": "{\"agencyId\":\"P7z9y24z2DBGiCPSgQRI\",\"role\":\"admin\"}",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "117018702568192101054",
+      "email": "omerfm4444@gmail.com",
+      "displayName": "עומר עסיס",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLclKxuu3vnpCR8ggFTm4iXF3U2G47AO3jrUpaITTRFOxeIow=s96-c"
+    }
+  ]
+},
+{
+  "localId": "9L8yQb5frxX66M7p3qiEaPURkJF2",
+  "email": "omerdigitalsolutions@gmail.com",
+  "emailVerified": true,
+  "displayName": "OMER",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLImR6J6a02MPETx9pFWn-2OBvcyfxMFts0qPrxHnTd_0DJRQ=s96-c",
+  "lastSignedInAt": "1772123870824",
+  "createdAt": "1771786317681",
+  "customAttributes": "{\"agencyId\":\"FD1zzacN9WFeSmENqY5G\",\"role\":\"admin\"}",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "116542273998818596311",
+      "email": "omerdigitalsolutions@gmail.com",
+      "displayName": "OMER",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocLImR6J6a02MPETx9pFWn-2OBvcyfxMFts0qPrxHnTd_0DJRQ=s96-c"
+    }
+  ]
+},
+{
+  "localId": "qZZqi5YXPPdjqsORV6CFnf4scYz2",
+  "email": "omerasis4@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "CWG5orK3sQqrp4oVghs/fLX6Lu4qM3rcBbiI/57Bdd/jh+bv6DRwEuWptn2JidNT4yuSri12F6h1WhisKMi4mQ==",
+  "salt": "w/q78FSG0Fk/pg==",
+  "lastSignedInAt": "1772121845212",
+  "createdAt": "1772121845212",
+  "customAttributes": "{\"agencyId\":\"5QfL1fcRZ4CsZ8ZZmsUK\",\"role\":\"admin\"}",
+  "providerUserInfo": []
+}]}

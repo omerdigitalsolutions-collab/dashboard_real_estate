@@ -75,10 +75,20 @@ export default function Onboarding() {
     };
 
     const handleNext = () => {
+        setError('');
+        if (step === 0 && !isValidPhone(phone)) {
+            setError('מספר הטלפון שהוזן אינו תקין');
+            return;
+        }
+        if (step === 1 && !isValidPhone(officePhone)) {
+            setError('טלפון המשרד שהוזן אינו תקין');
+            return;
+        }
         if (step < 3) setStep(s => s + 1);
     };
 
     const handleBack = () => {
+        setError('');
         if (step > 0) setStep(s => s - 1);
     };
 
