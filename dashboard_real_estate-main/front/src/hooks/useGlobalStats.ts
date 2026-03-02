@@ -5,7 +5,8 @@ import {
     query,
     Timestamp,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../config/firebase';
 
 export interface AgencyRow {
     id: string;
@@ -28,6 +29,13 @@ export interface SubscriptionBreakdown {
     color: string;
 }
 
+export interface ExpensesBreakdown {
+    fixed: number;
+    variable: number;
+    marketing: number;
+    total: number;
+}
+
 export interface GlobalStats {
     totalAgencies: number;
     totalUsers: number;
@@ -36,6 +44,7 @@ export interface GlobalStats {
     recentAgencies: AgencyRow[];
     monthlyGrowth: MonthlyDataPoint[];
     subscriptionBreakdown: SubscriptionBreakdown[];
+    expenses: ExpensesBreakdown | null;
     loading: boolean;
     error: string | null;
 }
@@ -69,6 +78,7 @@ export function useGlobalStats(): GlobalStats {
         recentAgencies: [],
         monthlyGrowth: [],
         subscriptionBreakdown: [],
+        expenses: null,
         loading: true,
         error: null,
     });
@@ -136,6 +146,19 @@ export function useGlobalStats(): GlobalStats {
                     if (idx >= 0 && idx < 6) monthlyGrowth[idx].users += 1;
                 }
 
+                // ── 6. Expenses (via Cloud Function) ────────────────────────
+                let expenses: ExpensesBreakdown | null = null;
+                try {
+                    const getDashboardStats = httpsCallable(functions, 'superadmin-superAdminGetDashboardStats');
+                    const statsRes = await getDashboardStats();
+                    const statsData = (statsRes.data as any)?.data;
+                    if (statsData?.totals?.expenses) {
+                        expenses = statsData.totals.expenses as ExpensesBreakdown;
+                    }
+                } catch (err) {
+                    console.error('[useGlobalStats] Error fetching expenses:', err);
+                }
+
                 if (!cancelled) {
                     setStats({
                         totalAgencies: allAgencies.length,
@@ -145,6 +168,7 @@ export function useGlobalStats(): GlobalStats {
                         recentAgencies,
                         monthlyGrowth,
                         subscriptionBreakdown,
+                        expenses,
                         loading: false,
                         error: null,
                     });

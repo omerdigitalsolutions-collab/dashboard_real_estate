@@ -95,8 +95,24 @@ export const onPropertyCreatedMatchmaking = onDocumentCreated(
             });
 
             if (matchCount > 0) {
+                // If this is an external property, alert the manager/entire office
+                const isExternal = propertyData.listingType === 'external' || propertyData.source === 'whatsapp_group';
+                if (isExternal) {
+                    const managerAlertRef = db.collection('alerts').doc();
+                    batch.set(managerAlertRef, {
+                        agencyId,
+                        targetAgentId: 'all', // Send to everyone or specifically admins via frontend filtering
+                        type: 'external_property_match',
+                        title: 'הזדמנות שיתוף פעולה (B2B)!',
+                        message: `דירה חדשה ממשרד אחר התווספה ב${propertyCity} ותואמת ל-${matchCount} מחפשי דירות במשרד שלנו!`,
+                        link: `/dashboard/properties`, // Adjust to properties list since we can't link to a nonexistent deal
+                        isRead: false,
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                }
+
                 await batch.commit();
-                console.log(`Matchmaking complete for ${propertyId}. Generated ${matchCount} notifications.`);
+                console.log(`Matchmaking complete for ${propertyId}. Generated ${matchCount} client notifications and potentially 1 manager notification.`);
             }
 
         } catch (err) {

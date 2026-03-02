@@ -41,17 +41,24 @@ import { matchPropertiesForLead } from './leads/matchPropertiesForLead';
 
 // ── Catalogs Module ────────────────────────────────────────────────────────────
 import { generateCatalog } from './catalogs/sharing';
+import { getLiveProperties as catalogsGetLiveProperties } from './catalogs/getLiveProperties';
 
 // ── Alerts Module ──────────────────────────────────────────────────────────────
 import { triggerSystemAlert } from './alerts/triggers';
 
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
-import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
+import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
 
 // ── AI Module ──────────────────────────────────────────────────────────────────
 import { askAgencyAgent } from './ai/agent';
 import { extractAiData } from './ai/extractAiData';
 
+// ── Automation Module ──────────────────────────────────────────────────────────
+import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
+
+// ── Super Admin Module ─────────────────────────────────────────────────────────
+import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin } from './superadmin';
+import { superAdminImportGlobalProperties, superAdminGetImportMapping } from './admin/globalImport';
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
@@ -68,11 +75,18 @@ export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentS
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
-export const catalogs = { generateCatalog };
+export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
-export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, disconnectWhatsApp, whatsappWebhook };
+export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
 export const ai = { askAgencyAgent, extractAiData };
-
+export const automation = { webhookProcessGlobalYad2Email };
+export const superadmin = {
+    superAdminUpdateExpenses,
+    superAdminGetDashboardStats,
+    setupSuperAdmin,
+    superAdminImportGlobalProperties,
+    superAdminGetImportMapping
+};
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

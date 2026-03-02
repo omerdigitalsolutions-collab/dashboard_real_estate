@@ -123,23 +123,23 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                                         <Fullscreen size={18} />
                                     </button>
                                 </div>
-                                {property.isExclusive && (
+                                {property.listingType === 'exclusive' || property.isExclusive ? (
                                     <div className="absolute top-4 right-4 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
                                         <Tag size={12} fill="currentColor" />
-                                        בלעדיות
+                                        👑 בלעדיות
                                     </div>
-                                )}
+                                ) : null}
                             </div>
                         ) : (
-                            <div className="w-full aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-6">
+                            <div className="w-full aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-6 relative">
                                 <ImageIcon size={48} className="mb-3 opacity-50" />
                                 <p className="text-sm font-medium">אין תמונות לנכס זה</p>
-                                {property.isExclusive && (
-                                    <div className="mt-4 bg-amber-50 text-amber-600 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-100 flex items-center gap-1">
+                                {property.listingType === 'exclusive' || property.isExclusive ? (
+                                    <div className="absolute top-4 right-4 bg-amber-50 text-amber-600 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-100 flex items-center gap-1">
                                         <Tag size={12} fill="currentColor" />
-                                        בבלעדיות חברה
+                                        👑 בלעדיות חברה
                                     </div>
-                                )}
+                                ) : null}
                             </div>
                         )}
 

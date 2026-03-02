@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Building2 } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
@@ -22,8 +21,8 @@ export default function InventorySnapshot() {
     const forRent = properties.filter(p => p.type === 'rent').length;
 
     const pieData = [
-        { name: 'למכירה', value: forSale, color: '#06b6d4' },
-        { name: 'להשכרה', value: forRent, color: '#10b981' },
+        { name: 'למכירה', value: forSale, color: '#10b981' }, // Emerald
+        { name: 'להשכרה', value: forRent, color: '#f43f5e' }, // Rose
     ];
 
     return (
@@ -49,7 +48,7 @@ export default function InventorySnapshot() {
                 </div>
 
                 {/* Pie chart + legend */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                     <div style={{ width: 100, height: 100 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -69,16 +68,34 @@ export default function InventorySnapshot() {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex-1 space-y-2">
-                        {pieData.map(item => (
-                            <div key={item.name} className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: item.color, color: item.color }} />
-                                    <span className="text-xs text-slate-300 font-medium">{item.name}</span>
+                    <div className="flex-1 space-y-3">
+                        {pieData.map(item => {
+                            const total = properties.length;
+                            const percentage = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                            return (
+                                <div key={item.name} className="flex flex-col gap-0.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-sm shadow-[0_0_8px_currentColor]" style={{ backgroundColor: item.color, color: item.color }} />
+                                            <span className="text-xs text-slate-300 font-medium">{item.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-white">{item.value}</span>
+                                            <span className="text-[10px] font-medium text-slate-500 bg-slate-800/50 px-1.5 py-0.5 rounded-md border border-slate-700/50">
+                                                {percentage}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {/* Small micro-progress bar */}
+                                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full transition-all duration-1000"
+                                            style={{ width: `${percentage}%`, backgroundColor: item.color }}
+                                        />
+                                    </div>
                                 </div>
-                                <span className="text-xs font-bold text-white">{item.value}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

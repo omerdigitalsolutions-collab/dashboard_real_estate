@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,28 +9,37 @@ export function useSuperAdmin() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let isMounted = true;
+
         if (!currentUser?.uid) {
             setIsSuperAdmin(false);
             setLoading(false);
             return;
         }
 
-        const superAdminRef = doc(db, 'superAdmins', currentUser.uid);
+        const checkSuperAdmin = async () => {
+            try {
+                const superAdminRef = doc(db, 'superAdmins', currentUser.uid);
+                const docSnap = await getDoc(superAdminRef);
 
-        const unsubscribe = onSnapshot(
-            superAdminRef,
-            (docSnap) => {
-                setIsSuperAdmin(docSnap.exists());
-                setLoading(false);
-            },
-            (error) => {
+                if (isMounted) {
+                    setIsSuperAdmin(docSnap.exists());
+                    setLoading(false);
+                }
+            } catch (error) {
                 console.error('[useSuperAdmin] Error checking super admin status:', error);
-                setIsSuperAdmin(false);
-                setLoading(false);
+                if (isMounted) {
+                    setIsSuperAdmin(false);
+                    setLoading(false);
+                }
             }
-        );
+        };
 
-        return () => unsubscribe();
+        checkSuperAdmin();
+
+        return () => {
+            isMounted = false;
+        };
     }, [currentUser?.uid]);
 
     return { isSuperAdmin, loading };

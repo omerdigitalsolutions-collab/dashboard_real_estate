@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getCatalogWithQueries, saveCatalogLikes, SharedCatalog } from '../services/catalogService';
-import { MapPin, BedDouble, MessageCircle, Home, Heart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { getCatalogWithQueries, getLiveCatalogProperties, saveCatalogLikes, SharedCatalog } from '../services/catalogService';
+import { MapPin, BedDouble, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize } from 'lucide-react';
 
 // ─── Address privacy helper ────────────────────────────────────────────────────
 // Strips house number from the end of an address (e.g. "הרצל 14" → "הרצל")
@@ -81,6 +81,8 @@ export default function SharedCatalogPage() {
 
     // Liked state — initialized from Firestore, synced back on change
     const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+    const [liveProperties, setLiveProperties] = useState<any[]>([]);
+    const [loadingProperties, setLoadingProperties] = useState(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Debounced save to Firestore
@@ -95,6 +97,46 @@ export default function SharedCatalogPage() {
         }, 600);
     }, []);
 
+    // Helper to determine if property is new (created in the last 7 days)
+    const isPropertyNew = useCallback((createdAt?: any) => {
+        if (!createdAt) return false;
+
+        let date: Date;
+        if (createdAt.toDate) {
+            date = createdAt.toDate();
+        } else if (createdAt.seconds) {
+            date = new Date(createdAt.seconds * 1000);
+        } else if (typeof createdAt === 'string' || typeof createdAt === 'number') {
+            date = new Date(createdAt);
+        } else {
+            return false;
+        }
+
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - date.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays <= 7;
+    }, []);
+
+    // intelligent sorting: Exclusive first, then newest first
+    const sortedProperties = useMemo(() => {
+        return [...liveProperties].sort((a, b) => {
+            // Primary Sort: Exclusive
+            if (a.listingType === 'exclusive' && b.listingType !== 'exclusive') return -1;
+            if (b.listingType === 'exclusive' && a.listingType !== 'exclusive') return 1;
+
+            // Secondary Sort: Newest First
+            const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() :
+                (a.createdAt as any)?.seconds ? (a.createdAt as any).seconds * 1000 :
+                    (new Date(a.createdAt as any)).getTime() || 0;
+            const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() :
+                (b.createdAt as any)?.seconds ? (b.createdAt as any).seconds * 1000 :
+                    (new Date(b.createdAt as any)).getTime() || 0;
+
+            return timeB - timeA;
+        });
+    }, [liveProperties]);
+
     // Initialize liked IDs from the catalog document when it loads
     useEffect(() => {
         if (catalog?.likedPropertyIds) {
@@ -103,23 +145,36 @@ export default function SharedCatalogPage() {
     }, [catalog?.id]);
 
     useEffect(() => {
-        async function fetchCatalog() {
+        async function fetchCatalogAndProperties() {
             if (!token) return;
             try {
                 const data = await getCatalogWithQueries(token);
                 if (!data) {
                     setError('הקטלוג המבוקש לא נמצא או שפג תוקפו.');
-                } else {
-                    setCatalog(data);
+                    return;
                 }
+                setCatalog(data);
+
+                // Now fetch the live properties
+                if (data.propertyIds && data.propertyIds.length > 0) {
+                    setLoadingProperties(true);
+                    const props = await getLiveCatalogProperties(token, data.propertyIds);
+                    setLiveProperties(props);
+                } else {
+                    // Fallback for older catalogs that still have 'properties' array directly
+                    // This cast bypasses TS type safety to keep legacy compatibility during transition
+                    setLiveProperties((data as any).properties || []);
+                }
+
             } catch (err) {
                 console.error(err);
                 setError('אירעה שגיאה בטעינת הקטלוג.');
             } finally {
                 setLoading(false);
+                setLoadingProperties(false);
             }
         }
-        fetchCatalog();
+        fetchCatalogAndProperties();
     }, [token]);
 
     const toggleLike = (id: string) => {
@@ -132,7 +187,7 @@ export default function SharedCatalogPage() {
         });
     };
 
-    if (loading) {
+    if (loading || loadingProperties) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-white">
                 <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
@@ -153,9 +208,11 @@ export default function SharedCatalogPage() {
         );
     }
 
-    const { leadName, properties = [], agencyName, agencyLogoUrl } = catalog;
+    const { leadName, agencyName, agencyLogoUrl } = catalog;
 
-    const agencyPhone = '972501234567'; // Placeholder — could be stored in catalog doc
+    const rawAgencyPhone = catalog.agencyPhone || '0501234567'; // Fallback
+    const agencyPhone = rawAgencyPhone.replace(/\D/g, '').replace(/^0/, '972');
+
     const waMessage = encodeURIComponent(
         `היי, עברתי על קטלוג הנכסים שנשלח אלי (${window.location.href}) ואשמח לפרטים נוספים.`
     );
@@ -192,7 +249,7 @@ export default function SharedCatalogPage() {
                         {leadName ? `הנכסים שנבחרו עבור ${leadName}` : 'קטלוג נכסים אישי'}
                     </h1>
                     <p className="text-blue-200 text-sm">
-                        מצאנו {properties.length} נכסים שיכולים להתאים לך
+                        מצאנו {sortedProperties.length} נכסים שיכולים להתאים לך
                     </p>
                     {likedCount > 0 && (
                         <div className="mt-3 inline-flex items-center gap-2 bg-rose-500/20 text-rose-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-rose-400/30">
@@ -205,19 +262,36 @@ export default function SharedCatalogPage() {
 
             {/* ── Property Cards ─────────────────────────────────────────────── */}
             <div className="p-4 space-y-5 mt-4">
-                {properties.map((property, index) => {
+                {sortedProperties.map((property, index) => {
                     const isLiked = likedIds.has(property.id || String(index));
                     const streetName = toStreetOnly(property.address || '');
                     const displayLocation = [streetName, property.city].filter(Boolean).join(', ');
+                    const isNew = isPropertyNew(property.createdAt);
 
                     return (
                         <div
                             key={property.id || index}
-                            className="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-100 transition-shadow hover:shadow-md"
+                            className={`bg-white rounded-3xl overflow-hidden shadow-sm border transition-shadow hover:shadow-md ${property.listingType === 'exclusive' ? 'border-amber-200' : 'border-slate-100'}`}
                         >
                             {/* Image Carousel */}
                             <div className="relative">
                                 <ImageCarousel images={property.images || []} alt={streetName} />
+
+                                {/* VIP Badges (Top-Right) */}
+                                <div className="absolute top-3 right-3 z-20 flex flex-col gap-2 items-end pointer-events-none">
+                                    {property.listingType === 'exclusive' && (
+                                        <div className="bg-amber-100/95 backdrop-blur-sm px-2.5 py-1 rounded-xl shadow-md border border-amber-200/50 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
+                                            <span className="text-base leading-none">👑</span>
+                                            <span className="text-amber-800 text-xs font-bold whitespace-nowrap">בלעדיות</span>
+                                        </div>
+                                    )}
+                                    {isNew && (
+                                        <div className="bg-blue-100/95 backdrop-blur-sm px-2.5 py-1 rounded-xl shadow-md border border-blue-200/50 flex items-center gap-1.5 animate-in fade-in slide-in-from-top-2">
+                                            <span className="text-base leading-none">✨</span>
+                                            <span className="text-blue-700 text-xs font-bold whitespace-nowrap">חדש</span>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Type badge (bottom-left on gradient) */}
                                 <div className="absolute bottom-3 left-3 z-20">
@@ -257,6 +331,18 @@ export default function SharedCatalogPage() {
                                             {property.rooms} חדרים
                                         </span>
                                     )}
+                                    {property.sqm && (
+                                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
+                                            <Maximize size={14} className="text-slate-400" />
+                                            {property.sqm} מ"ר
+                                        </span>
+                                    )}
+                                    {property.floor !== undefined && property.floor !== null && (
+                                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
+                                            <Layers size={14} className="text-slate-400" />
+                                            קומה {property.floor}
+                                        </span>
+                                    )}
                                     {property.kind && (
                                         <span className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-3 py-1 rounded-xl">
                                             {property.kind}
@@ -269,13 +355,6 @@ export default function SharedCatalogPage() {
                                     <p className="text-sm text-slate-500 leading-relaxed border-t border-slate-50 pt-3 mt-1">
                                         {property.description}
                                     </p>
-                                )}
-                                {/* Agent name */}
-                                {property.agentName && (
-                                    <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 font-medium flex items-center gap-1.5">
-                                        <span className="inline-block w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">{property.agentName.charAt(0)}</span>
-                                        סוכן: {property.agentName}
-                                    </div>
                                 )}
                             </div>
                         </div>

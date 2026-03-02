@@ -17,15 +17,21 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { to: '/', label: 'לוח בקרה', icon: LayoutDashboard },
+  { to: '/', label: 'לוח בקרה', icon: LayoutDashboard, roles: ['admin'] },
   { to: '/leads', label: 'לידים', icon: Users },
   { to: '/transactions', label: 'עסקאות', icon: ArrowLeftRight },
-  { to: '/agents', label: 'סוכנים', icon: UserCheck },
-  { to: '/settings', label: 'הגדרות', icon: Settings },
+  { to: '/agents', label: 'סוכנים', icon: UserCheck, roles: ['admin'] },
+  { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['admin'] },
 ];
 
 export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
   const { userData } = useAuth();
+
+  // Filter navigation based on user role
+  const filteredNavItems = navItems.filter(item =>
+    !item.roles || (userData?.role && item.roles.includes(userData.role))
+  );
+
   return (
     <>
       {open && (
@@ -57,7 +63,7 @@ export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
           <p className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">
             תפריט ראשי
           </p>
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {filteredNavItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

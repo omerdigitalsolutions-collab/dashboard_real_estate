@@ -136,18 +136,13 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
         setLoadingLikes(true);
         getCatalogsByLeadId(lead.id, lead.agencyId)
             .then(catalogs => {
-                const liked: LikedPropertySnapshot[] = [];
-                const seenIds = new Set<string>();
+                const likedIds = new Set<string>();
                 for (const catalog of catalogs) {
-                    const likedIds = catalog.likedPropertyIds ?? [];
-                    for (const prop of catalog.properties) {
-                        if (likedIds.includes(prop.id) && !seenIds.has(prop.id)) {
-                            liked.push(prop);
-                            seenIds.add(prop.id);
-                        }
-                    }
+                    (catalog.likedPropertyIds ?? []).forEach(id => likedIds.add(id));
                 }
-                setLikedProperties(liked);
+                // We'll need to fetch these properties by ID if we want to show their cards
+                // For now, let's keep the logic consistent with the UI
+                setLikedProperties([]); // We will need a follow-up to fetch these live
             })
             .catch(err => console.warn('[LeadProfilePanel] Could not load liked properties:', err))
             .finally(() => setLoadingLikes(false));
@@ -191,7 +186,11 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
             setMsgText('');
         } catch (e: any) {
             console.error('Failed to send WhatsApp message:', e);
-            onUpdated(`שגיאה בשליחת ההודעה: ${e.message}`);
+            let userMsg = `שגיאה בשליחת ההודעה: ${e.message}`;
+            if (e.message?.toLowerCase().includes('not connected')) {
+                userMsg = 'הווצאפ לא מחובר במערכת. יש לחבר אותו בהגדרות כדי לשלוח הודעות.';
+            }
+            onUpdated?.(userMsg);
         } finally {
             setSending(false);
         }

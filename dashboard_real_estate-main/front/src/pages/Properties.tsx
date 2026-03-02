@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building } from 'lucide-react';
 import { useProperties, useAgents, useLeads, useDeals } from '../hooks/useFirestoreData';
+import { useAuth } from '../context/AuthContext';
 
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import EditPropertyModal from '../components/modals/EditPropertyModal';
 import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import ImportModal from '../components/modals/ImportModal';
+import MergePropertiesModal from '../components/modals/MergePropertiesModal';
 import { Property, AppUser, Lead, Deal } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
@@ -15,12 +17,15 @@ export default function Properties() {
     const { data: agents = [] } = useAgents();
     const { data: leads = [] } = useLeads();
     const { data: deals = [] } = useDeals();
+    const { userData } = useAuth();
+    const isAdmin = userData?.role === 'admin';
 
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('All');
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
+    const [showMergeModal, setShowMergeModal] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
@@ -83,6 +88,29 @@ export default function Properties() {
         return matchesSearch && matchesFilter;
     });
 
+    const duplicateGroups = useMemo(() => {
+        const groups = new Map<string, Property[]>();
+        properties.forEach((p: Property) => {
+            if (p.status === 'draft' || !p.city || !p.address) return;
+            const cityStr = p.city.trim().toLowerCase();
+            const addrStr = p.address.trim().toLowerCase();
+            const roomsStr = p.rooms ? p.rooms.toString() : 'no-rooms';
+            const sqmStr = p.sqm ? p.sqm.toString() : 'no-sqm';
+
+            const sig = `${cityStr}|${addrStr}|${roomsStr}|${sqmStr}`;
+            const existing = groups.get(sig) || [];
+            groups.set(sig, [...existing, p]);
+        });
+
+        const result: { signature: string, properties: Property[] }[] = [];
+        groups.forEach((props, sig) => {
+            if (props.length > 1) {
+                result.push({ signature: sig, properties: props });
+            }
+        });
+        return result;
+    }, [properties]);
+
     // Helper functions for Grid View
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
 
@@ -134,6 +162,22 @@ export default function Properties() {
                     </button>
                 </div>
             </div>
+
+            {/* Duplicates Banner */}
+            {duplicateGroups.length > 0 && isAdmin && (
+                <div className="bg-purple-50 border border-purple-200 text-purple-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+                    <div>
+                        <h3 className="font-bold text-sm">זוהו {duplicateGroups.length} קבוצות של נכסים כפולים</h3>
+                        <p className="text-xs mt-0.5 opacity-80">חלק מהנכסים מופיעים מספר פעמים במלאי עם נתונים זהים. כדאי למזג אותם למניעת כפילויות.</p>
+                    </div>
+                    <button
+                        onClick={() => setShowMergeModal(true)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors shadow-sm flex-shrink-0"
+                    >
+                        לסקירה ומיזוג
+                    </button>
+                </div>
+            )}
 
             {/* Table Card wrapper */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -207,15 +251,15 @@ export default function Properties() {
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />
                                             <div className="absolute top-3 right-3 flex flex-col gap-2">
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : prop.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                    {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : prop.kind === 'מסחרי' ? 'bg-orange-600/90 text-white' : prop.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                    {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : prop.kind === 'מסחרי' ? 'מסחרי' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
                                                 </span>
                                             </div>
-                                            {prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && prop.status !== 'draft' && (
-                                                <div className="absolute top-3 left-3 bg-amber-500/90 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                                                    בלעדיות
+                                            {prop.listingType === 'exclusive' || (prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && prop.status !== 'draft') ? (
+                                                <div className="absolute top-3 left-3 flex items-center gap-1 bg-amber-500/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm w-max">
+                                                    👑 בלעדיות
                                                 </div>
-                                            )}
+                                            ) : null}
                                         </div>
 
                                         {/* Details */}
@@ -295,8 +339,31 @@ export default function Properties() {
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Edit button overlaid on the grid card */}
-                                        <div className="absolute bottom-3 left-3">
+                                        {/* Edit / Actions overlaid on the grid card */}
+                                        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                                            {prop.listingType === 'external' && prop.externalAgentPhone && (
+                                                <a
+                                                    href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
+                                                    target="_blank" rel="noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-emerald-500/90 hover:bg-emerald-600/90 backdrop-blur-sm shadow-md text-white px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[10px] sm:text-xs font-bold"
+                                                    title="צור קשר בוואטסאפ לשת״פ"
+                                                >
+                                                    <MessageCircle size={14} />
+                                                    <span className="hidden sm:inline">ווטסאפ סוכן</span>
+                                                </a>
+                                            )}
+                                            {isAdmin && prop.yad2Link && (
+                                                <a
+                                                    href={prop.yad2Link}
+                                                    target="_blank" rel="noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-orange-500/90 hover:bg-orange-600/90 backdrop-blur-sm shadow text-white px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold"
+                                                    title="מודעה ביד2"
+                                                >
+                                                    🔗 מודעה ביד2
+                                                </a>
+                                            )}
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
                                                 className="bg-white/90 backdrop-blur-sm shadow text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
@@ -351,7 +418,7 @@ export default function Properties() {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${prop.status === 'draft' ? 'bg-amber-50 text-amber-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${prop.status === 'draft' ? 'bg-amber-50 text-amber-600' : prop.kind === 'מסחרי' ? 'bg-orange-50 text-orange-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                                             {prop.status === 'draft' ? <MessageCircle size={18} /> : <Building size={18} />}
                                                         </div>
                                                         <div>
@@ -364,8 +431,8 @@ export default function Properties() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
-                                                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                        {prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${prop.kind === 'מסחרי' ? 'bg-orange-50 text-orange-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                        {prop.kind === 'מסחרי' ? 'מסחרי' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
@@ -377,12 +444,17 @@ export default function Properties() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
-                                                    {prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() ? (
-                                                        <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
-                                                            בבלעדיות
+                                                    {prop.listingType === 'exclusive' || (prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date()) ? (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
+                                                            👑 בלעדיות
                                                         </span>
                                                     ) : (
                                                         <span className="text-xs text-slate-400">-</span>
+                                                    )}
+                                                    {isAdmin && prop.yad2Link && (
+                                                        <a href={prop.yad2Link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="block mt-2 text-[10px] text-orange-500 hover:text-orange-600 font-semibold underline">
+                                                            לצפייה במודעה ביד2
+                                                        </a>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
@@ -393,9 +465,20 @@ export default function Properties() {
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
                                                     <div className="flex items-center gap-2">
+                                                        {prop.listingType === 'external' && prop.externalAgentPhone && (
+                                                            <a
+                                                                href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
+                                                                target="_blank" rel="noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="bg-emerald-500 hover:bg-emerald-600 shadow-sm text-white px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold shrink-0"
+                                                                title="צור קשר בוואטסאפ לשת״פ"
+                                                            >
+                                                                <MessageCircle size={14} /> שת״פ
+                                                            </a>
+                                                        )}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
-                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
                                                             title="ערוך נכס"
                                                         >
                                                             <Pencil size={16} />
@@ -466,6 +549,16 @@ export default function Properties() {
                     onClose={() => setSelectedProperty(null)}
                 />
             )}
+
+            <MergePropertiesModal
+                isOpen={showMergeModal}
+                onClose={() => setShowMergeModal(false)}
+                groups={duplicateGroups}
+                onMerged={() => {
+                    setToast('הנכסים מוזגו בהצלחה!');
+                    setTimeout(() => setToast(''), 3500);
+                }}
+            />
 
             {toast && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50">

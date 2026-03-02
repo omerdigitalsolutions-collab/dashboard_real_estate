@@ -1,7 +1,7 @@
 # hOMER — AI Architecture & Context Guide
 
 > **For AI coding assistants.** Read this before touching any file in this repo.  
-> Last updated: 2026-02-25
+> Last updated: 2026-02-27
 
 ---
 
@@ -64,6 +64,7 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
     ├── tasks/          Firestore trigger cleanups
     ├── alerts/         System alert triggers
     ├── whatsapp.ts     WhatsApp managed integration (WAHA / Green API)
+    ├── ai/             AI Agent (RAG) & shared extraction logic
     ├── stripeWebhook.ts Stripe payment processing & agency provisioning
     └── config/admin.ts Firebase Admin SDK init
 ```
@@ -112,8 +113,14 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
 ✅ Auth guard → ✅ Invite token validated → ✅ Stub doc consumed atomically
 
 ### `properties-addProperty` / `properties-updateProperty` / `properties-deleteProperty`
-✅ Auth guard → ✅ Agency membership verified via `users/{uid}` lookup  
 ✅ `agencyId` and `status` injected server-side (cannot be spoofed by client)
+
+### `ai-askAgencyAgent`
+✅ Auth guard → ✅ Fetches Firestore context (Properties/Leads) → ✅ Gemini 2.5 Flash  
+*Provides RAG-lite experience for agency data.*
+
+### `ai-extractAiData`
+✅ Shared utility for parsing text/images into structured data. Used by `AddPropertyModal`.
 
 ### `properties-geocodeNewProperty` / `properties-getCoordinates`
 ✅ Auth guard → Used for Nominatim geocoding (avoids CORS from browser)
@@ -159,6 +166,8 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
 ✅ Idempotency check via `idMessage` deduplication  
 ✅ Phone normalisation (international → local Israeli format)  
 ✅ Supports both WAHA session format and Green API instance format
+✅ **AI Triage (1-on-1):** Uses Gemini to analyze unknown inbound messages and create "pending leads" with summaries and intents.
+✅ **AI B2B Agent (Groups):** Scans up to 5 designated B2B WhatsApp groups for property listings, auto-extracts them as `external` properties via Gemini, and flags matchmaking opportunities to managers.
 
 ### `stripeWebhook` *(onRequest — public)*
 ✅ Stripe signature verification (`stripe.webhooks.constructEvent`)  
@@ -200,6 +209,7 @@ Direct Firestore SDK calls (in `/services/`) rely on **Firestore Security Rules*
 | `GREEN_API_WEBHOOK_SECRET` | Firebase Secret Manager | `whatsapp.ts` — fallback header name |
 | `STRIPE_SECRET_KEY` | Firebase Secret Manager | `stripeWebhook.ts` |
 | `STRIPE_WEBHOOK_SECRET` | Firebase Secret Manager | `stripeWebhook.ts` |
+| `GEMINI_API_KEY` | Firebase Secret Manager | `ai/*.ts`, `whatsapp.ts` |
 | `VITE_FIREBASE_*` | `.env` (frontend, public) | Firebase SDK init |
 
 > ⚠️ **Never commit `.env` files with real keys to Git.** Use `.env.example` templates only.
@@ -227,8 +237,9 @@ leads/{leadId}
 
 properties/{propertyId}
   ├── agencyId, address, city, type, price
-  ├── status, assignedAgentId
-  └── images: string[]   ← Firebase Storage URLs
+  ├── status, assignedAgentId, listingType (private/exclusive/external)
+  ├── images: string[]   ← Firebase Storage URLs
+  └── groupId, externalAgentPhone ← from B2B WhatsApp integration
 
 deals/{dealId}
   ├── agencyId, leadId, propertyId, assignedAgentId

@@ -1,32 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateCatalog = void 0;
-/**
- * generateCatalog — Generates a secure, snapshot-based digital property catalog.
- *
- * Requirements:
- * 1. Verify authentication and agency membership.
- * 2. Fetch property data. Inject placeholder if no images.
- * 3. Store essential fields directly in the catalog document (Snapshotting).
- * 4. Set expiresAt to exactly 7 days from now.
- * 5. Return the catalogId and the public URL.
- *
- * Input:
- *   {
- *     agencyId: string,
- *     leadId: string,
- *     propertyIds: string[]
- *   }
- *
- * Output: { success: true, catalogId: string, url: string }
- */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const db = (0, firestore_1.getFirestore)();
-// Using a high-quality professional placeholder
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-exports.generateCatalog = (0, https_1.onCall)(async (request) => {
-    var _a, _b, _c;
+exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a, _b, _c, _d;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -48,61 +27,7 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
     const agencyData = (_b = agencyDoc.data()) !== null && _b !== void 0 ? _b : {};
     const agencyName = agencyData.agencyName || agencyData.name || '';
     const agencyLogoUrl = ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.logoUrl) || '';
-    // ── Pre-fetch agent names (unique agentIds in property list) ─────────────────
-    const agentNameCache = {};
-    const fetchAgentName = async (agentId) => {
-        var _a;
-        if (agentNameCache[agentId])
-            return agentNameCache[agentId];
-        try {
-            const agentDoc = await db.collection('users').doc(agentId).get();
-            const name = ((_a = agentDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || '';
-            agentNameCache[agentId] = name;
-            return name;
-        }
-        catch (_b) {
-            return '';
-        }
-    };
-    // ── Fetch Properties and Snapshot ───────────────────────────────────────────
-    const snapshottedProperties = [];
-    // We fetch properties one by one or in batches. Since propertyIds length is usually small (<10),
-    // Promise.all with individual gets is fine, but let's use getAll if possible, or where 'in'.
-    // Firestore 'in' query supports max 10, so let's chunk it.
-    const chunks = [];
-    for (let i = 0; i < propertyIds.length; i += 10) {
-        chunks.push(propertyIds.slice(i, i + 10));
-    }
-    for (const chunk of chunks) {
-        const snap = await db.collection('properties')
-            .where('agencyId', '==', agencyId)
-            .where('__name__', 'in', chunk)
-            .get();
-        for (const doc of snap.docs) {
-            const data = doc.data();
-            // Check both 'images' (legacy) and 'imageUrls' (from Storage upload)
-            const images = data.imageUrls || data.images;
-            const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
-            // Look up agent name
-            const agentName = data.agentId ? await fetchAgentName(data.agentId) : '';
-            snapshottedProperties.push({
-                id: doc.id,
-                address: data.address || 'כתובת חסויה',
-                city: data.city || '',
-                price: data.price || 0,
-                rooms: data.rooms || null,
-                images: finalImages,
-                type: data.type || 'sale',
-                kind: data.kind || null,
-                description: data.description || null,
-                agentName,
-            });
-        }
-    }
-    if (snapshottedProperties.length === 0) {
-        throw new https_1.HttpsError('not-found', 'Could not find the specified properties for this agency.');
-    }
-    // ── Create Catalog Document ─────────────────────────────────────────────────
+    const agencyPhone = agencyData.officePhone || ((_d = agencyData.whatsappIntegration) === null || _d === void 0 ? void 0 : _d.phoneNumber) || '';
     const catalogRef = db.collection('shared_catalogs').doc();
     const now = new Date();
     const expiresAt = new Date();
@@ -111,10 +36,11 @@ exports.generateCatalog = (0, https_1.onCall)(async (request) => {
         agencyId,
         agencyName,
         agencyLogoUrl,
+        agencyPhone,
         agentId: request.auth.uid,
         leadId,
         leadName: leadName || '',
-        properties: snapshottedProperties,
+        propertyIds: propertyIds, // Storing only the references for live fetching
         viewCount: 0,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         expiresAt: expiresAt,

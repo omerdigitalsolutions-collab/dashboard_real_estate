@@ -30,7 +30,7 @@ export const extractAiData = onCall(
 
             let systemPrompt = '';
 
-            if (entityType === 'properties') {
+            if (entityType === 'properties' || entityType === 'property') {
                 systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
 You will receive raw scraped data, a CSV, or image text. Intelligently map this data into a strictly formatted JSON array of objects.
 Rules for property objects:
@@ -38,11 +38,17 @@ Rules for property objects:
 - "city" (string)
 - "address" (string - street address)
 - "rooms" (number)
+- "sqm" (number - total size in square meters)
+- "floor" (number)
 - "type" (string - 'למכירה' or 'להשכרה')
 - "kind" (string - property kind like 'דירה', 'פנטהאוז', 'דירת גן')
-- "description" (string - the raw description if any)
+- "description" (string - EXTRACT THE FULL DESCRIPTION. Include details about property condition, view, orientations, and special features. Do not summarize too much.)
+- "agentName" (string - name or email of the agent responsible for the property)
+- "listingType" (string - 'exclusive' if it's an office listing/בלעדיות, 'external' if it's a cooperation/שת״פ, 'private' if it's a private owner/פרטי. Default to 'exclusive' if unsure.)
+- "isExclusive" (boolean - true unless listingType is explicitly 'private' or 'external')
+- "exclusivityEndDate" (string - 'YYYY-MM-DD' format if an exclusivity end date is found)
 Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response. Ignore empty rows.`;
-            } else if (entityType === 'leads') {
+            } else if (entityType === 'leads' || entityType === 'lead') {
                 systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
 You will receive raw scraped data, a CSV, or image text. Intelligently map this data into a strictly formatted JSON array of objects.
 Rules for lead objects:
@@ -52,9 +58,19 @@ Rules for lead objects:
 - "budget" (number, overcome typos like '2.5M' to 2500000)
 - "city" (string - desired city)
 - "notes" (string - extra details)
+- "agentName" (string - name or email of the agent assigned to this lead)
 Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response. Ignore empty rows.`;
+            } else if (entityType === 'combined' || entityType === 'mixed') {
+                systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
+You will receive a mixed file that might contain both Lead (client/owner) information and Property information in the same row or alternating rows.
+Intelligently map this data into a strictly formatted JSON array of objects.
+For each logical record, extract:
+- Property fields: "address", "city", "price", "rooms", "sqm", "floor", "type", "kind", "description", "agentName", "listingType", "isExclusive"
+- Lead/Owner fields: "name", "phone", "email", "notes"
+- Metadata: "entityType" (string - 'property', 'lead', or 'combined' if the record has both)
+Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response.`;
             } else {
-                throw new HttpsError('invalid-argument', 'Unsupported entityType. Must be properties or leads.');
+                throw new HttpsError('invalid-argument', 'Unsupported entityType. Must be properties, leads, combined, or mixed.');
             }
 
             // Decide payload format (if it's base64 image or text)
@@ -79,8 +95,10 @@ Return ONLY a valid parseable JSON array of objects. Do not use markdown wrappin
                 ];
             }
 
+            console.log(`Extracting AI Data for ${entityType}. Payload size: ${payload.length} chars.`);
             const result = await model.generateContent(contents);
             let responseText = result.response.text().trim();
+            console.log('AI Extraction successful. Raw response length:', responseText.length);
 
             // Clean the JSON format if the AI returned it with markdown
             if (responseText.startsWith('```json')) {
@@ -94,7 +112,7 @@ Return ONLY a valid parseable JSON array of objects. Do not use markdown wrappin
                 parsedData = JSON.parse(responseText);
             } catch (err) {
                 console.error('Failed to parse model output as JSON. Output was:', responseText);
-                throw new HttpsError('internal', 'AI did not return valid JSON array.');
+                throw new HttpsError('internal', `AI did not return valid JSON array. Response: ${responseText.substring(0, 100)}...`);
             }
 
             // In 'single' mode, AddPropertyModal expects `data` to be an object instead of array
@@ -106,9 +124,10 @@ Return ONLY a valid parseable JSON array of objects. Do not use markdown wrappin
 
             // In 'bulk' mode, ensure it's an array
             return { success: true, data: Array.isArray(parsedData) ? parsedData : [parsedData] };
-        } catch (error) {
+        } catch (error: any) {
             console.error('Gemini extraction error:', error);
-            throw new HttpsError('internal', 'AI Data Extraction failed. Check logs for details.');
+            const msg = error.message || 'Unknown AI error';
+            throw new HttpsError('internal', `AI Data Extraction failed: ${msg}. Check logs for details.`);
         }
     }
 );

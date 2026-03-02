@@ -8,6 +8,7 @@ import {
     doc,
     updateDoc,
     serverTimestamp,
+    Timestamp,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { inviteAgent } from './teamService';
@@ -316,6 +317,17 @@ export async function importLeads(
         });
     }
 
+    // Fetch agents in the agency to map agent names
+    const agentsSnap = await getDocs(
+        query(collection(db, 'users'), where('agencyId', '==', agencyId))
+    );
+    const agentMap = new Map<string, string>(); // lowercased name/email -> uid
+    agentsSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
+        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
+    });
+
     const chunks = await getBatchChunks(rows);
 
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -327,14 +339,26 @@ export async function importLeads(
 
             if (strategy === 'skip' && existingPhones.has(phone)) continue;
 
+            // Resolve Agent ID
+            let assignedAgentId = row.assignedAgentId || null;
+            if (row.agentName) {
+                const qName = String(row.agentName).trim().toLowerCase();
+                if (agentMap.has(qName)) {
+                    assignedAgentId = agentMap.get(qName)!;
+                }
+            }
+
             if (strategy === 'update' && existingPhones.has(phone)) {
                 const existingId = existingDocsMap.get(phone)!;
                 const ref = doc(db, 'leads', existingId);
-                batch.update(ref, { ...row, updatedAt: serverTimestamp() });
+                const updateData = { ...row, updatedAt: serverTimestamp() };
+                if (assignedAgentId) (updateData as any).assignedAgentId = assignedAgentId;
+                batch.update(ref, updateData);
             } else {
                 const ref = doc(collection(db, 'leads'));
                 batch.set(ref, {
                     ...buildLeadDefaults(row),
+                    assignedAgentId,
                     agencyId,
                     createdBy,
                     source: 'import',
@@ -410,6 +434,17 @@ export async function importProperties(
         });
     }
 
+    // Fetch agents in the agency to map agent names
+    const agentsSnap = await getDocs(
+        query(collection(db, 'users'), where('agencyId', '==', agencyId))
+    );
+    const agentMap = new Map<string, string>(); // lowercased name/email -> uid
+    agentsSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
+        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
+    });
+
     const chunks = await getBatchChunks(rows);
 
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -421,10 +456,23 @@ export async function importProperties(
 
             if (strategy === 'skip' && existingKeys.has(key)) continue;
 
+            // Resolve Agent ID
+            let resolvedAgentId = createdBy; // fallback to the user doing the import
+            if (row.agentName) {
+                const qName = String(row.agentName).trim().toLowerCase();
+                if (agentMap.has(qName)) {
+                    resolvedAgentId = agentMap.get(qName)!;
+                }
+            }
+
             if (strategy === 'update' && existingKeys.has(key)) {
                 const existingId = existingDocsMap.get(key)!;
                 const ref = doc(db, 'properties', existingId);
-                batch.update(ref, { ...row, updatedAt: serverTimestamp() });
+                const updateData = { ...row, updatedAt: serverTimestamp() };
+                if (row.agentName && resolvedAgentId) {
+                    (updateData as any).agentId = resolvedAgentId;
+                }
+                batch.update(ref, updateData);
             } else {
                 const ref = doc(collection(db, 'properties'));
                 batch.set(ref, {
@@ -435,14 +483,17 @@ export async function importProperties(
                     price: row.price || 1, // Fallback to 1 since rules require > 0
                     rooms: row.rooms ?? null,
                     floor: row.floor ?? null,
+                    sqm: row.sqm ?? null,
                     description: row.description ?? null,
                     notes: row.notes ?? null,
+                    isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
+                    listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
+                    exclusivityEndDate: row.exclusivityEndDate ? (typeof row.exclusivityEndDate === 'string' ? Timestamp.fromDate(new Date(row.exclusivityEndDate)) : row.exclusivityEndDate) : null,
                     agencyId,
-                    agentId: createdBy,
+                    agentId: resolvedAgentId,
                     createdBy,
                     status: 'active',
                     daysOnMarket: 0,
-                    isExclusive: false,
                     lat: 31.5,
                     lng: 34.75,
                     location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
@@ -523,15 +574,18 @@ export async function importMixed(
                 price: row.price || 1, // Fallback to 1 since rules require > 0
                 rooms: row.rooms ?? null,
                 floor: row.floor ?? null,
+                sqm: row.sqm ?? null,
                 description: row.description ?? null,
                 notes: row.notes ?? null,
+                isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
+                listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
+                exclusivityEndDate: row.exclusivityEndDate ? (typeof row.exclusivityEndDate === 'string' ? Timestamp.fromDate(new Date(row.exclusivityEndDate)) : row.exclusivityEndDate) : null,
                 agencyId,
                 agentId: createdBy,
                 createdBy,
                 ownerId: leadRef.id,
                 status: 'active',
                 daysOnMarket: 0,
-                isExclusive: false,
                 lat: 31.5,
                 lng: 34.75,
                 location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated

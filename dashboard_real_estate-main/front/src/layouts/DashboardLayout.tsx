@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
+import { useAuth } from '../context/AuthContext';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useSuperAdmin } from '../hooks/useSuperAdmin';
 import AddPropertyModal from '../components/modals/AddPropertyModal';
@@ -21,18 +22,25 @@ import {
 } from 'lucide-react';
 
 const navigation = [
-    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
     { name: 'לידים', href: '/dashboard/leads', icon: Contact },
     { name: 'עסקאות', href: '/dashboard/transactions', icon: Handshake },
     { name: 'נכסים', href: '/dashboard/properties', icon: Building2 },
-    { name: 'סוכנים', href: '/dashboard/agents', icon: Users },
-    { name: 'הגדרות', href: '/dashboard/settings', icon: Settings },
+    { name: 'סוכנים', href: '/dashboard/agents', icon: Users, roles: ['admin'] },
+    { name: 'הגדרות', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
 ];
 
 export default function DashboardLayout() {
+    const { userData } = useAuth();
     const { isSuperAdmin } = useSuperAdmin();
-    const { alerts, agencySettings, agencyName } = useLiveDashboardData();
+    const { alerts, agencyLogo, agencyName } = useLiveDashboardData();
     const navigate = useNavigate();
+
+    // Filter navigation based on user role
+    const filteredNavigation = navigation.filter(item =>
+        !item.roles || (userData?.role && item.roles.includes(userData.role))
+    );
+
     const [showAddProperty, setShowAddProperty] = useState(false);
     const [showAddLead, setShowAddLead] = useState(false);
     const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -58,7 +66,7 @@ export default function DashboardLayout() {
                 </div>
 
                 <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1">
-                    {navigation.map((item) => (
+                    {filteredNavigation.map((item) => (
                         <NavLink
                             key={item.name}
                             to={item.href}
@@ -102,20 +110,24 @@ export default function DashboardLayout() {
                         onClick={() => navigate('/dashboard/settings')}
                         className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
                     >
-                        {agencySettings?.logoUrl ? (
-                            <img
-                                src={agencySettings.logoUrl}
-                                alt="לוגו סוכנות"
-                                className="h-8 w-auto object-contain mix-blend-screen brightness-200"
-                            />
-                        ) : (
-                            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
-                                <Building2 className="w-4 h-4 text-cyan-400" />
-                            </div>
-                        )}
-                        <h1 className="text-lg font-semibold text-white tracking-tight">
+                        <h1 className="text-xl font-bold text-white tracking-tight">
                             {agencyName || 'הסוכנות שלי'}
                         </h1>
+                        {agencyLogo && agencyLogo.trim() !== '' ? (
+                            <img
+                                src={agencyLogo}
+                                alt="לוגו סוכנות"
+                                className="h-10 w-auto object-contain rounded-lg shadow-sm bg-white/10"
+                                onError={(e) => {
+                                    // Fallback if image fails to load
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                        ) : (
+                            <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                                <Building2 className="w-6 h-6 text-cyan-400" />
+                            </div>
+                        )}
                     </button>
 
                     <div className="flex items-center gap-4">

@@ -1,31 +1,9 @@
-/**
- * generateCatalog — Generates a secure, snapshot-based digital property catalog.
- *
- * Requirements:
- * 1. Verify authentication and agency membership.
- * 2. Fetch property data. Inject placeholder if no images.
- * 3. Store essential fields directly in the catalog document (Snapshotting).
- * 4. Set expiresAt to exactly 7 days from now.
- * 5. Return the catalogId and the public URL.
- *
- * Input:
- *   {
- *     agencyId: string,
- *     leadId: string,
- *     propertyIds: string[]
- *   }
- *
- * Output: { success: true, catalogId: string, url: string }
- */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const db = getFirestore();
 
-// Using a high-quality professional placeholder
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
-
-export const generateCatalog = onCall(async (request) => {
+export const generateCatalog = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -54,69 +32,8 @@ export const generateCatalog = onCall(async (request) => {
     const agencyData = agencyDoc.data() ?? {};
     const agencyName: string = agencyData.agencyName || agencyData.name || '';
     const agencyLogoUrl: string = agencyData.settings?.logoUrl || '';
+    const agencyPhone: string = agencyData.officePhone || agencyData.whatsappIntegration?.phoneNumber || '';
 
-    // ── Pre-fetch agent names (unique agentIds in property list) ─────────────────
-    const agentNameCache: Record<string, string> = {};
-    const fetchAgentName = async (agentId: string): Promise<string> => {
-        if (agentNameCache[agentId]) return agentNameCache[agentId];
-        try {
-            const agentDoc = await db.collection('users').doc(agentId).get();
-            const name = agentDoc.data()?.name || '';
-            agentNameCache[agentId] = name;
-            return name;
-        } catch {
-            return '';
-        }
-    };
-
-    // ── Fetch Properties and Snapshot ───────────────────────────────────────────
-    const snapshottedProperties = [];
-
-    // We fetch properties one by one or in batches. Since propertyIds length is usually small (<10),
-    // Promise.all with individual gets is fine, but let's use getAll if possible, or where 'in'.
-    // Firestore 'in' query supports max 10, so let's chunk it.
-
-    const chunks = [];
-    for (let i = 0; i < propertyIds.length; i += 10) {
-        chunks.push(propertyIds.slice(i, i + 10));
-    }
-
-    for (const chunk of chunks) {
-        const snap = await db.collection('properties')
-            .where('agencyId', '==', agencyId)
-            .where('__name__', 'in', chunk)
-            .get();
-
-        for (const doc of snap.docs) {
-            const data = doc.data();
-
-            // Check both 'images' (legacy) and 'imageUrls' (from Storage upload)
-            const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
-            const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
-
-            // Look up agent name
-            const agentName = data.agentId ? await fetchAgentName(data.agentId) : '';
-
-            snapshottedProperties.push({
-                id: doc.id,
-                address: data.address || 'כתובת חסויה',
-                city: data.city || '',
-                price: data.price || 0,
-                rooms: data.rooms || null,
-                images: finalImages,
-                type: data.type || 'sale',
-                kind: data.kind || null,
-                description: data.description || null,
-                agentName,
-            });
-        }
-    }
-
-    if (snapshottedProperties.length === 0) {
-        throw new HttpsError('not-found', 'Could not find the specified properties for this agency.');
-    }
-
-    // ── Create Catalog Document ─────────────────────────────────────────────────
     const catalogRef = db.collection('shared_catalogs').doc();
 
     const now = new Date();
@@ -127,10 +44,11 @@ export const generateCatalog = onCall(async (request) => {
         agencyId,
         agencyName,
         agencyLogoUrl,
+        agencyPhone,
         agentId: request.auth.uid,
         leadId,
         leadName: leadName || '',
-        properties: snapshottedProperties,
+        propertyIds: propertyIds, // Storing only the references for live fetching
         viewCount: 0,
         createdAt: FieldValue.serverTimestamp(),
         expiresAt: expiresAt,

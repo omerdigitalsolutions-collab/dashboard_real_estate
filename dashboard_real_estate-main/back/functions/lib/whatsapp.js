@@ -36,13 +36,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsappWebhook = exports.disconnectWhatsApp = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
+exports.whatsappWebhook = exports.disconnectWhatsApp = exports.getGroups = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
+const generative_ai_1 = require("@google/generative-ai");
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
+const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 /**
  * ─── WhatsApp Managed Architecture (WAHA / Green API) ───────────────────────
  *
@@ -204,6 +206,7 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     cors: true,
     secrets: [masterKey],
 }, async (request) => {
+    var _a;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
@@ -211,6 +214,17 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     const agencyRef = db.collection('agencies').doc(agencyId);
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        // If credentials are already missing but the agency doc still has metadata, clear it anyway
+        const agencyDoc = await agencyRef.get();
+        if ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.whatsappIntegration) {
+            await agencyRef.update({
+                isWhatsappConnected: false,
+                whatsappIntegration: null
+            });
+            // CRITICAL: Always delete the private credentials doc to allow reconnecting
+            await credsRef.delete();
+            return { success: true, message: 'Cleaned up agency metadata and private credentials (keys were missing/invalid).' };
+        }
         throw new https_1.HttpsError('not-found', 'No encrypted instance allocated to this agency.');
     }
     // 1. Send LogOut to Green API to clear the current WhatsApp session
@@ -225,8 +239,8 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     // 2. Transaction: Return to pool, remove from private subcollection and agency doc
     try {
         await db.runTransaction(async (t) => {
-            // Put plain-text back in pool
-            const poolRef = db.collection('available_instances').doc();
+            // Put plain-text back in pool, using idInstance as the doc ID for uniqueness
+            const poolRef = db.collection('available_instances').doc(keys.idInstance);
             t.set(poolRef, {
                 idInstance: keys.idInstance,
                 apiTokenInstance: keys.apiTokenInstance,
@@ -255,42 +269,66 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
 exports.generateWhatsAppQR = (0, https_1.onCall)({
     region: REGION,
     cors: true,
-    secrets: [masterKey],
+    secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY', masterKey],
 }, async (request) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
+    // 1. Try Green API Credentials first
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
-    if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-        throw new https_1.HttpsError('failed-precondition', 'No WhatsApp instance allocated. Call connectAgencyWhatsApp first.');
-    }
-    const qrUrl = `https://api.green-api.com/waInstance${keys.idInstance}/qr/${keys.apiTokenInstance}`;
-    let qrCode;
-    try {
-        const resp = await axios_1.default.get(qrUrl, { timeout: 15000 });
-        if (((_a = resp.data) === null || _a === void 0 ? void 0 : _a.type) === 'alreadyLogged') {
-            throw new https_1.HttpsError('already-exists', 'WhatsApp is already connected. Disconnect first.');
+    if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        const qrUrl = `https://api.green-api.com/waInstance${keys.idInstance}/qr/${keys.apiTokenInstance}`;
+        try {
+            console.log(`[WhatsApp] Fetching Green API QR for instance ${keys.idInstance}...`);
+            const resp = await axios_1.default.get(qrUrl, { timeout: 40000 });
+            if (((_a = resp.data) === null || _a === void 0 ? void 0 : _a.type) === 'alreadyLogged') {
+                throw new https_1.HttpsError('already-exists', 'WhatsApp is already connected. Disconnect first.');
+            }
+            if (((_b = resp.data) === null || _b === void 0 ? void 0 : _b.type) !== 'qrCode' || !((_c = resp.data) === null || _c === void 0 ? void 0 : _c.message)) {
+                throw new https_1.HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
+            }
+            await updateStatus(agencyId, 'PENDING_SCAN');
+            return { qrCode: resp.data.message };
         }
-        if (((_b = resp.data) === null || _b === void 0 ? void 0 : _b.type) !== 'qrCode' || !((_c = resp.data) === null || _c === void 0 ? void 0 : _c.message)) {
-            throw new https_1.HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
+        catch (err) {
+            console.error('[WhatsApp] Green API QR fetch failed:', err.message);
+            if (err instanceof https_1.HttpsError)
+                throw err;
+            throw new https_1.HttpsError('internal', `Failed to fetch QR from Green API: ${err.message}. Try again or check instance status.`);
         }
-        qrCode = resp.data.message;
     }
-    catch (err) {
-        if (err instanceof https_1.HttpsError)
-            throw err;
-        throw new https_1.HttpsError('internal', `Failed to fetch QR: ${(_d = err === null || err === void 0 ? void 0 : err.message) !== null && _d !== void 0 ? _d : err}`);
+    // 2. Try WAHA
+    const baseUrl = process.env.WAHA_BASE_URL;
+    if (baseUrl) {
+        const sessionName = `agency_${agencyId}`;
+        const qrUrl = `${baseUrl.replace(/\/$/, '')}/api/${sessionName}/auth/qr`;
+        try {
+            const headers = {};
+            if (process.env.WAHA_MASTER_KEY)
+                headers['Authorization'] = `Bearer ${process.env.WAHA_MASTER_KEY}`;
+            const resp = await axios_1.default.get(qrUrl, { headers, responseType: 'arraybuffer', timeout: 40000 });
+            // WAHA returns a PNG image for QR. We convert it to base64.
+            const base64 = Buffer.from(resp.data, 'binary').toString('base64');
+            const dataUrl = `data:image/png;base64,${base64}`;
+            await updateStatus(agencyId, 'PENDING_SCAN');
+            return { qrCode: dataUrl };
+        }
+        catch (err) {
+            console.error('[WhatsApp] WAHA QR fetch failed:', err.message);
+            throw new https_1.HttpsError('internal', `Failed to fetch QR from WAHA: ${err.message}`);
+        }
     }
-    // Ensure status reflects pending scan
+    throw new https_1.HttpsError('failed-precondition', 'No WhatsApp instance allocated. Call connectAgencyWhatsApp first.');
+});
+async function updateStatus(agencyId, status) {
     await db.collection('agencies').doc(agencyId).set({
         whatsappIntegration: {
-            status: 'PENDING_SCAN',
+            status,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
     }, { merge: true });
-    return { qrCode };
-});
+}
 // ─── 2. checkWhatsAppStatus ──────────────────────────────────────────────────
 /**
  * Checks WhatsApp status cleanly reading keys from the dynamically assigned greenApiKeys
@@ -346,6 +384,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     cors: true,
     secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY', masterKey]
 }, async (request) => {
+    var _a;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const { phone, message } = request.data;
@@ -353,7 +392,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
         throw new https_1.HttpsError('invalid-argument', 'phone and message are required.');
     const agencyId = await getAgencyId(request.auth.uid);
     const wa = await getAgencyWhatsApp(agencyId);
-    if (!wa || wa.status !== 'connected') {
+    if (!wa || ((_a = wa.status) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== 'CONNECTED') {
         throw new https_1.HttpsError('failed-precondition', 'WhatsApp is not connected. Please connect first in Settings.');
     }
     // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
@@ -369,7 +408,107 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     }
     throw new https_1.HttpsError('failed-precondition', 'Session not found.');
 });
-// ─── 4. disconnectWhatsApp ───────────────────────────────────────────────────
+/**
+ * 5. getGroups:
+ * Fetches the list of all contacts (including groups) and filters for groups.
+ */
+exports.getGroups = (0, https_1.onCall)({
+    region: REGION,
+    cors: true,
+    secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY', masterKey],
+}, async (request) => {
+    var _a, _b;
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
+    const agencyId = await getAgencyId(request.auth.uid);
+    // 1. Try Green API Credentials first (Instance mode)
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        const contactsUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getContacts/${keys.apiTokenInstance}`;
+        const chatsUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getChats/${keys.apiTokenInstance}`;
+        try {
+            console.log(`[WhatsApp] Fetching contacts & chats for agency ${agencyId}...`);
+            // Parallel fetch for speed
+            const [contactsResp, chatsResp] = await Promise.allSettled([
+                axios_1.default.get(contactsUrl, { timeout: 15000 }),
+                axios_1.default.get(chatsUrl, { timeout: 15000 })
+            ]);
+            const allGroupsMap = new Map();
+            // Process Contacts
+            if (contactsResp.status === 'fulfilled' && Array.isArray(contactsResp.value.data)) {
+                console.log(`[WhatsApp] Contacts fetched: ${contactsResp.value.data.length}`);
+                contactsResp.value.data.forEach((c) => {
+                    const isGroup = c.type === 'group' || (c.id && c.id.endsWith('@g.us'));
+                    if (isGroup && c.id) {
+                        allGroupsMap.set(c.id, { id: c.id, name: c.name || c.id.split('@')[0] });
+                    }
+                });
+            }
+            else if (contactsResp.status === 'rejected') {
+                console.error(`[WhatsApp] Contacts fetch failed:`, (_a = contactsResp.reason) === null || _a === void 0 ? void 0 : _a.message);
+            }
+            // Process Chats (often contains more recent groups even if unsaved)
+            if (chatsResp.status === 'fulfilled' && Array.isArray(chatsResp.value.data)) {
+                console.log(`[WhatsApp] Chats fetched: ${chatsResp.value.data.length}`);
+                chatsResp.value.data.forEach((c) => {
+                    var _a;
+                    if ((_a = c.chatId) === null || _a === void 0 ? void 0 : _a.endsWith('@g.us')) {
+                        allGroupsMap.set(c.chatId, {
+                            id: c.chatId,
+                            name: c.name || c.chatId.split('@')[0]
+                        });
+                    }
+                });
+            }
+            else if (chatsResp.status === 'rejected') {
+                console.error(`[WhatsApp] Chats fetch failed:`, (_b = chatsResp.reason) === null || _b === void 0 ? void 0 : _b.message);
+            }
+            const groups = Array.from(allGroupsMap.values());
+            console.log(`[WhatsApp] Final unique groups count: ${groups.length}`);
+            return {
+                success: true,
+                groups
+            };
+        }
+        catch (err) {
+            console.error('[WhatsApp] Green API getGroups failed:', err.message);
+            // Fall through...
+        }
+    }
+    // 2. Try WAHA (Session mode)
+    const baseUrl = process.env.WAHA_BASE_URL;
+    const masterKeyVal = process.env.WAHA_MASTER_KEY;
+    if (baseUrl) {
+        const sessionName = `agency_${agencyId}`;
+        const chatsUrl = `${baseUrl.replace(/\/$/, '')}/api/chats?session=${sessionName}`;
+        try {
+            const headers = {};
+            if (masterKeyVal)
+                headers['Authorization'] = `Bearer ${masterKeyVal}`;
+            const resp = await axios_1.default.get(chatsUrl, { headers, timeout: 20000 });
+            const chats = resp.data;
+            if (!Array.isArray(chats))
+                throw new Error('Invalid format');
+            return {
+                success: true,
+                groups: chats
+                    .filter((c) => { var _a; return ((_a = c.id) === null || _a === void 0 ? void 0 : _a.server) === 'g.us' || c.isGroup === true; })
+                    .map((c) => {
+                    var _a, _b;
+                    return ({
+                        id: ((_a = c.id) === null || _a === void 0 ? void 0 : _a.id) || c.id || '',
+                        name: c.name || ((_b = c.id) === null || _b === void 0 ? void 0 : _b.user) || 'קבוצה ללא שם'
+                    });
+                })
+            };
+        }
+        catch (err) {
+            console.error('[WhatsApp] WAHA getGroups failed:', err.message);
+        }
+    }
+    throw new https_1.HttpsError('failed-precondition', 'WhatsApp connection details not found.');
+});
+// ─── 6. disconnectWhatsApp ───────────────────────────────────────────────────
 exports.disconnectWhatsApp = (0, https_1.onCall)({
     region: REGION,
     cors: true,
@@ -392,22 +531,21 @@ exports.disconnectWhatsApp = (0, https_1.onCall)({
  */
 exports.whatsappWebhook = (0, https_1.onRequest)({
     region: REGION,
-    secrets: ['WAHA_WEBHOOK_SECRET']
+    secrets: ['WAHA_WEBHOOK_SECRET', geminiApiKey]
 }, async (req, res) => {
-    var _a, _b;
+    var _a, _b, _c;
     // Always ACK first to prevent retries
     res.status(200).send('OK');
     try {
-        const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'];
-        if (process.env.WAHA_WEBHOOK_SECRET && secret !== process.env.WAHA_WEBHOOK_SECRET) {
-            console.warn('Webhook: Invalid secret header. Request ignored.');
-            return;
-        }
+        const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
+        const expected = process.env.WAHA_WEBHOOK_SECRET || '';
+        console.log(`Webhook: Incoming secret header: '${secret}'. Expected: '${expected}'`);
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
         // Support both Green API and WAHA event formats
         const isInboundMessage = typeWebhook === 'incomingMessageReceived' || // Green API
             typeWebhook === 'message'; // WAHA
+        console.log(`Webhook: Received event type '${typeWebhook}'. isInboundMessage: ${isInboundMessage}`);
         if (!isInboundMessage)
             return;
         // ── Extract idInstance (Green API) or sessionName (WAHA) ─────────────
@@ -431,9 +569,14 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
                 agencyId = snap.docs[0].id;
         }
         if (!agencyId) {
-            console.log('Webhook: No agency found for this instance/session. Ignored.');
+            console.log(`Webhook: No agency found for instance ${idInstance} or session ${sessionName}. Ignored.`);
             return;
         }
+        const agencyDoc = await db.collection('agencies').doc(agencyId).get();
+        const agencyData = agencyDoc.data() || {};
+        // Support both old string[] and new {id, name}[] structure
+        const monitoredGroupsRaw = ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.monitoredGroups) || [];
+        const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
         // ── Extract sender and message text ────────────────────────────────────
         const senderData = (body === null || body === void 0 ? void 0 : body.senderData) || {};
         const messageData = (body === null || body === void 0 ? void 0 : body.messageData) || {};
@@ -443,8 +586,11 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
         const isDirect = chatId.endsWith('@c.us');
         // Real sender is the person who sent the message (in a group, it's senderData.sender. In direct, it's the chatId itself)
         const rawSender = senderData.sender || chatId || '';
-        const textMessage = ((_b = messageData.textMessageData) === null || _b === void 0 ? void 0 : _b.textMessage) || '';
+        const textMessage = ((_c = messageData.textMessageData) === null || _c === void 0 ? void 0 : _c.textMessage) || '';
         const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
+        console.log(`Webhook: Agency ${agencyId} | ChatId: ${chatId} | isGroup: ${isGroup} | Sender: ${rawSender}`);
+        if (textMessage)
+            console.log(`Webhook: Message text preview: ${textMessage.substring(0, 50)}...`);
         if (!rawSender || !textMessage)
             return;
         // ── Normalise phone ─────────────────────────────────────────────────────
@@ -455,24 +601,60 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
         // 1. B2B GROUP MESSAGES (Property Hunting)
         // ============================================================================
         if (isGroup) {
-            const propertyKeywords = ['למכירה', 'להשכרה', 'נכס', 'דירה', 'מ"ר', 'חדרים', 'מחיר'];
-            const textLower = textMessage.toLowerCase();
-            // Basic heuristic: must contain at least two property-related words
-            const matches = propertyKeywords.filter(kw => textLower.includes(kw));
-            if (matches.length >= 2) {
-                // Create draft property
-                await db.collection('properties').add({
-                    agencyId,
-                    source: 'whatsapp_group',
-                    groupId: chatId,
-                    externalAgentPhone: cleanPhone,
-                    rawDescription: textMessage,
-                    status: 'draft', // Waiting for manual approval
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-                console.log(`Webhook: Parsed draft property from group ${chatId} by ${cleanPhone}`);
+            console.log(`Webhook (Group): Checking if ${chatId} is monitored...`);
+            console.log(`Webhook (Group): Monitored list -> ${JSON.stringify(monitoredGroupIds)}`);
+            if (!monitoredGroupIds.includes(chatId)) {
+                console.log(`Webhook (Group): Chat ${chatId} is NOT in the monitored list. Ignoring.`);
+                return; // Skip if not a monitored group
             }
-            return; // Done with group message
+            console.log(`Webhook (Group): Chat ${chatId} IS monitored. Proceeding matching logic with Gemini...`);
+            const apiKey = geminiApiKey.value();
+            if (!apiKey) {
+                console.error("GEMINI API KEY MISSING for B2B Property Extraction");
+                return;
+            }
+            try {
+                const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
+Scan this message for property listings (for sale or rent).
+If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
+If it IS a listing, extract the details. Prices are usually in NIS.
+Message: "${textMessage}"
+
+Output strict JSON:
+{
+  "isProperty": boolean,
+  "type": "sale" | "rent",
+  "city": string | null,
+  "price": number | null,
+  "rooms": number | null
+}`;
+                const result = await model.generateContent(prompt);
+                const cleanJson = result.response.text().replace(/```json|```/g, '').trim();
+                const parsed = JSON.parse(cleanJson);
+                if (parsed.isProperty) {
+                    await db.collection('properties').add({
+                        agencyId,
+                        source: 'whatsapp_group',
+                        groupId: chatId,
+                        externalAgentPhone: cleanPhone,
+                        rawDescription: textMessage,
+                        city: parsed.city || null,
+                        price: parsed.price || 0,
+                        rooms: parsed.rooms || null,
+                        type: parsed.type || 'sale',
+                        listingType: 'external',
+                        status: 'draft', // Requires manual approval in dashboard
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`Webhook: AI parsed external property from group ${chatId} by ${cleanPhone}`);
+                }
+            }
+            catch (e) {
+                console.error('Gemini extraction failed for B2B group message:', e);
+            }
+            return; // Done
         }
         // ============================================================================
         // 2. DIRECT MESSAGES (Smart Lead Detection)
@@ -484,11 +666,38 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
                 .where('phone', '==', cleanPhone)
                 .limit(1).get();
             if (leadsSnap.empty) {
-                // Unknown number - scan for lead keywords
-                const leadKeywords = ['נכס', 'דירה', 'מחיר', 'למכירה', 'להשכרה', 'פרטים', 'תיווך'];
-                const textLower = textMessage.toLowerCase();
-                const hasKeyword = leadKeywords.some(kw => textLower.includes(kw));
-                if (!hasKeyword) {
+                // Unknown number - Use Gemini to scan and summarize
+                const apiKey = geminiApiKey.value();
+                let aiTriage = { isRealEstateLead: false, summary: '', intent: 'inquiry' };
+                if (apiKey) {
+                    try {
+                        const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
+                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                        const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
+        Message: "${textMessage}"
+        
+        Determine if this is a potential real estate lead (buyer, seller, or interested in a property).
+        Return ONLY a JSON object:
+        {
+          "isRealEstateLead": boolean,
+          "summary": "a short 3-7 word summary in Hebrew",
+          "intent": "buy" | "rent" | "sell" | "inquiry"
+        }`;
+                        const result = await model.generateContent(prompt);
+                        const responseText = result.response.text().trim();
+                        const cleanJson = responseText.replace(/```json|```/g, '').trim();
+                        aiTriage = JSON.parse(cleanJson);
+                    }
+                    catch (e) {
+                        console.error('Gemini Triage Error:', e);
+                        // Fallback to basic keyword check if AI fails
+                        const leadKeywords = ['נכס', 'דירה', 'מחיר', 'למכירה', 'להשכרה', 'פרטים', 'תיווך'];
+                        const hasKeyword = leadKeywords.some(kw => textMessage.toLowerCase().includes(kw));
+                        if (hasKeyword)
+                            aiTriage = { isRealEstateLead: true, summary: 'ליד חדש מוואטסאפ (זיהוי מילות מפתח)', intent: 'inquiry' };
+                    }
+                }
+                if (!aiTriage.isRealEstateLead) {
                     console.log(`Webhook: Ignored spam/irrelevant DM from ${cleanPhone}`);
                     return;
                 }
@@ -498,7 +707,6 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
                     .where('phone', '==', cleanPhone)
                     .limit(1).get();
                 if (pendingSnap.empty) {
-                    // Calculate exactly 14 days from now as a proper Firestore Timestamp for TTL
                     const expireDate = new Date();
                     expireDate.setDate(expireDate.getDate() + 14);
                     const expiresAt = admin.firestore.Timestamp.fromDate(expireDate);
@@ -506,18 +714,20 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
                         agencyId,
                         phone: cleanPhone,
                         initialMessage: textMessage,
+                        aiSummary: aiTriage.summary,
+                        aiIntent: aiTriage.intent,
                         status: 'pending',
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        expiresAt: expiresAt, // Native TTL policy field
+                        expiresAt: expiresAt,
                     });
-                    console.log(`Webhook: New pending lead created for ${cleanPhone}`);
+                    console.log(`Webhook: New pending lead created for ${cleanPhone} (AI Summary: ${aiTriage.summary})`);
                     // Create notification for the agency
                     await db.collection('alerts').add({
                         agencyId,
-                        targetAgentId: 'all', // Send to everyone in the agency
+                        targetAgentId: 'all',
                         type: 'new_pending_lead',
-                        title: 'ליד חדש זוהה מ-WhatsApp',
-                        message: `הודעה חדשה ממספר לא מוכר (${cleanPhone}) ממתינה לאישורך.`,
+                        title: 'ליד חדש זוהה מ-WhatsApp ✨',
+                        message: `${aiTriage.summary || 'הודעה חדשה'} ממספר לא מוכר (${cleanPhone}).`,
                         isRead: false,
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         link: '/dashboard/leads?tab=pending'

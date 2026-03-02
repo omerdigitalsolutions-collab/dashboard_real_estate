@@ -32,10 +32,13 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     const [kind, setKind] = useState(property.kind ?? '');
     const [price, setPrice] = useState(property.price.toString());
     const [rooms, setRooms] = useState(property.rooms?.toString() ?? '');
+    const [sqm, setSqm] = useState(property.sqm?.toString() ?? '');
     const [status, setStatus] = useState(property.status);
     const [agentId, setAgentId] = useState(property.agentId ?? '');
     const [description, setDescription] = useState(property.description ?? '');
-    const [isExclusive, setIsExclusive] = useState(property.isExclusive ?? false);
+    const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>(
+        property.listingType || (property.isExclusive ? 'exclusive' : 'private')
+    );
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -61,10 +64,12 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                 kind,
                 price: parsedPrice,
                 rooms: rooms ? parseFloat(rooms) : undefined,
+                sqm: sqm ? parseFloat(sqm) : undefined,
                 status,
                 agentId: agentId || property.agentId,
                 description: description.trim() || undefined,
-                isExclusive,
+                listingType,
+                isExclusive: listingType === 'exclusive',
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
             onClose();
@@ -120,8 +125,8 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                             <input value={city} onChange={e => setCity(e.target.value)} placeholder="תל אביב" className={inputCls} />
                         </div>
 
-                        {/* Price + Rooms */}
-                        <div className="grid grid-cols-2 gap-3">
+                        {/* Price + Rooms + Sqm */}
+                        <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
                                 <input type="number" min="0" step="1000" value={price} onChange={e => setPrice(e.target.value)} required placeholder="2,500,000" className={inputCls} dir="ltr" />
@@ -129,6 +134,10 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                             <div>
                                 <label className={labelCls}>חדרים</label>
                                 <input type="number" min="1" max="20" step="0.5" value={rooms} onChange={e => setRooms(e.target.value)} placeholder="4" className={inputCls} dir="ltr" />
+                            </div>
+                            <div>
+                                <label className={labelCls}>גודל במ"ר</label>
+                                <input type="number" min="0" value={sqm} onChange={e => setSqm(e.target.value)} placeholder="100" className={inputCls} dir="ltr" />
                             </div>
                         </div>
 
@@ -166,15 +175,43 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         </div>
 
                         {/* Exclusivity toggle */}
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/60">
-                            <div>
-                                <p className="text-sm font-semibold text-slate-700">בלעדיות</p>
-                                <p className="text-xs text-slate-400 mt-0.5">הנכס בטיפול בלעדי של המשרד</p>
+                        <div>
+                            <label className={labelCls}>סוג השיווק</label>
+                            <div className="flex gap-4 p-3 rounded-xl border border-slate-200 bg-slate-50/60">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="editListingType"
+                                        value="private"
+                                        checked={listingType === 'private'}
+                                        onChange={() => setListingType('private')}
+                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700">רגיל (פרטי)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="editListingType"
+                                        value="exclusive"
+                                        checked={listingType === 'exclusive'}
+                                        onChange={() => setListingType('exclusive')}
+                                        className="w-4 h-4 text-amber-500 focus:ring-amber-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700">👑 בלעדיות</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="editListingType"
+                                        value="external"
+                                        checked={listingType === 'external'}
+                                        onChange={() => setListingType('external')}
+                                        className="w-4 h-4 text-slate-600 focus:ring-slate-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700">🤝 שת"פ</span>
+                                </label>
                             </div>
-                            <button type="button" onClick={() => setIsExclusive(p => !p)}
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isExclusive ? 'bg-amber-500' : 'bg-slate-200'}`}>
-                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${isExclusive ? 'translate-x-5' : 'translate-x-0'}`} />
-                            </button>
                         </div>
 
                         {/* Description */}

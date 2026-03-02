@@ -12,6 +12,7 @@ interface LiveDashboardData {
     leads: Lead[];
     agencySettings: Agency['settings'] | null;
     agencyName: string | null;
+    agencyLogo: string | null;
     loading: boolean;
     error: Error | null;
 }
@@ -26,6 +27,7 @@ export function useLiveDashboardData(): LiveDashboardData {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [agencySettings, setAgencySettings] = useState<Agency['settings'] | null>(null);
     const [agencyName, setAgencyName] = useState<string | null>(null);
+    const [agencyLogo, setAgencyLogo] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -216,5 +218,5 @@ export function useLiveDashboardData(): LiveDashboardData {
         }
     }, [tasks]);
 
-    return { properties, deals, tasks, alerts, leads, agencySettings, agencyName, loading, error };
+    return { properties, deals, tasks, alerts, leads, agencySettings, agencyName, agencyLogo, loading, error };
 }

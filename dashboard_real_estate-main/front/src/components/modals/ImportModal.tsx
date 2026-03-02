@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     Upload, Table as TableIcon, CheckCircle, AlertCircle,
     X, FileSpreadsheet, Sparkles, ImagePlus, Loader2, Download, ChevronRight, ChevronLeft
@@ -24,6 +24,7 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'email', label: 'אימייל' },
         { key: 'budget', label: 'תקציב מקסימלי' },
         { key: 'city', label: 'עיר מבוקשת' },
+        { key: 'agentName', label: 'שם סוכן מטפל' },
         { key: 'notes', label: 'הערות' },
     ],
     property: [
@@ -33,7 +34,12 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'price', label: 'מחיר', required: true },
         { key: 'rooms', label: 'מספר חדרים' },
         { key: 'kind', label: 'סוג נכס (דירת גן, פנטהוז...)' },
-        { key: 'description', label: 'תיאור' },
+        { key: 'sqm', label: 'שטח (מ"ר)' },
+        { key: 'floor', label: 'קומה' },
+        { key: 'description', label: 'תיאור נכס' },
+        { key: 'agentName', label: 'שם סוכן מטפל' },
+        { key: 'isExclusive', label: 'בלעדיות (כן/לא)' },
+        { key: 'exclusivityEndDate', label: 'סיום בלעדיות' },
         { key: 'notes', label: 'הערות / היסטוריית טיפול' },
     ],
     agent: [
@@ -68,6 +74,7 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'rooms', label: 'מספר חדרים' },
         { key: 'kind', label: 'סוג נכס' },
         { key: 'description', label: 'תיאור' },
+        { key: 'agentName', label: 'סוכן מטפל' },
     ],
 };
 
@@ -92,6 +99,9 @@ const HEBREW_MAP: Record<string, string> = {
     'סוג נכס': 'kind', 'סוג': 'kind', 'סוג הנכס': 'kind', 'קטגוריה': 'kind',
     'חדרים': 'rooms', 'מספר חדרים': 'rooms',
     'קומה': 'floor', 'מספר קומה': 'floor',
+    'שטח': 'sqm', 'מ"ר': 'sqm', 'גודל': 'sqm', 'שטח מ"ר': 'sqm',
+    'בלעדיות': 'isExclusive', 'בלעדי': 'isExclusive',
+    'סיום בלעדיות': 'exclusivityEndDate', 'תאריך סיום בלעדיות': 'exclusivityEndDate',
     'הערות': 'notes', 'הערה': 'notes', 'היסטוריה': 'notes', 'פירוט': 'notes', 'היסטוריית טיפול': 'notes', 'הערות טיפול': 'notes',
     'תקציב': 'budget', 'תקציב מקסימלי': 'budget',
     'תפקיד': 'role', 'הרשאה': 'role',
@@ -169,10 +179,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const [discriminatorCol, setDiscriminatorCol] = useState('');
     const [leadMapping, setLeadMapping] = useState<Record<string, string>>({});
     const [propertyMapping, setPropertyMapping] = useState<Record<string, string>>({});
+    const [agentMapping, setAgentMapping] = useState<Record<string, string>>({});
 
     // validated rows for mixed mode (stored separately so import knows which is which)
     const [validLeadRows, setValidLeadRows] = useState<TransformedRow[]>([]);
     const [validPropertyRows, setValidPropertyRows] = useState<TransformedRow[]>([]);
+    const [validAgentRows, setValidAgentRows] = useState<TransformedRow[]>([]);
 
     // shared state
     const [validation, setValidation] = useState<ValidationResult>({ valid: [], invalid: [] });
@@ -183,12 +195,40 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const [summary, setSummary] = useState({ success: 0, failed: 0, leads: 0, properties: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
+    const [isAiMapping, setIsAiMapping] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
+
+    // Listen to global paste events (to support pasting images directly from clipboard)
+    useEffect(() => {
+        if (!isOpen || step !== 1 || isExtracting || isProcessing) return;
+
+        const handlePaste = async (e: ClipboardEvent) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        await processImage(file);
+                        break; // Process one image at a time
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [isOpen, step, isExtracting, isProcessing]);
 
     if (!isOpen) return null;
 
     // ── Handlers ──────────────────────────────────────────────────────────────
+
 
     const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -196,59 +236,85 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         e.target.value = '';
     };
 
+    const resizeImage = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1600;
+                    const MAX_HEIGHT = 1600;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
+                };
+                img.onerror = reject;
+            };
+            reader.onerror = reject;
+        });
+    };
+
     const processImage = async (file: File) => {
         setErrorMsg('');
         setIsExtracting(true);
         try {
-            // Convert file to base64
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onloadend = async () => {
-                const base64data = reader.result as string;
+            // Resize image to ensure payload size is manageable
+            const base64data = await resizeImage(file);
 
-                // Determine target entity type
-                let targetEntity = entityType;
-                if (targetEntity === 'mixed' || targetEntity === 'combined') {
-                    // AI mixed extraction might be slightly complex, default to the page context or properties
-                    targetEntity = defaultEntityType;
-                }
+            // Determine target entity type
+            let targetEntity = entityType;
+            if (targetEntity === 'mixed' || targetEntity === 'combined') {
+                targetEntity = defaultEntityType;
+            }
 
-                const fns = getFunctions(undefined, 'europe-west1');
-                const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
+            const fns = getFunctions(undefined, 'europe-west1');
+            const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
 
-                const result = await extractAiData({
-                    payload: base64data,
-                    mode: 'bulk',
-                    entityType: targetEntity === 'lead' ? 'leads' : 'properties'
-                });
+            const result = await extractAiData({
+                payload: base64data,
+                mode: 'bulk',
+                entityType: targetEntity === 'lead' ? 'leads' : 'properties'
+            });
 
-                if (result.data.success && Array.isArray(result.data.data) && result.data.data.length > 0) {
-                    const rows = result.data.data;
-                    // Auto-generate headers from the keys of the first row
-                    const headers = Object.keys(rows[0]);
-
-                    setRawHeaders(headers);
-                    setRawRows(rows);
-
-                    // Try to auto-map based on the headers
-                    setMapping(buildAutoMapping(headers, targetEntity as EntityType));
-                    setDiscriminatorCol('');
-                    setStep(2);
-                } else {
-                    setErrorMsg('ה-AI לא הצליח לזהות נתונים בתמונה. נסה תמונה ברורה יותר.');
-                }
-                setIsExtracting(false);
-            };
-            reader.onerror = () => {
-                setErrorMsg('שגיאה בקריאת התמונה.');
-                setIsExtracting(false);
-            };
+            if (result.data.success && Array.isArray(result.data.data) && result.data.data.length > 0) {
+                const rows = result.data.data;
+                const headers = Object.keys(rows[0]);
+                setRawHeaders(headers);
+                setRawRows(rows);
+                setMapping(buildAutoMapping(headers, targetEntity as EntityType));
+                setDiscriminatorCol('');
+                setStep(2);
+            } else {
+                setErrorMsg('ה-AI לא הצליח לזהות נתונים בתמונה. נסה תמונה ברורה יותר.');
+            }
         } catch (err: any) {
-            console.error(err);
-            setErrorMsg(err.message || 'אירעה שגיאה בחילוץ הנתונים מהתמונה.');
+            console.error('Image processing error:', err);
+            setErrorMsg(err.message || 'אירעה שגיאה בעיבוד התמונה.');
+        } finally {
             setIsExtracting(false);
         }
     };
+
 
     const processFile = async (file: File) => {
         setErrorMsg('');
@@ -257,11 +323,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setRawHeaders(headers);
             setRawRows(rows);
 
-            // HYBRID LOGIC: If <= 1500 data rows and entityType is property or lead, use AI.
-            if (rows.length > 0 && rows.length <= 1500 && (entityType === 'property' || entityType === 'lead')) {
+            // HYBRID LOGIC: If <= 1500 data rows, attempt AI extraction for any entity type.
+            if (rows.length > 0 && rows.length <= 1500) {
                 setIsExtracting(true); // Re-using isExtracting state for loading UI
                 try {
-                    // 1. Rebuild a lightweight CSV representation (headers + stringified rows)
                     const csvLines = [headers.join(',')];
                     rows.forEach((r: any) => {
                         const line = headers.map((h: string) => {
@@ -272,33 +337,38 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     });
                     const payloadCsv = csvLines.join('\n');
 
-                    // 2. Call the AI Function
                     const fns = getFunctions(undefined, 'europe-west1');
                     const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
-
-                    const targetEntity = entityType === 'property' ? 'properties' : 'leads';
 
                     const result = await extractAiData({
                         payload: payloadCsv,
                         mode: 'bulk',
-                        entityType: targetEntity
+                        entityType: entityType === 'property' ? 'properties' : (entityType === 'lead' ? 'leads' : entityType)
                     });
 
                     if (result.data.success && Array.isArray(result.data.data)) {
-                        // 3. Skip Mapping Step -> Go straight to Validation (Step 3)
                         const extractedRows = result.data.data;
-
-                        // We must format them as ValidationResult shape
                         const validRows: TransformedRow[] = extractedRows.map(r => ({ ...r, _status: 'valid' } as TransformedRow));
 
-                        setValidation({ valid: validRows, invalid: [] }); // Assume AI cleaned it perfectly for now
+                        if (entityType === 'mixed') {
+                            // Split based on what AI detected
+                            const leads = validRows.filter(r => (r as any).entityType === 'lead');
+                            const properties = validRows.filter(r => (r as any).entityType === 'property');
+                            const combined = validRows.filter(r => (r as any).entityType === 'combined');
+
+                            setValidLeadRows([...leads, ...combined]);
+                            setValidPropertyRows([...properties, ...combined]);
+                            setValidation({ valid: validRows, invalid: [] });
+                        } else {
+                            setValidation({ valid: validRows, invalid: [] });
+                        }
+
                         setStep(3);
                         setIsExtracting(false);
                         return; // Early return to completely bypass standard flow!
                     }
                 } catch (aiErr: any) {
                     console.error('AI Hybrid mapping failed, falling back to traditional routing:', aiErr);
-                    // Silently fall through to standard mapping if AI errors out (rate limits, context limits etc)
                 }
                 setIsExtracting(false);
             }
@@ -342,17 +412,21 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const buildMixedMapping = (headers: string[]) => {
         const leadOpts = FIELD_OPTIONS.lead;
         const propOpts = FIELD_OPTIONS.property;
+        const agentOpts = FIELD_OPTIONS.agent;
         const nl: Record<string, string> = {};
         const np: Record<string, string> = {};
+        const na: Record<string, string> = {};
         headers.forEach(h => {
             const clean = h.trim();
             const dictMap = HEBREW_MAP[clean] || HEBREW_MAP[clean.toLowerCase()];
             let leadMatch = leadOpts.find(o => o.key === dictMap || o.label === clean)?.key;
             let propMatch = propOpts.find(o => o.key === dictMap || o.label === clean)?.key;
+            let agentMatch = agentOpts.find(o => o.key === dictMap || o.label === clean)?.key;
             if (leadMatch) nl[h] = leadMatch; else nl[h] = `__custom__${h}`;
             if (propMatch) np[h] = propMatch; else np[h] = `__custom__${h}`;
+            if (agentMatch) na[h] = agentMatch; else na[h] = `__custom__${h}`;
         });
-        return { nl, np };
+        return { nl, np, na };
     };
 
     const buildAutoMapping = (headers: string[], type: EntityType) => {
@@ -370,12 +444,46 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
     const handleAutoMap = () => {
         if (entityType === 'mixed') {
-            const { nl, np } = buildMixedMapping(rawHeaders);
+            const { nl, np, na } = buildMixedMapping(rawHeaders);
             setLeadMapping(nl);
             setPropertyMapping(np);
+            setAgentMapping(na);
             return;
         }
         setMapping(buildAutoMapping(rawHeaders, entityType as EntityType));
+    };
+
+    const handleAiMapping = async () => {
+        if (rawHeaders.length === 0) return;
+        setErrorMsg('');
+        setIsAiMapping(true);
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const getMappingFn = httpsCallable(fns, 'superadmin-superAdminGetImportMapping');
+
+            // Note: Even though it's in the superadmin namespace, we might need a generic one 
+            // but for now we'll use this since it's already implemented. 
+            // In a real prod app we might move it to a more generic location.
+            const result = await getMappingFn({
+                headers: rawHeaders,
+                sampleData: rawRows.slice(0, 1)
+            });
+
+            const aiMapping = (result.data as any).mapping;
+            if (entityType === 'mixed') {
+                // For mixed, we might need a more complex AI prompt but let's try applying it to all
+                setLeadMapping(prev => ({ ...prev, ...aiMapping }));
+                setPropertyMapping(prev => ({ ...prev, ...aiMapping }));
+                setAgentMapping(prev => ({ ...prev, ...aiMapping }));
+            } else {
+                setMapping(prev => ({ ...prev, ...aiMapping }));
+            }
+        } catch (err: any) {
+            console.error('AI Mapping failed:', err);
+            setErrorMsg('מיפוי AI נכשל. נסה מיפוי ידני.');
+        } finally {
+            setIsAiMapping(false);
+        }
     };
 
     const handleValidate = () => {
@@ -395,11 +503,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             }
             const leadRows = rawRows.filter(r => /ליד|lead/i.test(String(r[discriminatorCol] ?? '')));
             const propRows = rawRows.filter(r => /נכס|property|דירה|בית/i.test(String(r[discriminatorCol] ?? '')));
+            const agentRows = rawRows.filter(r => /סוכן|agent/i.test(String(r[discriminatorCol] ?? '')));
+
             const lr = validateAndTransform(leadRows, leadMapping, 'lead');
             const pr = validateAndTransform(propRows, propertyMapping, 'property');
+            const ar = validateAndTransform(agentRows, agentMapping, 'agent');
+
             setValidLeadRows(lr.valid);
             setValidPropertyRows(pr.valid);
-            setValidation({ valid: [...lr.valid, ...pr.valid], invalid: [...lr.invalid, ...pr.invalid] });
+            setValidAgentRows(ar.valid);
+
+            setValidation({
+                valid: [...lr.valid, ...pr.valid, ...ar.valid],
+                invalid: [...lr.invalid, ...pr.invalid, ...ar.invalid]
+            });
             setStep(3);
             return;
         }
@@ -432,19 +549,41 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
         try {
             if (entityType === 'mixed') {
-                const total = validLeadRows.length + validPropertyRows.length;
+                const total = validLeadRows.length + validPropertyRows.length + validAgentRows.length;
                 setProgress({ current: 0, total });
                 let base = 0;
+
+                // Agents first so they can be referenced by properties/leads
+                let agentCount = 0;
+                if (validAgentRows.length > 0) {
+                    const hasAdmin = validAgentRows.some(r => r.role === 'admin');
+                    let proceed = true;
+                    if (hasAdmin) {
+                        proceed = window.confirm("שימו לב: בקובץ (מעורב) קיימים מנהלים ('admin'). למנהל יש הרשאה מלאה לכל נתוני המשרד. האם להמשיך בייבוא מנהלים?");
+                    }
+                    if (proceed) {
+                        const agentRes = await importAgents(
+                            userData.agencyId, validAgentRows,
+                            (c, _t) => setProgress({ current: base + c, total })
+                        );
+                        agentCount = agentRes.importedCount;
+                    }
+                    base += validAgentRows.length;
+                }
+
                 const leadCount = await importLeads(
                     userData.agencyId, userData.uid, validLeadRows, strategy,
                     (c, _t) => setProgress({ current: base + c, total })
                 );
-                base = validLeadRows.length;
+                base += validLeadRows.length;
+
                 const propCount = await importProperties(
                     userData.agencyId, userData.uid, validPropertyRows, strategy,
                     (c, _t) => setProgress({ current: base + c, total })
                 );
-                setSummary({ success: leadCount + propCount, failed: validation.invalid.length, leads: leadCount, properties: propCount });
+
+                // Add agents count to the success/failure totals. The summary UI might need a tweak to show agents, but total success is key.
+                setSummary({ success: leadCount + propCount + agentCount, failed: validation.invalid.length, leads: leadCount, properties: propCount });
             } else if (entityType === 'lead') {
                 // Apply lead sub-type override if not mixed
                 const leadRows = leadSubType === 'mixed'
@@ -484,9 +623,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const handleClose = () => {
         setStep(1);
         setRawHeaders([]); setRawRows([]);
-        setMapping({}); setLeadMapping({}); setPropertyMapping({});
+        setMapping({}); setLeadMapping({}); setPropertyMapping({}); setAgentMapping({});
         setDiscriminatorCol('');
-        setValidLeadRows([]); setValidPropertyRows([]);
+        setValidLeadRows([]); setValidPropertyRows([]); setValidAgentRows([]);
         setValidation({ valid: [], invalid: [] });
         setStrategy('skip');
         setProgress({ current: 0, total: 0 });
@@ -613,7 +752,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                 </div>
                                 {entityType === 'mixed' && (
                                     <p className="text-xs text-slate-500 mt-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                                        במצב מעורב, הקובץ צריך לכלול עמודה שמציינת לכל שורה אם היא <strong>ליד</strong> או <strong>נכס</strong>.
+                                        במצב מעורב, הקובץ צריך לכלול עמודה שמציינת לכל שורה אם היא <strong>ליד</strong>, <strong>נכס</strong> או <strong>סוכן</strong>.
                                     </p>
                                 )}
                                 {entityType === 'lead' && (
@@ -702,10 +841,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     <p className="text-sm font-semibold text-slate-700">שייך עמודות לשדות במערכת</p>
                                     <p className="text-xs text-slate-400 mt-0.5">{rawRows.length} שורות זוהו בקובץ</p>
                                 </div>
-                                <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors">
-                                    <Sparkles size={15} />
-                                    זיהוי אוטומטי
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleAiMapping}
+                                        disabled={isAiMapping}
+                                        className="flex items-center gap-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+                                    >
+                                        {isAiMapping ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                                        מיפוי AI
+                                    </button>
+                                    <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">
+                                        <TableIcon size={15} />
+                                        זיהוי רגיל
+                                    </button>
+                                </div>
                             </div>
                             <MappingTable
                                 headers={rawHeaders}
@@ -725,10 +874,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     <p className="text-sm font-semibold text-slate-700">מיפוי עמודות – לידים ונכסים</p>
                                     <p className="text-xs text-slate-400 mt-0.5">{rawRows.length} שורות זוהו</p>
                                 </div>
-                                <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 rounded-xl transition-colors">
-                                    <Sparkles size={15} />
-                                    זיהוי אוטומטי
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleAiMapping}
+                                        disabled={isAiMapping}
+                                        className="flex items-center gap-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
+                                    >
+                                        {isAiMapping ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                                        מיפוי AI
+                                    </button>
+                                    <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">
+                                        <TableIcon size={15} />
+                                        זיהוי רגיל
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Discriminator */}
@@ -742,7 +901,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     <option value="">-- בחר עמודה --</option>
                                     {rawHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                                 </select>
-                                <p className="text-xs text-amber-600 mt-1.5">ערכים מקובלים: <strong>ליד</strong> / <strong>lead</strong> לשורות לידים, <strong>נכס</strong> / <strong>property</strong> לשורות נכסים</p>
+                                <p className="text-xs text-amber-600 mt-1.5">ערכים מקובלים: <strong>ליד</strong> / <strong>lead</strong> , <strong>נכס</strong> / <strong>property</strong>, <strong>סוכן</strong> / <strong>agent</strong></p>
                             </div>
 
                             {/* Lead mapping */}
@@ -774,6 +933,21 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     colorClass="emerald"
                                 />
                             </div>
+
+                            {/* Agent mapping */}
+                            <div>
+                                <p className="text-sm font-semibold text-purple-700 mb-2 flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 bg-purple-500 rounded-full inline-block"></span>
+                                    מיפוי שדות סוכנים
+                                </p>
+                                <MappingTable
+                                    headers={rawHeaders}
+                                    currentMapping={agentMapping}
+                                    onChange={(h, v) => setAgentMapping(prev => ({ ...prev, [h]: v }))}
+                                    options={FIELD_OPTIONS.agent}
+                                    colorClass="purple"
+                                />
+                            </div>
                             <p className="text-xs text-slate-400">* שדות חובה</p>
                         </div>
                     )}
@@ -787,7 +961,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                         <p className="text-emerald-700 font-bold text-2xl">{validation.valid.length}</p>
                                         <p className="text-emerald-600 text-sm font-semibold mt-0.5">שורות מוכנות לייבוא</p>
                                         {entityType === 'mixed' && (
-                                            <p className="text-emerald-500 text-xs mt-0.5">{validLeadRows.length} לידים · {validPropertyRows.length} נכסים</p>
+                                            <p className="text-emerald-500 text-xs mt-0.5">{validLeadRows.length} לידים · {validPropertyRows.length} נכסים{validAgentRows.length > 0 ? ` · ${validAgentRows.length} סוכנים` : ''}</p>
                                         )}
                                     </div>
                                     <CheckCircle size={32} className="text-emerald-400" />

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Sparkles, MapPin, BedDouble, X, CheckSquare, MessageCircle, AlertCircle, Link, Copy, Check, Send, Plus, Trash2, ExternalLink, Search, Heart } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
-import { createCatalog, getCatalogsByLeadId } from '../../services/catalogService';
+import { createCatalog, getCatalogsByLeadId, updateCatalog } from '../../services/catalogService';
 import { matchPropertiesForLead, updateLead } from '../../services/leadService';
 import { Lead, Property } from '../../types';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
@@ -13,11 +13,14 @@ interface PropertyMatcherModalProps {
 }
 
 // ── Helper: property card thumbnail ──────────────────────────────────────────
-function PropertyThumb({ property, selected, onToggle, onRemove }: {
+function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, onQuickAddToCatalog, isInCatalog }: {
     property: Property & { isLiked?: boolean };
     selected: boolean;
     onToggle: () => void;
     onRemove?: () => void;
+    onQuickShare?: () => void;
+    onQuickAddToCatalog?: () => void;
+    isInCatalog?: boolean;
 }) {
     return (
         <div
@@ -29,10 +32,13 @@ function PropertyThumb({ property, selected, onToggle, onRemove }: {
                     type="checkbox"
                     checked={selected}
                     readOnly
-                    className="w-4 h-4 rounded text-blue-600 border-slate-300"
+                    className="w-5 h-5 rounded-lg text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
                 />
+                {isInCatalog && (
+                    <span className="text-[10px] font-bold text-blue-500 mt-0.5">בקטלוג</span>
+                )}
                 {property.isLiked && (
-                    <Heart size={16} className="text-rose-500 fill-rose-500" />
+                    <Heart size={16} className="text-rose-500 fill-rose-500 mt-1" />
                 )}
             </div>
 
@@ -40,11 +46,35 @@ function PropertyThumb({ property, selected, onToggle, onRemove }: {
             {onRemove && selected && (
                 <button
                     onClick={e => { e.stopPropagation(); onRemove(); }}
-                    className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-colors"
+                    className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-colors shadow-sm"
                     title="הסר מהקטלוג"
                 >
                     <Trash2 size={12} />
                 </button>
+            )}
+
+            {/* Quick Actions (only shown if provided) */}
+            {(onQuickShare || onQuickAddToCatalog) && (
+                <div className="absolute bottom-3 left-4 z-20 flex gap-2">
+                    {onQuickShare && (
+                        <button
+                            onClick={e => { e.stopPropagation(); onQuickShare(); }}
+                            className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 shadow-sm p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                            title="שלח ישירות בוואטסאפ"
+                        >
+                            <MessageCircle size={14} />
+                        </button>
+                    )}
+                    {onQuickAddToCatalog && (
+                        <button
+                            onClick={e => { e.stopPropagation(); onQuickAddToCatalog(); }}
+                            className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 shadow-sm p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                            title="הוסף לקטלוג ושלח מנוסח"
+                        >
+                            <Plus size={14} />
+                        </button>
+                    )}
+                </div>
             )}
 
             <div className="w-20 h-20 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden relative border border-slate-100">
@@ -100,16 +130,34 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
         getCatalogsByLeadId(lead.id, lead.agencyId)
             .then(catalogs => {
                 const liked = new Set<string>();
-                for (const catalog of catalogs) {
+                const inCatalog = new Set<string>();
+
+                // Find properties in any catalog and specifically likes
+                catalogs.forEach(catalog => {
                     if (catalog.likedPropertyIds) {
                         catalog.likedPropertyIds.forEach(id => liked.add(id));
                     }
-                }
+                    if (catalog.propertyIds) {
+                        catalog.propertyIds.forEach(id => inCatalog.add(id));
+                    }
+                });
+
                 setLikedPropertyIds(liked);
+
+                // If lead has a specific current catalog, pre-select those items
+                if (lead.catalogId) {
+                    const currentCatalog = catalogs.find(c => c.id === lead.catalogId);
+                    if (currentCatalog?.propertyIds) {
+                        setSelectedPropertyIds(new Set(currentCatalog.propertyIds));
+                    }
+                } else if (inCatalog.size > 0) {
+                    // Fallback to any properties found in catalogs if lead.catalogId is missing
+                    setSelectedPropertyIds(inCatalog);
+                }
             })
             .catch(err => console.warn('Could not load liked properties:', err))
             .finally(() => setLoadingLikes(false));
-    }, [lead.id, lead.agencyId]);
+    }, [lead.id, lead.agencyId, lead.catalogId]);
 
     // Attach `isLiked` flag to properties
     const matchedPropertiesWithLikes = useMemo(() => {
@@ -125,6 +173,21 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
             isLiked: likedPropertyIds.has(p.id)
         }));
     }, [allProperties, likedPropertyIds]);
+
+    const { inCatalogMatched, otherMatched } = useMemo(() => {
+        const inCatalog: (Property & { isLiked?: boolean })[] = [];
+        const others: (Property & { isLiked?: boolean })[] = [];
+
+        matchedPropertiesWithLikes.forEach(p => {
+            if (selectedPropertyIds.has(p.id)) {
+                inCatalog.push(p);
+            } else {
+                others.push(p);
+            }
+        });
+
+        return { inCatalogMatched: inCatalog, otherMatched: others };
+    }, [matchedPropertiesWithLikes, selectedPropertyIds]);
 
     const [panel, setPanel] = useState<'match' | 'edit'>('match');
     const [searchQuery, setSearchQuery] = useState('');
@@ -158,30 +221,86 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
         else setSelectedPropertyIds(new Set());
     };
 
-    // Generate catalog and optionally open in new tab
+    const formatPhoneForWhatsApp = (phone?: string) => {
+        if (!phone) return '';
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.startsWith('0')) return `972${cleaned.substring(1)}`;
+        if (cleaned.startsWith('972')) return cleaned;
+        return `972${cleaned}`;
+    };
+
+    const handleQuickShare = (prop: Property) => {
+        const url = `${window.location.origin}/properties?id=${prop.id}`;
+        const waMsg = encodeURIComponent(`היי ${lead.name}, הנה פרטים על נכס מעניין ב${prop.city}: ${url}`);
+        window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleQuickAddToCatalog = async (prop: Property) => {
+        setIsGenerating(true);
+        try {
+            // New set of IDs: Existing selection + the new property
+            const nextIds = Array.from(new Set([...Array.from(selectedPropertyIds), prop.id]));
+
+            let token = lead.catalogId;
+            let url = lead.catalogUrl;
+
+            if (token) {
+                // Update existing
+                await updateCatalog(token, nextIds);
+            } else {
+                // Create new
+                token = await createCatalog(lead.agencyId, lead.id, lead.name, nextIds);
+                url = `${window.location.origin}/catalog/${token}`;
+                await updateLead(lead.id, { catalogId: token, catalogUrl: url } as any);
+            }
+
+            // Re-select it so UI updates visually
+            setSelectedPropertyIds(new Set(nextIds));
+            setCatalogUrl(url || `${window.location.origin}/catalog/${token}`);
+
+            const waMsg = encodeURIComponent(`היי ${lead.name}, יש למשרד שלנו נכס חדש שכרגע יצא לשוק ונראה שהוא בול מה שחיפשת! הוספתי לך אותו לקטלוג האישי שלך. כנס לראות: ${url || `${window.location.origin}/catalog/${token}`}`);
+            window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            console.error('Failed to quick add to catalog', error);
+            alert('שגיאה בעדכון הקטלוג');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Generate/Update catalog and optionally open in new tab
     const handleGenerateCatalog = async (openTab = false) => {
         if (selectedPropertyIds.size === 0) return;
         setIsGenerating(true);
         try {
-            const token = await createCatalog(
-                lead.agencyId,
-                lead.id,
-                lead.name,
-                Array.from(selectedPropertyIds)
-            );
-            const url = `${window.location.origin}/catalog/${token}`;
-            setCatalogUrl(url);
+            const nextIds = Array.from(selectedPropertyIds);
+            let token = lead.catalogId;
+            let url = lead.catalogUrl;
 
-            // Save to lead document replacing the old one
-            await updateLead(lead.id, {
-                catalogId: token,
-                catalogUrl: url
-            } as any);
+            if (token) {
+                // Persistent Update
+                await updateCatalog(token, nextIds);
+            } else {
+                // Initial Creation
+                token = await createCatalog(
+                    lead.agencyId,
+                    lead.id,
+                    lead.name,
+                    nextIds
+                );
+                url = `${window.location.origin}/catalog/${token}`;
+                // Save to lead document
+                await updateLead(lead.id, {
+                    catalogId: token,
+                    catalogUrl: url
+                } as any);
+            }
 
-            if (openTab) window.open(url, '_blank', 'noopener,noreferrer');
+            setCatalogUrl(url || `${window.location.origin}/catalog/${token}`);
+            if (openTab) window.open(url || `${window.location.origin}/catalog/${token}`, '_blank', 'noopener,noreferrer');
         } catch (error) {
-            console.error('Failed to generate catalog', error);
-            alert('שגיאה ביצירת הקטלוג.');
+            console.error('Failed to update catalog', error);
+            alert('שגיאה בעדכון הקטלוג.');
         } finally {
             setIsGenerating(false);
         }
@@ -323,16 +442,43 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                                     </label>
                                     <span className="text-xs text-blue-600 font-medium">נבחרו {selectedPropertyIds.size} פריטים</span>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {matchedPropertiesWithLikes.map(property => (
-                                        <PropertyThumb
-                                            key={property.id}
-                                            property={property}
-                                            selected={selectedPropertyIds.has(property.id)}
-                                            onToggle={() => handleToggle(property.id)}
-                                        />
-                                    ))}
-                                </div>
+                                {inCatalogMatched.length > 0 && (
+                                    <div className="space-y-4">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">בקודם (כבר בקטלוג):</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {inCatalogMatched.map(property => (
+                                                <PropertyThumb
+                                                    key={property.id}
+                                                    property={property}
+                                                    selected={selectedPropertyIds.has(property.id)}
+                                                    onToggle={() => handleToggle(property.id)}
+                                                    onQuickShare={() => handleQuickShare(property)}
+                                                    onQuickAddToCatalog={() => handleQuickAddToCatalog(property)}
+                                                    isInCatalog={true}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {otherMatched.length > 0 && (
+                                    <div className="space-y-4 pt-4">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">התאמות חדשות:</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {otherMatched.map(property => (
+                                                <PropertyThumb
+                                                    key={property.id}
+                                                    property={property}
+                                                    selected={selectedPropertyIds.has(property.id)}
+                                                    onToggle={() => handleToggle(property.id)}
+                                                    onQuickShare={() => handleQuickShare(property)}
+                                                    onQuickAddToCatalog={() => handleQuickAddToCatalog(property)}
+                                                    isInCatalog={false}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )
                     ) : (
@@ -350,6 +496,8 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                                                 selected={true}
                                                 onToggle={() => handleToggle(p.id)}
                                                 onRemove={() => handleToggle(p.id)}
+                                                onQuickShare={() => handleQuickShare(p)}
+                                                isInCatalog={true}
                                             />
                                         ))}
                                     </div>
@@ -466,7 +614,7 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                                         }`}
                                 >
                                     <ExternalLink size={15} />
-                                    פתח קטלוג נכסים
+                                    {lead.catalogId ? 'פתח קטלוג נוכחי' : 'פתח קטלוג נכסים'}
                                 </button>
                                 {/* "Create Catalog" — generates and shows link/send UI */}
                                 <button
@@ -482,7 +630,7 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                                     ) : (
                                         <CheckSquare size={16} />
                                     )}
-                                    {isGenerating ? 'יוצר קטלוג...' : `צור קטלוג (${selectedPropertyIds.size})`}
+                                    {isGenerating ? (lead.catalogId ? 'מעדכן...' : 'יוצר...') : (lead.catalogId ? `עדכן קטלוג (${selectedPropertyIds.size})` : `צור קטלוג (${selectedPropertyIds.size})`)}
                                 </button>
                             </div>
                         </div>

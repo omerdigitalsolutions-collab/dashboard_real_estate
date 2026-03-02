@@ -30,6 +30,12 @@ export interface Agency {
         themeColor?: string;
         customDealStages?: CustomDealStage[];
     };
+    whatsappIntegration?: {
+        status?: string;
+        instanceId?: string;
+        monitoredGroups?: { id: string, name: string }[];
+    };
+    isWhatsappConnected?: boolean;
     createdAt: Timestamp;
 }
 
@@ -134,6 +140,7 @@ export interface Property {
     kind?: string;
     price: number;
     rooms?: number;
+    sqm?: number;
     status: PropertyStatus;
     exclusivityEndDate?: Timestamp | null;
     isExclusive?: boolean;
@@ -151,6 +158,9 @@ export interface Property {
     lat?: number;
     lng?: number;
     leadId?: string;
+    listingType?: 'exclusive' | 'external' | 'private';
+    agencyName?: string;
+    yad2Link?: string;
 }
 
 // ─── Deals ────────────────────────────────────────────────────────────────────
@@ -197,21 +207,11 @@ export interface SharedCatalog {
     agencyId: string;
     agencyName?: string;
     agencyLogoUrl?: string;
+    agencyPhone?: string;
     agentId: string;
     leadId: string | null;
     leadName?: string;
-    properties: {
-        id: string;
-        address: string;
-        city?: string;
-        price: number;
-        rooms: number | null;
-        images: string[];
-        type: PropertyType;
-        kind?: string | null;
-        description?: string | null;
-        agentName?: string;
-    }[];
+    propertyIds: string[];
     viewCount: number;
     likedPropertyIds?: string[];
     createdAt: Timestamp;
@@ -234,4 +234,18 @@ export interface Alert {
         type: 'deal' | 'lead' | 'property' | 'task';
     };
     createdAt?: Timestamp;
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+export type ExpenseCategory = 'Marketing' | 'Rent' | 'Salaries' | 'Other';
+
+export interface Expense {
+    id: string;
+    agencyId: string;
+    title: string;
+    amount: number;
+    category: ExpenseCategory | string;
+    date: Timestamp; // Using Firestore Timestamp to maintain consistency
+    createdBy: string;
+    createdAt: Timestamp;
 }

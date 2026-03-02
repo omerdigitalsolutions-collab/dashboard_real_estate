@@ -1,62 +1,13 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.completeAgentSetup = exports.getInviteInfo = exports.inviteAgent = exports.deleteAgent = exports.toggleAgentStatus = exports.updateAgentRole = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
-const nodemailer = __importStar(require("nodemailer"));
+const params_1 = require("firebase-functions/params");
+const resend_1 = require("resend");
+const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = (0, firestore_1.getFirestore)();
-// ─── Email Transporter ────────────────────────────────────────────────────────
-// Gmail App Password is stored in process.env to avoid hard-coding credentials.
-// Set via: firebase functions:secrets:set GMAIL_APP_PASSWORD (Google Secret Manager)
-// Or add to your .env.local for local emulator testing.
-function getTransporter() {
-    const appPassword = process.env.GMAIL_APP_PASSWORD;
-    if (!appPassword) {
-        console.warn('[team.ts] GMAIL_APP_PASSWORD not set — email will not be sent.');
-        return null;
-    }
-    return nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: 'omerdigitalsolutions@gmail.com',
-            pass: appPassword,
-        },
-    });
-}
 /**
  * updateAgentRole — Changes the role of a team member.
  *
@@ -274,7 +225,7 @@ function buildInviteEmail(agentName, agencyName, joinLink) {
  * Input:  { email: string, name: string, role: 'admin' | 'agent', phone?: string, appUrl?: string }
  * Output: { success: true, stubId: string, whatsappUrl?: string }
  */
-exports.inviteAgent = (0, https_1.onCall)(async (request) => {
+exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {
     var _a;
     // ── Auth Guard ──────────────────────────────────────────────────────────────
     if (!request.auth) {
@@ -333,21 +284,25 @@ exports.inviteAgent = (0, https_1.onCall)(async (request) => {
         : 'https://your-app.web.app'; // fallback — frontend passes real origin
     const joinLink = `${baseUrl}/join?token=${stubId}`;
     // ── Send Invite Email ────────────────────────────────────────────────────────
-    const transporter = getTransporter();
-    if (transporter) {
+    const apiKey = resendApiKey.value();
+    if (apiKey) {
+        const resend = new resend_1.Resend(apiKey);
         try {
-            await transporter.sendMail({
-                from: `"${agencyName} — מערכת ניהול" <omerdigitalsolutions@gmail.com>`,
+            await resend.emails.send({
+                from: 'onboarding@resend.dev', // Resend testing sandbox
                 to: email.trim().toLowerCase(),
                 subject: `הוזמנת להצטרף ל${agencyName} 🏠`,
                 html: buildInviteEmail(name.trim(), agencyName, joinLink),
             });
-            console.log(`[inviteAgent] Invite email sent to ${email}`);
+            console.log(`[inviteAgent] Invite email sent to ${email} via Resend`);
         }
         catch (mailErr) {
             // Don't fail the whole call if only email delivery fails — stub is already created
             console.error('[inviteAgent] Failed to send invite email:', mailErr);
         }
+    }
+    else {
+        console.warn('[inviteAgent] RESEND_API_KEY not set — email will not be sent.');
     }
     // ── Build WhatsApp URL (if phone provided) ───────────────────────────────────
     let whatsappUrl;

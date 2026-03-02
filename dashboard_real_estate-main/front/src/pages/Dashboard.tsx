@@ -7,6 +7,10 @@ import AgentLeaderboard from '../components/dashboard/AgentLeaderboard';
 import RecentActivity from '../components/dashboard/RecentActivity';
 import AIInsights from '../components/dashboard/AIInsights';
 import TaskDashboardWidget from '../components/dashboard/TaskDashboardWidget';
+import WidgetLeadSourceChart from '../components/dashboard/WidgetLeadSourceChart';
+import WidgetLeadStatusChart from '../components/dashboard/WidgetLeadStatusChart';
+import WidgetDealStatusChart from '../components/dashboard/WidgetDealStatusChart';
+import WidgetAgencyExpenses from '../components/dashboard/WidgetAgencyExpenses';
 import AddTaskModal from '../components/modals/AddTaskModal';
 import ImportModal from '../components/modals/ImportModal';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
@@ -25,26 +29,26 @@ import 'react-resizable/css/styles.css';
 // container so the visual left matches the coordinate left, then each widget
 // uses dir=rtl internally.
 const DEFAULT_LAYOUT: LayoutItem[] = [
-  // Row 1 – KPI cards (each 3 cols wide, 3 rows tall)
-  { i: 'kpi_value', x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'kpi_active', x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'kpi_leads', x: 3, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-  { i: 'kpi_tasks', x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-  // Row 2 – Inventory | Financial Chart | Tasks
-  { i: 'inventory', x: 9, y: 3, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'financial', x: 3, y: 3, w: 6, h: 5, minW: 3, minH: 3 },
-  { i: 'task_widget', x: 0, y: 3, w: 3, h: 5, minW: 2, minH: 3 },
-  // Row 3 – Operations | Activity | Leaderboard
-  { i: 'operations', x: 9, y: 8, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'activity', x: 6, y: 8, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'leaderboard', x: 0, y: 8, w: 6, h: 5, minW: 3, minH: 3 },
-  // Row 4 – Map | AI Insights
-  { i: 'map', x: 9, y: 13, w: 3, h: 5, minW: 2, minH: 3 },
-  { i: 'ai_insights', x: 0, y: 13, w: 9, h: 5, minW: 3, minH: 3 },
+  { i: 'kpi_value', x: 9, y: 0, w: 3, h: 3, minH: 2, minW: 2 },
+  { i: 'kpi_active', x: 4, y: 0, w: 3, h: 3, minH: 2, minW: 2 },
+  { i: 'kpi_leads', x: 7, y: 0, w: 2, h: 3, minH: 2, minW: 2 },
+  { i: 'kpi_tasks', x: 6, y: 13, w: 3, h: 4, minH: 2, minW: 2 },
+  { i: 'inventory', x: 9, y: 3, w: 3, h: 3, minH: 3, minW: 2 },
+  { i: 'financial', x: 4, y: 3, w: 5, h: 5, minH: 3, minW: 3 },
+  { i: 'task_widget', x: 9, y: 10, w: 3, h: 5, minH: 3, minW: 2 },
+  { i: 'operations', x: 9, y: 15, w: 3, h: 6, minH: 3, minW: 2 },
+  { i: 'activity', x: 3, y: 12, w: 3, h: 5, minH: 3, minW: 2 },
+  { i: 'leaderboard', x: 0, y: 8, w: 6, h: 4, minH: 3, minW: 3 },
+  { i: 'map', x: 6, y: 8, w: 3, h: 5, minH: 3, minW: 2 },
+  { i: 'ai_insights', x: 2, y: 21, w: 9, h: 5, minH: 3, minW: 3 },
+  { i: 'lead_source_chart', x: 9, y: 6, w: 3, h: 4, minH: 4, minW: 3 },
+  { i: 'lead_status_chart', x: 0, y: 17, w: 9, h: 4, minH: 4, minW: 3 },
+  { i: 'deal_status_chart', x: 0, y: 12, w: 3, h: 5, minH: 4, minW: 3 },
+  { i: 'agency_expenses', x: 0, y: 0, w: 4, h: 8, minH: 5, minW: 3 },
 ];
 
 export default function Dashboard() {
-  const { deals, tasks, leads, properties, loading } = useLiveDashboardData();
+  const { deals, tasks, leads, properties, loading, agencySettings } = useLiveDashboardData();
   const { userData } = useAuth();
   const { preferences, saveLayout, updatePreferences } = usePreferences();
 
@@ -311,6 +315,24 @@ export default function Dashboard() {
 
           <div key="ai_insights" dir="rtl" className={`overflow-hidden ${editRing}`}>
             <div className={`${innerWrap} flex flex-col`}><AIInsights /></div>
+          </div>
+
+          {/* ─ Row 5 ──────────────────────────────────────────────── */}
+          <div key="lead_source_chart" dir="rtl" className={`overflow-hidden ${editRing}`}>
+            <div className={`${innerWrap} flex flex-col`}><WidgetLeadSourceChart leads={leads as any} /></div>
+          </div>
+
+          <div key="lead_status_chart" dir="rtl" className={`overflow-hidden ${editRing}`}>
+            <div className={`${innerWrap} flex flex-col`}><WidgetLeadStatusChart leads={leads as any} /></div>
+          </div>
+
+          <div key="deal_status_chart" dir="rtl" className={`overflow-hidden ${editRing}`}>
+            <div className={`${innerWrap} flex flex-col`}><WidgetDealStatusChart deals={deals as any} agencySettings={agencySettings} /></div>
+          </div>
+
+          {/* ─ Row 6 ──────────────────────────────────────────────── */}
+          <div key="agency_expenses" dir="rtl" className={`overflow-hidden ${editRing}`}>
+            <div className={`${innerWrap} flex flex-col`}><WidgetAgencyExpenses /></div>
           </div>
         </ResponsiveGridLayout>
       </div>

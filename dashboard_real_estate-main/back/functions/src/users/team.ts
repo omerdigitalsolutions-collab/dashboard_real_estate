@@ -1,30 +1,15 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import * as nodemailer from 'nodemailer';
+import { defineSecret } from 'firebase-functions/params';
+import { Resend } from 'resend';
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
 
 const db = getFirestore();
 
 type Role = 'admin' | 'agent';
 
-// ─── Email Transporter ────────────────────────────────────────────────────────
-// Gmail App Password is stored in process.env to avoid hard-coding credentials.
-// Set via: firebase functions:secrets:set GMAIL_APP_PASSWORD (Google Secret Manager)
-// Or add to your .env.local for local emulator testing.
-function getTransporter() {
-  const appPassword = process.env.GMAIL_APP_PASSWORD;
-  if (!appPassword) {
-    console.warn('[team.ts] GMAIL_APP_PASSWORD not set — email will not be sent.');
-    return null;
-  }
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: 'omerdigitalsolutions@gmail.com',
-      pass: appPassword,
-    },
-  });
-}
 
 /**
  * updateAgentRole — Changes the role of a team member.
@@ -276,131 +261,136 @@ function buildInviteEmail(agentName: string, agencyName: string, joinLink: strin
  * Input:  { email: string, name: string, role: 'admin' | 'agent', phone?: string, appUrl?: string }
  * Output: { success: true, stubId: string, whatsappUrl?: string }
  */
-export const inviteAgent = onCall(async (request) => {
-  // ── Auth Guard ──────────────────────────────────────────────────────────────
-  if (!request.auth) {
-    throw new HttpsError(
-      'unauthenticated',
-      'You must be signed in to invite agents.'
-    );
-  }
-
-  // ── Input Validation ────────────────────────────────────────────────────────
-  const { email, name, role, phone, appUrl } = request.data as {
-    email?: string;
-    name?: string;
-    role?: string;
-    phone?: string;
-    appUrl?: string;
-  };
-
-  if (!email?.trim() || !name?.trim()) {
-    throw new HttpsError('invalid-argument', 'email and name are required.');
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    throw new HttpsError('invalid-argument', 'email is invalid.');
-  }
-
-  const normalizedRole: Role = role === 'admin' ? 'admin' : 'agent';
-
-  // ── RBAC: Verify caller is an admin ─────────────────────────────────────────
-  const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-  if (!callerDoc.exists) {
-    throw new HttpsError('not-found', 'Caller user document not found.');
-  }
-
-  const callerData = callerDoc.data() as {
-    role: Role;
-    agencyId: string;
-    isActive?: boolean;
-  };
-
-  if (callerData.role !== 'admin') {
-    throw new HttpsError(
-      'permission-denied',
-      'Only admins can invite new team members.'
-    );
-  }
-
-  if (callerData.isActive === false) {
-    throw new HttpsError(
-      'permission-denied',
-      'Suspended accounts cannot perform this action.'
-    );
-  }
-
-  // ── Prevent duplicate stubs for same email in same agency ───────────────────
-  const existingSnap = await db
-    .collection('users')
-    .where('email', '==', email.trim().toLowerCase())
-    .where('agencyId', '==', callerData.agencyId)
-    .limit(1)
-    .get();
-
-  if (!existingSnap.empty) {
-    throw new HttpsError(
-      'already-exists',
-      `A user with email ${email} already exists in this agency.`
-    );
-  }
-
-  // ── Read Agency Name ─────────────────────────────────────────────────────────
-  const agencyDoc = await db.doc(`agencies/${callerData.agencyId}`).get();
-  const agencyName = (agencyDoc.data() as { name?: string })?.name || 'הסוכנות שלנו';
-
-  // ── Create Stub Document ─────────────────────────────────────────────────────
-  const stubRef = await db.collection('users').add({
-    uid: null, // linked when the agent first signs in
-    email: email.trim().toLowerCase(),
-    name: name.trim(),
-    role: normalizedRole,
-    agencyId: callerData.agencyId,
-    phone: phone?.trim() || null,
-    isActive: true,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-
-  const stubId = stubRef.id;
-
-  // ── Compute Join URL ─────────────────────────────────────────────────────────
-  const baseUrl = appUrl?.trim()
-    ? appUrl.trim().replace(/\/$/, '')
-    : 'https://your-app.web.app'; // fallback — frontend passes real origin
-  const joinLink = `${baseUrl}/join?token=${stubId}`;
-
-  // ── Send Invite Email ────────────────────────────────────────────────────────
-  const transporter = getTransporter();
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: `"${agencyName} — מערכת ניהול" <omerdigitalsolutions@gmail.com>`,
-        to: email.trim().toLowerCase(),
-        subject: `הוזמנת להצטרף ל${agencyName} 🏠`,
-        html: buildInviteEmail(name.trim(), agencyName, joinLink),
-      });
-      console.log(`[inviteAgent] Invite email sent to ${email}`);
-    } catch (mailErr) {
-      // Don't fail the whole call if only email delivery fails — stub is already created
-      console.error('[inviteAgent] Failed to send invite email:', mailErr);
+export const inviteAgent = onCall(
+  { secrets: [resendApiKey] },
+  async (request) => {
+    // ── Auth Guard ──────────────────────────────────────────────────────────────
+    if (!request.auth) {
+      throw new HttpsError(
+        'unauthenticated',
+        'You must be signed in to invite agents.'
+      );
     }
-  }
 
-  // ── Build WhatsApp URL (if phone provided) ───────────────────────────────────
-  let whatsappUrl: string | undefined;
-  if (phone?.trim()) {
-    // Strip non-digits and ensure international format (Israel: add 972 prefix)
-    const digits = phone.trim().replace(/\D/g, '');
-    const intl = digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
-    const msg = encodeURIComponent(
-      `שלום ${name.trim()}! 👋\nהוזמנת להצטרף ל${agencyName} כסוכן נדל"ן.\nלחץ על הקישור כדי להצטרף: ${joinLink}`
-    );
-    whatsappUrl = `https://wa.me/${intl}?text=${msg}`;
-  }
+    // ── Input Validation ────────────────────────────────────────────────────────
+    const { email, name, role, phone, appUrl } = request.data as {
+      email?: string;
+      name?: string;
+      role?: string;
+      phone?: string;
+      appUrl?: string;
+    };
 
-  return { success: true, stubId, whatsappUrl };
-});
+    if (!email?.trim() || !name?.trim()) {
+      throw new HttpsError('invalid-argument', 'email and name are required.');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new HttpsError('invalid-argument', 'email is invalid.');
+    }
+
+    const normalizedRole: Role = role === 'admin' ? 'admin' : 'agent';
+
+    // ── RBAC: Verify caller is an admin ─────────────────────────────────────────
+    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
+    if (!callerDoc.exists) {
+      throw new HttpsError('not-found', 'Caller user document not found.');
+    }
+
+    const callerData = callerDoc.data() as {
+      role: Role;
+      agencyId: string;
+      isActive?: boolean;
+    };
+
+    if (callerData.role !== 'admin') {
+      throw new HttpsError(
+        'permission-denied',
+        'Only admins can invite new team members.'
+      );
+    }
+
+    if (callerData.isActive === false) {
+      throw new HttpsError(
+        'permission-denied',
+        'Suspended accounts cannot perform this action.'
+      );
+    }
+
+    // ── Prevent duplicate stubs for same email in same agency ───────────────────
+    const existingSnap = await db
+      .collection('users')
+      .where('email', '==', email.trim().toLowerCase())
+      .where('agencyId', '==', callerData.agencyId)
+      .limit(1)
+      .get();
+
+    if (!existingSnap.empty) {
+      throw new HttpsError(
+        'already-exists',
+        `A user with email ${email} already exists in this agency.`
+      );
+    }
+
+    // ── Read Agency Name ─────────────────────────────────────────────────────────
+    const agencyDoc = await db.doc(`agencies/${callerData.agencyId}`).get();
+    const agencyName = (agencyDoc.data() as { name?: string })?.name || 'הסוכנות שלנו';
+
+    // ── Create Stub Document ─────────────────────────────────────────────────────
+    const stubRef = await db.collection('users').add({
+      uid: null, // linked when the agent first signs in
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
+      role: normalizedRole,
+      agencyId: callerData.agencyId,
+      phone: phone?.trim() || null,
+      isActive: true,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const stubId = stubRef.id;
+
+    // ── Compute Join URL ─────────────────────────────────────────────────────────
+    const baseUrl = appUrl?.trim()
+      ? appUrl.trim().replace(/\/$/, '')
+      : 'https://your-app.web.app'; // fallback — frontend passes real origin
+    const joinLink = `${baseUrl}/join?token=${stubId}`;
+
+    // ── Send Invite Email ────────────────────────────────────────────────────────
+    const apiKey = resendApiKey.value();
+    if (apiKey) {
+      const resend = new Resend(apiKey);
+      try {
+        await resend.emails.send({
+          from: 'onboarding@resend.dev', // Resend testing sandbox
+          to: email.trim().toLowerCase(),
+          subject: `הוזמנת להצטרף ל${agencyName} 🏠`,
+          html: buildInviteEmail(name.trim(), agencyName, joinLink),
+        });
+        console.log(`[inviteAgent] Invite email sent to ${email} via Resend`);
+      } catch (mailErr) {
+        // Don't fail the whole call if only email delivery fails — stub is already created
+        console.error('[inviteAgent] Failed to send invite email:', mailErr);
+      }
+    } else {
+      console.warn('[inviteAgent] RESEND_API_KEY not set — email will not be sent.');
+    }
+
+    // ── Build WhatsApp URL (if phone provided) ───────────────────────────────────
+    let whatsappUrl: string | undefined;
+    if (phone?.trim()) {
+      // Strip non-digits and ensure international format (Israel: add 972 prefix)
+      const digits = phone.trim().replace(/\D/g, '');
+      const intl = digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
+      const msg = encodeURIComponent(
+        `שלום ${name.trim()}! 👋\nהוזמנת להצטרף ל${agencyName} כסוכן נדל"ן.\nלחץ על הקישור כדי להצטרף: ${joinLink}`
+      );
+      whatsappUrl = `https://wa.me/${intl}?text=${msg}`;
+    }
+
+    return { success: true, stubId, whatsappUrl };
+  });
 
 /**
  * getInviteInfo — Public (no-auth) function to fetch invite details from a stub ID.

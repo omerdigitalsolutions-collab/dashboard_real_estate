@@ -23,8 +23,11 @@ import {
     Activity,
     Cpu,
     RefreshCw,
+    DollarSign,
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
+import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
+import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 
 // ─── Tooltip customisation ───────────────────────────────────────────────────
 const NeonBarTooltip = ({ active, payload, label }: any) => {
@@ -59,9 +62,10 @@ interface KpiCardProps {
     icon: React.ElementType;
     glowColor: string;         // raw rgba for box-shadow
     loading?: boolean;
+    subtitle?: string;
 }
 
-function KpiCard({ label, value, icon: Icon, glowColor, loading }: KpiCardProps) {
+function KpiCard({ label, value, icon: Icon, glowColor, loading, subtitle }: KpiCardProps) {
     return (
         <div
             className="relative overflow-hidden rounded-2xl border bg-slate-900/60 backdrop-blur-xl p-5 flex flex-col gap-4 transition-all duration-300 hover:scale-[1.02]"
@@ -100,11 +104,17 @@ function KpiCard({ label, value, icon: Icon, glowColor, loading }: KpiCardProps)
                 </p>
             )}
 
-            <div className="flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-xs text-emerald-400 font-semibold">פעיל</span>
-                <span className="text-xs text-slate-600 mr-1">| מערכת מחוברת</span>
-            </div>
+            {subtitle ? (
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-400 font-semibold">{subtitle}</span>
+                </div>
+            ) : (
+                <div className="flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs text-emerald-400 font-semibold">פעיל</span>
+                    <span className="text-xs text-slate-600 mr-1">| מערכת מחוברת</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -180,6 +190,7 @@ export default function SuperAdminDashboard() {
         recentAgencies,
         monthlyGrowth,
         subscriptionBreakdown,
+        expenses,
         loading,
     } = useGlobalStats();
 
@@ -237,6 +248,24 @@ export default function SuperAdminDashboard() {
                         טוען נתוני מערכת...
                     </div>
                 )}
+                <button
+                    onClick={async () => {
+                        if (!window.confirm('האם לעדכן הרשאות סופר אדמין?')) return;
+                        try {
+                            const { httpsCallable } = await import('firebase/functions');
+                            const { functions } = await import('../config/firebase');
+                            const setupFn = httpsCallable(functions, 'superadmin-setupSuperAdmin');
+                            const res = await setupFn();
+                            alert((res.data as any).message);
+                            window.location.reload();
+                        } catch (e: any) {
+                            alert('שגיאה: ' + e.message);
+                        }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold hover:bg-red-500/20 transition-all ml-4"
+                >
+                    תיקון הרשאות סופר אדמין
+                </button>
             </div>
 
             {/* ── KPI Cards ───────────────────────────────────────────────── */}
@@ -269,6 +298,24 @@ export default function SuperAdminDashboard() {
                     glowColor="#10b981"
                     loading={loading}
                 />
+                <KpiCard
+                    label="הוצאות החודש"
+                    value={expenses ? `$${expenses.total.toFixed(2)}` : '$0'}
+                    icon={DollarSign}
+                    glowColor="#f43f5e"
+                    loading={loading}
+                    subtitle={
+                        expenses
+                            ? `$${expenses.fixed} מנויים | $${expenses.variable} ענן | $${expenses.marketing} שיווק`
+                            : ''
+                    }
+                />
+            </div>
+
+            {/* ── Finances & Import ────────────────────────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                <SystemFinancesManager />
+                <GlobalPropertyImport />
             </div>
 
             {/* ── Charts Row ──────────────────────────────────────────────── */}
@@ -500,6 +547,6 @@ export default function SuperAdminDashboard() {
                     </table>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

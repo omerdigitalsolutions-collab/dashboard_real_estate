@@ -19,6 +19,20 @@ import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import SuperAdminRoute from './components/routing/SuperAdminRoute';
 import LandingPage from './pages/LandingPage';
 import { PreferencesProvider } from './context/PreferencesContext';
+import { useAuth } from './context/AuthContext';
+import { Navigate } from 'react-router-dom';
+
+function DashboardIndex() {
+  const { userData, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (userData?.role === 'agent') {
+    return <Navigate to="/dashboard/transactions" replace />;
+  }
+
+  return <Dashboard />;
+}
 
 function App() {
   return (
@@ -67,7 +81,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+          <Route index element={<ErrorBoundary><DashboardIndex /></ErrorBoundary>} />
           <Route path="leads" element={<ErrorBoundary><Leads /></ErrorBoundary>} />
           <Route path="properties" element={<ErrorBoundary><Properties /></ErrorBoundary>} />
           <Route path="transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />

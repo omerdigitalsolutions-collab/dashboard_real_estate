@@ -29,12 +29,13 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [kind, setKind] = useState('דירה');
     const [price, setPrice] = useState('');
     const [rooms, setRooms] = useState('');
+    const [sqm, setSqm] = useState('');
     const [floor, setFloor] = useState('');
     const [description, setDescription] = useState('');
     const [importedImages, setImportedImages] = useState<string[]>([]);
 
-    // Exclusive Upload States
-    const [isExclusive, setIsExclusive] = useState(false);
+    // Listing Type & Upload States
+    const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>('exclusive');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
@@ -104,9 +105,9 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
     const resetForm = () => {
         setAddressQuery(''); setCity(''); setType('sale'); setKind('דירה');
-        setPrice(''); setRooms(''); setFloor(''); setSelectedAddress(null); setSuggestions([]);
+        setPrice(''); setRooms(''); setSqm(''); setFloor(''); setSelectedAddress(null); setSuggestions([]);
         setImportUrl(''); setDescription(''); setImportedImages([]);
-        setIsExclusive(false); setImageFiles([]); setPreviewUrls([]);
+        setListingType('private'); setImageFiles([]); setPreviewUrls([]);
     };
 
     const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,6 +152,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 if (d.city) setCity(d.city);
                 if (d.price) setPrice(d.price.toString());
                 if (d.rooms) setRooms(d.rooms.toString());
+                if (d.sqm) setSqm(d.sqm.toString());
                 if (d.floor) setFloor(d.floor.toString());
                 if (d.kind) setKind(d.kind);
                 if (d.type) setType(d.type);
@@ -188,6 +190,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 if (d.address) setAddressQuery(d.address);
                 if (d.price) setPrice(d.price.toString());
                 if (d.rooms) setRooms(d.rooms.toString());
+                if (d.sqm) setSqm(d.sqm.toString());
                 if (d.kind) setKind(d.kind);
                 if (d.type) setType(d.type);
                 if (d.description) setDescription(d.description);
@@ -241,13 +244,15 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 kind,
                 price: parsedPrice,
                 ...(rooms ? { rooms: parseFloat(rooms) } : {}),
+                ...(sqm ? { sqm: parseFloat(sqm) } : {}),
                 ...(floor ? { floor: parseFloat(floor) } : {}),
                 ...(lat && lng ? { lat, lng } : {}),
                 ...(description ? { description: description.trim() } : {}),
                 // Normalize: magic import images become the base image list
                 ...(importedImages.length > 0 ? { images: importedImages } : {}),
-                isExclusive,
-                ...(isExclusive && imageFiles.length > 0 ? { imageFiles } : {}),
+                isExclusive: listingType === 'exclusive',
+                listingType,
+                ...(listingType === 'exclusive' && imageFiles.length > 0 ? { imageFiles } : {}),
                 ...(leadId ? { leadId } : {}),
                 agentId: userData.uid || '',
             });
@@ -406,11 +411,15 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                             <input type="number" min="1" value={price} onChange={e => setPrice(e.target.value)} required placeholder="1,500,000" className={inputCls} dir="ltr" />
                         </div>
 
-                        {/* Rooms + Floor */}
-                        <div className="grid grid-cols-2 gap-3">
+                        {/* Rooms + Sqm + Floor */}
+                        <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <label className={labelCls}>חדרים</label>
                                 <input type="number" min="0" step="0.5" value={rooms} onChange={e => setRooms(e.target.value)} placeholder="3.5" className={inputCls} dir="ltr" />
+                            </div>
+                            <div>
+                                <label className={labelCls}>גודל במ"ר</label>
+                                <input type="number" min="0" value={sqm} onChange={e => setSqm(e.target.value)} placeholder="100" className={inputCls} dir="ltr" />
                             </div>
                             <div>
                                 <label className={labelCls}>קומה</label>
@@ -445,20 +454,49 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
                         {/* Exclusivity Toggle + Image Upload */}
                         <div className="pt-2 border-t border-slate-100">
-                            <label className="flex items-center gap-2 cursor-pointer mb-3">
-                                <input
-                                    type="checkbox"
-                                    checked={isExclusive}
-                                    onChange={(e) => setIsExclusive(e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                                    <Star size={14} className={isExclusive ? "text-amber-500 fill-amber-500" : "text-slate-400"} />
-                                    נכס בבלעדיות חברה
-                                </span>
-                            </label>
+                            <label className={labelCls + " mb-2 block"}>סוג השיווק</label>
+                            <div className="flex gap-4 mb-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="listingType"
+                                        value="private"
+                                        checked={listingType === 'private'}
+                                        onChange={() => setListingType('private')}
+                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700">רגיל (פרטי)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="listingType"
+                                        value="exclusive"
+                                        checked={listingType === 'exclusive'}
+                                        onChange={() => setListingType('exclusive')}
+                                        className="w-4 h-4 text-amber-500 focus:ring-amber-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                                        <Star size={14} className={listingType === 'exclusive' ? "text-amber-500 fill-amber-500" : "text-slate-400"} />
+                                        בלעדיות
+                                    </span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="listingType"
+                                        value="external"
+                                        checked={listingType === 'external'}
+                                        onChange={() => setListingType('external')}
+                                        className="w-4 h-4 text-slate-600 focus:ring-slate-500"
+                                    />
+                                    <span className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                                        🤝 שת"פ
+                                    </span>
+                                </label>
+                            </div>
 
-                            {isExclusive && (
+                            {listingType === 'exclusive' && (
                                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                                     <label className={labelCls}>תמונות הנכס (עד 5 תמונות)</label>
 
@@ -507,7 +545,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                 ביטול
                             </button>
                             <button type="submit" disabled={loading || !addressQuery || !price} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">
-                                {loading ? (isExclusive && imageFiles.length > 0 ? 'מעלה תמונות ושומר...' : 'שומר...') : 'הוסף נכס'}
+                                {loading ? (listingType === 'exclusive' && imageFiles.length > 0 ? 'מעלה תמונות ושומר...' : 'שומר...') : 'הוסף נכס'}
                             </button>
                         </div>
                     </form>

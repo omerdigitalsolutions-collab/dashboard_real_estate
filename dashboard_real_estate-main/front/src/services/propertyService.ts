@@ -8,6 +8,7 @@ import {
     query,
     where,
     serverTimestamp,
+    writeBatch
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
@@ -31,6 +32,7 @@ export interface NewPropertyData {
     description?: string;
     images?: string[];
     isExclusive?: boolean;
+    listingType?: 'private' | 'exclusive' | 'external';
     imageFiles?: File[];
     leadId?: string;
 }
@@ -116,6 +118,28 @@ export async function updateProperty(
 ): Promise<void> {
     const ref = doc(db, COLLECTION, propertyId);
     await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
+}
+
+/**
+ * Merges duplicate properties into a primary one.
+ * Deletes the specified duplicates and updates the primary property with merged data.
+ */
+export async function mergeProperties(
+    primaryId: string,
+    duplicateIds: string[],
+    mergedData: Partial<Property>
+): Promise<void> {
+    const batch = writeBatch(db);
+
+    const primaryRef = doc(db, COLLECTION, primaryId);
+    batch.update(primaryRef, { ...mergedData, updatedAt: serverTimestamp() });
+
+    duplicateIds.forEach(id => {
+        const dupRef = doc(db, COLLECTION, id);
+        batch.delete(dupRef);
+    });
+
+    await batch.commit();
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────

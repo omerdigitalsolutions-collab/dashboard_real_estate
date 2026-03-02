@@ -3,14 +3,14 @@ import { useLeads } from '../../hooks/useFirestoreData';
 import { useMemo } from 'react';
 
 const SOURCE_COLORS: Record<string, string> = {
-  'Facebook': '#1877F2',
-  'Instagram': '#E4405F',
-  'Google': '#4285F4',
-  'Yad2': '#ff6b00',
-  'Madlan': '#00d084',
-  'Referral': '#8b5cf6',
-  'Walk-in': '#64748b',
-  'Other': '#94a3b8'
+  'Facebook': '#6366f1', // Indigo
+  'Instagram': '#f43f5e', // Rose
+  'Google': '#0ea5e9', // Sky
+  'Yad2': '#f59e0b', // Amber
+  'Madlan': '#10b981', // Emerald
+  'Referral': '#8b5cf6', // Violet
+  'Walk-in': '#64748b', // Slate
+  'Other': '#94a3b8'  // Zinc
 };
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string } }> }) => {
@@ -71,10 +71,11 @@ export default function LeadSourcesChart() {
                     data={sourceData}
                     cx="50%"
                     cy="50%"
+                    innerRadius={65}
                     outerRadius={85}
-                    paddingAngle={2}
+                    paddingAngle={3}
                     dataKey="value"
-                    stroke="white"
+                    stroke="#f1f5f9"
                     strokeWidth={2}
                   >
                     {sourceData.map((entry, index) => (

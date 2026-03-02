@@ -86,6 +86,14 @@ service cloud.firestore {
       allow create, update, delete: if isAuthed() && isAgencyAdmin(agencyId);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // AGENCY EXPENSES (Subcollection)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/expenses/{expenseId} {
+      allow read: if isAuthed() && inAgency(agencyId);
+      allow create, update, delete: if isAuthed() && isAgencyAdmin(agencyId);
+    }
+
 
     // ══════════════════════════════════════════════════════════════════════════
     // USERS
@@ -218,14 +226,18 @@ service cloud.firestore {
       // 2. Allow agents in the same agency to read/query all catalogs for their agency (needed for LeadProfilePanel)
       allow read: if (resource.data.expiresAt > request.time) || (isAuthed() && inAgency(resource.data.agencyId));
       
+      // Update rules:
       // Allow anonymous increments of viewCount (existing)
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) 
-                    && request.resource.data.viewCount == resource.data.viewCount + 1;
+                    && request.resource.data.viewCount == (resource.data.viewCount + 1);
       
       // Allow anonymous update of likedPropertyIds — any visitor can like/unlike properties
-      // Only the likedPropertyIds field may change, and it must be a list.
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
                     && request.resource.data.likedPropertyIds is list;
+
+      // Allow authenticated agents same-agency to update propertyIds/updatedAt
+      allow update: if isAuthed() && inAgency(resource.data.agencyId)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['propertyIds', 'updatedAt']);
                     
       allow create, delete: if false; // Managed by Cloud Functions
     }
@@ -262,6 +274,21 @@ service cloud.firestore {
     match /superAdmins/{userId} {
       allow read: if isAuthed() && request.auth.uid == userId;
       allow write: if false; // Only modified directly via Firebase Console
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ADMIN SETTINGS (System-wide configuration)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /admin_settings/finances {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CITIES (Reference Data)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /cities/{cityId} {
+      allow read: if isAuthed();
+      allow create, update, delete: if isSuperAdmin();
     }
   }
 }
