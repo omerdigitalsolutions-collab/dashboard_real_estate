@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
-import { Toast, ToastState } from '../ui/Toast';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { functions } from '../../config/firebase';
+import toast from 'react-hot-toast';
 interface AddPropertyModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -47,10 +47,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [isExtracting, setIsExtracting] = useState(false);
 
     const [loading, setLoading] = useState(false);
-    const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
 
     const showToast = (message: string, isOk: boolean = true) => {
-        setToast({ show: true, message, type: isOk ? 'success' : 'error' });
+        if (isOk) toast.success(message);
+        else toast.error(message);
     };
 
     const fetchSuggestions = async (query: string) => {
@@ -551,7 +551,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                     </form>
                 </div>
             </div>
-            <Toast {...toast} onClose={() => setToast(prev => ({ ...prev, show: false }))} />
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Sparkles, MapPin, BedDouble, X, CheckSquare, MessageCircle, AlertCircle, Link, Copy, Check, Send, Plus, Trash2, ExternalLink, Search, Heart } from 'lucide-react';
-import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
+
 import { createCatalog, getCatalogsByLeadId, updateCatalog } from '../../services/catalogService';
 import { matchPropertiesForLead, updateLead } from '../../services/leadService';
 import { Lead, Property } from '../../types';
@@ -8,6 +8,7 @@ import { sendWhatsAppWebhook } from '../../utils/webhookClient';
 
 interface PropertyMatcherModalProps {
     lead: Lead;
+    allProperties: Property[]; // <-- Added
     onClose: () => void;
     onSuccess?: (message: string) => void;
 }
@@ -113,9 +114,7 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function PropertyMatcherModal({ lead, onClose, onSuccess }: PropertyMatcherModalProps) {
-    const { properties: allProperties = [], loading } = useLiveDashboardData();
-
+export default function PropertyMatcherModal({ lead, allProperties, onClose, onSuccess }: PropertyMatcherModalProps) {
     const matchedProperties = matchPropertiesForLead(lead.requirements, allProperties);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
 
@@ -415,7 +414,7 @@ export default function PropertyMatcherModal({ lead, onClose, onSuccess }: Prope
                         </div>
                     )}
 
-                    {loading || loadingLikes ? (
+                    {loadingLikes ? (
                         <div className="py-12 flex flex-col items-center justify-center text-slate-400">טוען נתונים...</div>
                     ) : panel === 'match' ? (
                         /* ── MATCH PANEL ── */

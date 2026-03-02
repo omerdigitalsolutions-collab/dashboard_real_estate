@@ -78,109 +78,108 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          * login / logout.  We return its unsubscribe function for cleanup.
          */
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            setCurrentUser(firebaseUser);
+            console.log('[AuthContext] onAuthStateChanged fired:', firebaseUser ? `User: ${firebaseUser.email} (UID: ${firebaseUser.uid})` : 'LOGGED OUT');
 
-            if (firebaseUser) {
-                // Force-refresh the ID token so Custom Claims (agencyId, role)
-                // are always up-to-date before any Firestore reads happen.
-                try {
-                    await firebaseUser.getIdToken(true);
-                } catch (e) {
-                    console.warn('[AuthContext] Token refresh warning:', e);
-                }
+            try {
+                setCurrentUser(firebaseUser);
 
-                // Step 1: Fast path — doc already exists at users/{uid}
-                const uidDocRef = doc(db, 'users', firebaseUser.uid);
-                let uidDocSnap = await getDoc(uidDocRef);
+                if (firebaseUser) {
+                    console.log('[AuthContext] Refreshing token...');
+                    try {
+                        await firebaseUser.getIdToken(true);
+                    } catch (e) {
+                        console.warn('[AuthContext] Token refresh warning:', e);
+                    }
 
-                if (!uidDocSnap.exists()) {
-                    // EMERGENCY SELF-HEAL
-                    const email = firebaseUser.email?.toLowerCase();
-                    const knownAdmins: Record<string, { agencyId: string, name: string }> = {
-                        'omerdigitalsolutions@gmail.com': { agencyId: 'FD1zzacN9WFeSmENqY5G', name: 'OMER' },
-                        'omerfm4444@gmail.com': { agencyId: 'P7z9y24z2DBGiCPSgQRI', name: 'עומר עסיס' },
-                        'omerasis4@gmail.com': { agencyId: '5QfL1fcRZ4CsZ8ZZmsUK', name: 'OMER ASIS' }
-                    };
+                    const uidDocRef = doc(db, 'users', firebaseUser.uid);
+                    console.log('[AuthContext] Checking user doc at /users/' + firebaseUser.uid);
+                    let uidDocSnap = await getDoc(uidDocRef);
 
-                    if (email && knownAdmins[email]) {
-                        const info = knownAdmins[email];
-                        console.log('[RECOVERY] Healing user:', email);
-                        try {
-                            const agencyRef = doc(db, 'agencies', info.agencyId);
-                            // Only set if it doesn't exist or merge
-                            await setDoc(agencyRef, {
-                                agencyId: info.agencyId,
-                                agencyName: email === 'omerdigitalsolutions@gmail.com' ? "אנגלו" : "סוכנות " + info.agencyId,
-                                whatsappIntegration: email === 'omerdigitalsolutions@gmail.com' ? {
-                                    idInstance: "7105261595",
-                                    apiTokenInstance: "2d3153735b0c422c9c44e64c299fb66c861cbaacd68a4395af",
-                                    status: "connected",
-                                    updatedAt: serverTimestamp()
-                                } : null,
-                                createdAt: serverTimestamp()
-                            }, { merge: true });
+                    if (!uidDocSnap.exists()) {
+                        console.log('[AuthContext] User doc does not exist.');
+                        const email = firebaseUser.email?.toLowerCase();
+                        const knownAdmins: Record<string, { agencyId: string, name: string }> = {
+                            'omerdigitalsolutions@gmail.com': { agencyId: 'FD1zzacN9WFeSmENqY5G', name: 'OMER' },
+                            'omerfm4444@gmail.com': { agencyId: 'P7z9y24z2DBGiCPSgQRI', name: 'עומר עסיס' },
+                            'omerasis4@gmail.com': { agencyId: '5QfL1fcRZ4CsZ8ZZmsUK', name: 'OMER ASIS' }
+                        };
 
-                            await setDoc(uidDocRef, {
-                                uid: firebaseUser.uid,
-                                email: firebaseUser.email,
-                                name: info.name,
-                                agencyId: info.agencyId,
-                                role: 'admin',
-                                createdAt: serverTimestamp()
-                            });
+                        if (email && knownAdmins[email]) {
+                            const info = knownAdmins[email];
+                            console.log('[RECOVERY] Healing user record for:', email);
+                            try {
+                                const agencyRef = doc(db, 'agencies', info.agencyId);
+                                await setDoc(agencyRef, {
+                                    agencyId: info.agencyId,
+                                    agencyName: email === 'omerdigitalsolutions@gmail.com' ? "אנגלו" : "סוכנות " + info.name,
+                                    createdAt: serverTimestamp()
+                                }, { merge: true });
 
-                            // Re-fetch
-                            uidDocSnap = await getDoc(uidDocRef);
-                        } catch (healingErr) {
-                            console.error('[RECOVERY] Healing failed:', healingErr);
+                                await setDoc(uidDocRef, {
+                                    uid: firebaseUser.uid,
+                                    email: firebaseUser.email,
+                                    name: info.name,
+                                    agencyId: info.agencyId,
+                                    role: 'admin',
+                                    createdAt: serverTimestamp()
+                                });
+
+                                uidDocSnap = await getDoc(uidDocRef);
+                                console.log('[RECOVERY] Healing successful.');
+                            } catch (healingErr) {
+                                console.error('[RECOVERY] Healing process failed:', healingErr);
+                            }
                         }
                     }
-                }
 
-                if (uidDocSnap.exists()) {
-                    setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...uidDocSnap.data() } as AppUser);
-                    setRequireOnboarding(false);
-                } else {
-                    // Step 2: Check for a stub with matching email and uid == null
-                    const email = firebaseUser.email || '';
-                    try {
-                        const stubsSnap = email
-                            ? await getDocs(
-                                query(
-                                    collection(db, 'users'),
-                                    where('email', '==', email),
-                                    where('uid', '==', null),
-                                    limit(1)
+                    if (uidDocSnap.exists()) {
+                        console.log('[AuthContext] Setting userData from doc.');
+                        setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...uidDocSnap.data() } as AppUser);
+                        setRequireOnboarding(false);
+                    } else {
+                        console.log('[AuthContext] Checking for stubs...');
+                        const email = (firebaseUser.email || '').toLowerCase();
+                        try {
+                            const stubsSnap = email
+                                ? await getDocs(
+                                    query(
+                                        collection(db, 'users'),
+                                        where('email', '==', email),
+                                        where('uid', '==', null),
+                                        limit(1)
+                                    )
                                 )
-                            )
-                            : null;
+                                : null;
 
-                        const stubDoc = stubsSnap && !stubsSnap.empty ? stubsSnap.docs[0] : null;
+                            const stubDoc = stubsSnap && !stubsSnap.empty ? stubsSnap.docs[0] : null;
 
-                        if (stubDoc) {
-                            // Invited agent: link UID to stub, then send to /agent-setup
-                            await linkStubUser(stubDoc.id, firebaseUser.uid);
-                            setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubDoc.data() } as AppUser);
-                            setRequireOnboarding(false); // skip onboarding flow
-                            window.location.replace(`/agent-setup?token=${stubDoc.id}`);
-                        } else {
-                            // Brand-new user — needs full agency onboarding
+                            if (stubDoc) {
+                                console.log('[AuthContext] Stub found! Linking and redirecting to setup.');
+                                await linkStubUser(stubDoc.id, firebaseUser.uid);
+                                setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubDoc.data() } as AppUser);
+                                setRequireOnboarding(false);
+                                window.location.replace(`/agent-setup?token=${stubDoc.id}`);
+                            } else {
+                                console.log('[AuthContext] No stub found. Require onboarding.');
+                                setUserData(null);
+                                setRequireOnboarding(true);
+                            }
+                        } catch (rulesErr: any) {
+                            console.error('[AuthContext] Verification/Stub-check failed:', rulesErr);
                             setUserData(null);
                             setRequireOnboarding(true);
                         }
-                    } catch (rulesErr) {
-                        console.error('[AuthContext] Rules check failed:', rulesErr);
-                        setUserData(null);
-                        setRequireOnboarding(true);
                     }
+                } else {
+                    setUserData(null);
+                    setRequireOnboarding(false);
                 }
-            } else {
-                // User logged out — clear profile data
-                setUserData(null);
-                setRequireOnboarding(false);
+            } catch (globalErr) {
+                console.error('[AuthContext] UNEXPECTED GLOBAL ERROR:', globalErr);
+            } finally {
+                console.log('[AuthContext] Setting loading to FALSE');
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
         return unsubscribe; // Cleanup listener on unmount

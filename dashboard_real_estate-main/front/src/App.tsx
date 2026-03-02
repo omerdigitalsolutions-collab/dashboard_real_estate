@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -37,6 +38,7 @@ function DashboardIndex() {
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="bottom-right" toastOptions={{ className: 'rtl-grid text-sm shadow-xl', style: { background: '#1e293b', color: '#fff', border: '1px solid #334155' } }} />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />

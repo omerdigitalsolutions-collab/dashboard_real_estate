@@ -19,11 +19,15 @@ export function useSuperAdmin() {
 
         const checkSuperAdmin = async () => {
             try {
+                // 1. Check the firestore collection ONLY (this is the single source of truth)
                 const superAdminRef = doc(db, 'superAdmins', currentUser.uid);
                 const docSnap = await getDoc(superAdminRef);
 
+                const doesExist = docSnap.exists();
+                console.log(`[useSuperAdmin] Checking UID ${currentUser.uid}: ${doesExist ? 'IS SUPER ADMIN' : 'NOT Super Admin'}`);
+
                 if (isMounted) {
-                    setIsSuperAdmin(docSnap.exists());
+                    setIsSuperAdmin(doesExist);
                     setLoading(false);
                 }
             } catch (error) {

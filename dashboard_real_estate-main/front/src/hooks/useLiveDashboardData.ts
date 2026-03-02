@@ -43,6 +43,24 @@ export function useLiveDashboardData(): LiveDashboardData {
         setLoading(true);
         setError(null);
 
+        const loadedFlags = {
+            properties: false,
+            deals: false,
+            leads: false,
+            agency: false
+        };
+
+        const checkLoaded = () => {
+            if (loadedFlags.properties && loadedFlags.deals && loadedFlags.leads && loadedFlags.agency) {
+                setLoading(false);
+            }
+        };
+
+        // Safety fallback: if some collection is completely missing indices or fails silently
+        const safetyTimeout = setTimeout(() => {
+            setLoading(false);
+        }, 2000);
+
         // 1. Properties Query
         const qProperties = query(
             collection(db, 'properties'),
@@ -51,9 +69,11 @@ export function useLiveDashboardData(): LiveDashboardData {
 
         const unsubProperties = onSnapshot(qProperties, (snap) => {
             setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property)));
+            loadedFlags.properties = true; checkLoaded();
         }, (err) => {
             console.error('[useLiveDashboardData] Properties Error:', err);
             setError(err);
+            loadedFlags.properties = true; checkLoaded();
         });
 
         // 2. Deals Query
@@ -64,9 +84,11 @@ export function useLiveDashboardData(): LiveDashboardData {
 
         const unsubDeals = onSnapshot(qDeals, (snap) => {
             setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
+            loadedFlags.deals = true; checkLoaded();
         }, (err) => {
             console.error('[useLiveDashboardData] Deals Error:', err);
             setError(err);
+            loadedFlags.deals = true; checkLoaded();
         });
 
         // 3. Tasks Query (Only for current user)
@@ -97,9 +119,11 @@ export function useLiveDashboardData(): LiveDashboardData {
                 return tB - tA;
             });
             setLeads(rawLeads);
+            loadedFlags.leads = true; checkLoaded();
         }, (err) => {
             console.error('Error fetching leads:', err);
             setError(err);
+            loadedFlags.leads = true; checkLoaded();
         });
 
         // 4. Alerts Query (Targeted to user OR broadcast 'all')
@@ -131,9 +155,6 @@ export function useLiveDashboardData(): LiveDashboardData {
                 return true;
             });
             setAlerts(deduped);
-            // Wait for at least one initial payload before setting loading to false 
-            // is a bit tricky with multiple subscriptions. We'll set it here to ensure it flips eventually.
-            setLoading(false);
         };
 
         const unsubAlertsPersonal = onSnapshot(qAlertsPersonal, (snap) => {
@@ -159,18 +180,29 @@ export function useLiveDashboardData(): LiveDashboardData {
                 if (logo) {
                     // console.log('[useLiveDashboardData] Agency Logo found:', logo);
                     settings.logoUrl = logo;
+                    setAgencyLogo(logo);
                 }
 
                 setAgencySettings(settings);
-                setAgencyName(data?.agencyName || data?.name || null);
+
+                const rawName = data?.agencyName || data?.name || null;
+                // Cleanse if it's the auto-generated UID name from healing
+                if (rawName && rawName.includes(agencyId) && userData?.name) {
+                    setAgencyName("סוכנות " + userData.name);
+                } else {
+                    setAgencyName(rawName);
+                }
             }
+            loadedFlags.agency = true; checkLoaded();
         }, (err) => {
             console.error('[useLiveDashboardData] Agency Error:', err);
             setError(err);
+            loadedFlags.agency = true; checkLoaded();
         });
 
 
         return () => {
+            clearTimeout(safetyTimeout);
             unsubProperties();
             unsubDeals();
             unsubTasks();

@@ -7,6 +7,7 @@ import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useSuperAdmin } from '../hooks/useSuperAdmin';
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import AddLeadModal from '../components/modals/AddLeadModal';
+import CopilotChatWidget from '../components/copilot/CopilotChatWidget';
 import {
     LayoutDashboard,
     Handshake,
@@ -110,9 +111,6 @@ export default function DashboardLayout() {
                         onClick={() => navigate('/dashboard/settings')}
                         className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
                     >
-                        <h1 className="text-xl font-bold text-white tracking-tight">
-                            {agencyName || 'הסוכנות שלי'}
-                        </h1>
                         {agencyLogo && agencyLogo.trim() !== '' ? (
                             <img
                                 src={agencyLogo}
@@ -128,6 +126,9 @@ export default function DashboardLayout() {
                                 <Building2 className="w-6 h-6 text-cyan-400" />
                             </div>
                         )}
+                        <h1 className="text-xl font-bold text-white tracking-tight">
+                            {agencyName || 'הסוכנות שלי'}
+                        </h1>
                     </button>
 
                     <div className="flex items-center gap-4">
@@ -237,6 +238,9 @@ export default function DashboardLayout() {
             {/* Global Modals */}
             <AddPropertyModal isOpen={showAddProperty} onClose={() => setShowAddProperty(false)} />
             <AddLeadModal isOpen={showAddLead} onClose={() => setShowAddLead(false)} />
+
+            {/* Global AI Copilot Widget */}
+            <CopilotChatWidget />
         </div>
     );
 }

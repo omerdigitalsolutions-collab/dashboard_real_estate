@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Building2 } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
+import PeriodPicker, { usePeriod, periodStartDate } from './PeriodPicker';
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
     if (active && payload && payload.length) {
@@ -14,26 +15,73 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
     return null;
 };
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.01) return null;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+        <text
+            x={x}
+            y={y}
+            fill="white"
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="text-[9px] font-bold pointer-events-none"
+        >
+            {`${(percent * 100).toFixed(0)}%`}
+        </text>
+    );
+};
+
+const HEBREW_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
 export default function InventorySnapshot() {
     const { properties } = useLiveDashboardData();
+    const { period, setPeriod } = usePeriod('1m');
 
-    const forSale = properties.filter(p => p.type === 'sale').length;
-    const forRent = properties.filter(p => p.type === 'rent').length;
+    const startDate = periodStartDate(period);
+
+    // Only exclusive properties in the selected period
+    const newInPeriod = properties.filter(p => {
+        const rawDate = (p as any).createdAt;
+        if (!rawDate) return false;
+        const d = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
+        const inPeriod = d >= startDate;
+        const isExclusive = (p as any).listingType === 'exclusive' || (p as any).isExclusive === true;
+        return inPeriod && isExclusive;
+    });
+
+    // For sale / rent distribution among the recruited properties
+    const forSale = newInPeriod.filter(p => p.type === 'sale').length;
+    const forRent = newInPeriod.filter(p => p.type === 'rent').length;
 
     const pieData = [
-        { name: 'למכירה', value: forSale, color: '#10b981' }, // Emerald
-        { name: 'להשכרה', value: forRent, color: '#f43f5e' }, // Rose
+        { name: 'למכירה', value: forSale, color: '#10b981' },
+        { name: 'להשכרה', value: forRent, color: '#f43f5e' },
     ];
+
+    const now = new Date();
+    const monthName = HEBREW_MONTHS[now.getMonth()];
+    const subtitleByPeriod: Record<string, string> = {
+        '1m': `גיוס בלעדיות בחודש ${monthName}`,
+        '3m': 'גיוס בלעדיות ב-3 חודשים',
+        '6m': 'גיוס בלעדיות ב-6 חודשים',
+        '12m': 'גיוס בלעדיות ב-12 חודשים',
+    };
 
     return (
         <>
-            <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 flex flex-col gap-4">
+            <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5 flex flex-col gap-4 h-full">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-2">
                     <div>
                         <h2 className="text-base font-bold text-white">מלאי נכסים</h2>
-                        <p className="text-sm text-slate-400 mt-0.5">סקירת מצב עדכנית</p>
+                        <p className="text-sm text-slate-400 mt-0.5">{subtitleByPeriod[period]}</p>
                     </div>
+                    <PeriodPicker value={period} onChange={setPeriod} />
                 </div>
 
                 {/* Total counter */}
@@ -42,25 +90,28 @@ export default function InventorySnapshot() {
                         <Building2 size={20} />
                     </div>
                     <div>
-                        <p className="text-2xl font-black text-white">{properties.length}</p>
-                        <p className="text-xs text-slate-500">סה"כ נכסים בניהול</p>
+                        <p className="text-2xl font-black text-white">{newInPeriod.length}</p>
+                        <p className="text-xs text-slate-500">נכסים בלעדיים שגויסו בתקופה</p>
                     </div>
                 </div>
 
                 {/* Pie chart + legend */}
-                <div className="flex items-center gap-6">
-                    <div style={{ width: 100, height: 100 }}>
+                <div className="flex flex-col gap-3">
+                    <div className="w-full h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={pieData}
                                     cx="50%"
                                     cy="50%"
-                                    innerRadius={28}
-                                    outerRadius={46}
+                                    innerRadius={50}
+                                    outerRadius={75}
                                     paddingAngle={3}
                                     dataKey="value"
-                                    stroke="none"
+                                    stroke="#0f172a"
+                                    strokeWidth={2}
+                                    labelLine={false}
+                                    label={renderCustomizedLabel}
                                 >
                                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                                 </Pie>
@@ -68,9 +119,9 @@ export default function InventorySnapshot() {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex-1 space-y-3">
+                    <div className="space-y-3">
                         {pieData.map(item => {
-                            const total = properties.length;
+                            const total = newInPeriod.length;
                             const percentage = total > 0 ? Math.round((item.value / total) * 100) : 0;
                             return (
                                 <div key={item.name} className="flex flex-col gap-0.5">
@@ -86,7 +137,6 @@ export default function InventorySnapshot() {
                                             </span>
                                         </div>
                                     </div>
-                                    {/* Small micro-progress bar */}
                                     <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
                                         <div
                                             className="h-full rounded-full transition-all duration-1000"

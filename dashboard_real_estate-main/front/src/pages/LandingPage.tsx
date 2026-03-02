@@ -2,12 +2,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
-    Home,
-    FileSignature,
-    FileSpreadsheet,
     PlayCircle,
     Star,
-    ArrowLeft
+    ArrowLeft,
+    Bot,
+    Zap,
+    Share2,
+    LayoutDashboard
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -140,47 +141,70 @@ export default function LandingPage() {
                         <h2 className="text-3xl md:text-5xl font-black text-blue-900 mb-6">
                             כל מה שהמשרד שלך צריך במקום אחד
                         </h2>
+                        <p className="text-lg text-slate-600 font-medium">
+                            טכנולוגיה מתקדמת שחוסכת זמן ומייצרת עסקאות
+                        </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-                        {/* Feature 1 */}
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                        {/* Feature 1: AI Import */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <Home size={28} />
+                                <Zap size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">ניהול לידים ונכסים חכם</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">יבוא נכסים חכם (AI)</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                התאמה חכמה ואוטומטית בניהול מאגרי הלקוחות והנכסים, ליצירת התאמות מדויקות בזמן אמת.
+                                הדבק טקסט חופשי, העלה צילום מסך או קובץ אקסל - ה-AI (Gemini) ינתח ויזין את כל נתוני הנכס אוטומטית למערכת בתוך שניות.
                             </p>
                         </div>
-                        {/* Feature 2 */}
+                        {/* Feature 2: WhatsApp B2B */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <MessageCircle size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">אינטגרציית WhatsApp מובנית</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">ניטור קבוצות WhatsApp</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                תקשרו עם לקוחות, שילחו נכסים מעוצבים והודעות תפוצה ישירות מתוך ה-CRM בקליק אחד.
+                                המערכת סורקת אוטומטית קבוצות B2B של מתווכים, מזהה נכסים חדשים ומקימה אותם כטיוטות מוכנות לשיווק במשרד שלכם.
                             </p>
                         </div>
-                        {/* Feature 3 */}
+                        {/* Feature 3: Webot Catalog */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <FileSignature size={28} />
+                                <Share2 size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">חתימה דיגיטלית</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">קטלוג "הוובוט" הדיגיטלי</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                שליחה נוחה של טפסי תיווך מחייבים משפטית להחתמה דיגיטלית מהירה דרך SMS או WhatsApp.
+                                יצירת מיני-סייט שיווקי אישי לכל ליד עם נכסים מותאמים. הלקוח מסמן ❤️ ואתם מקבלים התראה מיידית למערכת.
                             </p>
                         </div>
-                        {/* Feature 4 */}
+                        {/* Feature 4: Smart Dashboard */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <FileSpreadsheet size={28} />
+                                <LayoutDashboard size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">יבוא אקסל חכם</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">Dashboard מותאם אישית</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                ייבוא נתונים מרוכז מקבצי אקסל בתוך שניות, כך שתוכלו להעביר את כל המידע ההיסטורי שלכם בקלות רבה.
+                                לוח בקרה מבוסס ווידג'טים שניתן לסדר בגרירה. ניתוח "הכנסות ריאליות" (Actual Revenue) לקבלת תמונה עסקית מדויקת.
+                            </p>
+                        </div>
+                        {/* Feature 5: AI Copilot */}
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
+                            <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                                <Bot size={28} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">העוזר החכם AI Agent</h3>
+                            <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
+                                צ'אט בוט שמכיר את כל הדאטה של המשרד שלכם. שאלו אותו "מי הלידים הכי חמים?" או "מצא לי דירות 4 חדרים מתחת ל-3 מיליון".
+                            </p>
+                        </div>
+                        {/* Feature 6: WhatsApp Triage */}
+                        <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                                <CheckCircle2 size={28} />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">מיון הודעות אוטומטי</h3>
+                            <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
+                                המערכת מנתחת הודעות ממספרים לא מוכרים בוואטסאפ, מסכמת אותן ומציעה לכם להקים ליד חדש בלחיצת כפתור.
                             </p>
                         </div>
                     </div>

@@ -1,9 +1,10 @@
 import { Property } from '../../types';
 import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAgents, useLeads } from '../../hooks/useFirestoreData';
 import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
+import toast from 'react-hot-toast';
 
 interface PropertyDetailsModalProps {
     property: Property;
@@ -18,7 +19,18 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Description Edit State
+    const [isEditingDescription, setIsEditingDescription] = useState(false);
+    const [editedDescription, setEditedDescription] = useState(property.description || '');
+    const [isSavingDescription, setIsSavingDescription] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Sync state when property prop changes
+    useEffect(() => {
+        setEditedDescription(property.description || '');
+    }, [property]);
 
     const hasImages = property.imageUrls && property.imageUrls.length > 0;
     const images = hasImages ? property.imageUrls! : [];
@@ -29,7 +41,7 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
 
     const handleUploadClick = () => {
         if (images.length >= 5) {
-            alert('לא ניתן להוסיף מעל השניה 5 תמונות לנכס.');
+            toast.error('לא ניתן להוסיף מעל 5 תמונות לנכס.');
             return;
         }
         fileInputRef.current?.click();
@@ -40,7 +52,7 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
         if (files.length === 0) return;
 
         if (images.length + files.length > 5) {
-            alert(`ניתן להעלות עד 5 תמונות סך הכל. נותרו לך ${5 - images.length} תמונות.`);
+            toast.error(`ניתן להעלות עד 5 תמונות סך הכל. נותרו לך ${5 - images.length} תמונות להעלאה.`);
             return;
         }
 
@@ -51,11 +63,10 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
             const newUrls = await uploadPropertyImages(userData.agencyId, property.id, files);
             const combinedUrls = [...images, ...newUrls];
             await updateProperty(property.id, { imageUrls: combinedUrls });
-            // Let the real-time listener update the local property obj eventually, or we could optimistic update.
-            // But since this receives `property` from parent which has `useProperties` real-time, it will update automatically.
+            toast.success('התמונות הועלו בהצלחה ✓');
         } catch (error) {
             console.error('Error uploading images:', error);
-            alert('אירעה שגיאה בהעלאת התמונות.');
+            toast.error('אירעה שגיאה בהעלאת התמונות.');
         } finally {
             setIsUploading(false);
         }
@@ -64,18 +75,34 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
     const handleAgentChange = async (newAgentId: string) => {
         try {
             await updateProperty(property.id, { agentId: newAgentId });
+            toast.success('סוכן מוקצה עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating agent:', err);
-            alert('שגיאה בשיוך סוכן.');
+            toast.error('שגיאה בשיוך סוכן.');
         }
     };
 
     const handleLeadChange = async (newLeadId: string) => {
         try {
             await updateProperty(property.id, { leadId: newLeadId });
+            toast.success('שיוך ליד עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating lead:', err);
-            alert('שגיאה בשיוך ליד.');
+            toast.error('שגיאה בשיוך ליד.');
+        }
+    };
+
+    const handleSaveDescription = async () => {
+        try {
+            setIsSavingDescription(true);
+            await updateProperty(property.id, { description: editedDescription });
+            toast.success('תיאור הנכס שומר בהצלחה ✓');
+            setIsEditingDescription(false);
+        } catch (err) {
+            console.error('Error updating description:', err);
+            toast.error('שגיאה בשמירת תיאור הנכס.');
+        } finally {
+            setIsSavingDescription(false);
         }
     };
 
@@ -215,18 +242,73 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                         </div>
 
                         {/* Description */}
-                        <div>
-                            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-                                תיאור הנכס
-                            </h3>
-                            {property.description ? (
-                                <div className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl">
-                                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                        {property.description}
-                                    </p>
-                                </div>
+                        <div className="mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    תיאור הנכס
+                                </h3>
+                                {!isEditingDescription ? (
+                                    <button
+                                        onClick={() => setIsEditingDescription(true)}
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors"
+                                    >
+                                        ערוך
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                setIsEditingDescription(false);
+                                                setEditedDescription(property.description || '');
+                                            }}
+                                            disabled={isSavingDescription}
+                                            className="text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50"
+                                        >
+                                            ביטול
+                                        </button>
+                                        <button
+                                            onClick={handleSaveDescription}
+                                            disabled={isSavingDescription}
+                                            className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                        >
+                                            {isSavingDescription && <Loader2 size={12} className="animate-spin" />}
+                                            שמור שינויים
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {isEditingDescription ? (
+                                <textarea
+                                    className="w-full bg-white border border-slate-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 rounded-xl p-4 text-sm text-slate-700 leading-relaxed min-h-[120px] resize-y transition-all outline-none custom-scrollbar"
+                                    value={editedDescription}
+                                    onChange={(e) => setEditedDescription(e.target.value)}
+                                    placeholder="הזן תיאור מילולי של הנכס..."
+                                    dir="rtl"
+                                    autoFocus
+                                />
                             ) : (
-                                <p className="text-sm text-slate-400 italic bg-slate-50 p-4 rounded-xl">לא הוזן תיאור מילולי לנכס זה.</p>
+                                property.description ? (
+                                    <div
+                                        className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors group relative"
+                                        onClick={() => setIsEditingDescription(true)}
+                                    >
+                                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                                            {property.description}
+                                        </p>
+                                        <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm border border-slate-200 rounded p-1.5 text-slate-400 pointer-events-none">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div
+                                        className="text-sm text-slate-400 italic bg-slate-50 p-4 rounded-xl cursor-pointer hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-all flex items-center justify-between group"
+                                        onClick={() => setIsEditingDescription(true)}
+                                    >
+                                        <span>לא הוזן תיאור מילולי לנכס זה. לחץ להוספה...</span>
+                                        <Plus size={16} className="opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
+                                    </div>
+                                )
                             )}
                         </div>
 

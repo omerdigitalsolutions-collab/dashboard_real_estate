@@ -130,6 +130,27 @@ export default function WidgetAgencyExpenses() {
 
     const { totalExpenses, monthlyIncome, grossMargin, expensesPieData } = filteredData;
 
+    const RADIAN = Math.PI / 180;
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+        if (percent < 0.05) return null;
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+        return (
+            <text
+                x={x}
+                y={y}
+                fill="white"
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="text-[10px] font-bold pointer-events-none"
+            >
+                {`${(percent * 100).toFixed(0)}%`}
+            </text>
+        );
+    };
+
     return (
         <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-4 lg:p-5 h-full flex flex-col">
             {/* Header & Totals */}
@@ -147,8 +168,8 @@ export default function WidgetAgencyExpenses() {
                                     key={opt.value}
                                     onClick={() => setTimeRange(opt.value as any)}
                                     className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${timeRange === opt.value
-                                            ? 'bg-pink-500 text-white shadow-lg'
-                                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                        ? 'bg-pink-500 text-white shadow-lg'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                                         }`}
                                 >
                                     {opt.label}
@@ -264,6 +285,8 @@ export default function WidgetAgencyExpenses() {
                                             dataKey="value"
                                             stroke="#0f172a"
                                             strokeWidth={2}
+                                            labelLine={false}
+                                            label={renderCustomizedLabel}
                                         >
                                             {expensesPieData.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
@@ -274,16 +297,24 @@ export default function WidgetAgencyExpenses() {
                                 </ResponsiveContainer>
                             </div>
 
-                            <div className="w-full mt-2 space-y-1.5 min-h-[50px] pr-1">
-                                {expensesPieData.map(item => (
-                                    <div key={item.name} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                                            <span className="text-xs text-slate-300 font-medium">{item.name}</span>
+                            <div className="w-full mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 min-h-[50px] pr-1">
+                                {expensesPieData.map(item => {
+                                    const percentage = totalExpenses > 0 ? Math.round((item.value / totalExpenses) * 100) : 0;
+                                    return (
+                                        <div key={item.name} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                                                <span className="text-[10px] text-slate-300 font-medium truncate max-w-[60px]">{item.name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-bold text-slate-200">₪{item.value.toLocaleString()}</span>
+                                                <span className="text-[9px] font-medium text-slate-500 bg-slate-900 border border-slate-800 px-1 rounded">
+                                                    {percentage}%
+                                                </span>
+                                            </div>
                                         </div>
-                                        <span className="text-xs font-bold text-slate-200">₪{item.value.toLocaleString()}</span>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </>
                     )}

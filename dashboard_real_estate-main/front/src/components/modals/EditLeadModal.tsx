@@ -4,6 +4,7 @@ import { updateLead } from '../../services/leadService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Lead } from '../../types';
 import { isValidPhone } from '../../utils/validation';
+import toast from 'react-hot-toast';
 
 interface EditLeadModalProps {
     lead: Lead;
@@ -74,6 +75,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
         setError('');
 
         if (phone && !isValidPhone(phone)) {
+            toast.error('מספר הטלפון שהוזן אינו תקין');
             setError('מספר הטלפון שהוזן אינו תקין');
             return;
         }
@@ -118,8 +120,10 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
 
             await updateLead(lead.id, updates);
             onSuccess?.('הליד עודכן בהצלחה ✓');
+            toast.success('הליד עודכן בהצלחה ✓');
             onClose();
         } catch (err: any) {
+            toast.error(err?.message || 'שגיאה בעדכון הליד');
             setError(err?.message || 'שגיאה בעדכון הליד');
         } finally {
             setLoading(false);

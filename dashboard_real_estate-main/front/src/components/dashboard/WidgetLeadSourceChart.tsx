@@ -2,6 +2,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useMemo } from 'react';
 import { Lead } from '../../types';
 import { aggregateLeadSources } from '../../utils/analytics';
+import PeriodPicker, { usePeriod, periodStartDate, periodLabel } from './PeriodPicker';
 
 const SOURCE_COLORS: Record<string, string> = {
     'Facebook': '#1877F2', // Facebook Blue
@@ -30,19 +31,55 @@ interface WidgetLeadSourceChartProps {
     leads: Lead[];
 }
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent < 0.05) return null; // Don't show labels for very small slices
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+        <text
+            x={x}
+            y={y}
+            fill="white"
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="text-[10px] font-bold pointer-events-none"
+        >
+            {`${(percent * 100).toFixed(0)}%`}
+        </text>
+    );
+};
+
 export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartProps) {
+    const { period, setPeriod } = usePeriod('1m');
+    const startDate = periodStartDate(period);
+
+    const filteredLeads = useMemo(() => leads.filter(l => {
+        const raw = (l as any).createdAt;
+        if (!raw) return false;
+        const d = raw.toDate ? raw.toDate() : new Date(raw);
+        return d >= startDate;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [leads, period]);
+
     const sourceData = useMemo(() => {
-        const aggregated = aggregateLeadSources(leads);
+        const aggregated = aggregateLeadSources(filteredLeads);
         return aggregated.map(item => ({
             ...item,
             color: SOURCE_COLORS[item.name] || SOURCE_COLORS['Other']
         }));
-    }, [leads]);
+    }, [filteredLeads]);
 
     return (
         <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-4 lg:p-5 h-full flex flex-col">
-            <div className="mb-4">
-                <h2 className="text-base font-bold text-white">מקורות לידים</h2>
+            <div className="flex items-start justify-between gap-2 mb-4">
+                <div>
+                    <h2 className="text-base font-bold text-white">מקורות לידים</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">{periodLabel(period)}</p>
+                </div>
+                <PeriodPicker value={period} onChange={setPeriod} />
             </div>
 
             <div className="flex flex-col items-center flex-1 min-h-0">
@@ -56,11 +93,13 @@ export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartPr
                                         cx="50%"
                                         cy="50%"
                                         innerRadius={55}
-                                        outerRadius={75}
+                                        outerRadius={85} // Slightly larger for better label space
                                         paddingAngle={4}
                                         dataKey="value"
                                         stroke="#0f172a"
                                         strokeWidth={2}
+                                        labelLine={false}
+                                        label={renderCustomizedLabel}
                                     >
                                         {sourceData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.color} />

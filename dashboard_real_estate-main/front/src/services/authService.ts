@@ -4,7 +4,21 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, db, googleProvider, functions } from '../config/firebase';
 
 /**
- * Sign in using Google Provider
+ * Sign in using Google Provider (Popup) - Better for local dev
+ */
+export const signInWithGooglePopup = async () => {
+    try {
+        const { signInWithPopup } = await import('firebase/auth');
+        const result = await signInWithPopup(auth, googleProvider);
+        return result.user;
+    } catch (error) {
+        console.error("Error signing in with Google Popup", error);
+        throw error;
+    }
+};
+
+/**
+ * Sign in using Google Provider (Redirect)
  */
 export const signInWithGoogle = async () => {
     try {
@@ -12,7 +26,7 @@ export const signInWithGoogle = async () => {
         // The result will be handled after the redirect in getGoogleRedirectResult()
         return null as any; // will never reach here
     } catch (error) {
-        console.error("Error signing in with Google", error);
+        console.error("Error signing in with Google Redirect", error);
         throw error;
     }
 };
@@ -24,6 +38,11 @@ export const signInWithGoogle = async () => {
 export const getGoogleRedirectResult = async () => {
     try {
         const result = await getRedirectResult(auth);
+        if (result) {
+            console.log('[authService] Redirect result found user:', result.user.email);
+        } else {
+            console.log('[authService] No redirect result found.');
+        }
         return result?.user ?? null;
     } catch (error) {
         console.error("Error getting redirect result", error);

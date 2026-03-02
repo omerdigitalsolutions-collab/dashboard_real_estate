@@ -4,6 +4,7 @@ import { addLead } from '../../services/leadService';
 import { useAuth } from '../../context/AuthContext';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidPhone } from '../../utils/validation';
+import toast from 'react-hot-toast';
 
 interface AddLeadModalProps {
     isOpen: boolean;
@@ -55,15 +56,13 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [sellerAddress, setSellerAddress] = useState('');
     const [sellerPrice, setSellerPrice] = useState('');
 
-    const [assignedTo, setAssignedTo] = useState('');
     const [loading, setLoading] = useState(false);
-    const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
     if (!isOpen) return null;
 
     const showToast = (msg: string, ok = true) => {
-        setToast({ msg, ok });
-        setTimeout(() => setToast(null), 3500);
+        if (ok) toast.success(msg);
+        else toast.error(msg);
     };
 
     const resetForm = () => {
@@ -427,11 +426,6 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
 
                     {/* Footer (fixed at bottom) */}
                     <div className="flex-shrink-0 px-6 pb-5 pt-3 border-t border-slate-100 space-y-3">
-                        {toast && (
-                            <div className={`text-xs font-medium px-4 py-3 rounded-xl border ${toast.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                                {toast.msg}
-                            </div>
-                        )}
                         <div className="flex gap-3">
                             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
                                 ביטול

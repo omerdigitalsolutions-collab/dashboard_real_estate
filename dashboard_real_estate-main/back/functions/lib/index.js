@@ -45,6 +45,7 @@ const whatsapp_1 = require("./whatsapp");
 // ── AI Module ──────────────────────────────────────────────────────────────────
 const agent_1 = require("./ai/agent");
 const extractAiData_1 = require("./ai/extractAiData");
+const copilot_1 = require("./ai/copilot");
 // ── Automation Module ──────────────────────────────────────────────────────────
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, a
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
-exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData };
+exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot };
 exports.automation = { webhookProcessGlobalYad2Email: globalYad2Webhook_1.webhookProcessGlobalYad2Email };
 exports.superadmin = {
     superAdminUpdateExpenses: superadmin_1.superAdminUpdateExpenses,

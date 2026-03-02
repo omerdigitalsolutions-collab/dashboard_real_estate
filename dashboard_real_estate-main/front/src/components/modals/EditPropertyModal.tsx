@@ -3,6 +3,7 @@ import { X, Building2, Loader2 } from 'lucide-react';
 import { updateProperty } from '../../services/propertyService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Property } from '../../types';
+import toast from 'react-hot-toast';
 
 interface EditPropertyModalProps {
     property: Property;
@@ -51,7 +52,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
 
         const parsedPrice = parseFloat(price);
         if (!address.trim() || isNaN(parsedPrice) || parsedPrice <= 0) {
-            setError('יש למלא כתובת ומחיר תקין');
+            toast.error('יש למלא כתובת ומחיר תקין');
             return;
         }
 
@@ -72,8 +73,10 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                 isExclusive: listingType === 'exclusive',
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
+            toast.success('הנכס עודכן בהצלחה ✓');
             onClose();
         } catch (err: any) {
+            toast.error(err?.message || 'שגיאה בעדכון הנכס');
             setError(err?.message || 'שגיאה בעדכון הנכס');
         } finally {
             setLoading(false);

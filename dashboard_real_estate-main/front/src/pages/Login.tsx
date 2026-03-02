@@ -2,25 +2,50 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
+import { useAuth } from '../context/AuthContext';
 import { Loader2, Mail, Lock } from 'lucide-react';
-import { signInWithGoogle, getGoogleRedirectResult, checkUserExists } from '../services/authService';
+import { signInWithGoogle, signInWithGooglePopup, getGoogleRedirectResult } from '../services/authService';
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isGoogleLoading, setIsGoogleLoading] = useState(true); // starts true while checking redirect
+    const [isGoogleLoading, setIsGoogleLoading] = useState(true); // Start true for redirect check
+    const { currentUser, userData, requireOnboarding, loading: authLoading } = useAuth();
     const navigate = useNavigate();
+
+    // ─── STATE-DRIVEN NAVIGATION ───
+    // This effect ensures we only navigate once AuthContext has finished its work
+    // (including potential self-healing or stub linking).
+    useEffect(() => {
+        console.log('[Login] Navigation check:', { currentUser: !!currentUser, userData: !!userData, requireOnboarding, authLoading });
+
+        if (authLoading) return;
+
+        if (currentUser) {
+            if (userData) {
+                console.log('[Login] User data found, navigating to dashboard');
+                navigate('/dashboard', { replace: true });
+            } else if (requireOnboarding) {
+                console.log('[Login] No user data, require onboarding');
+                navigate('/onboarding', { replace: true });
+            } else {
+                console.log('[Login] currentUser exists but userData/requireOnboarding not set yet.');
+            }
+        }
+    }, [currentUser, userData, requireOnboarding, authLoading, navigate]);
 
     // Handle Google redirect result when this page loads after redirect
     useEffect(() => {
         const handleRedirectResult = async () => {
+            console.log('[Login] Checking for redirect result...');
             try {
                 const user = await getGoogleRedirectResult();
                 if (user) {
-                    const exists = await checkUserExists(user.uid);
-                    navigate(exists ? '/dashboard' : '/onboarding');
+                    console.log('[Login] Redirect user found in effect:', user.email);
+                } else {
+                    console.log('[Login] No redirect user found in effect.');
                 }
             } catch (err: any) {
                 console.error('Google redirect result error:', err);
@@ -30,7 +55,7 @@ export default function Login() {
             }
         };
         handleRedirectResult();
-    }, [navigate]);
+    }, []);
 
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,12 +64,11 @@ export default function Login() {
 
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            navigate('/dashboard');
+            // navigate('/dashboard'); // Removed manual navigation
         } catch (err: any) {
             console.error('Login error:', err);
             setError('אימייל או סיסמה שגויים');
-        } finally {
-            setIsLoading(false);
+            setIsLoading(false); // Only stop loading on error, otherwise let state-driven nav take over
         }
     };
 
@@ -52,10 +76,26 @@ export default function Login() {
         setError('');
         setIsGoogleLoading(true);
         try {
-            await signInWithGoogle(); // triggers redirect, page will reload
+            console.log('[Login] Starting Google Popup login...');
+            const user = await signInWithGooglePopup();
+            if (user) {
+                console.log('[Login] Google Popup success:', user.email);
+                // AuthContext will handle navigation via useEffect
+            }
         } catch (err: any) {
             console.error('Google login error:', err);
-            setError('שגיאה בהתחברות עם חשבון גוגל');
+            // Fallback to redirect if popup is blocked or fails
+            if (err.code === 'auth/popup-blocked') {
+                console.log('[Login] Popup blocked, falling back to redirect...');
+                try {
+                    await signInWithGoogle();
+                } catch (redirectErr) {
+                    setError('החלון הקופץ נחסם והתחברות חלופית נכשלה');
+                }
+            } else {
+                setError('שגיאה בהתחברות עם חשבון גוגל');
+            }
+        } finally {
             setIsGoogleLoading(false);
         }
     };

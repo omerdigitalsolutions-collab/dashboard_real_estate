@@ -12,7 +12,8 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 export const superAdminImportGlobalProperties = functions.https.onCall({
     region: 'europe-west1',
     memory: '512MiB',
-    timeoutSeconds: 300
+    timeoutSeconds: 300,
+    cors: true
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -85,9 +86,16 @@ export const superAdminImportGlobalProperties = functions.https.onCall({
  */
 export const superAdminGetImportMapping = functions.https.onCall({
     region: 'europe-west1',
-    secrets: [geminiApiKey]
+    secrets: [geminiApiKey],
+    cors: true
 }, async (request) => {
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    // 1. Auth Guard
+    if (!request.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    // 2. Super Admin Check
+    if (request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
     }
 

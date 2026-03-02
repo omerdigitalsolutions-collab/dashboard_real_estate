@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, Shield, Globe, Palette, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4 } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
-import { Toast, ToastState } from '../components/ui/Toast';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
 import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo } from '../services/agencyService';
@@ -56,10 +56,10 @@ export default function Settings() {
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
-  const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ show: true, message, type });
+    if (type === 'success') toast.success(message);
+    else toast.error(message);
   };
 
   // Fetch Agency Data for goals and user data for profile
@@ -456,7 +456,6 @@ export default function Settings() {
           )}
         </div>
       </div>
-      <Toast {...toast} onClose={() => setToast(prev => ({ ...prev, show: false }))} />
     </div>
   );
 }

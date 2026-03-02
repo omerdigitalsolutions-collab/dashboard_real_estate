@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AppUser, UserRole } from '../../types';
 import { getAgencyTeam, updateAgentRole, toggleAgentStatus, deleteAgent } from '../../services/teamService';
 import InviteAgentModal from './InviteAgentModal';
+import toast from 'react-hot-toast';
 
 const RoleBadge = ({ role }: { role: UserRole }) =>
     role === 'admin' ? (
@@ -96,12 +97,9 @@ export default function TeamManagement() {
     const { userData, currentUser } = useAuth();
     const [team, setTeam] = useState<AppUser[]>([]);
     const [showInvite, setShowInvite] = useState(false);
-    const [toast, setToast] = useState('');
     const [loading, setLoading] = useState(true);
-
     const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3500);
+        toast.success(msg);
     };
 
     useEffect(() => {
@@ -118,8 +116,8 @@ export default function TeamManagement() {
             const newRole: UserRole = currentRole === 'admin' ? 'agent' : 'admin';
             await updateAgentRole(docId, newRole);
             showToast('התפקיד עודכן בהצלחה');
-        } catch {
-            showToast('עדכון התפקיד נכשל');
+        } catch (err: any) {
+            toast.error(err?.message || 'עדכון התפקיד נכשל');
         }
     };
 
@@ -127,8 +125,8 @@ export default function TeamManagement() {
         try {
             await toggleAgentStatus(docId, !currentlyActive);
             showToast(currentlyActive ? 'הסוכן הושעה' : 'הסוכן הופעל מחדש');
-        } catch {
-            showToast('עדכון הסטטוס נכשל');
+        } catch (err: any) {
+            toast.error(err?.message || 'עדכון הסטטוס נכשל');
         }
     };
 
@@ -137,8 +135,8 @@ export default function TeamManagement() {
         try {
             await deleteAgent(docId);
             showToast('הסוכן נמחק מהמערכת');
-        } catch {
-            showToast('מחיקת הסוכן נכשלה');
+        } catch (err: any) {
+            toast.error(err?.message || 'מחיקת הסוכן נכשלה');
         }
     };
 
@@ -230,12 +228,6 @@ export default function TeamManagement() {
                 />
             )}
 
-            {/* Toast */}
-            {toast && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50 animate-fade-in">
-                    {toast}
-                </div>
-            )}
         </div>
     );
 }

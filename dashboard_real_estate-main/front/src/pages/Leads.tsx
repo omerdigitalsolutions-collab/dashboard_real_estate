@@ -514,7 +514,7 @@ export default function Leads() {
         </div>
       </div>
 
-      {matchingLead && <PropertyMatcherModal lead={matchingLead} onClose={() => setMatchingLead(null)} />}
+      {matchingLead && <PropertyMatcherModal lead={matchingLead} allProperties={properties} onClose={() => setMatchingLead(null)} />}
 
       {profileLead && (
         <LeadProfilePanel
