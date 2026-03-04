@@ -20,6 +20,8 @@ import {
     Contact,
     Plus,
     Shield,
+    Menu,
+    X,
 } from 'lucide-react';
 
 const navigation = [
@@ -46,6 +48,7 @@ export default function DashboardLayout() {
     const [showAddLead, setShowAddLead] = useState(false);
     const [quickAddOpen, setQuickAddOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const handleLogout = async () => {
         try {
@@ -58,12 +61,26 @@ export default function DashboardLayout() {
 
     return (
         <div className="flex h-screen overflow-hidden bg-[#0a0f1c]" dir="rtl">
+            {/* Mobile Sidebar Overlay */}
+            {isMobileMenuOpen && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="w-64 flex-shrink-0 bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col z-20">
-                <div className="shrink-0 h-20 flex items-center px-6 border-b border-slate-800">
+            <aside className={`fixed inset-y-0 right-0 z-50 w-64 flex-shrink-0 bg-slate-900/95 md:bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className="shrink-0 h-20 flex items-center justify-between px-6 border-b border-slate-800">
                     <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
                         <img src="/homer-logo.png" alt="Homer" className="h-12 w-auto mix-blend-screen brightness-200" />
                     </span>
+                    <button
+                        className="md:hidden text-slate-400 hover:text-white p-2 mb-1"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                        <X size={20} />
+                    </button>
                 </div>
 
                 <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1">
@@ -71,6 +88,7 @@ export default function DashboardLayout() {
                         <NavLink
                             key={item.name}
                             to={item.href}
+                            onClick={() => setIsMobileMenuOpen(false)}
                             className={({ isActive }) =>
                                 `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all duration-300 ${isActive
                                     ? 'bg-blue-500/10 border border-blue-500/20 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
@@ -86,6 +104,7 @@ export default function DashboardLayout() {
                     {isSuperAdmin && (
                         <NavLink
                             to="/dashboard/super-admin"
+                            onClick={() => setIsMobileMenuOpen(false)}
                             className={({ isActive }) =>
                                 `flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold transition-all duration-300 mt-6 ${isActive
                                     ? 'bg-purple-500/10 border border-purple-500/30 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
@@ -106,40 +125,48 @@ export default function DashboardLayout() {
                 <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none"></div>
 
                 {/* Header */}
-                <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-8 z-10">
-                    <button
-                        onClick={() => navigate('/dashboard/settings')}
-                        className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
-                    >
-                        {agencyLogo && agencyLogo.trim() !== '' ? (
-                            <img
-                                src={agencyLogo}
-                                alt="לוגו סוכנות"
-                                className="h-10 w-auto object-contain rounded-lg shadow-sm bg-white/10"
-                                onError={(e) => {
-                                    // Fallback if image fails to load
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                            />
-                        ) : (
-                            <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
-                                <Building2 className="w-6 h-6 text-cyan-400" />
-                            </div>
-                        )}
-                        <h1 className="text-xl font-bold text-white tracking-tight">
-                            {agencyName || 'הסוכנות שלי'}
-                        </h1>
-                    </button>
+                <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-4 md:px-8 z-10">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                        >
+                            <Menu size={22} />
+                        </button>
+                        <button
+                            onClick={() => navigate('/dashboard/settings')}
+                            className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
+                        >
+                            {agencyLogo && agencyLogo.trim() !== '' ? (
+                                <img
+                                    src={agencyLogo}
+                                    alt="לוגו סוכנות"
+                                    className="h-10 w-auto object-contain rounded-lg shadow-sm bg-white/10"
+                                    onError={(e) => {
+                                        // Fallback if image fails to load
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                />
+                            ) : (
+                                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                                    <Building2 className="w-6 h-6 text-cyan-400" />
+                                </div>
+                            )}
+                            <h1 className="text-lg md:text-xl font-bold text-white tracking-tight hidden sm:block max-w-[150px] md:max-w-xs truncate">
+                                {agencyName || 'הסוכנות שלי'}
+                            </h1>
+                        </button>
+                    </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         {/* Quick Add Dropdown */}
                         <div className="relative">
                             <button
                                 onClick={() => setQuickAddOpen(v => !v)}
-                                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-4 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                                className="flex items-center gap-1.5 md:gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-3 md:px-4 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
                             >
                                 <Plus size={16} />
-                                חדש
+                                <span className="hidden sm:inline">חדש</span>
                             </button>
 
                             {quickAddOpen && (
@@ -164,14 +191,14 @@ export default function DashboardLayout() {
                                 </>
                             )}
                         </div>
-                        <div className="relative">
+                        <div className="relative hidden md:block">
                             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                                 <Search className="h-4 w-4 text-slate-500" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="חיפוש..."
-                                className="block w-64 pl-3 pr-10 py-2 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 bg-slate-900/50 backdrop-blur-sm transition-all focus:bg-slate-900"
+                                className="block w-48 lg:w-64 pl-3 pr-10 py-2 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 bg-slate-900/50 backdrop-blur-sm transition-all focus:bg-slate-900"
                             />
                         </div>
 
@@ -217,20 +244,21 @@ export default function DashboardLayout() {
                             )}
                         </div>
 
-                        <div className="h-8 w-px bg-slate-200 mx-2"></div>
+                        <div className="h-6 md:h-8 w-px bg-slate-200/20 mx-1 md:mx-2"></div>
 
                         <button
                             onClick={handleLogout}
-                            className="flex items-center gap-2 text-slate-600 hover:text-red-600 font-medium text-sm transition-colors"
+                            className="flex items-center gap-2 text-slate-400 hover:text-red-500 font-medium text-sm transition-colors p-1.5 md:p-0 rounded-lg hover:bg-slate-800 md:hover:bg-transparent"
+                            title="התנתק"
                         >
-                            <LogOut className="w-4 h-4" />
-                            <span>התנתק</span>
+                            <LogOut className="w-5 h-5 md:w-4 md:h-4" />
+                            <span className="hidden md:inline">התנתק</span>
                         </button>
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 overflow-y-auto p-4 md:p-8">
+                <main className="flex-1 overflow-y-auto p-4 md:p-8 relative z-0">
                     <Outlet />
                 </main>
             </div>

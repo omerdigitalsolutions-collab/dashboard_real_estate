@@ -190,15 +190,26 @@ export const disconnectAgencyWhatsApp = onCall({
   const credsRef = db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp');
   const agencyRef = db.collection('agencies').doc(agencyId);
 
-  const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+  let keys = await getGreenApiCredentials(agencyId, masterKey.value());
+
+  const agencyDoc = await agencyRef.get();
+  const legacyKeys = agencyDoc.data()?.greenApiKeys;
+
+  // Fallback: If no encrypted keys exist, check if the agency has legacy plain-text keys
+  if (!keys && legacyKeys?.idInstance && legacyKeys?.apiTokenInstance) {
+    keys = {
+      idInstance: legacyKeys.idInstance,
+      apiTokenInstance: legacyKeys.apiTokenInstance
+    };
+  }
 
   if (!keys?.idInstance || !keys?.apiTokenInstance) {
     // If credentials are already missing but the agency doc still has metadata, clear it anyway
-    const agencyDoc = await agencyRef.get();
-    if (agencyDoc.data()?.whatsappIntegration) {
+    if (agencyDoc.data()?.whatsappIntegration || legacyKeys) {
       await agencyRef.update({
         isWhatsappConnected: false,
-        whatsappIntegration: null
+        whatsappIntegration: admin.firestore.FieldValue.delete(),
+        greenApiKeys: admin.firestore.FieldValue.delete()
       });
       // CRITICAL: Always delete the private credentials doc to allow reconnecting
       await credsRef.delete();
@@ -209,7 +220,7 @@ export const disconnectAgencyWhatsApp = onCall({
 
   // 1. Send LogOut to Green API to clear the current WhatsApp session
   try {
-    await axios.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`);
+    await axios.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`, { timeout: 10_000 });
     console.log(`[WhatsApp] Logged out instance ${keys.idInstance}`);
   } catch (err: any) {
     console.warn(`[WhatsApp] Failed to cleanly logout instance ${keys.idInstance}:`, err?.message);
@@ -220,20 +231,21 @@ export const disconnectAgencyWhatsApp = onCall({
   try {
     await db.runTransaction(async (t) => {
       // Put plain-text back in pool, using idInstance as the doc ID for uniqueness
-      const poolRef = db.collection('available_instances').doc(keys.idInstance);
+      const poolRef = db.collection('available_instances').doc(keys!.idInstance);
       t.set(poolRef, {
-        idInstance: keys.idInstance,
-        apiTokenInstance: keys.apiTokenInstance,
+        idInstance: keys!.idInstance,
+        apiTokenInstance: keys!.apiTokenInstance,
         returnedAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
       // Delete from private subcollection
       t.delete(credsRef);
 
-      // Wipe status from agency doc
+      // Wipe status and legacy keys from agency doc
       t.set(agencyRef, {
         isWhatsappConnected: false,
-        whatsappIntegration: null
+        whatsappIntegration: admin.firestore.FieldValue.delete(),
+        greenApiKeys: admin.firestore.FieldValue.delete()
       }, { merge: true });
     });
 
@@ -638,7 +650,7 @@ export const whatsappWebhook = onRequest({
 
       try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
 Scan this message for property listings (for sale or rent).
 If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
@@ -698,7 +710,7 @@ Output strict JSON:
         if (apiKey) {
           try {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
             const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
         Message: "${textMessage}"

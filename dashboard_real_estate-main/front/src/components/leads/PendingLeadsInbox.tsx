@@ -1,46 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { collection, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { usePendingLeads } from '../../hooks/useFirestoreData';
 import { MessageCircle, Check, X, Clock, Loader2, Sparkles } from 'lucide-react';
-
-interface PendingLead {
-    id: string;
-    agencyId: string;
-    phone: string;
-    initialMessage: string;
-    aiSummary?: string;
-    aiIntent?: 'buy' | 'rent' | 'sell' | 'inquiry';
-    createdAt: any;
-    expiresAt: number;
-}
+import { PendingLead } from '../../types';
 
 export default function PendingLeadsInbox() {
     const { userData } = useAuth();
     const { agencyId } = userData || {};
-    const [pendingLeads, setPendingLeads] = useState<PendingLead[]>([]);
+    const { data: pendingLeadsUnsorted } = usePendingLeads();
+
+    const pendingLeads = [...pendingLeadsUnsorted].sort((a, b) =>
+        ((b.createdAt as any)?.toMillis?.() || 0) - ((a.createdAt as any)?.toMillis?.() || 0)
+    );
+
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const [approveModal, setApproveModal] = useState<PendingLead | null>(null);
-    const [newName, setNewName] = useState('');
-    const [newType, setNewType] = useState<'buyer' | 'seller'>('buyer');
-
-    useEffect(() => {
-        if (!agencyId) return;
-
-        const q = query(
-            collection(db, 'pending_leads'),
-            where('agencyId', '==', agencyId)
-        );
-
-        const unsub = onSnapshot(q, (snap) => {
-            const leads = snap.docs.map(d => ({ id: d.id, ...d.data() } as PendingLead));
-            // Sort by newest first (handling firestore timestamp lag)
-            leads.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-            setPendingLeads(leads);
-        });
-
-        return () => unsub();
-    }, [agencyId]);
 
     const handleReject = async (id: string) => {
         if (!window.confirm('למחוק הודעה זו? הפעולה בלתי הפיכה.')) return;
@@ -125,8 +100,8 @@ export default function PendingLeadsInbox() {
                                         <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
                                             <Clock size={12} />
                                             <span>
-                                                {lead.createdAt?.toDate()
-                                                    ? lead.createdAt.toDate().toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+                                                {(lead.createdAt as any)?.toDate()
+                                                    ? (lead.createdAt as any).toDate().toLocaleString('he-IL', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
                                                     : 'עכשיו'}
                                             </span>
                                         </div>
@@ -148,9 +123,9 @@ export default function PendingLeadsInbox() {
                                     {lead.aiIntent && (
                                         <div className="absolute -top-2 -right-2">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border shadow-lg ${lead.aiIntent === 'buy' ? 'bg-emerald-500 border-emerald-400 text-white' :
-                                                    lead.aiIntent === 'rent' ? 'bg-amber-500 border-amber-400 text-white' :
-                                                        lead.aiIntent === 'sell' ? 'bg-blue-600 border-blue-500 text-white' :
-                                                            'bg-slate-600 border-slate-500 text-white'
+                                                lead.aiIntent === 'rent' ? 'bg-amber-500 border-amber-400 text-white' :
+                                                    lead.aiIntent === 'sell' ? 'bg-blue-600 border-blue-500 text-white' :
+                                                        'bg-slate-600 border-slate-500 text-white'
                                                 }`}>
                                                 {lead.aiIntent === 'buy' ? 'רכישה' :
                                                     lead.aiIntent === 'rent' ? 'שכירות' :

@@ -22,6 +22,8 @@ import LandingPage from './pages/LandingPage';
 import { PreferencesProvider } from './context/PreferencesContext';
 import { useAuth } from './context/AuthContext';
 import { Navigate } from 'react-router-dom';
+import { DashboardDataProvider } from './hooks/useLiveDashboardData';
+import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 
 function DashboardIndex() {
   const { userData, loading } = useAuth();
@@ -78,7 +80,9 @@ function App() {
           element={
             <ProtectedRoute>
               <PreferencesProvider>
-                <DashboardLayout />
+                <DashboardDataProvider>
+                  <DashboardLayout />
+                </DashboardDataProvider>
               </PreferencesProvider>
             </ProtectedRoute>
           }
@@ -92,6 +96,11 @@ function App() {
           <Route path="super-admin" element={
             <SuperAdminRoute>
               <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>
+            </SuperAdminRoute>
+          } />
+          <Route path="super-admin/agencies/:agencyId" element={
+            <SuperAdminRoute>
+              <ErrorBoundary><AgencyDrillDown /></ErrorBoundary>
             </SuperAdminRoute>
           } />
         </Route>

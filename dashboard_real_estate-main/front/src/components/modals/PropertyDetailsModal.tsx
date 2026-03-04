@@ -1,21 +1,20 @@
-import { Property } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
+import { Property, AppUser, Lead } from '../../types';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { useAgents, useLeads } from '../../hooks/useFirestoreData';
 import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
 interface PropertyDetailsModalProps {
     property: Property;
+    agents: AppUser[];
+    leads: Lead[];
     onClose: () => void;
+    onCreateDeal?: (property: Property) => void;
 }
 
-export default function PropertyDetailsModal({ property, onClose }: PropertyDetailsModalProps) {
+export default function PropertyDetailsModal({ property, agents, leads, onClose }: PropertyDetailsModalProps) {
     const { userData } = useAuth();
-    const { data: agents = [] } = useAgents();
-    const { data: leads = [] } = useLeads();
-
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -128,9 +127,20 @@ export default function PropertyDetailsModal({ property, onClose }: PropertyDeta
                                 </p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
-                            <X size={20} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {onCreateDeal && (
+                                <button
+                                    onClick={() => onCreateDeal(property)}
+                                    className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg transition-colors text-sm"
+                                >
+                                    <Handshake size={16} />
+                                    <span className="hidden sm:inline">צור עסקה</span>
+                                </button>
+                            )}
+                            <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="overflow-y-auto flex-1 p-6">

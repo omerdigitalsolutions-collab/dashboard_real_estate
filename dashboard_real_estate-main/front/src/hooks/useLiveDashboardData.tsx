@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +17,9 @@ interface LiveDashboardData {
     error: Error | null;
 }
 
-export function useLiveDashboardData(): LiveDashboardData {
+export const DashboardDataContext = createContext<LiveDashboardData | undefined>(undefined);
+
+export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const { userData } = useAuth();
 
     const [properties, setProperties] = useState<Property[]>([]);
@@ -250,5 +252,17 @@ export function useLiveDashboardData(): LiveDashboardData {
         }
     }, [tasks]);
 
-    return { properties, deals, tasks, alerts, leads, agencySettings, agencyName, agencyLogo, loading, error };
+    return (
+        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, agencySettings, agencyName, agencyLogo, loading, error }}>
+            {children}
+        </DashboardDataContext.Provider>
+    );
+}
+
+export function useLiveDashboardData(): LiveDashboardData {
+    const context = useContext(DashboardDataContext);
+    if (context === undefined) {
+        throw new Error('useLiveDashboardData must be used within a DashboardDataProvider');
+    }
+    return context;
 }

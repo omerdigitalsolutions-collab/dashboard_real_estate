@@ -141,7 +141,7 @@ export default function CopilotChatWidget() {
             {/* ── Chat Window ──────────────────────────────────────────────── */}
             {isOpen && (
                 <div
-                    className="fixed bottom-24 left-6 z-[9999] w-[360px] h-[520px] flex flex-col rounded-2xl overflow-hidden"
+                    className="fixed bottom-[85px] sm:bottom-24 left-4 right-4 sm:right-auto sm:left-6 z-[9999] w-auto sm:w-[360px] h-[65vh] xs:h-[70vh] sm:h-[520px] max-h-[85vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl"
                     dir="rtl"
                     style={{
                         animation: 'copilot-slide-up 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both',
@@ -199,8 +199,8 @@ export default function CopilotChatWidget() {
                                 )}
                                 <div
                                     className={`max-w-[78%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
-                                            ? 'rounded-2xl rounded-bl-none text-slate-100'
-                                            : 'rounded-2xl rounded-br-none text-slate-200'
+                                        ? 'rounded-2xl rounded-bl-none text-slate-100'
+                                        : 'rounded-2xl rounded-br-none text-slate-200'
                                         }`}
                                     style={
                                         msg.role === 'user'
@@ -279,7 +279,7 @@ export default function CopilotChatWidget() {
             <button
                 onClick={() => setIsOpen(v => !v)}
                 aria-label="פתח AI Copilot"
-                className="fixed bottom-6 left-6 z-[9999] w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+                className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[9999] w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl"
                 style={{
                     background: isOpen
                         ? 'linear-gradient(135deg, #475569, #334155)'

@@ -47,7 +47,7 @@ exports.superAdminImportGlobalProperties = functions.https.onCall({
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
-    cors: true
+    invoker: 'public'
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -101,7 +101,7 @@ exports.superAdminImportGlobalProperties = functions.https.onCall({
 exports.superAdminGetImportMapping = functions.https.onCall({
     region: 'europe-west1',
     secrets: [geminiApiKey],
-    cors: true
+    invoker: 'public'
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -114,7 +114,7 @@ exports.superAdminGetImportMapping = functions.https.onCall({
     const { headers, sampleData } = request.data;
     const apiKey = geminiApiKey.value();
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const systemPrompt = `You are a data mapping assistant. I have an Excel file with specific headers.
 I need a JSON object that maps these headers to my database field names.
 Internal database fields:

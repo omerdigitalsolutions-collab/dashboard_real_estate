@@ -139,7 +139,7 @@ function DealsColumn({
     const totalCommission = deals.reduce((sum, d) => sum + (d.actualCommission ?? d.projectedCommission ?? 0), 0);
 
     return (
-        <div ref={setNodeRef} className="w-[320px] 2xl:w-[340px] flex-shrink-0 flex flex-col h-[650px] 2xl:h-[750px] bg-slate-50/70 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div ref={setNodeRef} className="snap-center w-[85vw] sm:w-[320px] 2xl:w-[340px] flex-shrink-0 flex flex-col h-[600px] sm:h-[650px] 2xl:h-[750px] bg-slate-50/70 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className={`p-4 border-b ${stage.border} ${stage.headerBg}`}>
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
@@ -305,8 +305,8 @@ export default function DealsKanban() {
     };
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[800px] h-[calc(100vh-8rem)] relative">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px] sm:min-h-[800px] h-[calc(100vh-8rem)] relative">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">לוח עסקאות דינמי</h2>
                     <p className="text-sm font-medium text-slate-500 mt-1">גרור עסקאות בין השלבים השונים למעקב חכם אחריהן</p>
@@ -320,7 +320,7 @@ export default function DealsKanban() {
                 </button>
             </div>
 
-            <div className="p-6 flex-grow overflow-y-auto bg-slate-50/30">
+            <div className="p-4 sm:p-6 flex-grow overflow-x-hidden sm:overflow-x-auto overflow-y-auto bg-slate-50/30">
                 <DndContext
                     sensors={sensors}
                     collisionDetection={(args) => {
@@ -330,8 +330,8 @@ export default function DealsKanban() {
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                 >
-                    {/* FLEX WRAP container for 2 rows effect */}
-                    <div className="flex flex-wrap gap-6 items-start pb-4">
+                    {/* FLEX container with overflow-x-auto for horizontal scroll on mobile, wrap on desktop */}
+                    <div className="flex flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-x-visible snap-x snap-mandatory sm:snap-none gap-4 sm:gap-6 items-start pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
                         {activeStages.map(stage => (
                             <SortableContext
                                 key={stage.id}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, QueryConstraint, DocumentData, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Property, Deal, Lead, AppUser, AppTask, Alert } from '../types';
+import { Property, Deal, Lead, AppUser, AppTask, Alert, PendingLead } from '../types';
 
 /**
  * Generic real-time hook to subscribe to any Firestore collection 
@@ -72,6 +72,7 @@ export const useLeads = () => useAgencyCollection<Lead>('leads');   // sorted cl
 export const useAgents = () => useAgencyCollection<AppUser>('users', [where('role', 'in', ['admin', 'agent'])]);
 export const useTasks = () => useAgencyCollection<AppTask>('tasks');   // sorted client-side below
 export const useAlerts = () => useAgencyCollection<Alert>('alerts');
+export const usePendingLeads = () => useAgencyCollection<PendingLead>('pending_leads');
 
 export function useAgency() {
     const { userData } = useAuth();

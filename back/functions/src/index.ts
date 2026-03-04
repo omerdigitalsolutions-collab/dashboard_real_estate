@@ -45,6 +45,15 @@ import { triggerSystemAlert } from './alerts/triggers';
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
 import { getWhatsAppQrCode, whatsappWebhook } from './whatsapp';
 
+// ── Super Admin Module ─────────────────────────────────────────────────────────
+import {
+    superAdminGetAgencyUsage,
+    superAdminGetImportMapping,
+    superAdminImportGlobalProperties,
+    superAdminGetDashboardStats,
+    setupSuperAdmin,
+} from './superadmin';
+
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
 //   agencies-createAgencyAccount
@@ -63,3 +72,10 @@ export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, ma
 export const catalogs = { generateCatalog };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { getWhatsAppQrCode, whatsappWebhook };
+export const superadmin = {
+    setupSuperAdmin,
+    superAdminGetDashboardStats,
+    superAdminGetAgencyUsage,
+    superAdminGetImportMapping,
+    superAdminImportGlobalProperties,
+};

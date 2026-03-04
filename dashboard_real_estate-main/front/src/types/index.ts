@@ -163,6 +163,17 @@ export interface Property {
     yad2Link?: string;
 }
 
+export interface PendingLead {
+    id: string;
+    agencyId: string;
+    phone: string;
+    initialMessage: string;
+    aiSummary?: string;
+    aiIntent?: 'buy' | 'rent' | 'sell' | 'inquiry';
+    createdAt?: Timestamp;
+    expiresAt?: number;
+}
+
 // ─── Deals ────────────────────────────────────────────────────────────────────
 export type DealStage = string; // Permits dynamic custom stages
 

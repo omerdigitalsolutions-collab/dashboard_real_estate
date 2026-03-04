@@ -338,7 +338,7 @@ export default function LandingPage() {
                     </div>
 
                     <p className="text-slate-500 text-sm md:text-base text-center font-medium">
-                        © 2026 hOMER מבית עומר פתרונות דיגיטלים. <br className="sm:hidden" />Automate Your Success.
+                        © 2026 Homer מבית עומר פתרונות דיגיטלים. <br className="sm:hidden" />Automate Your Success.
                     </p>
                 </div>
             </footer>

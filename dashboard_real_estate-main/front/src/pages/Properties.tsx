@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building } from 'lucide-react';
-import { useProperties, useAgents, useLeads, useDeals } from '../hooks/useFirestoreData';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake } from 'lucide-react';
+import { useProperties, useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useAuth } from '../context/AuthContext';
 
 import AddPropertyModal from '../components/modals/AddPropertyModal';
@@ -9,6 +9,7 @@ import EditPropertyModal from '../components/modals/EditPropertyModal';
 import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import ImportModal from '../components/modals/ImportModal';
 import MergePropertiesModal from '../components/modals/MergePropertiesModal';
+import CreateDealFromPropertyModal from '../components/modals/CreateDealFromPropertyModal';
 import { Property, AppUser, Lead, Deal } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
@@ -17,6 +18,7 @@ export default function Properties() {
     const { data: agents = [] } = useAgents();
     const { data: leads = [] } = useLeads();
     const { data: deals = [] } = useDeals();
+    const { agency } = useAgency();
     const { userData } = useAuth();
     const isAdmin = userData?.role === 'admin';
 
@@ -29,6 +31,7 @@ export default function Properties() {
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
+    const [propertyToCreateDeal, setPropertyToCreateDeal] = useState<Property | null>(null);
     const [toast, setToast] = useState('');
 
     const location = useLocation();
@@ -339,18 +342,33 @@ export default function Properties() {
                                                 </div>
                                             </div>
                                         </div>
-                                        {/* Edit / Actions overlaid on the grid card */}
-                                        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+
+                                        {/* Card Footer Actions */}
+                                        <div className="px-4 pb-4 pt-2 flex items-center gap-2 border-t border-slate-100 mt-3">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                                                title="צור עסקה לנכס זה"
+                                            >
+                                                <Handshake size={13} />
+                                                צור עסקה
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
+                                                className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors"
+                                                title="ערוך נכס"
+                                            >
+                                                <Pencil size={14} />
+                                            </button>
                                             {prop.listingType === 'external' && prop.externalAgentPhone && (
                                                 <a
                                                     href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
                                                     target="_blank" rel="noreferrer"
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="bg-emerald-500/90 hover:bg-emerald-600/90 backdrop-blur-sm shadow-md text-white px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[10px] sm:text-xs font-bold"
-                                                    title="צור קשר בוואטסאפ לשת״פ"
+                                                    className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200 rounded-lg transition-colors"
+                                                    title="ווטסאפ סוכן"
                                                 >
                                                     <MessageCircle size={14} />
-                                                    <span className="hidden sm:inline">ווטסאפ סוכן</span>
                                                 </a>
                                             )}
                                             {isAdmin && prop.yad2Link && (
@@ -358,19 +376,12 @@ export default function Properties() {
                                                     href={prop.yad2Link}
                                                     target="_blank" rel="noreferrer"
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="bg-orange-500/90 hover:bg-orange-600/90 backdrop-blur-sm shadow text-white px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold"
+                                                    className="p-1.5 bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-600 border border-slate-200 rounded-lg transition-colors text-[10px] font-bold"
                                                     title="מודעה ביד2"
                                                 >
-                                                    🔗 מודעה ביד2
+                                                    🔗
                                                 </a>
                                             )}
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
-                                                className="bg-white/90 backdrop-blur-sm shadow text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
-                                                title="ערוך נכס"
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -484,6 +495,13 @@ export default function Properties() {
                                                             <Pencil size={16} />
                                                         </button>
                                                         <button
+                                                            onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors shrink-0"
+                                                            title="צור עסקה"
+                                                        >
+                                                            <Handshake size={16} />
+                                                        </button>
+                                                        <button
                                                             onClick={async (e) => {
                                                                 e.stopPropagation();
                                                                 if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
@@ -546,7 +564,13 @@ export default function Properties() {
             {selectedProperty && (
                 <PropertyDetailsModal
                     property={selectedProperty}
+                    agents={agents}
+                    leads={leads}
                     onClose={() => setSelectedProperty(null)}
+                    onCreateDeal={(prop) => {
+                        setSelectedProperty(null); // Close details modal
+                        setPropertyToCreateDeal(prop); // Open create deal modal
+                    }}
                 />
             )}
 
@@ -559,6 +583,21 @@ export default function Properties() {
                     setTimeout(() => setToast(''), 3500);
                 }}
             />
+
+            {propertyToCreateDeal && (
+                <CreateDealFromPropertyModal
+                    property={propertyToCreateDeal}
+                    agents={agents}
+                    leads={leads}
+                    agencySettings={agency?.settings}
+                    isOpen={true}
+                    onClose={() => setPropertyToCreateDeal(null)}
+                    onSuccess={(msg) => {
+                        setToast(msg);
+                        setTimeout(() => setToast(''), 3500);
+                    }}
+                />
+            )}
 
             {toast && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50">

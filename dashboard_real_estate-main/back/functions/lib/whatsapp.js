@@ -206,20 +206,29 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     cors: true,
     secrets: [masterKey],
 }, async (request) => {
-    var _a;
+    var _a, _b;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
     const credsRef = db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp');
     const agencyRef = db.collection('agencies').doc(agencyId);
-    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    let keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    const agencyDoc = await agencyRef.get();
+    const legacyKeys = (_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.greenApiKeys;
+    // Fallback: If no encrypted keys exist, check if the agency has legacy plain-text keys
+    if (!keys && (legacyKeys === null || legacyKeys === void 0 ? void 0 : legacyKeys.idInstance) && (legacyKeys === null || legacyKeys === void 0 ? void 0 : legacyKeys.apiTokenInstance)) {
+        keys = {
+            idInstance: legacyKeys.idInstance,
+            apiTokenInstance: legacyKeys.apiTokenInstance
+        };
+    }
     if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
         // If credentials are already missing but the agency doc still has metadata, clear it anyway
-        const agencyDoc = await agencyRef.get();
-        if ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.whatsappIntegration) {
+        if (((_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.whatsappIntegration) || legacyKeys) {
             await agencyRef.update({
                 isWhatsappConnected: false,
-                whatsappIntegration: null
+                whatsappIntegration: admin.firestore.FieldValue.delete(),
+                greenApiKeys: admin.firestore.FieldValue.delete()
             });
             // CRITICAL: Always delete the private credentials doc to allow reconnecting
             await credsRef.delete();
@@ -229,7 +238,7 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     }
     // 1. Send LogOut to Green API to clear the current WhatsApp session
     try {
-        await axios_1.default.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`);
+        await axios_1.default.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`, { timeout: 10000 });
         console.log(`[WhatsApp] Logged out instance ${keys.idInstance}`);
     }
     catch (err) {
@@ -248,10 +257,11 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
             });
             // Delete from private subcollection
             t.delete(credsRef);
-            // Wipe status from agency doc
+            // Wipe status and legacy keys from agency doc
             t.set(agencyRef, {
                 isWhatsappConnected: false,
-                whatsappIntegration: null
+                whatsappIntegration: admin.firestore.FieldValue.delete(),
+                greenApiKeys: admin.firestore.FieldValue.delete()
             }, { merge: true });
         });
         return { success: true, message: 'Disconnected and safely returned instance to pool.' };
@@ -615,7 +625,7 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
             }
             try {
                 const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
                 const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
 Scan this message for property listings (for sale or rent).
 If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
@@ -672,7 +682,7 @@ Output strict JSON:
                 if (apiKey) {
                     try {
                         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
                         const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
         Message: "${textMessage}"
         

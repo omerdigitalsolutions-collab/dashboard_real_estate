@@ -28,6 +28,7 @@ import {
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
+import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
 
 // ─── Tooltip customisation ───────────────────────────────────────────────────
 const NeonBarTooltip = ({ active, payload, label }: any) => {
@@ -195,6 +196,7 @@ export default function SuperAdminDashboard() {
     } = useGlobalStats();
 
     const [search, setSearch] = useState('');
+    const [selectedAgency, setSelectedAgency] = useState<AgencyRow | null>(null);
 
     const filteredAgencies = recentAgencies.filter((ag) =>
         (ag.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
@@ -507,7 +509,9 @@ export default function SuperAdminDashboard() {
                                 filteredAgencies.map((ag: AgencyRow) => (
                                     <tr
                                         key={ag.id}
-                                        className="group border-b border-slate-800/50 hover:bg-cyan-500/5 transition-colors"
+                                        className="group border-b border-slate-800/50 hover:bg-cyan-500/5 transition-colors cursor-pointer"
+                                        onClick={() => setSelectedAgency(prev => prev?.id === ag.id ? null : ag)}
+                                        style={selectedAgency?.id === ag.id ? { background: 'rgba(6,182,212,0.08)' } : undefined}
                                     >
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
@@ -546,6 +550,13 @@ export default function SuperAdminDashboard() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* ── Agency Drill-Down: Resource Usage ────────────────────────────── */}
+                {selectedAgency && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                        <AgencyUsageWidget agencyId={selectedAgency.id} agencyName={selectedAgency.name ?? undefined} />
+                    </div>
+                )}
             </div>
         </div >
     );

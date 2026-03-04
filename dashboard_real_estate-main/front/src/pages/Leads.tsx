@@ -288,7 +288,7 @@ export default function Leads() {
               className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-right placeholder-slate-400"
             />
           </div>
-          <div className="flex gap-2 mr-auto sm:mr-0">
+          <div className="flex gap-2 mr-auto sm:mr-0 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto hide-scrollbar">
             {['All', 'new', 'contacted', 'meeting_set', 'won', 'lost'].map((f) => (
               <button
                 key={f}
@@ -547,6 +547,8 @@ export default function Leads() {
       {selectedProperty && (
         <PropertyDetailsModal
           property={selectedProperty}
+          agents={agents}
+          leads={leads}
           onClose={() => setSelectedProperty(null)}
         />
       )}

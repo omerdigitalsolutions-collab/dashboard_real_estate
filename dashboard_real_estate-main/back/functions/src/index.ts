@@ -58,7 +58,7 @@ import { askCopilot } from './ai/copilot';
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
-import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin } from './superadmin';
+import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage } from './superadmin';
 import { superAdminImportGlobalProperties, superAdminGetImportMapping } from './admin/globalImport';
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
@@ -86,7 +86,8 @@ export const superadmin = {
     superAdminGetDashboardStats,
     setupSuperAdmin,
     superAdminImportGlobalProperties,
-    superAdminGetImportMapping
+    superAdminGetImportMapping,
+    superAdminGetAgencyUsage
 };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';

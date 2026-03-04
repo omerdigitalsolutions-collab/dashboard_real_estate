@@ -363,9 +363,9 @@ export const inviteAgent = onCall(
       const resend = new Resend(apiKey);
       try {
         await resend.emails.send({
-          from: 'onboarding@resend.dev', // Resend testing sandbox
-          to: email.trim().toLowerCase(),
-          subject: `הוזמנת להצטרף ל${agencyName} 🏠`,
+          from: 'hello@homer.management',
+          to: [email.trim().toLowerCase()],
+          subject: `🏠 הזמנה להצטרף לסוכנות נדל״ן ${agencyName} 🏠`,
           html: buildInviteEmail(name.trim(), agencyName, joinLink),
         });
         console.log(`[inviteAgent] Invite email sent to ${email} via Resend`);
