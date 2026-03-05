@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, Users, TrendingUp, BarChart3, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare, Pencil, Home } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, Sparkles, RefreshCw, Car, MoveUp, Sun, Shield, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, UserCircle2, MessageSquare, Pencil, Home, Calendar } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
+import { useSearchParams } from 'react-router-dom';
 import PropertyMatcherModal from '../components/leads/PropertyMatcherModal';
 import LeadProfilePanel from '../components/leads/LeadProfilePanel';
 import AddLeadModal from '../components/modals/AddLeadModal';
@@ -12,8 +13,9 @@ import ImportModal from '../components/modals/ImportModal';
 import BulkWhatsAppModal from '../components/modals/BulkWhatsAppModal';
 import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import PendingLeadsInbox from '../components/leads/PendingLeadsInbox';
+import KpiCard from '../components/dashboard/KpiCard';
 import { Toast, ToastState } from '../components/ui/Toast';
-import { Lead, Property } from '../types';
+import { Lead, Property, TimeRange } from '../types';
 import { deleteLead } from '../services/leadService';
 
 const statusColors: Record<string, string> = {
@@ -45,6 +47,44 @@ export default function Leads() {
   const [filter, setFilter] = useState('All');
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller'>('buyer');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'createdAt', direction: 'desc' });
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawRange = searchParams.get('range') as TimeRange | null;
+  const [timeRange, setTimeRange] = useState<TimeRange | 'all'>(rawRange || 'all');
+
+  useEffect(() => {
+    if (rawRange) {
+      setTimeRange(rawRange);
+    }
+  }, [rawRange]);
+
+  const handleRangeChange = (newRange: TimeRange | 'all') => {
+    setTimeRange(newRange);
+    if (newRange === 'all') {
+      searchParams.delete('range');
+    } else {
+      searchParams.set('range', newRange);
+    }
+    setSearchParams(searchParams);
+  };
+
+  const filterByTimeRange = (items: any[], range: TimeRange | 'all') => {
+    if (range === 'all') return items;
+    const now = new Date();
+    const cutoff = new Date();
+    if (range === '1m') cutoff.setMonth(now.getMonth() - 1);
+    else if (range === '3m') cutoff.setMonth(now.getMonth() - 3);
+    else if (range === '6m') cutoff.setMonth(now.getMonth() - 6);
+    else if (range === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+
+    return items.filter(item => {
+      if (!item.createdAt) return true;
+      const itemDate = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+      return itemDate >= cutoff;
+    });
+  };
+
+  const filteredLeadsByTime = useMemo(() => filterByTimeRange(leads, timeRange), [leads, timeRange]);
 
   // Multi-selection state
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
@@ -81,7 +121,7 @@ export default function Leads() {
   };
 
   const processedLeads = useMemo(() => {
-    let filtered = leads.filter((lead) => {
+    let filtered = filteredLeadsByTime.filter((lead) => {
       const type = lead.type || 'buyer';
       if (type !== activeTab) return false;
 
@@ -113,7 +153,7 @@ export default function Leads() {
     }
 
     return filtered;
-  }, [leads, search, filter, activeTab, sortConfig]);
+  }, [filteredLeadsByTime, search, filter, activeTab, sortConfig]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -203,28 +243,46 @@ export default function Leads() {
             </>
           )}
 
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            title="רענן רשימה"
-            className="inline-flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw size={18} className={isRefreshing ? "animate-spin text-blue-600" : ""} />
-          </button>
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-          >
-            <Upload size={16} />
-            ייבוא מאקסל
-          </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-          >
-            <Plus size={16} />
-            הוסף ליד
-          </button>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap px-1">
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm h-10 order-last sm:order-none w-full sm:w-auto mt-2 sm:mt-0">
+              <Calendar size={16} className="text-slate-400" />
+              <select
+                value={timeRange}
+                onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
+                className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none appearance-none pr-6 cursor-pointer w-full"
+                style={{ paddingRight: '1rem', paddingLeft: '0.5rem' }}
+              >
+                <option value="all">כל הזמן</option>
+                <option value="1m">חודש אחרון</option>
+                <option value="3m">3 חודשים</option>
+                <option value="6m">6 חודשים</option>
+                <option value="1y">שנה אחרונה</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="רענן רשימה"
+              className="inline-flex items-center justify-center w-10 h-10 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl transition-colors shadow-sm disabled:opacity-50 shrink-0"
+            >
+              <RefreshCw size={18} className={isRefreshing ? "animate-spin text-blue-600" : ""} />
+            </button>
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+            >
+              <Upload size={16} />
+              ייבוא מאקסל
+            </button>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+            >
+              <Plus size={16} />
+              הוסף ליד
+            </button>
+          </div>
         </div>
       </div>
 
@@ -238,22 +296,18 @@ export default function Leads() {
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: 'סה"כ לידים', value: leads.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'אחוז המרה', value: leads.length > 0 ? `${Math.round((leads.filter(l => l.status === 'won').length / leads.length) * 100)}%` : '0%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'שווי פוטנציאלי', value: `₪${Math.round(leads.reduce((sum, l) => sum + (l.requirements?.maxBudget || 0), 0) / 1_000_000 * 10) / 10}M`, icon: BarChart3, color: 'text-violet-600', bg: 'bg-violet-50' },
-        ].map((card) => (
-          <div key={card.label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl ${card.bg} flex items-center justify-center`}>
-              <card.icon size={22} className={card.color} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500">{card.label}</p>
-              <p className="text-lg font-bold text-slate-900 mt-0.5">{card.value}</p>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" dir="rtl">
+        <KpiCard
+          title="סה״כ לידים פעילים"
+          value={filteredLeadsByTime.filter(l => ['new', 'contacted', 'meeting_set'].includes(l.status)).length.toString()}
+          rawValue={filteredLeadsByTime.filter(l => ['new', 'contacted', 'meeting_set'].includes(l.status)).length}
+          target={50}
+          change="+10%"
+          positive
+          subtitle={timeRange === 'all' ? "לידים חמים (כל הזמן)" : `לידים חמים (${timeRange})`}
+          icon="Users"
+          color="emerald"
+        />
       </div>
 
       <PendingLeadsInbox />
@@ -264,13 +318,13 @@ export default function Leads() {
           onClick={() => { setActiveTab('buyer'); setSelectedLeadIds(new Set()); }}
           className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'buyer' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          מחפשי דירה ({leads.filter(l => l.type === 'buyer').length || 0})
+          מחפשי דירה ({filteredLeadsByTime.filter(l => l.type === 'buyer').length || 0})
         </button>
         <button
           onClick={() => { setActiveTab('seller'); setSelectedLeadIds(new Set()); }}
-          className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'seller' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          className={`px-6 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'seller' ? 'bg-white text-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
-          בעלי נכסים ({leads.filter(l => l.type === 'seller').length || 0})
+          בעלי נכסים ({filteredLeadsByTime.filter(l => l.type === 'seller').length || 0})
         </button>
       </div>
 

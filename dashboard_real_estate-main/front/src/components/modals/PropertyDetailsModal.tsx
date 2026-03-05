@@ -13,7 +13,7 @@ interface PropertyDetailsModalProps {
     onCreateDeal?: (property: Property) => void;
 }
 
-export default function PropertyDetailsModal({ property, agents, leads, onClose }: PropertyDetailsModalProps) {
+export default function PropertyDetailsModal({ property, agents, leads, onClose, onCreateDeal }: PropertyDetailsModalProps) {
     const { userData } = useAuth();
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);

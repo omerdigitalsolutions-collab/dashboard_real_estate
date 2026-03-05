@@ -65,7 +65,7 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
                 name: name.trim(),
                 role,
                 phone: phone.trim() || undefined,
-                appUrl: window.location.origin, // Passes the real deployed URL to the CF
+                appUrl: 'https://homer.management', // Passes the real deployed URL to the CF
             });
 
             // If phone was provided and CF returned a WhatsApp URL, open it

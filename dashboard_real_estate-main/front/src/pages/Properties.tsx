@@ -10,7 +10,8 @@ import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import ImportModal from '../components/modals/ImportModal';
 import MergePropertiesModal from '../components/modals/MergePropertiesModal';
 import CreateDealFromPropertyModal from '../components/modals/CreateDealFromPropertyModal';
-import { Property, AppUser, Lead, Deal } from '../types';
+import KpiCard from '../components/dashboard/KpiCard';
+import { Property, AppUser, Lead, Deal, TimeRange } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
 export default function Properties() {
@@ -37,8 +38,11 @@ export default function Properties() {
     const location = useLocation();
     const navigate = useNavigate();
 
+    const params = new URLSearchParams(location.search);
+    const rawRange = params.get('range') as TimeRange | null;
+    const [timeRange, setTimeRange] = useState<TimeRange | 'all'>(rawRange || 'all');
+
     useEffect(() => {
-        const params = new URLSearchParams(location.search);
         const queryId = params.get('id');
         const openId = location.state?.openId || queryId;
 
@@ -53,7 +57,40 @@ export default function Properties() {
                 }
             }
         }
-    }, [location.state, location.search, properties, selectedProperty, navigate, location.pathname]);
+
+        if (rawRange) {
+            setTimeRange(rawRange);
+        }
+    }, [location.state, location.search, properties, selectedProperty, navigate, location.pathname, rawRange]);
+
+    const handleRangeChange = (newRange: TimeRange | 'all') => {
+        setTimeRange(newRange);
+        const newParams = new URLSearchParams(location.search);
+        if (newRange === 'all') {
+            newParams.delete('range');
+        } else {
+            newParams.set('range', newRange);
+        }
+        navigate(`${location.pathname}?${newParams.toString()}`, { replace: true, state: location.state });
+    };
+
+    const filterByTimeRange = (items: any[], range: TimeRange | 'all') => {
+        if (range === 'all') return items;
+        const now = new Date();
+        const cutoff = new Date();
+        if (range === '1m') cutoff.setMonth(now.getMonth() - 1);
+        else if (range === '3m') cutoff.setMonth(now.getMonth() - 3);
+        else if (range === '6m') cutoff.setMonth(now.getMonth() - 6);
+        else if (range === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+
+        return items.filter(item => {
+            if (!item.createdAt) return true;
+            const itemDate = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+            return itemDate >= cutoff;
+        });
+    };
+
+    const filteredPropertiesByTime = useMemo(() => filterByTimeRange(properties, timeRange), [properties, timeRange]);
 
     const handleSelectAll = () => {
         if (selectedPropertyIds.size === filtered.length) {
@@ -83,7 +120,7 @@ export default function Properties() {
         }
     };
 
-    const filtered = properties.filter((prop: Property) => {
+    const filtered = filteredPropertiesByTime.filter((prop: Property) => {
         const matchesSearch =
             (prop.city && prop.city.toLowerCase().includes(search.toLowerCase())) ||
             (prop.address && prop.address.toLowerCase().includes(search.toLowerCase())) || '';
@@ -93,7 +130,7 @@ export default function Properties() {
 
     const duplicateGroups = useMemo(() => {
         const groups = new Map<string, Property[]>();
-        properties.forEach((p: Property) => {
+        filteredPropertiesByTime.forEach((p: Property) => {
             if (p.status === 'draft' || !p.city || !p.address) return;
             const cityStr = p.city.trim().toLowerCase();
             const addrStr = p.address.trim().toLowerCase();
@@ -112,7 +149,7 @@ export default function Properties() {
             }
         });
         return result;
-    }, [properties]);
+    }, [filteredPropertiesByTime]);
 
     // Helper functions for Grid View
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
@@ -139,7 +176,7 @@ export default function Properties() {
                     <h1 className="text-xl font-bold text-slate-900 leading-tight">ניהול נכסים</h1>
                     <p className="text-sm text-slate-500 mt-1">{properties.length} נכסים במערכת</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
                     {selectedPropertyIds.size > 0 && (
                         <button
                             onClick={handleBulkDelete}
@@ -163,7 +200,35 @@ export default function Properties() {
                         <Plus size={16} />
                         הוסף נכס
                     </button>
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm h-10 w-full sm:w-auto overflow-hidden">
+                        <select
+                            value={timeRange}
+                            onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
+                            className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none appearance-none pr-2 cursor-pointer w-full text-right"
+                        >
+                            <option value="all">כל הזמן</option>
+                            <option value="1m">חודש אחרון</option>
+                            <option value="3m">3 חודשים</option>
+                            <option value="6m">6 חודשים</option>
+                            <option value="1y">שנה אחרונה</option>
+                        </select>
+                    </div>
                 </div>
+            </div>
+
+            {/* Top KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" dir="rtl">
+                <KpiCard
+                    title="מלאי נכסים"
+                    value={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length.toString()}
+                    rawValue={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length}
+                    target={20}
+                    change="חדשים בתקופה"
+                    positive={true}
+                    subtitle={timeRange === 'all' ? "בלעדיות נכסים (כל הזמן)" : `נכסים בבלעדיות (${timeRange})`}
+                    icon="Home"
+                    color="sky"
+                />
             </div>
 
             {/* Duplicates Banner */}

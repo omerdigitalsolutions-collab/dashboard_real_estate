@@ -24,6 +24,7 @@ import { useAuth } from './context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
+import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
 
 function DashboardIndex() {
   const { userData, loading } = useAuth();
@@ -92,6 +93,7 @@ function App() {
           <Route path="properties" element={<ErrorBoundary><Properties /></ErrorBoundary>} />
           <Route path="transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
           <Route path="agents" element={<ErrorBoundary><Agents /></ErrorBoundary>} />
+          <Route path="pnl" element={<ErrorBoundary><ProfitAndLossDashboard /></ErrorBoundary>} />
           <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>

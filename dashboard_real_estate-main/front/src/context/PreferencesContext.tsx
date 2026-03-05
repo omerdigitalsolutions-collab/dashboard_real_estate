@@ -7,7 +7,8 @@ import debounce from 'lodash.debounce';
 
 interface PreferencesContextType {
     preferences: UserPreferences | null;
-    saveLayout: (newLayout: any[]) => void;
+    saveLayout: (newLayout: any) => void;
+    saveTabLayout: (tab: 'finance' | 'office', layout: any[]) => void;
     updatePreferences: (newPrefs: Partial<UserPreferences>) => void;
 }
 
@@ -75,13 +76,30 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }, [userData?.id, debouncedSaveToFirestore]);
 
     // Specialty function for layout since it gets spammed rapidly
-    const saveLayout = useCallback((newLayout: any[]) => {
+    const saveLayout = useCallback((newLayout: any) => {
         updatePreferences({ dashboardLayout: newLayout });
     }, [updatePreferences]);
+
+    // Save a single tab's layout, merging with the other tab's saved layout
+    const saveTabLayout = useCallback((tab: 'finance' | 'office', layout: any[]) => {
+        setPreferences((prev) => {
+            const existing = (prev?.dashboardLayout as any) || {};
+            const updated = {
+                ...prev,
+                dashboardLayout: {
+                    ...(typeof existing === 'object' && !Array.isArray(existing) ? existing : {}),
+                    [tab]: layout,
+                },
+            };
+            debouncedSaveToFirestore(userData!.id, updated);
+            return updated;
+        });
+    }, [userData?.id, debouncedSaveToFirestore]);
 
     const value = {
         preferences,
         saveLayout,
+        saveTabLayout,
         updatePreferences,
     };
 

@@ -20,7 +20,7 @@ import {
 
 // ─── Cloud Function Callables ─────────────────────────────────────────────────
 const fns = getFunctions(undefined, 'europe-west1');
-const cfConnectInstance = httpsCallable<{}, { success: boolean, message: string }>(fns, 'whatsapp-connectAgencyWhatsApp');
+const cfConnectInstance = httpsCallable<{}, { success: boolean; alreadyConnected: boolean; qrCode: string | null }>(fns, 'whatsapp-connectAgencyWhatsApp');
 const cfGenerateQR = httpsCallable<{}, { qrCode: string }>(fns, 'whatsapp-generateWhatsAppQR');
 const cfCheckStatus = httpsCallable<{}, { status: string }>(fns, 'whatsapp-checkWhatsAppStatus');
 const cfDisconnect = httpsCallable<{}, { success: boolean }>(fns, 'whatsapp-disconnectAgencyWhatsApp');
@@ -150,23 +150,30 @@ export const WhatsAppSettings = () => {
         setLoadingQR(true);
 
         try {
-            // 1. Allocate Instance
-            try {
-                await cfConnectInstance({});
-            } catch (err: any) {
-                if (err?.code !== 'already-exists' && !err?.message?.includes('already has an allocated')) {
-                    throw err;
-                }
-                console.log('WhatsApp instance already allocated for this agency, proceeding to QR.');
+            // Single call: allocates instance (if needed) AND fetches QR
+            const result = await cfConnectInstance({});
+
+            if (result.data.alreadyConnected) {
+                // Backend confirmed the session is already authorised — close modal
+                setShowModal(false);
+                setLoadingQR(false);
+                return;
             }
 
-            // 2. Generate QR
-            const result = await cfGenerateQR({});
-            setQrCode(result.data.qrCode);
-            startPolling();
+            if (result.data.qrCode) {
+                setQrCode(result.data.qrCode);
+                startPolling();
+            } else {
+                setError('לא התקבל קוד QR מהשרת. נסה שוב.');
+            }
         } catch (err: any) {
             console.error(err);
-            setError(err?.message || 'שגיאה ביצירת קוד QR. יש לוודא שיש Instances זמינים במאגר.');
+            if (err?.code === 'already-exists' || err?.message?.includes('WhatsApp is already connected')) {
+                setError('המשתמש כבר מחובר לווצאפ. יש לנתק תחילה את החיבור.');
+                setQrCode(null);
+            } else {
+                setError(err?.message || 'שגיאה ביצירת קוד QR. יש לוודא שיש Instances זמינים במאגר.');
+            }
         } finally {
             setLoadingQR(false);
         }
@@ -197,7 +204,12 @@ export const WhatsAppSettings = () => {
             setQrCode(result.data.qrCode);
             startPolling();
         } catch (err: any) {
-            setError(err?.message || 'שגיאה בריענון הקוד');
+            if (err?.code === 'already-exists' || err?.message?.includes('WhatsApp is already connected')) {
+                setError('המשתמש כבר מחובר לווצאפ בשרת. יש לנתק תחילה את החיבור הקיים דרך כפתור השגיאה (אם מוצג) או לחזור למסך הראשי.');
+                setQrCode(null);
+            } else {
+                setError(err?.message || 'שגיאה בריענון הקוד');
+            }
         } finally {
             setLoadingQR(false);
         }

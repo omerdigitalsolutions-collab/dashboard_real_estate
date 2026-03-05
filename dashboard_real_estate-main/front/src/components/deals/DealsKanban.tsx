@@ -175,8 +175,9 @@ import { Settings } from 'lucide-react';
 import DealStagesModal from '../modals/DealStagesModal';
 import DealProfileModal from '../modals/DealProfileModal';
 
-export default function DealsKanban() {
-    const { deals: liveDeals, leads, properties, agencySettings } = useLiveDashboardData();
+export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
+    const { deals: liveDealsHook, leads, properties, agencySettings } = useLiveDashboardData();
+    const liveDeals = dealsProps ?? liveDealsHook;
     const [deals, setDeals] = useState<Deal[]>([]);
 
     const activeStages = useMemo(() => {

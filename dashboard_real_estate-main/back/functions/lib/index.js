@@ -76,7 +76,8 @@ exports.superadmin = {
     superAdminGetDashboardStats: superadmin_1.superAdminGetDashboardStats,
     setupSuperAdmin: superadmin_1.setupSuperAdmin,
     superAdminImportGlobalProperties: globalImport_1.superAdminImportGlobalProperties,
-    superAdminGetImportMapping: globalImport_1.superAdminGetImportMapping
+    superAdminGetImportMapping: globalImport_1.superAdminGetImportMapping,
+    superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage
 };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });

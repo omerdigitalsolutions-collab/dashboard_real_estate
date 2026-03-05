@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../config/firebase';
+import { functions, auth } from '../config/firebase';
 import {
     Loader2, User, Phone, Building2, CheckCircle2,
     MapPin, BadgeCheck, Camera, Star, Briefcase, ChevronLeft, ChevronRight,
@@ -126,7 +126,13 @@ export default function Onboarding() {
 
             newAgencyId = result.data.agencyId;
 
-            // Refresh context in the background so it's ready for the Dashboard
+            // Force token refresh so custom claims (agencyId, role) are immediately
+            // present in the JWT — without this, Firestore rules deny all listeners.
+            if (auth.currentUser) {
+                await auth.currentUser.getIdToken(true);
+            }
+
+            // Refresh context so userData reflects the new agencyId
             await refreshUserData();
         } catch (err: any) {
             if (err?.code === 'functions/already-exists') {

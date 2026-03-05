@@ -1,5 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 
+export type TimeRange = '1m' | '3m' | '6m' | '1y';
+
 // ─── Agencies ────────────────────────────────────────────────────────────────
 export type AgencySpecialization = 'residential' | 'commercial' | 'luxury' | 'new_projects';
 
@@ -259,4 +261,5 @@ export interface Expense {
     date: Timestamp; // Using Firestore Timestamp to maintain consistency
     createdBy: string;
     createdAt: Timestamp;
+    isRecurring?: boolean;
 }

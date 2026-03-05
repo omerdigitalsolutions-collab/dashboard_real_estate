@@ -1,14 +1,57 @@
-import { useState } from 'react';
-import { Download, Plus } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Download, Plus, Calendar } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import DealsKanban from '../components/deals/DealsKanban';
 import AddDealModal from '../components/modals/AddDealModal';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
+import { TimeRange } from '../types';
+import { calculatePipelineStats } from '../utils/analytics';
+import KpiCard from '../components/dashboard/KpiCard';
 
 export default function Transactions() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { deals, leads, properties, agencySettings } = useLiveDashboardData();
   const { data: agents } = useAgents();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawRange = searchParams.get('range') as TimeRange | null;
+  const [timeRange, setTimeRange] = useState<TimeRange | 'all'>(rawRange || 'all');
+
+  useEffect(() => {
+    if (rawRange) {
+      setTimeRange(rawRange);
+    }
+  }, [rawRange]);
+
+  const handleRangeChange = (newRange: TimeRange | 'all') => {
+    setTimeRange(newRange);
+    if (newRange === 'all') {
+      searchParams.delete('range');
+    } else {
+      searchParams.set('range', newRange);
+    }
+    setSearchParams(searchParams);
+  };
+
+  const filterByTimeRange = (items: any[], range: TimeRange | 'all') => {
+    if (range === 'all') return items;
+    const now = new Date();
+    const cutoff = new Date();
+    if (range === '1m') cutoff.setMonth(now.getMonth() - 1);
+    else if (range === '3m') cutoff.setMonth(now.getMonth() - 3);
+    else if (range === '6m') cutoff.setMonth(now.getMonth() - 6);
+    else if (range === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+
+    return items.filter(item => {
+      if (!item.createdAt) return true;
+      const itemDate = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+      return itemDate >= cutoff;
+    });
+  };
+
+  const filteredDeals = useMemo(() => filterByTimeRange(deals, timeRange), [deals, timeRange]);
+  const pipelineStats = useMemo(() => calculatePipelineStats(filteredDeals), [filteredDeals]);
 
   const handleExportCSV = () => {
     if (!deals || deals.length === 0) {
@@ -97,7 +140,22 @@ export default function Transactions() {
             <h1 className="text-xl font-bold text-slate-900">עסקאות - Kanban</h1>
             <p className="text-sm text-slate-500 mt-0.5">ניהול עסקאות באמצעות לוח עבודה דינמי</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm">
+              <Calendar size={16} className="text-slate-400" />
+              <select
+                value={timeRange}
+                onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
+                className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none appearance-none pr-6 cursor-pointer"
+                style={{ paddingRight: '1rem', paddingLeft: '0.5rem' }}
+              >
+                <option value="all">כל הזמן</option>
+                <option value="1m">חודש אחרון</option>
+                <option value="3m">3 חודשים</option>
+                <option value="6m">6 חודשים</option>
+                <option value="1y">שנה אחרונה</option>
+              </select>
+            </div>
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm shadow-blue-200"
@@ -115,8 +173,34 @@ export default function Transactions() {
           </div>
         </div>
 
+        {/* Dashboard Top KPIs Linkage */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" dir="rtl">
+          <KpiCard
+            title="סה״כ פוטנציאל עמלות"
+            value={`₪${pipelineStats.totalValue.toLocaleString()}`}
+            rawValue={pipelineStats.totalValue}
+            target={1000000}
+            change={`${pipelineStats.successRate.toFixed(1)}% אחוז הצלחה`}
+            positive
+            subtitle={timeRange === 'all' ? "בכל השלבים הפעילים (כל הזמן)" : `בכל השלבים הפעילים (${timeRange})`}
+            icon="Wallet"
+            color="blue"
+          />
+          <KpiCard
+            title="עסקאות פעילות"
+            value={pipelineStats.activeCount.toString()}
+            rawValue={pipelineStats.activeCount}
+            target={20}
+            change={`${pipelineStats.wonCount} נסגרו החודש`}
+            positive
+            subtitle={timeRange === 'all' ? "עסקאות בתהליך (כל הזמן)" : `עסקאות בתהליך (${timeRange})`}
+            icon="Handshake"
+            color="amber"
+          />
+        </div>
+
         <div className="flex-1 min-h-0">
-          <DealsKanban />
+          <DealsKanban dealsProps={filteredDeals} />
         </div>
 
         <AddDealModal

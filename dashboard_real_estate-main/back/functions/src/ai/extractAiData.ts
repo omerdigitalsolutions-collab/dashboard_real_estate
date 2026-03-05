@@ -60,6 +60,15 @@ Rules for lead objects:
 - "notes" (string - extra details)
 - "agentName" (string - name or email of the agent assigned to this lead)
 Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response. Ignore empty rows.`;
+            } else if (entityType === 'expenses') {
+                systemPrompt = `You are a financial assistant for a real estate agency. Review this JSON array of raw expenses. Map each expense to one of the following exact categories: ['שיווק', 'תפעול משרד', 'שכר', 'רכבים', 'שונות']. 
+Return a raw JSON array of objects with the exact keys:
+- "description" (string)
+- "amount" (number)
+- "category" (string - must be one of the exact 5 categories above)
+- "date" (string - YYYY-MM-DD format)
+- "isRecurring" (boolean - true only if it looks like a fixed monthly bill like rent, software subscriptions, insurance, etc. otherwise false)
+Do not wrap in markdown blocks. Return ONLY a parseable JSON array of objects. Ignore completely empty rows.`;
             } else if (entityType === 'combined' || entityType === 'mixed') {
                 systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
 You will receive a mixed file that might contain both Lead (client/owner) information and Property information in the same row or alternating rows.
@@ -70,7 +79,7 @@ For each logical record, extract:
 - Metadata: "entityType" (string - 'property', 'lead', or 'combined' if the record has both)
 Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response.`;
             } else {
-                throw new HttpsError('invalid-argument', 'Unsupported entityType. Must be properties, leads, combined, or mixed.');
+                throw new HttpsError('invalid-argument', `Unsupported entityType '${entityType}'. Must be properties, leads, combined, mixed, or expenses.`);
             }
 
             // Decide payload format (if it's base64 image or text)

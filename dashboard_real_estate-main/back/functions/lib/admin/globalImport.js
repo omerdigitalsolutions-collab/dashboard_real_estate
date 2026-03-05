@@ -47,7 +47,6 @@ exports.superAdminImportGlobalProperties = functions.https.onCall({
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
-    invoker: 'public'
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -101,7 +100,6 @@ exports.superAdminImportGlobalProperties = functions.https.onCall({
 exports.superAdminGetImportMapping = functions.https.onCall({
     region: 'europe-west1',
     secrets: [geminiApiKey],
-    invoker: 'public'
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -114,7 +112,8 @@ exports.superAdminGetImportMapping = functions.https.onCall({
     const { headers, sampleData } = request.data;
     const apiKey = geminiApiKey.value();
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    // Use the reliable 1.5 flash model (2.5 doesn't exist yet)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const systemPrompt = `You are a data mapping assistant. I have an Excel file with specific headers.
 I need a JSON object that maps these headers to my database field names.
 Internal database fields:
@@ -138,16 +137,23 @@ Sample data (first row): ${JSON.stringify(sampleData)}
 Return ONLY a JSON object where keys are the Excel headers and values are the internal database field names.
 If a header doesn't map to anything useful, ignore it.
 Example: {"עיר": "city", "כתובת": "street"}`;
-    const result = await model.generateContent(systemPrompt);
-    let text = result.response.text().trim();
-    // Clean potential markdown wrapping
-    text = text.replace(/```json|```/g, '').trim();
     try {
-        const mapping = JSON.parse(text);
-        return { success: true, mapping };
+        const result = await model.generateContent(systemPrompt);
+        let text = result.response.text().trim();
+        // Clean potential markdown wrapping
+        text = text.replace(/```json|```/g, '').trim();
+        try {
+            const mapping = JSON.parse(text);
+            return { success: true, mapping };
+        }
+        catch (e) {
+            console.error('[superAdminGetImportMapping] Invalid JSON:', text);
+            throw new functions.https.HttpsError('internal', 'AI returned invalid JSON mapping.');
+        }
     }
-    catch (e) {
-        throw new functions.https.HttpsError('internal', 'AI returned invalid JSON mapping.');
+    catch (apiError) {
+        console.error('[superAdminGetImportMapping] Gemini API Error:', apiError);
+        throw new functions.https.HttpsError('internal', 'Gemini API failed: ' + apiError.message);
     }
 });
 //# sourceMappingURL=globalImport.js.map

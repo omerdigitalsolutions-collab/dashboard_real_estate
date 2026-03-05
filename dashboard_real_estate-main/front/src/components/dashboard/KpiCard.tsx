@@ -10,6 +10,7 @@ interface KpiCardProps {
     subtitle: string;
     icon: string;
     color: string;
+    onClick?: () => void;
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -23,14 +24,22 @@ const colorMap: Record<string, { icon: string; bar: string; badge: string }> = {
     violet: { icon: 'bg-violet-500/20 text-violet-400', bar: 'bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.8)]', badge: 'bg-violet-500/20 text-violet-400' },
 };
 
-export default function KpiCard({ title, value, rawValue, target, change, positive, subtitle, icon, color }: KpiCardProps) {
+export default function KpiCard({ title, value, rawValue, target, change, positive, subtitle, icon, color, onClick }: KpiCardProps) {
     const Icon = iconMap[icon] ?? DollarSign;
     const colors = colorMap[color] ?? colorMap.blue;
     const pct = Math.min(100, Math.round((rawValue / target) * 100));
     const onTrack = pct >= 70;
 
+    const Component = onClick ? 'button' : 'div';
+    const clickabilityStyles = onClick
+        ? 'cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:bg-slate-800/90 hover:shadow-lg hover:shadow-primary/20 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+        : 'hover:border-slate-700 transition-colors duration-200';
+
     return (
-        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-4 sm:p-5 flex flex-col justify-between h-full hover:border-slate-700 transition-colors duration-200">
+        <Component
+            onClick={onClick}
+            className={`w-full text-right bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-4 sm:p-5 flex flex-col justify-between h-full ${clickabilityStyles}`}
+        >
             <div className="flex items-start justify-between">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.icon}`}>
                     <Icon size={20} />
@@ -62,9 +71,9 @@ export default function KpiCard({ title, value, rawValue, target, change, positi
                     <div
                         className={`h-full rounded-full transition-all duration-700 ${onTrack ? colors.bar : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]'}`}
                         style={{ width: `${pct}%` }}
-                    />
+                    ></div>
                 </div>
             </div>
-        </div>
+        </Component>
     );
 }

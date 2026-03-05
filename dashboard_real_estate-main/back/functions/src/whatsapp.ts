@@ -112,7 +112,10 @@ async function getGreenApiCredentials(agencyId: string, secretValue: string) {
  * connectAgencyWhatsApp:
  * Pulls an available Green API instance from the `available_instances` pool,
  * encrypts the API token, assigns it to `agencies/{agencyId}/private_credentials/whatsapp`,
- * and removes it from the pool.
+ * removes it from the pool, then immediately fetches and returns the QR code.
+ *
+ * The agency status is set to PENDING_SCAN until the user scans the QR.
+ * Only checkWhatsAppStatus (called by the frontend poller) will update it to CONNECTED.
  */
 export const connectAgencyWhatsApp = onCall({
   region: REGION,
@@ -123,54 +126,94 @@ export const connectAgencyWhatsApp = onCall({
 
   const agencyId = await getAgencyId(request.auth.uid);
 
-  // Check if agency already has keys in the private vault
   const credsRef = db.collection('agencies').doc(agencyId).collection('private_credentials').doc('whatsapp');
   const agencyRef = db.collection('agencies').doc(agencyId);
 
-  try {
+  // Check if agency already has keys in the private vault
+  const credsDoc = await credsRef.get();
+  const existingInstance = credsDoc.exists && credsDoc.data()?.idInstance ? credsDoc.data()!.idInstance as string : null;
+
+  // If already CONNECTED in Firestore, block re-allocation
+  const agencyDoc = await agencyRef.get();
+  const currentStatus = agencyDoc.data()?.whatsappIntegration?.status?.toUpperCase();
+  if (currentStatus === 'CONNECTED' && agencyDoc.data()?.isWhatsappConnected === true) {
+    throw new HttpsError('already-exists', 'WhatsApp is already connected. Disconnect first.');
+  }
+
+  let instanceId: string;
+  let instanceToken: string;
+
+  if (existingInstance) {
+    // Instance already allocated (PENDING_SCAN state) — reuse it without touching the pool
+    console.log(`[WhatsApp] Reusing already-allocated instance ${existingInstance} for agency ${agencyId}`);
+    const creds = await getGreenApiCredentials(agencyId, masterKey.value());
+    if (!creds?.idInstance || !creds?.apiTokenInstance) {
+      throw new HttpsError('internal', 'Could not decrypt existing instance credentials.');
+    }
+    instanceId = creds.idInstance;
+    instanceToken = creds.apiTokenInstance;
+  } else {
+    // Allocate a new instance from the pool
+    const availableSnap = await db.collection('available_instances').limit(1).get();
+    if (availableSnap.empty) {
+      throw new HttpsError('resource-exhausted', 'No available WhatsApp instances at the moment. Please contact support.');
+    }
+
+    const instanceDoc = availableSnap.docs[0];
+    const instanceData = instanceDoc.data() as { idInstance: string; apiTokenInstance: string };
+    instanceId = instanceData.idInstance;
+    instanceToken = instanceData.apiTokenInstance;
+
+    // Encrypt the token
+    const { encryptedToken, iv } = encryptToken(instanceToken, masterKey.value());
+
+    // Save credentials and update agency status atomically
     await db.runTransaction(async (t) => {
-      const credsDoc = await t.get(credsRef);
-      if (credsDoc.exists && credsDoc.data()?.idInstance) {
-        throw new HttpsError('already-exists', 'Agency already has an allocated WhatsApp instance.');
-      }
-
-      // Find an available instance
-      const availableSnap = await t.get(db.collection('available_instances').limit(1));
-      if (availableSnap.empty) {
-        throw new HttpsError('resource-exhausted', 'No available WhatsApp instances at the moment. Please contact support.');
-      }
-
-      const instanceDoc = availableSnap.docs[0];
-      const instanceData = instanceDoc.data() as { idInstance: string; apiTokenInstance: string };
-
-      // Encrypt the token
-      const { encryptedToken, iv } = encryptToken(instanceData.apiTokenInstance, masterKey.value());
-
-      // Save encrypted credentials to private subcollection
       t.set(credsRef, {
-        idInstance: instanceData.idInstance,
+        idInstance: instanceId,
         encryptedToken,
         iv,
         assignedAt: admin.firestore.FieldValue.serverTimestamp()
       });
-
-      // Update agency public metadata (remove plain-text keys if any existed, and set status)
       t.set(agencyRef, {
         greenApiKeys: admin.firestore.FieldValue.delete(),
         whatsappIntegration: {
-          status: 'PENDING_SCAN', // Force them to scan QR next
+          status: 'PENDING_SCAN',
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }
       }, { merge: true });
-
-      // Remove from pool
       t.delete(instanceDoc.ref);
     });
 
-    return { success: true, message: 'Instance allocated securely.' };
+    console.log(`[WhatsApp] Allocated new instance ${instanceId} to agency ${agencyId}`);
+  }
+
+  // Now fetch the QR code immediately so the frontend only needs ONE call
+  const qrUrl = `https://api.green-api.com/waInstance${instanceId}/qr/${instanceToken}`;
+  try {
+    console.log(`[WhatsApp] Fetching QR for instance ${instanceId}...`);
+    const resp = await axios.get(qrUrl, { timeout: 40_000 });
+
+    if (resp.data?.type === 'alreadyLogged') {
+      // Instance is already authorised — mark as connected immediately
+      await db.collection('agencies').doc(agencyId).set({
+        isWhatsappConnected: true,
+        whatsappIntegration: {
+          status: 'CONNECTED',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+      return { success: true, alreadyConnected: true, qrCode: null };
+    }
+
+    if (resp.data?.type !== 'qrCode' || !resp.data?.message) {
+      throw new HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
+    }
+
+    return { success: true, alreadyConnected: false, qrCode: resp.data.message as string };
   } catch (err: any) {
-    console.error('Failed to allocate instance:', err);
-    throw new HttpsError(err.code || 'internal', err.message || 'Failed to allocate instance');
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError('internal', `Failed to fetch QR: ${err.message}`);
   }
 });
 

@@ -229,7 +229,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
     };
 
     const handleQuickShare = (prop: Property) => {
-        const url = `${window.location.origin}/properties?id=${prop.id}`;
+        const url = `https://homer.management/properties?id=${prop.id}`;
         const waMsg = encodeURIComponent(`היי ${lead.name}, הנה פרטים על נכס מעניין ב${prop.city}: ${url}`);
         window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
     };
@@ -241,7 +241,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
             const nextIds = Array.from(new Set([...Array.from(selectedPropertyIds), prop.id]));
 
             let token = lead.catalogId;
-            let url = lead.catalogUrl;
+            let url = token ? `https://homer.management/catalog/${token}` : lead.catalogUrl;
 
             if (token) {
                 // Update existing
@@ -249,15 +249,15 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
             } else {
                 // Create new
                 token = await createCatalog(lead.agencyId, lead.id, lead.name, nextIds);
-                url = `${window.location.origin}/catalog/${token}`;
+                url = `https://homer.management/catalog/${token}`;
                 await updateLead(lead.id, { catalogId: token, catalogUrl: url } as any);
             }
 
             // Re-select it so UI updates visually
             setSelectedPropertyIds(new Set(nextIds));
-            setCatalogUrl(url || `${window.location.origin}/catalog/${token}`);
+            setCatalogUrl(url || `https://homer.management/catalog/${token}`);
 
-            const waMsg = encodeURIComponent(`היי ${lead.name}, יש למשרד שלנו נכס חדש שכרגע יצא לשוק ונראה שהוא בול מה שחיפשת! הוספתי לך אותו לקטלוג האישי שלך. כנס לראות: ${url || `${window.location.origin}/catalog/${token}`}`);
+            const waMsg = encodeURIComponent(`היי ${lead.name}, יש למשרד שלנו נכס חדש שכרגע יצא לשוק ונראה שהוא בול מה שחיפשת! הוספתי לך אותו לקטלוג האישי שלך. כנס לראות: ${url || `https://homer.management/catalog/${token}`}`);
             window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
         } catch (error) {
             console.error('Failed to quick add to catalog', error);
@@ -274,7 +274,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
         try {
             const nextIds = Array.from(selectedPropertyIds);
             let token = lead.catalogId;
-            let url = lead.catalogUrl;
+            let url = token ? `https://homer.management/catalog/${token}` : lead.catalogUrl;
 
             if (token) {
                 // Persistent Update
@@ -287,7 +287,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                     lead.name,
                     nextIds
                 );
-                url = `${window.location.origin}/catalog/${token}`;
+                url = `https://homer.management/catalog/${token}`;
                 // Save to lead document
                 await updateLead(lead.id, {
                     catalogId: token,
@@ -295,8 +295,8 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                 } as any);
             }
 
-            setCatalogUrl(url || `${window.location.origin}/catalog/${token}`);
-            if (openTab) window.open(url || `${window.location.origin}/catalog/${token}`, '_blank', 'noopener,noreferrer');
+            setCatalogUrl(url || `https://homer.management/catalog/${token}`);
+            if (openTab) window.open(url || `https://homer.management/catalog/${token}`, '_blank', 'noopener,noreferrer');
         } catch (error) {
             console.error('Failed to update catalog', error);
             alert('שגיאה בעדכון הקטלוג.');
