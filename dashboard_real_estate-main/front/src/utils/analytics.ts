@@ -17,10 +17,12 @@ export function calculatePipelineStats(deals: Deal[]): PipelineStats {
     let activeCount = 0;
 
     for (const deal of deals) {
-        if (deal.stage === 'won') {
+        const stageNorm = ((deal.stage as string) || '').toLowerCase();
+        if (stageNorm === 'won') {
             wonCount++;
-            revenue += (deal.actualCommission ?? 0);
-        } else if (deal.stage === 'lost') {
+            // Use actual commission if set, otherwise fall back to projected
+            revenue += ((deal as any).actualCommission || deal.projectedCommission || 0);
+        } else if (stageNorm === 'lost') {
             lostCount++;
         } else {
             // Active stages

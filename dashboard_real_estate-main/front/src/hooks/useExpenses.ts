@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Expense } from '../types';
@@ -26,7 +26,7 @@ export function useExpenses() {
             q,
             (snapshot) => {
                 const fetchedExpenses = snapshot.docs.map(
-                    (doc) => ({ id: doc.id, ...doc.data() } as Expense)
+                    (d) => ({ id: d.id, ...d.data() } as Expense)
                 );
                 // Sort by date descending locally to avoid requiring a composite index
                 fetchedExpenses.sort((a, b) => {
@@ -64,5 +64,13 @@ export function useExpenses() {
         return docRef.id;
     };
 
-    return { expenses, loading, error, addExpense };
+    const deleteExpense = async (expenseId: string) => {
+        if (!userData?.agencyId) {
+            throw new Error('User not authenticated properly to delete expense');
+        }
+        const expenseRef = doc(db, 'agencies', userData.agencyId, 'expenses', expenseId);
+        await deleteDoc(expenseRef);
+    };
+
+    return { expenses, loading, error, addExpense, deleteExpense };
 }

@@ -1,73 +1,113 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Default deny
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // DEFAULT DENY
+    // ══════════════════════════════════════════════════════════════════════════
     match /{allPaths=**} {
       allow read, write: if false;
     }
 
-    // Allow users to upload their own profile pictures
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // USER PROFILE PICTURES
+    // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId}/profile/{fileName} {
-      allow read: if request.auth != null;
-      
-      allow create, update: if request.auth != null 
+      // ✅ FIX #1: Was open to ALL authenticated users — now restricted to the
+      //            profile owner only. Prevents any logged-in user from fetching
+      //            every other user's profile photo by guessing the path.
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create, update: if request.auth != null
                             && request.auth.uid == userId
-                            && request.resource.size < 5 * 1024 * 1024 // max 5MB
+                            && request.resource.size < 5 * 1024 * 1024
                             && request.resource.contentType.matches('image/.*');
-                            
+
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
-    
-    // 🔒 SECURED AGENCY STORAGE
-    match /agencies/{agencyId} {
-      
-      // 1. Agency Logo - Only Admins can modify/delete
-      match /logo/{fileName} {
-        allow read: if true;
-        
-        allow create, update: if request.auth != null
-                              && request.auth.token.agencyId == agencyId
-                              && request.auth.token.role == 'admin' // 👈 רק מנהל
-                              && request.resource.size < 5 * 1024 * 1024 
-                              && request.resource.contentType.matches('image/.*');
-                              
-        allow delete: if request.auth != null 
-                      && request.auth.token.agencyId == agencyId
-                      && request.auth.token.role == 'admin'; // 👈 רק מנהל
-      }
 
-      // 2. Property Images
-      match /properties/{propertyId}/images/{fileName} {
-        allow read: if true;
-        
-        // כל סוכן במשרד יכול להעלות תמונות חדשות לנכס
-        allow create: if request.auth != null
-                      && request.auth.token.agencyId == agencyId
-                      && request.resource.size < 10 * 1024 * 1024 
-                      && request.resource.contentType.matches('image/.*');
-        
-        // מניעת דריסה/מחיקה על ידי סוכנים אחרים - רק מנהל יכול למחוק (או לעדכן/לדרוס)
-        allow update, delete: if request.auth != null 
-                              && request.auth.token.agencyId == agencyId
-                              && request.auth.token.role == 'admin'; // 👈 רק מנהל יכול למחוק
-      }
 
-      // 3. Leads Documents / Files
-      match /leads/{leadId}/{fileName} {
-        // מותר רק לסוכנים במשרד לראות מסמכים של לידים שלהם
-        allow read: if request.auth != null && request.auth.token.agencyId == agencyId;
-        
-        // מותר לכל סוכן להעלות מסמך לליד מקושר למשרד (עד 15 מגה)
-        allow create: if request.auth != null
-                      && request.auth.token.agencyId == agencyId
-                      && request.resource.size < 15 * 1024 * 1024;
-                      
-        // מחיקה ודריסה - כרגע פתוח לכל סוכן למחוק לעצמו/למשרד.
-        // אם תרצה לנעול למנהל בלבד, שנה את זה.
-        allow update, delete: if request.auth != null 
-                              && request.auth.token.agencyId == agencyId;
-      }
+    // ══════════════════════════════════════════════════════════════════════════
+    // AGENCY STORAGE
+    // ✅ FIX #6: Added explicit "/" separator after {agencyId} so that nested
+    //            match blocks resolve to the correct full paths in Firebase
+    //            Storage (unlike Firestore, Storage path concatenation requires
+    //            the leading slash on every child segment).
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // 1. Agency Logo — Admin only
+    match /agencies/{agencyId}/logo/{fileName} {
+      allow read: if true; // Public — needed for catalogs/website widgets
+
+      allow create, update: if request.auth != null
+                            && request.auth.token.agencyId == agencyId
+                            && request.auth.token.role == 'admin'
+                            && request.resource.size < 5 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && request.auth.token.role == 'admin';
+    }
+
+
+    // 2. Property Images
+    match /agencies/{agencyId}/properties/{propertyId}/images/{fileName} {
+      allow read: if true; // Public — needed for catalogs
+
+      // ✅ FIX #5: Verify propertyId actually belongs to this agency via Firestore,
+      //            preventing agent X from uploading images under a property owned
+      //            by a different agency by guessing a valid propertyId.
+      allow create: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*')
+                    && firestore.get(
+                         /databases/(default)/documents/properties/$(propertyId)
+                       ).data.agencyId == agencyId;
+
+      // Only admins can overwrite or delete property images
+      allow update, delete: if request.auth != null
+                            && request.auth.token.agencyId == agencyId
+                            && request.auth.token.role == 'admin';
+    }
+
+
+    // 3. Lead Documents / Files
+    match /agencies/{agencyId}/leads/{leadId}/{fileName} {
+      // Visible only to agents of the same agency
+      allow read: if request.auth != null
+                  && request.auth.token.agencyId == agencyId;
+
+      // ✅ FIX #3: Added contentType whitelist — previously any file type
+      //            (exe, html, script…) up to 15 MB was accepted.
+      //            Now restricted to images, PDF, and common Office formats.
+      //            The uploader's UID is stored in custom metadata so ownership
+      //            can be enforced on update/delete (see FIX #4 below).
+      allow create: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && request.resource.size < 15 * 1024 * 1024
+                    && (
+                      request.resource.contentType.matches('image/.*')
+                      || request.resource.contentType == 'application/pdf'
+                      || request.resource.contentType == 'application/msword'
+                      || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                      || request.resource.contentType == 'application/vnd.ms-excel'
+                      || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                    // Require uploader to stamp their UID in custom metadata
+                    && request.resource.metadata.uploadedBy == request.auth.uid;
+
+      // ✅ FIX #4: Only the original uploader OR an admin can update/delete a
+      //            document. Previously any agent in the agency could overwrite
+      //            or delete a colleague's files.
+      allow update, delete: if request.auth != null
+                            && request.auth.token.agencyId == agencyId
+                            && (
+                              resource.metadata.uploadedBy == request.auth.uid
+                              || request.auth.token.role == 'admin'
+                            );
     }
   }
 }

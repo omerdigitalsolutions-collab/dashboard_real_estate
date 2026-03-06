@@ -4,10 +4,10 @@ import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { calculatePipelineStats } from '../../utils/analytics';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Timestamp } from 'firebase/firestore';
-import { Plus, Wallet, Loader2, ChevronDown } from 'lucide-react';
+import { Plus, Wallet, Loader2, ChevronDown, Trash2 } from 'lucide-react';
 
 export default function WidgetAgencyExpenses() {
-    const { expenses, loading: expensesLoading, addExpense } = useExpenses();
+    const { expenses, loading: expensesLoading, addExpense, deleteExpense } = useExpenses();
     const { deals, loading: dataLoading } = useLiveDashboardData();
     const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12'>('1');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -319,6 +319,36 @@ export default function WidgetAgencyExpenses() {
                         </>
                     )}
                 </div>
+
+                {/* Recent Expenses List with Delete */}
+                {!loading && expenses.length > 0 && (
+                    <div className="shrink-0 mt-1">
+                        <h3 className="text-[11px] font-bold text-slate-400 mb-2">הוצאות אחרונות</h3>
+                        <div className="max-h-[120px] overflow-y-auto custom-scrollbar space-y-1">
+                            {expenses.slice(0, 20).map(exp => (
+                                <div key={exp.id} className="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg px-3 py-1.5 group hover:border-slate-700 transition-colors">
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className="text-xs text-slate-300 truncate">{exp.title}</span>
+                                        <span className="text-[10px] text-slate-500">{exp.category}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className="text-xs font-bold text-rose-400" dir="ltr">₪{exp.amount?.toLocaleString()}</span>
+                                        <button
+                                            onClick={async () => {
+                                                if (!window.confirm('למחוק את ההוצאה?')) return;
+                                                try { await deleteExpense(exp.id); } catch (e) { console.error(e); }
+                                            }}
+                                            title="מחק הוצאה"
+                                            className="p-1 text-slate-600 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

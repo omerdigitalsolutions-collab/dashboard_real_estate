@@ -69,6 +69,29 @@ Return a raw JSON array of objects with the exact keys:
 - "date" (string - YYYY-MM-DD format)
 - "isRecurring" (boolean - true only if it looks like a fixed monthly bill like rent, software subscriptions, insurance, etc. otherwise false)
 Do not wrap in markdown blocks. Return ONLY a parseable JSON array of objects. Ignore completely empty rows.`;
+            } else if (entityType === 'finance') {
+                systemPrompt = `You are a financial assistant for a real estate agency. The input file may contain BOTH income rows AND expense rows mixed together.
+
+CRITICAL RULES for determining rowType:
+1. PRIMARY SIGNAL — The SIGN of the amount value is the most important indicator:
+   - NEGATIVE number (e.g. -1000, -500.00) → rowType = "expense"
+   - POSITIVE number (e.g. 1000, 500.00) → rowType = "income"
+2. SECONDARY SIGNAL — Column name hints (use these when amount sign is unclear or zero):
+   - Columns named "חובה", "debit", "Debit", "charge", "withdrawal", "הוצאה" → rowType = "expense"
+   - Columns named "זכות", "credit", "Credit", "deposit", "הכנסה", "income" → rowType = "income"
+3. TERTIARY SIGNAL — Description context (only if sign and column name are both unclear):
+   - Rent, salary, subscription, marketing fee, insurance → likely "expense"
+   - Commission received, deal closed, wire transfer in → likely "income"
+
+Return a raw JSON array of objects with EXACTLY these keys:
+- "rowType" (string - MUST be exactly "income" or "expense", determined by the rules above)
+- "description" (string - take from the description/תיאור column)
+- "amount" (number - ALWAYS POSITIVE, use Math.abs() on the original value)
+- "category" (string - for expenses: one of ['שיווק', 'תפעול משרד', 'שכר', 'רכבים', 'שונות']; for income: one of ['עמלה', 'עסקה שנסגרה', 'הכנסה אחרת'])
+- "date" (string - YYYY-MM-DD format, infer from any date column available)
+- "isRecurring" (boolean - true only for fixed recurring charges like rent, insurance, subscriptions)
+
+Do not wrap in markdown blocks. Return ONLY a parseable JSON array. Ignore completely empty rows.`;
             } else if (entityType === 'combined' || entityType === 'mixed') {
                 systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
 You will receive a mixed file that might contain both Lead (client/owner) information and Property information in the same row or alternating rows.

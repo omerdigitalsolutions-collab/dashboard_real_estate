@@ -3,7 +3,7 @@ import { useExpenses } from '../hooks/useExpenses';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
 import { calculatePipelineStats } from '../utils/analytics';
-import { Wallet, ChevronDown, ChevronUp, UploadCloud, PieChart as PieChartIcon, TrendingDown, TrendingUp, FileText, FileSpreadsheet, Plus, X, TrendingUp as IncomeIcon, RefreshCw, Tag, Pencil, Trash2 } from 'lucide-react';
+import { Wallet, ChevronDown, ChevronUp, UploadCloud, PieChart as PieChartIcon, TrendingDown, TrendingUp, FileText, FileSpreadsheet, Plus, X, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import AiExpenseImporter from '../components/dashboard/AiExpenseImporter';
 import { exportPnLToExcel, exportPnLToPDF, PnLReportData } from '../utils/pnlExport';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -58,7 +58,7 @@ interface ManualIncome {
 const FALLBACK_COLOR = '#64748b';
 
 export default function ProfitAndLossDashboard() {
-    const { expenses, loading: expensesLoading, addExpense } = useExpenses();
+    const { expenses, loading: expensesLoading, addExpense, deleteExpense } = useExpenses();
     const { deals, loading: dataLoading } = useLiveDashboardData();
     const { userData } = useAuth();
     const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12' | '60'>('1');
@@ -185,14 +185,22 @@ export default function ProfitAndLossDashboard() {
             const dealDate = dealDateVal?.toDate ? dealDateVal.toDate() : new Date();
 
             if (dealDate >= startDate) {
-                if (deal.stage === 'Won') {
-                    const amount = deal.projectedCommission || ((deal as any).value ? (deal as any).value * 0.02 : 0);
-                    incomesList.push({
-                        agentName: (deal as any).assignedAgentName || 'לא משויך',
-                        propertyName: (deal as any).propertyName || (deal as any).title || 'עסקה',
-                        date: dealDate.toLocaleDateString('he-IL'),
-                        amount
-                    });
+                const stageNorm = ((deal.stage as string) || '').toLowerCase();
+                if (stageNorm === 'won') {
+                    // Prefer actual commission (set on close), fallback to projected, then 2% of value
+                    const amount =
+                        (deal as any).actualCommission ||
+                        deal.projectedCommission ||
+                        ((deal as any).value ? (deal as any).value * 0.02 : 0);
+                    if (amount > 0) {
+                        incomesList.push({
+                            agentName: (deal as any).assignedAgentName || 'לא משויך',
+                            propertyName: (deal as any).propertyName || (deal as any).title || 'עסקה',
+                            date: dealDate.toLocaleDateString('he-IL'),
+                            amount,
+                            source: 'deal'
+                        });
+                    }
                 }
                 return true;
             }
@@ -200,7 +208,11 @@ export default function ProfitAndLossDashboard() {
         });
 
         const stats = calculatePipelineStats(rangeDeals);
-        const dealIncome = stats.revenue || incomesList.reduce((acc, curr) => acc + curr.amount, 0);
+        // Always use incomesList (deals with commission > 0) as the source of truth.
+        // stats.revenue is a fallback if incomesList is somehow empty.
+        const dealIncome = incomesList.length > 0
+            ? incomesList.reduce((acc, curr) => acc + curr.amount, 0)
+            : (stats.revenue || 0);
 
         // Manual incomes in range
         const manualIncomeInRange = manualIncomes
@@ -296,7 +308,30 @@ export default function ProfitAndLossDashboard() {
             .filter(([_, data]) => data.items.length > 0)
             .sort((a, b) => b[1].total - a[1].total);
 
-        // 6. Build the PnLReportData payload
+        // 6. Build the PnLReportData payload (combine deal incomes + manual incomes)
+        const allIncomesForReport = [
+            ...incomesList.map(i => ({ ...i, category: 'עמלת עסקאות' })),
+            ...manualIncomes
+                .filter(mi => {
+                    const d = mi.date?.toDate ? mi.date.toDate() : new Date();
+                    return mi.isRecurring ? true : d >= startDate;
+                })
+                .map(mi => ({
+                    agentName: '-',
+                    propertyName: mi.title,
+                    date: mi.date?.toDate ? mi.date.toDate().toLocaleDateString('he-IL') : '',
+                    amount: mi.isRecurring
+                        ? (() => {
+                            const d = mi.date?.toDate ? mi.date.toDate() : new Date();
+                            const mDiff = d < startDate ? months : Math.max(1, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()) + 1);
+                            return mi.amount * mDiff;
+                        })()
+                        : mi.amount,
+                    category: mi.category,
+                    source: 'manual'
+                }))
+        ];
+
         const reportData: PnLReportData = {
             // @ts-ignore
             agencyName: userData?.agencyName || 'hOMER Real Estate',
@@ -307,7 +342,7 @@ export default function ProfitAndLossDashboard() {
             totalExpenses,
             netProfit: profit,
             profitMargin: margin,
-            incomes: incomesList,
+            incomes: allIncomesForReport,
             expenses: expensesListForReport,
             expenseCategories: accordionData.map(a => ({ category: a[0], total: a[1].total, itemsCount: a[1].items.length }))
         };
@@ -319,11 +354,12 @@ export default function ProfitAndLossDashboard() {
             profit,
             expensesPieData: pieData,
             accordionData,
-            reportData
+            reportData,
+            incomesList
         };
     }, [expenses, deals, timeRange, userData, manualIncomes]);
 
-    const { totalExpenses, monthlyIncome, grossMargin, profit, expensesPieData, accordionData, reportData } = dashboardData;
+    const { totalExpenses, monthlyIncome, grossMargin, profit, expensesPieData, accordionData, reportData, incomesList } = dashboardData;
 
     const handleDownload = async (type: 'pdf' | 'excel') => {
         const toastId = toast.loading('מייצר דוח...');
@@ -364,28 +400,45 @@ export default function ProfitAndLossDashboard() {
                             <p className="text-slate-400 mt-1">ניהול פיננסי חכם, מעקב הוצאות וחישוב רווחיות</p>
                         </div>
 
-                        {/* Export + Add buttons */}
+                        {/* Split Add Buttons + Export */}
                         <div className="flex items-center gap-3 flex-wrap">
                             <button
-                                onClick={() => { setShowAddPanel(!showAddPanel); setShowImporter(false); resetForm(); }}
-                                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 whitespace-nowrap"
+                                onClick={() => {
+                                    setEntryType('expense');
+                                    setShowAddPanel(true);
+                                    setShowImporter(false);
+                                    resetForm();
+                                }}
+                                className="flex items-center gap-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 hover:border-rose-400 text-rose-300 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
                             >
                                 <Plus className="w-4 h-4" />
-                                הוסף רשומה
+                                הוצאה חדשה
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setEntryType('income');
+                                    setShowAddPanel(true);
+                                    setShowImporter(false);
+                                    resetForm();
+                                }}
+                                className="flex items-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
+                            >
+                                <Plus className="w-4 h-4" />
+                                הכנסה חדשה
                             </button>
                             <button
                                 onClick={() => handleDownload('pdf')}
-                                className="flex items-center gap-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 hover:border-rose-400 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
+                                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
                             >
                                 <FileText className="w-4 h-4 shrink-0" />
-                                הורד PDF
+                                PDF
                             </button>
                             <button
                                 onClick={() => handleDownload('excel')}
-                                className="flex items-center gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
+                                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg whitespace-nowrap"
                             >
                                 <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                                הורד Excel
+                                Excel
                             </button>
                         </div>
                     </div>
@@ -461,8 +514,8 @@ export default function ProfitAndLossDashboard() {
                         <button
                             onClick={() => { setEntryType('expense'); setForm(f => ({ ...f, category: '' })); }}
                             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'expense'
-                                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
-                                    : 'text-slate-400 hover:text-white'
+                                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
+                                : 'text-slate-400 hover:text-white'
                                 }`}
                         >
                             <TrendingDown className="w-4 h-4" /> הוצאה
@@ -470,8 +523,8 @@ export default function ProfitAndLossDashboard() {
                         <button
                             onClick={() => { setEntryType('income'); setForm(f => ({ ...f, category: '' })); }}
                             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'income'
-                                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                                    : 'text-slate-400 hover:text-white'
+                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                : 'text-slate-400 hover:text-white'
                                 }`}
                         >
                             <TrendingUp className="w-4 h-4" /> הכנסה
@@ -626,95 +679,206 @@ export default function ProfitAndLossDashboard() {
             {/* ── Main Content: Charts & Accordion ───────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* Right col: Accordion Breakdown */}
-                <div className="lg:col-span-2 space-y-4">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-                        <Wallet className="w-5 h-5 text-slate-400" />
-                        פירוט הוצאות לפי קטגוריה
-                    </h3>
+                {/* Right col: Expense + Income Accordion Breakdown */}
+                <div className="lg:col-span-2 space-y-8">
 
-                    {accordionData.length === 0 ? (
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-10 text-center text-slate-400">
-                            אין הוצאות מתועדות לטווח הזמן שנבחר.
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {accordionData.map(([categoryName, data]) => {
-                                const isExpanded = expandedCategories[categoryName];
-                                const catColor = CATEGORY_COLORS[categoryName] || CATEGORY_COLORS['Other'];
-
-                                return (
-                                    <div key={categoryName} className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300 shadow-md hover:border-slate-700">
-                                        {/* Accordion Header */}
-                                        <div
-                                            onClick={() => toggleCategory(categoryName)}
-                                            className="flex items-center justify-between p-4 cursor-pointer select-none hover:bg-slate-800/30 transition-colors"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    className="w-4 h-4 rounded-full shadow-[0_0_10px_currentColor] opacity-80"
-                                                    style={{ backgroundColor: catColor, color: catColor }}
-                                                />
-                                                <div>
-                                                    <h4 className="text-lg font-bold text-white">{categoryName}</h4>
-                                                    <span className="text-xs text-slate-400">{data.items.length} רשומות</span>
+                    {/* ── Expense Breakdown ── */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <TrendingDown className="w-5 h-5 text-rose-400" />
+                            פירוט הוצאות לפי קטגוריה
+                        </h3>
+                        {accordionData.length === 0 ? (
+                            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                אין הוצאות מתועדות לטווח הזמן שנבחר.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {accordionData.map(([categoryName, data]) => {
+                                    const isExpanded = expandedCategories[categoryName];
+                                    const catColor = CATEGORY_COLORS[categoryName] || FALLBACK_COLOR;
+                                    return (
+                                        <div key={categoryName} className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-md hover:border-slate-700 transition-all">
+                                            <div onClick={() => toggleCategory(categoryName)} className="flex items-center justify-between p-4 cursor-pointer select-none hover:bg-slate-800/30 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: catColor }} />
+                                                    <div>
+                                                        <h4 className="text-lg font-bold text-white">{categoryName}</h4>
+                                                        <span className="text-xs text-slate-400">{data.items.length} רשומות</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <span className="font-black text-lg text-rose-400" dir="ltr">₪{data.total.toLocaleString()}</span>
+                                                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4">
-                                                <span className="font-black text-lg text-slate-200" dir="ltr">₪{data.total.toLocaleString()}</span>
-                                                {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-500" /> : <ChevronDown className="w-5 h-5 text-slate-500" />}
-                                            </div>
-                                        </div>
-
-                                        {/* Accordion Body */}
-                                        {isExpanded && (
-                                            <div className="border-t border-slate-800 bg-slate-950/50 p-4 animate-in slide-in-from-top-2 duration-200">
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-right text-sm">
-                                                        <thead className="text-slate-500 border-b border-slate-800">
-                                                            <tr>
-                                                                <th className="pb-2 font-medium">תיאור</th>
-                                                                <th className="pb-2 font-medium">תאריך מקורי</th>
-                                                                <th className="pb-2 font-medium text-center">הוצאה קבועה</th>
-                                                                <th className="pb-2 font-medium">סכום בפועל</th>
-                                                                <th className="pb-2 font-medium">סכום מחושב לתקופה</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-800 text-slate-300">
-                                                            {data.items.sort((a: any, b: any) => b.amount - a.amount).map((item: any, idx: number) => (
-                                                                <tr key={idx} className="hover:bg-slate-800/30">
-                                                                    <td className="py-3 font-medium text-white">{item.title}</td>
-                                                                    <td className="py-3 text-slate-400">
-                                                                        {item.date?.toDate ? item.date.toDate().toLocaleDateString('he-IL') : 'N/A'}
-                                                                    </td>
-                                                                    <td className="py-3 text-center">
-                                                                        {item.isRecurring ? (
-                                                                            <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">
-                                                                                קבוע
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-slate-600">-</span>
-                                                                        )}
-                                                                    </td>
-                                                                    <td className="py-3" dir="ltr">₪{item.amount.toLocaleString()}</td>
-                                                                    <td className="py-3 text-rose-400 font-bold" dir="ltr">
-                                                                        ₪{item.displayAmount.toLocaleString()}
-                                                                        {item.timesMultiplied > 1 && (
-                                                                            <span className="text-xs text-slate-500 font-normal ml-2"> (x{item.timesMultiplied} חוד')</span>
-                                                                        )}
-                                                                    </td>
+                                            {isExpanded && (
+                                                <div className="border-t border-slate-800 bg-slate-950/50 p-4 animate-in slide-in-from-top-2 duration-200">
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-right text-sm">
+                                                            <thead className="text-slate-500 border-b border-slate-800">
+                                                                <tr>
+                                                                    <th className="pb-2 font-medium">תיאור</th>
+                                                                    <th className="pb-2 font-medium">תאריך</th>
+                                                                    <th className="pb-2 font-medium text-center">קבועה</th>
+                                                                    <th className="pb-2 font-medium">סכום</th>
+                                                                    <th className="pb-2 font-medium">מחושב לתקופה</th>
+                                                                    <th className="pb-2"></th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-800 text-slate-300">
+                                                                {data.items.sort((a: any, b: any) => b.amount - a.amount).map((item: any, idx: number) => (
+                                                                    <tr key={idx} className="hover:bg-slate-800/30 group">
+                                                                        <td className="py-3 font-medium text-white">{item.title}</td>
+                                                                        <td className="py-3 text-slate-400">{item.date?.toDate ? item.date.toDate().toLocaleDateString('he-IL') : 'N/A'}</td>
+                                                                        <td className="py-3 text-center">
+                                                                            {item.isRecurring
+                                                                                ? <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">קבוע</span>
+                                                                                : <span className="text-slate-600">-</span>}
+                                                                        </td>
+                                                                        <td className="py-3" dir="ltr">₪{item.amount.toLocaleString()}</td>
+                                                                        <td className="py-3 text-rose-400 font-bold" dir="ltr">
+                                                                            ₪{item.displayAmount.toLocaleString()}
+                                                                            {item.timesMultiplied > 1 && <span className="text-xs text-slate-500 font-normal ml-2">(x{item.timesMultiplied} חוד')</span>}
+                                                                        </td>
+                                                                        <td className="py-3 text-right">
+                                                                            <button
+                                                                                onClick={async () => {
+                                                                                    if (!window.confirm('למחוק את ההוצאה?')) return;
+                                                                                    try {
+                                                                                        await deleteExpense(item.id);
+                                                                                        toast.success('ההוצאה נמחקה');
+                                                                                    } catch (e) { console.error(e); }
+                                                                                }}
+                                                                                className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all"
+                                                                            >
+                                                                                <Trash2 className="w-4 h-4" />
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── Income Breakdown ── */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-emerald-400" />
+                            פירוט הכנסות
+                        </h3>
+
+                        {/* Deal commissions */}
+                        {incomesList.length > 0 && (
+                            <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl overflow-hidden shadow-md">
+                                <div className="flex items-center justify-between p-4 border-b border-slate-800">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-4 h-4 rounded-full bg-cyan-400" />
+                                        <div>
+                                            <h4 className="text-base font-bold text-white">עמלת עסקאות</h4>
+                                            <span className="text-xs text-slate-400">{incomesList.length} עסקאות שנסגרו</span>
+                                        </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                    <span className="font-black text-lg text-cyan-400" dir="ltr">
+                                        ₪{incomesList.reduce((s: number, i: any) => s + i.amount, 0).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="p-4">
+                                    <table className="w-full text-right text-sm">
+                                        <thead className="text-slate-500 border-b border-slate-800">
+                                            <tr>
+                                                <th className="pb-2 font-medium">נכס</th>
+                                                <th className="pb-2 font-medium">סוכן</th>
+                                                <th className="pb-2 font-medium">תאריך</th>
+                                                <th className="pb-2 font-medium">עמלה</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                                            {[...incomesList].sort((a: any, b: any) => b.amount - a.amount).map((item: any, idx: number) => (
+                                                <tr key={idx} className="hover:bg-slate-800/30">
+                                                    <td className="py-3 font-medium text-white">{item.propertyName}</td>
+                                                    <td className="py-3 text-slate-400">{item.agentName}</td>
+                                                    <td className="py-3 text-slate-400">{item.date}</td>
+                                                    <td className="py-3 text-cyan-400 font-bold" dir="ltr">₪{item.amount.toLocaleString()}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Manual income entries */}
+                        {manualIncomes.length > 0 && (
+                            <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl overflow-hidden shadow-md">
+                                <div className="flex items-center justify-between p-4 border-b border-slate-800">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-4 h-4 rounded-full bg-emerald-400" />
+                                        <div>
+                                            <h4 className="text-base font-bold text-white">הכנסות ידניות</h4>
+                                            <span className="text-xs text-slate-400">{manualIncomes.length} רשומות</span>
+                                        </div>
+                                    </div>
+                                    <span className="font-black text-lg text-emerald-400" dir="ltr">
+                                        ₪{manualIncomes.reduce((s, mi) => s + mi.amount, 0).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="p-4">
+                                    <table className="w-full text-right text-sm">
+                                        <thead className="text-slate-500 border-b border-slate-800">
+                                            <tr>
+                                                <th className="pb-2 font-medium">תיאור</th>
+                                                <th className="pb-2 font-medium">קטגוריה</th>
+                                                <th className="pb-2 font-medium">תאריך</th>
+                                                <th className="pb-2 font-medium text-center">חוזרת</th>
+                                                <th className="pb-2 font-medium">סכום</th>
+                                                <th className="pb-2"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                                            {manualIncomes.sort((a, b) => b.amount - a.amount).map(mi => (
+                                                <tr key={mi.id} className="hover:bg-slate-800/30 group">
+                                                    <td className="py-3 font-medium text-white">{mi.title}</td>
+                                                    <td className="py-3">
+                                                        <span className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[11px] font-bold">{mi.category}</span>
+                                                    </td>
+                                                    <td className="py-3 text-slate-400">{mi.date?.toDate ? mi.date.toDate().toLocaleDateString('he-IL') : 'N/A'}</td>
+                                                    <td className="py-3 text-center">
+                                                        {mi.isRecurring
+                                                            ? <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">קבוע</span>
+                                                            : <span className="text-slate-600">-</span>}
+                                                    </td>
+                                                    <td className="py-3 text-emerald-400 font-bold" dir="ltr">₪{mi.amount.toLocaleString()}</td>
+                                                    <td className="py-3 text-right">
+                                                        <button
+                                                            onClick={() => handleDeleteIncome(mi.id)}
+                                                            className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {incomesList.length === 0 && manualIncomes.length === 0 && (
+                            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                אין הכנסות מתועדות לטווח הזמן שנבחר.
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Left col: Pie Chart */}
