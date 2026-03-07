@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidCommission, isValidPhone } from '../../utils/validation';
-import { DealStage, Deal } from '../../types';
+import { DealStage, Deal, Lead } from '../../types';
 
 interface AddDealModalProps {
     isOpen: boolean;
@@ -30,18 +30,22 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
     })();
 
     // -- Selection modes --
-    const [leadMode, setLeadMode] = useState<'select' | 'create'>('select');
+    const [buyerMode, setBuyerMode] = useState<'select' | 'create'>('select');
+    const [sellerMode, setSellerMode] = useState<'select' | 'create'>('select');
     const [propertyMode, setPropertyMode] = useState<'select' | 'create'>('select');
 
     // -- Existing states --
-    const [leadId, setLeadId] = useState('');
+    const [buyerId, setBuyerId] = useState('');
+    const [sellerId, setSellerId] = useState('');
     const [propertyId, setPropertyId] = useState('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
     const [assignedAgentId, setAssignedAgentId] = useState('');
 
     // -- New Item states --
-    const [newLeadName, setNewLeadName] = useState('');
-    const [newLeadPhone, setNewLeadPhone] = useState('');
+    const [newBuyerName, setNewBuyerName] = useState('');
+    const [newBuyerPhone, setNewBuyerPhone] = useState('');
+    const [newSellerName, setNewSellerName] = useState('');
+    const [newSellerPhone, setNewSellerPhone] = useState('');
 
     const [newPropertyCity, setNewPropertyCity] = useState('');
     const [newPropertyAddress, setNewPropertyAddress] = useState('');
@@ -51,27 +55,6 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-    // -- Duplicate-prevention state --
-    // When the lead already has 1 deal, we ask for confirmation before proceeding
-    const [leadConflictDeal, setLeadConflictDeal] = useState<Deal | null>(null);
-    const [leadConfirmed, setLeadConfirmed] = useState(false);
-
-    // Reset confirmation when lead selection changes
-    useEffect(() => {
-        setLeadConflictDeal(null);
-        setLeadConfirmed(false);
-    }, [leadId, leadMode]);
-
-    // Auto-assign agent if selected existing lead has one
-    useEffect(() => {
-        if (leadMode === 'select' && leadId) {
-            const selectedLead = leads.find(l => l.id === leadId);
-            if (selectedLead && selectedLead.assignedAgentId) {
-                setAssignedAgentId(selectedLead.assignedAgentId);
-            }
-        }
-    }, [leadId, leads, leadMode]);
-
     // Derived helpers
     const displayPrice = propertyMode === 'select'
         ? (properties.find(p => p.id === propertyId)?.price || 0)
@@ -79,9 +62,8 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
 
     const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
 
-    // Inline duplicate checks (computed on every render for UI hints)
+    // Inline duplicate checks
     const propertyDeals = propertyId ? allDeals.filter(d => d.propertyId === propertyId && d.stage !== 'won') : [];
-    const leadDeals = leadId ? allDeals.filter(d => d.leadId === leadId) : [];
 
     if (!isOpen) return null;
 
@@ -91,12 +73,12 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
     };
 
     const resetForm = () => {
-        setLeadMode('select'); setPropertyMode('select');
-        setLeadId(''); setPropertyId('');
-        setNewLeadName(''); setNewLeadPhone('');
+        setBuyerMode('select'); setSellerMode('select'); setPropertyMode('select');
+        setBuyerId(''); setSellerId(''); setPropertyId('');
+        setNewBuyerName(''); setNewBuyerPhone('');
+        setNewSellerName(''); setNewSellerPhone('');
         setNewPropertyCity(''); setNewPropertyAddress(''); setNewPropertyPrice(''); setNewPropertyType('sale');
         setCommissionPercentage('2'); setAssignedAgentId('');
-        setLeadConflictDeal(null); setLeadConfirmed(false);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -105,53 +87,60 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
         if (!isValidCommission(commissionPercentage)) return showToast('אחוז עמלה חייב להיות מספר תקין בין 0 ל-100', false);
 
         // Validation based on modes
-        if (leadMode === 'select' && !leadId) return showToast('בחר ליד או צור חדש', false);
+        if (buyerMode === 'select' && !buyerId && sellerMode === 'select' && !sellerId) {
+            return showToast('חובה לבחור או ליצור לפחות קונה או מוכר אחד', false);
+        }
         if (propertyMode === 'select' && !propertyId) return showToast('בחר נכס או צור חדש', false);
 
-        if (leadMode === 'create') {
-            if (!newLeadName || !newLeadPhone) return showToast('שם וטלפון לליד חובה', false);
-            if (!isValidPhone(newLeadPhone)) return showToast('מספר טלפון לליד אינו תקין', false);
+        if (buyerMode === 'create' && (newBuyerName || newBuyerPhone)) {
+            if (!newBuyerName || !newBuyerPhone) return showToast('שם וטלפון לקונה חובה', false);
+            if (!isValidPhone(newBuyerPhone)) return showToast('מספר טלפון לקונה אינו תקין', false);
+        }
+        if (sellerMode === 'create' && (newSellerName || newSellerPhone)) {
+            if (!newSellerName || !newSellerPhone) return showToast('שם וטלפון למוכר חובה', false);
+            if (!isValidPhone(newSellerPhone)) return showToast('מספר טלפון למוכר אינו תקין', false);
         }
         if (propertyMode === 'create' && (!newPropertyCity || !newPropertyAddress || !newPropertyPrice)) return showToast('כל שדות הנכס חובה', false);
 
         // ── Duplicate checks ──────────────────────────────────────────────────
-
-        // 1. Property: Hard block — a property can only be in one active deal
         if (propertyMode === 'select' && propertyDeals.length > 0) {
             const existingProp = properties.find(p => p.id === propertyId);
-            return showToast(`הנכס "${existingProp?.address || propertyId}" כבר קיים בעסקה פעילה. לא ניתן לשייך נכס לשתי עסקאות בו-זמנית.`, false);
-        }
-
-        // 2. Lead: Max 2 deals — block if already has 2
-        if (leadMode === 'select' && leadDeals.length >= 2) {
-            return showToast('ניתן לשייך ליד לעסקה לכל היותר פעמיים. לליד זה כבר שויכו שתי עסקאות.', false);
-        }
-
-        // 3. Lead: Warning — if lead already has 1 deal, require explicit confirmation
-        if (leadMode === 'select' && leadDeals.length === 1 && !leadConfirmed) {
-            setLeadConflictDeal(leadDeals[0]);
-            return; // Stop — wait for the user to confirm in the UI
+            return showToast(`הנכס "${existingProp?.address || propertyId}" כבר קיים בעסקה פעילה.`, false);
         }
 
         try {
             setLoading(true);
-            let finalLeadId = leadId;
+            let finalBuyerId = buyerMode === 'select' ? buyerId : '';
+            let finalSellerId = sellerMode === 'select' ? sellerId : '';
             let finalPropertyId = propertyId;
 
-            // 1. Create Lead if needed
-            if (leadMode === 'create') {
-                const leadRef = await addLead(userData.agencyId, {
-                    name: newLeadName,
-                    phone: newLeadPhone,
+            // 1. Create Buyer if needed
+            if (buyerMode === 'create' && newBuyerName && newBuyerPhone) {
+                const buyerRef = await addLead(userData.agencyId, {
+                    name: newBuyerName,
+                    phone: newBuyerPhone,
+                    status: 'new',
+                    type: 'buyer',
+                    source: 'manual',
+                    assignedAgentId: assignedAgentId || null
+                });
+                finalBuyerId = buyerRef.id;
+            }
+
+            // 2. Create Seller if needed
+            if (sellerMode === 'create' && newSellerName && newSellerPhone) {
+                const sellerRef = await addLead(userData.agencyId, {
+                    name: newSellerName,
+                    phone: newSellerPhone,
                     status: 'new',
                     type: 'seller',
                     source: 'manual',
                     assignedAgentId: assignedAgentId || null
                 });
-                finalLeadId = leadRef.id;
+                finalSellerId = sellerRef.id;
             }
 
-            // 2. Create Property if needed
+            // 3. Create Property if needed
             if (propertyMode === 'create') {
                 finalPropertyId = await addProperty(userData.agencyId, {
                     city: newPropertyCity,
@@ -163,10 +152,11 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                 });
             }
 
-            // 3. Create Deal
+            // 4. Create Deal
             await addDeal(userData.agencyId, {
-                leadId: finalLeadId,
                 propertyId: finalPropertyId,
+                ...(finalBuyerId ? { buyerId: finalBuyerId } : {}),
+                ...(finalSellerId ? { sellerId: finalSellerId } : {}),
                 ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
                 stage: firstStageId,
                 projectedCommission: calculatedCommission,
@@ -211,89 +201,72 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
 
-                    {/* --- LEAD SECTION --- */}
-                    <div className="space-y-3 p-4 bg-slate-50/50 border border-slate-100 rounded-xl">
+                    {/* --- BUYER SECTION --- */}
+                    <div className="space-y-3 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
                         <div className="flex items-center justify-between mb-1">
-                            <label className="text-sm font-bold text-slate-800">לקוח (ליד משויך)</label>
-                            <div className="flex bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm">
-                                <button type="button" onClick={() => setLeadMode('select')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${leadMode === 'select' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>בחירה מקיים</button>
-                                <button type="button" onClick={() => setLeadMode('create')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${leadMode === 'create' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>+ לקוח חדש</button>
+                            <label className="text-sm font-bold text-blue-900">קונה הנכס (ליד)</label>
+                            <div className="flex bg-white rounded-lg border border-blue-200 p-0.5 shadow-sm">
+                                <button type="button" onClick={() => setBuyerMode('select')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${buyerMode === 'select' ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>בחירה מקיים</button>
+                                <button type="button" onClick={() => setBuyerMode('create')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${buyerMode === 'create' ? 'bg-blue-100 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>+ קונה חדש</button>
                             </div>
                         </div>
 
-                        {leadMode === 'select' ? (
-                            <>
-                                <select
-                                    value={leadId}
-                                    onChange={e => setLeadId(e.target.value)}
-                                    required
-                                    className={`${inputCls} ${leadDeals.length >= 2 ? 'border-red-300 bg-red-50' : leadDeals.length === 1 ? 'border-amber-300 bg-amber-50' : ''}`}
-                                >
-                                    <option value="" disabled>בחר ליד מהרשימה...</option>
-                                    {leads.map(lead => (
-                                        <option key={lead.id} value={lead.id}>{lead.name} {lead.phone ? `- ${lead.phone}` : ''}</option>
-                                    ))}
-                                </select>
-
-                                {/* Lead has 2 deals — hard block */}
-                                {leadDeals.length >= 2 && (
-                                    <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-                                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-500" />
-                                        <span>לליד זה כבר שויכו שתי עסקאות. זהו המקסימום המותר — נא בחר ליד אחר.</span>
-                                    </div>
-                                )}
-
-                                {/* Lead has 1 deal — show confirmation card */}
-                                {leadConflictDeal && leadDeals.length === 1 && !leadConfirmed && (
-                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
-                                        <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
-                                            <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-                                            הליד כבר משויך לעסקאה פעילה
-                                        </div>
-                                        <div className="text-xs text-amber-700 bg-amber-100/60 rounded-lg p-2 space-y-1">
-                                            <div><span className="font-semibold">נכס:</span> {properties.find(p => p.id === leadConflictDeal.propertyId)?.address || leadConflictDeal.propertyId}</div>
-                                            <div><span className="font-semibold">שלב:</span> {leadConflictDeal.stage}</div>
-                                            <div><span className="font-semibold">עמלה צפויה:</span> ₪{leadConflictDeal.projectedCommission?.toLocaleString()}</div>
-                                        </div>
-                                        <p className="text-[11px] text-amber-600">האם לשייך את הליד גם לעסקאה החדשה? (זו פעם השנייה והאחרונה)</p>
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => { setLeadConflictDeal(null); setLeadId(''); }}
-                                                className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
-                                            >
-                                                בחר ליד אחר
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => { setLeadConfirmed(true); setLeadConflictDeal(null); }}
-                                                className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                                            >
-                                                כן, שייך בכל זאת
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Lead confirmed for 2nd deal — green badge */}
-                                {leadConfirmed && leadDeals.length === 1 && (
-                                    <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700">
-                                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                                        אושר — הליד ישויך לשתי עסקאות.
-                                    </div>
-                                )}
-                            </>
+                        {buyerMode === 'select' ? (
+                            <select
+                                value={buyerId}
+                                onChange={e => setBuyerId(e.target.value)}
+                                className={inputCls}
+                            >
+                                <option value="">ללא קונה בעסקה בשלב זה</option>
+                                {leads.map(lead => (
+                                    <option key={lead.id} value={lead.id}>{lead.name} {lead.phone ? `- ${lead.phone}` : ''}</option>
+                                ))}
+                            </select>
                         ) : (
                             <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1">
                                 <div>
-                                    <label className={labelCls}>שם מלא <span className="text-red-500">*</span></label>
-                                    <input value={newLeadName} onChange={e => setNewLeadName(e.target.value)} required type="text" className={inputCls} placeholder="לדוג' ישראל ישראלי" />
+                                    <label className={labelCls}>שם מלא</label>
+                                    <input value={newBuyerName} onChange={e => setNewBuyerName(e.target.value)} type="text" className={inputCls} placeholder="לדוג' ישראל קונה" />
                                 </div>
                                 <div>
-                                    <label className={labelCls}>מספר טלפון <span className="text-red-500">*</span></label>
-                                    <input value={newLeadPhone} onChange={e => setNewLeadPhone(e.target.value)} required type="tel" className={inputCls} placeholder="050-0000000" dir="ltr" />
+                                    <label className={labelCls}>מספר טלפון</label>
+                                    <input value={newBuyerPhone} onChange={e => setNewBuyerPhone(e.target.value)} type="tel" className={inputCls} placeholder="050-0000000" dir="ltr" />
                                 </div>
-                                <div className="col-span-2 text-xs text-slate-400">הלקוח ייווצר תחת סטאטוס "חדש" וסוג "מוכר נכס" (Seller).</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* --- SELLER SECTION --- */}
+                    <div className="space-y-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-sm font-bold text-emerald-900">מוכר הנכס (ליד)</label>
+                            <div className="flex bg-white rounded-lg border border-emerald-200 p-0.5 shadow-sm">
+                                <button type="button" onClick={() => setSellerMode('select')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${sellerMode === 'select' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-500 hover:bg-slate-50'}`}>בחירה מקיים</button>
+                                <button type="button" onClick={() => setSellerMode('create')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${sellerMode === 'create' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-500 hover:bg-slate-50'}`}>+ מוכר חדש</button>
+                            </div>
+                        </div>
+
+                        {sellerMode === 'select' ? (
+                            <select
+                                value={sellerId}
+                                onChange={e => setSellerId(e.target.value)}
+                                className={inputCls}
+                            >
+                                <option value="">ללא מוכר בעסקה בשלב זה</option>
+                                {leads.map(lead => (
+                                    <option key={lead.id} value={lead.id}>{lead.name} {lead.phone ? `- ${lead.phone}` : ''}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1">
+                                <div>
+                                    <label className={labelCls}>שם מלא</label>
+                                    <input value={newSellerName} onChange={e => setNewSellerName(e.target.value)} type="text" className={inputCls} placeholder="לדוג' רחל מוכרת" />
+                                </div>
+                                <div>
+                                    <label className={labelCls}>מספר טלפון</label>
+                                    <input value={newSellerPhone} onChange={e => setNewSellerPhone(e.target.value)} type="tel" className={inputCls} placeholder="050-0000000" dir="ltr" />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -371,7 +344,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                                 ))}
                             </select>
                             <p className="text-[10px] text-slate-400 mt-1">
-                                סוכן זה ישוייך לנכס ולליד במידה שבחרת ליצור אותם כעת.
+                                סוכן זה ישוייך לנכס ולידים במידה שבחרת ליצור אותם כעת.
                             </p>
                         </div>
 
@@ -415,9 +388,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                                 loading ||
                                 !commissionPercentage ||
                                 calculatedCommission <= 0 ||
-                                (propertyMode === 'select' && propertyDeals.length > 0) ||
-                                (leadMode === 'select' && leadDeals.length >= 2) ||
-                                (leadMode === 'select' && leadDeals.length === 1 && !leadConfirmed && !leadConflictDeal)
+                                (propertyMode === 'select' && propertyDeals.length > 0)
                             }
                             className="w-2/3 flex justify-center py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                         >

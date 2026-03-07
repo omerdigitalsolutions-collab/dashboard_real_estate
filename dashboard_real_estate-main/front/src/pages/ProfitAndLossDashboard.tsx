@@ -36,12 +36,24 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const RANGE_OPTIONS = [
-    { label: 'החודש', value: '1' },
+    { label: 'חודש', value: '1' },
     { label: '3 חודשים', value: '3' },
     { label: 'חצי שנה', value: '6' },
     { label: 'שנה', value: '12' },
     { label: '5 שנים', value: '60' },
+    { label: 'תקופה חופשית', value: 'custom' },
 ];
+
+const HEBREW_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+function formatDateLabel(start: Date, end: Date, months: number, isCustom: boolean): string {
+    const fmt = (d: Date) => `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+    if (!isCustom && months === 1) {
+        // Exact calendar month
+        return `חודש ${HEBREW_MONTHS[end.getMonth()]} ${end.getFullYear()}`;
+    }
+    return `${fmt(start)}–${fmt(end)}`;
+}
 
 const DEFAULT_EXPENSE_CATEGORIES = ['שיווק', 'תפעול משרד', 'שכר', 'רכבים', 'שונות'];
 const DEFAULT_INCOME_CATEGORIES = ['עמלה', 'דמי ניהול', 'ייעוץ', 'אחר'];
@@ -61,7 +73,12 @@ export default function ProfitAndLossDashboard() {
     const { expenses, loading: expensesLoading, addExpense, deleteExpense } = useExpenses();
     const { deals, loading: dataLoading } = useLiveDashboardData();
     const { userData } = useAuth();
-    const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12' | '60'>('1');
+    const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12' | '60' | 'custom'>('1');
+    const today = new Date();
+    const [customRange, setCustomRange] = useState({
+        from: new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0],
+        to: today.toISOString().split('T')[0],
+    });
     const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
     const [showImporter, setShowImporter] = useState(false);
 
@@ -172,11 +189,23 @@ export default function ProfitAndLossDashboard() {
 
     const dashboardData = useMemo(() => {
         const now = new Date();
-        const months = parseInt(timeRange);
+        const isCustom = timeRange === 'custom';
+        const months = isCustom ? 1 : parseInt(timeRange);
 
-        // Start Date Boundary
-        const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
-        startDate.setHours(0, 0, 0, 0);
+        // Start / End Date Boundary
+        let startDate: Date;
+        let endDate: Date;
+        if (isCustom) {
+            startDate = new Date(customRange.from);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(customRange.to);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = now;
+        }
+        const dateRangeLabel = formatDateLabel(startDate, endDate, months, isCustom);
 
         // 1. Gather all deals in range to calculate income and list for report
         const incomesList: any[] = [];
@@ -184,7 +213,7 @@ export default function ProfitAndLossDashboard() {
             const dealDateVal = deal.updatedAt || deal.createdAt;
             const dealDate = dealDateVal?.toDate ? dealDateVal.toDate() : new Date();
 
-            if (dealDate >= startDate) {
+            if (dealDate >= startDate && dealDate <= endDate) {
                 const stageNorm = ((deal.stage as string) || '').toLowerCase();
                 if (stageNorm === 'won') {
                     // Prefer actual commission (set on close), fallback to projected, then 2% of value
@@ -219,7 +248,7 @@ export default function ProfitAndLossDashboard() {
             .filter(mi => {
                 const d = mi.date?.toDate ? mi.date.toDate() : new Date();
                 if (mi.isRecurring) return true;
-                return d >= startDate;
+                return d >= startDate && d <= endDate;
             })
             .reduce((sum, mi) => {
                 if (mi.isRecurring) {
@@ -271,7 +300,7 @@ export default function ProfitAndLossDashboard() {
                 });
 
             } else {
-                if (expDate >= startDate) {
+                if (expDate >= startDate && expDate <= endDate) {
                     totalExpenses += exp.amount;
                     categoriesMap[catKey].total += exp.amount;
                     categoriesMap[catKey].items.push({ ...exp, displayAmount: exp.amount, timesMultiplied: 1 });
@@ -337,7 +366,7 @@ export default function ProfitAndLossDashboard() {
             agencyName: userData?.agencyName || 'hOMER Real Estate',
             // @ts-ignore
             agencyLogo: userData?.agencyLogo || '',
-            dateRangeLabel: RANGE_OPTIONS.find(o => o.value === timeRange)?.label || timeRange,
+            dateRangeLabel,
             totalRevenue: income,
             totalExpenses,
             netProfit: profit,
@@ -357,7 +386,7 @@ export default function ProfitAndLossDashboard() {
             reportData,
             incomesList
         };
-    }, [expenses, deals, timeRange, userData, manualIncomes]);
+    }, [expenses, deals, timeRange, customRange, userData, manualIncomes]);
 
     const { totalExpenses, monthlyIncome, grossMargin, profit, expensesPieData, accordionData, reportData, incomesList } = dashboardData;
 
@@ -444,19 +473,42 @@ export default function ProfitAndLossDashboard() {
                     </div>
 
                     {/* Time range filter */}
-                    <div className="flex bg-slate-800/60 p-1.5 rounded-xl border border-slate-700 w-max">
-                        {RANGE_OPTIONS.map((opt) => (
-                            <button
-                                key={opt.value}
-                                onClick={() => setTimeRange(opt.value as any)}
-                                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${timeRange === opt.value
-                                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
-                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                                    }`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <div className="flex bg-slate-800/60 p-1.5 rounded-xl border border-slate-700 flex-wrap gap-1">
+                            {RANGE_OPTIONS.map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setTimeRange(opt.value as any)}
+                                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${timeRange === opt.value
+                                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                        }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                        {timeRange === 'custom' && (
+                            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+                                <span className="text-slate-400 text-sm font-medium">מ-</span>
+                                <input
+                                    type="date"
+                                    value={customRange.from}
+                                    onChange={e => setCustomRange(r => ({ ...r, from: e.target.value }))}
+                                    className="bg-transparent text-white text-sm font-medium border-none outline-none cursor-pointer"
+                                />
+                                <span className="text-slate-400 text-sm font-medium">עד-</span>
+                                <input
+                                    type="date"
+                                    value={customRange.to}
+                                    onChange={e => setCustomRange(r => ({ ...r, to: e.target.value }))}
+                                    className="bg-transparent text-white text-sm font-medium border-none outline-none cursor-pointer"
+                                />
+                            </div>
+                        )}
+                        <span className="text-slate-500 text-sm font-medium hidden md:block">
+                            תקופה: <span className="text-pink-400 font-bold">{reportData.dateRangeLabel}</span>
+                        </span>
                     </div>
                 </div>
             </div>

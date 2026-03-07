@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.maxPaymentWebhook = exports.stripeWebhook = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -83,4 +83,9 @@ var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");
 Object.defineProperty(exports, "maxPaymentWebhook", { enumerable: true, get: function () { return maxWebhook_1.maxPaymentWebhook; } });
+// ── AI WhatsApp Bot ────────────────────────────────────────────────────────────
+// Top-level export so the URL is clean (no namespace prefix):
+//   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI
+var webhookWhatsAppAI_1 = require("./webhookWhatsAppAI");
+Object.defineProperty(exports, "webhookWhatsAppAI", { enumerable: true, get: function () { return webhookWhatsAppAI_1.webhookWhatsAppAI; } });
 //# sourceMappingURL=index.js.map

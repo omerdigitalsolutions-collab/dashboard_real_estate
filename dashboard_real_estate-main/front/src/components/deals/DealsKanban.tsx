@@ -32,14 +32,16 @@ export const MANDATORY_STAGES: { id: DealStage; label: string; color: string; bg
 
 function DealCard({
     deal,
-    lead,
+    buyer,
+    seller,
     property,
     isOverlay,
     onDelete,
     onClick
 }: {
     deal: Deal;
-    lead?: Lead;
+    buyer?: Lead;
+    seller?: Lead;
     property?: Property;
     isOverlay?: boolean;
     onDelete: (id: string) => void;
@@ -80,12 +82,21 @@ function DealCard({
             <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1 min-w-0">
                     <p className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={property?.address || 'נכס לא ידוע'}>{property?.address || 'נכס לא ידוע'}</p>
-                    {lead ? (
-                        <Link to={`/leads?search=${encodeURIComponent(lead.name)}`} className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline mt-0.5 block truncate" title={lead.name} onClick={(e) => e.stopPropagation()}>
-                            {lead.name}
-                        </Link>
+                    {buyer || seller ? (
+                        <div className="flex flex-col mt-0.5">
+                            {buyer && (
+                                <span className="text-xs text-slate-500 truncate">
+                                    קונה: <Link to={`/leads?search=${encodeURIComponent(buyer.name)}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline" title={buyer.name} onClick={(e) => e.stopPropagation()}>{buyer.name}</Link>
+                                </span>
+                            )}
+                            {seller && (
+                                <span className="text-xs text-slate-500 truncate">
+                                    מוכר: <Link to={`/leads?search=${encodeURIComponent(seller.name)}`} className="font-medium text-emerald-600 hover:text-emerald-800 hover:underline" title={seller.name} onClick={(e) => e.stopPropagation()}>{seller.name}</Link>
+                                </span>
+                            )}
+                        </div>
                     ) : (
-                        <p className="text-sm text-slate-500 mt-0.5 truncate">ליד לא ידוע</p>
+                        <p className="text-sm text-slate-500 mt-0.5 truncate">ללא לקוחות משויכים</p>
                     )}
                 </div>
 
@@ -158,7 +169,8 @@ function DealsColumn({
                         <DealCard
                             key={deal.id}
                             deal={deal}
-                            lead={leads.find(l => l.id === deal.leadId)}
+                            buyer={deals.map(d => d.buyerId ? leads.find(l => l.id === d.buyerId) : undefined).find((_, i) => deals[i].id === deal.id)}
+                            seller={deals.map(d => d.sellerId ? leads.find(l => l.id === d.sellerId) : undefined).find((_, i) => deals[i].id === deal.id)}
                             property={properties.find(p => p.id === deal.propertyId)}
                             onDelete={onDelete}
                             onClick={onOpenProfile}
@@ -382,7 +394,8 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                         {activeDeal ? (
                             <DealCard
                                 deal={activeDeal}
-                                lead={leads.find(l => l.id === activeDeal.leadId)}
+                                buyer={activeDeal.buyerId ? leads.find(l => l.id === activeDeal.buyerId) : undefined}
+                                seller={activeDeal.sellerId ? leads.find(l => l.id === activeDeal.sellerId) : undefined}
                                 property={properties.find(p => p.id === activeDeal.propertyId)}
                                 isOverlay
                                 onDelete={handleDelete}
@@ -435,7 +448,8 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
             {profileModalDeal && (
                 <DealProfileModal
                     deal={profileModalDeal}
-                    lead={leads.find(l => l.id === profileModalDeal.leadId)}
+                    buyer={profileModalDeal.buyerId ? leads.find(l => l.id === profileModalDeal.buyerId) : undefined}
+                    seller={profileModalDeal.sellerId ? leads.find(l => l.id === profileModalDeal.sellerId) : undefined}
                     property={properties.find(p => p.id === profileModalDeal.propertyId)}
                     stages={activeStages}
                     isOpen={!!profileModalDeal}

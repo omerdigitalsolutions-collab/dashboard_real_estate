@@ -118,6 +118,25 @@ exports.stripeWebhookHandler = (0, https_1.onRequest)({}, async (req, res) => {
     res.json({ received: true });
 });
 /**
+ * Anti-abuse: checks if a phone number has already been used for a trial.
+ * Returns { eligible: boolean } and writes the phone to used_phones if eligible.
+ */
+async function checkPhoneEligibility(phone) {
+    if (!phone)
+        return { eligible: true }; // no phone = allow (handled per-case)
+    const normalized = phone.replace(/\D/g, ''); // strip non-digits
+    const ref = db.collection('used_phones').doc(normalized);
+    const snap = await ref.get();
+    if (snap.exists) {
+        console.log(`⚠️  Phone ${normalized} already used for a trial — downgrading to past_due.`);
+        return { eligible: false };
+    }
+    // Mark as used
+    await ref.set({ usedAt: admin.firestore.FieldValue.serverTimestamp() });
+    console.log(`✅ Phone ${normalized} registered as trial-eligible.`);
+    return { eligible: true };
+}
+/**
  * פונקציית עזר: הקמת המשרד והמשתמש במערכת
  */
 async function provisionNewAgency(session, resendApiKey) {
@@ -139,6 +158,14 @@ async function provisionNewAgency(session, resendApiKey) {
         subscriptionStatus: 'paid',
         stripeCustomerId: session.customer, // שמירת מזהה הלקוח ב-Stripe לעתיד
         stripeSubscriptionId: session.subscription,
+        // Billing — Stripe-paid customers get 'active' status immediately
+        billing: {
+            planId: 'pro',
+            status: 'active',
+            trialEndsAt: null,
+            ownerPhone: '',
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
         // הגדרות ברירת מחדל למשרד חדש
         settings: {
             dealStages: ['ליד חדש', 'פגישה נקבעה', 'במו"מ', 'חוזה נשלח', 'נחתם בשעה טובה'],

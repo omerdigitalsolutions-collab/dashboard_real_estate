@@ -4,14 +4,15 @@ import { Deal, Lead, Property, CustomDealStage } from '../../types';
 
 interface DealProfileModalProps {
     deal: Deal;
-    lead?: Lead;
+    buyer?: Lead;
+    seller?: Lead;
     property?: Property;
     stages: CustomDealStage[];
     isOpen: boolean;
     onClose: () => void;
 }
 
-export default function DealProfileModal({ deal, lead, property, stages, isOpen, onClose }: DealProfileModalProps) {
+export default function DealProfileModal({ deal, buyer, seller, property, stages, isOpen, onClose }: DealProfileModalProps) {
     if (!isOpen) return null;
 
     const currentStageInfo = stages.find(s => s.id === deal.stage) || { label: deal.stage, color: 'text-slate-700', bg: 'bg-slate-100' };
@@ -154,23 +155,43 @@ export default function DealProfileModal({ deal, lead, property, stages, isOpen,
                         {/* Left column - Entities (Lead, Agent, Property Profile) */}
                         <div className="space-y-4">
 
-                            {/* Lead Profile */}
+                            {/* Buyer Profile */}
                             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                                <p className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">לקוח משויך</p>
-                                {lead ? (
+                                <p className="text-xs font-bold text-blue-400 mb-3 uppercase tracking-wider">קונה הנכס</p>
+                                {buyer ? (
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg font-black shrink-0">
-                                            {lead.name.substring(0, 1)}
+                                            {buyer.name.substring(0, 1)}
                                         </div>
                                         <div>
-                                            <Link to={`/leads?search=${encodeURIComponent(lead.name)}`} className="text-base font-bold text-slate-900 hover:text-blue-600 hover:underline">
-                                                {lead.name}
+                                            <Link to={`/leads?search=${encodeURIComponent(buyer.name)}`} className="text-base font-bold text-slate-900 hover:text-blue-600 hover:underline">
+                                                {buyer.name}
                                             </Link>
-                                            <p className="text-sm text-slate-500 mt-0.5">{lead.phone}</p>
+                                            <p className="text-sm text-slate-500 mt-0.5">{buyer.phone}</p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-slate-500 italic">ליד לא נמצא או נמחק</p>
+                                    <p className="text-sm text-slate-500 italic">ללא קונה</p>
+                                )}
+                            </div>
+
+                            {/* Seller Profile */}
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <p className="text-xs font-bold text-emerald-500 mb-3 uppercase tracking-wider">מוכר הנכס</p>
+                                {seller ? (
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg font-black shrink-0">
+                                            {seller.name.substring(0, 1)}
+                                        </div>
+                                        <div>
+                                            <Link to={`/leads?search=${encodeURIComponent(seller.name)}`} className="text-base font-bold text-slate-900 hover:text-emerald-600 hover:underline">
+                                                {seller.name}
+                                            </Link>
+                                            <p className="text-sm text-slate-500 mt-0.5">{seller.phone}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-slate-500 italic">ללא מוכר</p>
                                 )}
                             </div>
 

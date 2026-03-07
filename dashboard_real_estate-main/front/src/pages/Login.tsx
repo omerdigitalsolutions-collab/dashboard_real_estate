@@ -1,56 +1,57 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { signInWithGoogle, signInWithGooglePopup, getGoogleRedirectResult } from '../services/authService';
+import { Loader2, Mail, Lock, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
+import { signInWithGooglePopup, signInWithGoogle, getGoogleRedirectResult } from '../services/authService';
+
+type View = 'login' | 'forgot_password';
+
+const FIREBASE_ERROR_MAP: Record<string, string> = {
+    'auth/user-not-found': 'משתמש לא קיים',
+    'auth/wrong-password': 'סיסמה שגויה',
+    'auth/invalid-credential': 'אימייל או סיסמה שגויים',
+    'auth/invalid-email': 'כתובת אימייל לא תקינה',
+    'auth/user-disabled': 'המשתמש חסום. פנה לתמיכה.',
+    'auth/too-many-requests': 'יותר מדי ניסיונות. נסה שוב מאוחר יותר.',
+    'auth/network-request-failed': 'שגיאת רשת. בדוק את חיבור האינטרנט.',
+};
+
+function getFirebaseErrorMessage(code: string, fallback: string): string {
+    return FIREBASE_ERROR_MAP[code] || fallback;
+}
 
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [successMsg, setSuccessMsg] = useState('');
+    const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [isGoogleLoading, setIsGoogleLoading] = useState(true); // Start true for redirect check
-    const [isResetMode, setIsResetMode] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(true);
+    const [view, setView] = useState<View>('login');
+    const [resetSent, setResetSent] = useState(false);
+
     const { currentUser, userData, requireOnboarding, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
-    // ─── STATE-DRIVEN NAVIGATION ───
-    // This effect ensures we only navigate once AuthContext has finished its work
-    // (including potential self-healing or stub linking).
+    // ─── State-driven navigation after auth ───────────────────────────────────
     useEffect(() => {
-        console.log('[Login] Navigation check:', { currentUser: !!currentUser, userData: !!userData, requireOnboarding, authLoading });
-
         if (authLoading) return;
-
         if (currentUser) {
             if (userData) {
-                console.log('[Login] User data found, navigating to dashboard');
                 navigate('/dashboard', { replace: true });
             } else if (requireOnboarding) {
-                console.log('[Login] No user data, require onboarding');
                 navigate('/onboarding', { replace: true });
-            } else {
-                console.log('[Login] currentUser exists but userData/requireOnboarding not set yet.');
             }
         }
     }, [currentUser, userData, requireOnboarding, authLoading, navigate]);
 
-    // Handle Google redirect result when this page loads after redirect
+    // ─── Handle Google redirect result on page load ───────────────────────────
     useEffect(() => {
         const handleRedirectResult = async () => {
-            console.log('[Login] Checking for redirect result...');
             try {
-                const user = await getGoogleRedirectResult();
-                if (user) {
-                    console.log('[Login] Redirect user found in effect:', user.email);
-                } else {
-                    console.log('[Login] No redirect user found in effect.');
-                }
+                await getGoogleRedirectResult();
             } catch (err: any) {
-                console.error('Google redirect result error:', err);
                 setError('שגיאה בהתחברות עם חשבון גוגל');
             } finally {
                 setIsGoogleLoading(false);
@@ -59,159 +60,182 @@ export default function Login() {
         handleRedirectResult();
     }, []);
 
+    // ─── Login ────────────────────────────────────────────────────────────────
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
-        setSuccessMsg('');
+        setError(null);
         setIsLoading(true);
-
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            // navigate('/dashboard'); // Removed manual navigation
+            await signInWithEmailAndPassword(auth, email.trim(), password);
+            // Navigation handled by useEffect above
         } catch (err: any) {
-            console.error('Login error:', err);
-            setError('אימייל או סיסמה שגויים');
-            setIsLoading(false); // Only stop loading on error, otherwise let state-driven nav take over
+            setError(getFirebaseErrorMessage(err.code, 'שגיאה בהתחברות. נסה שוב.'));
+            setIsLoading(false);
         }
     };
 
+    // ─── Forgot Password ──────────────────────────────────────────────────────
     const handlePasswordReset = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email) {
+        if (!email.trim()) {
             setError('אנא הזן כתובת אימייל');
             return;
         }
-        setError('');
-        setSuccessMsg('');
+        setError(null);
         setIsLoading(true);
-
         try {
-            await sendPasswordResetEmail(auth, email);
-            setSuccessMsg('נשלח אליך למייל קישור לאיפוס סיסמה. (בדוק גם בתיקיית הספאם)');
+            await sendPasswordResetEmail(auth, email.trim());
+            setResetSent(true);
         } catch (err: any) {
-            console.error('Password reset error:', err);
-            if (err.code === 'auth/user-not-found') {
-                setError('לא נמצא משתמש עם אימייל זה');
-            } else if (err.code === 'auth/valid-email') {
-                setError('כתובת אימייל לא חוקית');
-            } else {
-                setError('שגיאה בשליחת מייל איפוס סיסמה');
-            }
+            setError(getFirebaseErrorMessage(err.code, 'שגיאה בשליחת קישור האיפוס. נסה שוב.'));
         } finally {
             setIsLoading(false);
         }
     };
 
+    // ─── Google Login ─────────────────────────────────────────────────────────
     const handleGoogleLogin = async () => {
-        setError('');
+        setError(null);
         setIsGoogleLoading(true);
         try {
-            console.log('[Login] Starting Google Popup login...');
-            const user = await signInWithGooglePopup();
-            if (user) {
-                console.log('[Login] Google Popup success:', user.email);
-                // AuthContext will handle navigation via useEffect
-            }
+            await signInWithGooglePopup();
+            // Navigation handled by useEffect
         } catch (err: any) {
-            console.error('Google login error:', err);
-            // Fallback to redirect if popup is blocked or fails
             if (err.code === 'auth/popup-blocked') {
-                console.log('[Login] Popup blocked, falling back to redirect...');
                 try {
                     await signInWithGoogle();
-                } catch (redirectErr) {
-                    setError('החלון הקופץ נחסם והתחברות חלופית נכשלה');
+                } catch {
+                    setError('החלון הקופץ נחסם. נסה שוב.');
                 }
             } else {
-                setError('שגיאה בהתחברות עם חשבון גוגל');
+                setError('שגיאה בהתחברות עם גוגל');
             }
         } finally {
             setIsGoogleLoading(false);
         }
     };
 
+    const switchToForgot = () => { setView('forgot_password'); setError(null); setResetSent(false); };
+    const switchToLogin = () => { setView('login'); setError(null); setResetSent(false); };
+
+    // ─── Shared input class ───────────────────────────────────────────────────
+    const inputClass =
+        'w-full bg-slate-900/50 border border-slate-700/80 text-white rounded-xl py-3.5 pr-12 pl-4 ' +
+        'focus:outline-none focus:ring-2 focus:ring-[#00e5ff]/50 focus:border-[#00e5ff] transition-all ' +
+        'placeholder-slate-500 text-base';
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8" dir="rtl">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Omer Digital Solutions
-                </h2>
-                <p className="mt-2 text-center text-sm text-gray-600">
-                    {isResetMode ? 'שחזור סיסמה' : 'התחבר למערכת'}
-                </p>
-            </div>
+        <div className="min-h-screen flex items-center justify-center bg-[#020b18] px-4 relative overflow-hidden" dir="rtl">
+            {/* Background glow orbs */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#00e5ff]/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-700/10 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-slate-200">
-                    {isResetMode ? (
-                        <form className="space-y-6" onSubmit={handlePasswordReset}>
-                            <div>
-                                <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700">
-                                    הזן את האימייל שלך לקבלת קישור לאיפוס סיסמה
-                                </label>
-                                <div className="mt-1 relative rounded-md shadow-sm">
-                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-slate-400" />
-                                    </div>
-                                    <input
-                                        id="reset-email"
-                                        name="email"
-                                        type="email"
-                                        autoComplete="email"
-                                        required
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                        placeholder="name@example.com"
-                                        dir="ltr"
-                                    />
+            <div className="w-full max-w-md relative z-10">
+                {/* Logo */}
+                <div className="text-center mb-8">
+                    <img src="/homer-logo.png" alt="hOMER CRM" className="h-16 mx-auto mb-5 drop-shadow-lg" />
+                </div>
+
+                {/* Card */}
+                <div className="w-full bg-[#0a192f]/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-8">
+
+                    {/* ── FORGOT PASSWORD VIEW ─────────────────────────────── */}
+                    {view === 'forgot_password' ? (
+                        resetSent ? (
+                            // Success state
+                            <div className="flex flex-col items-center text-center space-y-5 py-4">
+                                <div className="w-20 h-20 bg-emerald-500/15 rounded-full flex items-center justify-center border-2 border-emerald-500/40">
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-400" />
                                 </div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-white mb-2">קישור נשלח בהצלחה!</h2>
+                                    <p className="text-slate-400 leading-relaxed">
+                                        שלחנו קישור לאיפוס הסיסמה אל <span className="text-white font-bold">{email}</span>.
+                                        <br />בדוק גם את תיקיית הספאם אם לא רואה את המייל.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={switchToLogin}
+                                    className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold py-3.5 rounded-xl transition-all"
+                                >
+                                    <ArrowRight className="w-4 h-4" />
+                                    חזור להתחברות
+                                </button>
+                            </div>
+                        ) : (
+                            // Email input form
+                            <form onSubmit={handlePasswordReset} className="space-y-6" noValidate>
+                                <div className="text-center">
+                                    <h2 className="text-2xl font-black text-white mb-1">איפוס סיסמה</h2>
+                                    <p className="text-slate-400 text-sm">הזינו את כתובת האימייל שלכם ונשלח לכם קישור לאיפוס.</p>
+                                </div>
+
+                                {error && (
+                                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-center gap-3">
+                                        <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                                        <p className="text-rose-400 text-sm font-medium">{error}</p>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label htmlFor="reset-email" className="block text-slate-300 font-medium mb-2 text-sm">אימייל</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                            <Mail className="h-5 w-5 text-slate-500" />
+                                        </div>
+                                        <input
+                                            id="reset-email"
+                                            type="email"
+                                            autoComplete="email"
+                                            required
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className={inputClass}
+                                            placeholder="name@agency.co.il"
+                                            dir="ltr"
+                                        />
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(0,229,255,0.35)] hover:shadow-[0_0_30px_rgba(0,229,255,0.55)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'שלח קישור לאיפוס'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={switchToLogin}
+                                    className="w-full flex items-center justify-center gap-2 text-slate-400 hover:text-white text-sm font-medium transition-colors py-1"
+                                >
+                                    <ArrowRight className="w-4 h-4" />
+                                    חזור להתחברות
+                                </button>
+                            </form>
+                        )
+                    ) : (
+                        /* ── LOGIN VIEW ───────────────────────────────────── */
+                        <form onSubmit={handleEmailLogin} className="space-y-5" noValidate autoComplete="on">
+                            <div className="text-center mb-2">
+                                <h2 className="text-2xl font-black text-white mb-1">ברוכים הבאים</h2>
+                                <p className="text-slate-400 text-sm">התחברו למערכת הניהול שלכם</p>
                             </div>
 
                             {error && (
-                                <div className="text-red-600 text-sm font-medium text-center bg-red-50 p-3 rounded-md border border-red-100">
-                                    {error}
+                                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3.5 flex items-center gap-3">
+                                    <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                                    <p className="text-rose-400 text-sm font-medium">{error}</p>
                                 </div>
                             )}
 
-                            {successMsg ? (
-                                <div className="text-emerald-700 text-sm font-medium border border-emerald-200 bg-emerald-50 p-4 rounded-md flex flex-col items-center gap-3 text-center">
-                                    <CheckCircle2 size={32} className="text-emerald-500" />
-                                    {successMsg}
-                                </div>
-                            ) : (
-                                <div>
-                                    <button
-                                        type="submit"
-                                        disabled={isLoading}
-                                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'שלח קישור לחידוש סיסמה'}
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="mt-6 flex justify-center">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsResetMode(false); setError(''); setSuccessMsg(''); }}
-                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
-                                >
-                                    <ArrowRight size={16} />
-                                    <span>חזור להתחברות</span>
-                                </button>
-                            </div>
-                        </form>
-                    ) : (
-                        <form className="space-y-6" onSubmit={handleEmailLogin}>
+                            {/* Email */}
                             <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-                                    אימייל
-                                </label>
-                                <div className="mt-1 relative rounded-md shadow-sm">
-                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-slate-400" />
+                                <label htmlFor="email" className="block text-slate-300 font-medium mb-2 text-sm">אימייל</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                        <Mail className="h-5 w-5 text-slate-500" />
                                     </div>
                                     <input
                                         id="email"
@@ -221,20 +245,28 @@ export default function Login() {
                                         required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                        placeholder="name@example.com"
+                                        className={inputClass}
+                                        placeholder="name@agency.co.il"
                                         dir="ltr"
                                     />
                                 </div>
                             </div>
 
+                            {/* Password */}
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                                    סיסמה
-                                </label>
-                                <div className="mt-1 relative rounded-md shadow-sm">
-                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-slate-400" />
+                                <div className="flex items-center justify-between mb-2">
+                                    <label htmlFor="password" className="block text-slate-300 font-medium text-sm">סיסמה</label>
+                                    <button
+                                        type="button"
+                                        onClick={switchToForgot}
+                                        className="text-[#00e5ff] text-sm font-medium hover:brightness-125 transition-all"
+                                    >
+                                        שכחת סיסמה?
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                                        <Lock className="h-5 w-5 text-slate-500" />
                                     </div>
                                     <input
                                         id="password"
@@ -244,90 +276,66 @@ export default function Login() {
                                         required
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                        className={inputClass}
                                         placeholder="••••••••"
                                         dir="ltr"
                                     />
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-start">
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsResetMode(true); setError(''); setSuccessMsg(''); }}
-                                    className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                                >
-                                    שכחת סיסמה?
-                                </button>
+                            {/* Submit */}
+                            <button
+                                type="submit"
+                                disabled={isLoading || isGoogleLoading}
+                                className="w-full bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(0,229,255,0.35)] hover:shadow-[0_0_30px_rgba(0,229,255,0.55)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-base mt-2"
+                            >
+                                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'התחבר'}
+                            </button>
+
+                            {/* Divider */}
+                            <div className="relative flex items-center gap-3 py-1">
+                                <div className="flex-1 h-px bg-white/10" />
+                                <span className="text-slate-500 text-xs font-medium">או</span>
+                                <div className="flex-1 h-px bg-white/10" />
                             </div>
 
-                            {error && (
-                                <div className="text-red-600 text-sm font-medium text-center bg-red-50 p-2 rounded-md">
-                                    {error}
-                                </div>
-                            )}
+                            {/* Google Login */}
+                            <button
+                                type="button"
+                                onClick={handleGoogleLogin}
+                                disabled={isLoading || isGoogleLoading}
+                                className="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isGoogleLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                                ) : (
+                                    <>
+                                        <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                                            <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.66 15.63 16.88 16.79 15.72 17.57V20.34H19.29C21.37 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4" />
+                                            <path d="M12 23C14.97 23 17.46 22.02 19.29 20.34L15.72 17.57C14.73 18.23 13.48 18.63 12 18.63C9.13 18.63 6.69 16.69 5.81 14.1H2.12V16.96C3.94 20.57 7.67 23 12 23Z" fill="#34A853" />
+                                            <path d="M5.81 14.1C5.58 13.41 5.45 12.69 5.45 11.95C5.45 11.21 5.58 10.49 5.81 9.80001V6.94001H2.12C1.37 8.44001 0.95 10.15 0.95 11.95C0.95 13.75 1.37 15.46 2.12 16.96L5.81 14.1Z" fill="#FBBC05" />
+                                            <path d="M12 5.28C13.62 5.28 15.07 5.84 16.21 6.93L19.38 3.76C17.45 1.96 14.97 0.9 12 0.9C7.67 0.9 3.94 3.33 2.12 6.94L5.81 9.8C6.69 7.2 9.13 5.28 12 5.28Z" fill="#EA4335" />
+                                        </svg>
+                                        <span>התחבר עם גוגל</span>
+                                    </>
+                                )}
+                            </button>
 
-                            <div>
-                                <button
-                                    type="submit"
-                                    disabled={isLoading || isGoogleLoading}
-                                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'התחבר עם אימייל'}
-                                </button>
-                            </div>
+                            {/* Register link */}
+                            <p className="text-center text-slate-500 text-sm pt-1">
+                                עדיין אין לך חשבון?{' '}
+                                <Link to="/register" className="text-[#00e5ff] font-bold hover:brightness-125 transition-all">
+                                    הירשם עכשיו
+                                </Link>
+                            </p>
                         </form>
-                    )}
-
-                    {!isResetMode && (
-                        <div className="mt-6">
-                            <div className="relative">
-                                <div className="absolute inset-0 flex items-center">
-                                    <div className="w-full border-t border-slate-300" />
-                                </div>
-                                <div className="relative flex justify-center text-sm">
-                                    <span className="px-2 bg-white text-slate-500">
-                                        או
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="mt-6">
-                                <button
-                                    onClick={handleGoogleLogin}
-                                    disabled={isLoading || isGoogleLoading}
-                                    type="button"
-                                    className="w-full inline-flex justify-center py-2 px-4 border border-slate-300 rounded-md shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {isGoogleLoading ? (
-                                        <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-                                    ) : (
-                                        <>
-                                            <svg className="w-5 h-5 ml-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.66 15.63 16.88 16.79 15.72 17.57V20.34H19.29C21.37 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4" />
-                                                <path d="M12 23C14.97 23 17.46 22.02 19.29 20.34L15.72 17.57C14.73 18.23 13.48 18.63 12 18.63C9.13 18.63 6.69 16.69 5.81 14.1H2.12V16.96C3.94 20.57 7.67 23 12 23Z" fill="#34A853" />
-                                                <path d="M5.81 14.1C5.58 13.41 5.45 12.69 5.45 11.95C5.45 11.21 5.58 10.49 5.81 9.80001V6.94001H2.12C1.37 8.44001 0.95 10.15 0.95 11.95C0.95 13.75 1.37 15.46 2.12 16.96L5.81 14.1Z" fill="#FBBC05" />
-                                                <path d="M12 5.27999C13.62 5.27999 15.07 5.83999 16.21 6.92999L19.38 3.75999C17.45 1.95999 14.97 0.899994 12 0.899994C7.67 0.899994 3.94 3.32999 2.12 6.94001L5.81 9.80001C6.69 7.20001 9.13 5.27999 12 5.27999Z" fill="#EA4335" />
-                                            </svg>
-                                            <span>התחבר עם גוגל</span>
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
                     )}
                 </div>
 
-                {!isResetMode && (
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-slate-600">
-                            עדיין אין לך חשבון?{' '}
-                            <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                                הירשם עכשיו
-                            </a>
-                        </p>
-                    </div>
-                )}
+                {/* Footer */}
+                <p className="text-center text-slate-600 text-xs mt-6">
+                    © 2026 hOMER · מבית עומר פתרונות דיגיטלים
+                </p>
             </div>
         </div>
     );

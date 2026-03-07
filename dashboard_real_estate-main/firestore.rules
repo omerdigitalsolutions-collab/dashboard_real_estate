@@ -49,6 +49,34 @@ service cloud.firestore {
       return request.resource.data.agencyId == resource.data.agencyId;
     }
 
+    /**
+     * Returns true if the agency's billing is active (not locked out).
+     * An agency is active if:
+     *  - No billing field exists yet (new agency during onboarding)
+     *  - billing.status is 'active' or 'paid'
+     *  - billing.status is 'trialing' AND trial hasn't ended yet
+     */
+    function isBillingActive(agencyData) {
+      // No billing field: allow (onboarding in progress)
+      let b = agencyData.get('billing', null);
+      if (b == null) return true;
+
+      let status = b.get('status', 'active');
+
+      // Explicitly active/paid
+      if (status == 'active' || status == 'paid') return true;
+
+      // Trial: allow only if not expired
+      if (status == 'trialing') {
+        let trialEnd = b.get('trialEndsAt', null);
+        if (trialEnd == null) return true; // No end date = allow
+        return request.time < trialEnd;
+      }
+
+      // past_due, canceled, or anything else = locked
+      return false;
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // DEFAULT DENY
     // ══════════════════════════════════════════════════════════════════════════
@@ -60,7 +88,11 @@ service cloud.firestore {
     // AGENCIES
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId} {
-      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin() || isBootstrapAdmin());
+      // Read: must be in the agency AND billing must be active (SuperAdmin/Bootstrap bypass billing check)
+      allow read: if isAuthed() && (
+        isSuperAdmin() || isBootstrapAdmin() ||
+        (inAgency(agencyId) && (isBillingActive(resource.data) || isAdmin()))
+      );
       allow create: if isBootstrapAdmin();
       
       // ✅ SECURED: Removed 'agencyId' from mutable fields
@@ -306,6 +338,15 @@ service cloud.firestore {
     match /cities/{cityId} {
       allow read: if isAuthed();
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // USED PHONES (Anti-abuse trial registry)
+    // Read: deny all clients (only Cloud Functions via Admin SDK can read)
+    // Write: deny all clients (only Cloud Functions via Admin SDK can write)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /used_phones/{phone} {
+      allow read, write: if false;
     }
   }
 }

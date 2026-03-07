@@ -6,6 +6,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
 import Onboarding from './pages/Onboarding';
 import AgentJoin from './pages/AgentJoin';
 import AgentSetup from './pages/AgentSetup';
@@ -25,6 +26,16 @@ import { Navigate } from 'react-router-dom';
 import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
+import BillingLockScreen from './pages/BillingLockScreen';
+import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
+
+/** Wraps the dashboard and renders the lock screen if billing is expired */
+function SubscriptionProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLockedOut, loading } = useSubscriptionGuard();
+  if (loading) return null;
+  if (isLockedOut) return <BillingLockScreen />;
+  return <>{children}</>;
+}
 
 function DashboardIndex() {
   const { userData, loading } = useAuth();
@@ -43,8 +54,12 @@ function App() {
     <BrowserRouter>
       <Toaster position="bottom-right" toastOptions={{ className: 'rtl-grid text-sm shadow-xl', style: { background: '#1e293b', color: '#fff', border: '1px solid #334155' } }} />
       <Routes>
+        {/* Firebase Auth handler bypass */}
+        <Route path="/__/*" element={null} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Public Routes */}
         <Route element={<PublicLayout />}>
@@ -80,11 +95,13 @@ function App() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <PreferencesProvider>
-                <DashboardDataProvider>
-                  <DashboardLayout />
-                </DashboardDataProvider>
-              </PreferencesProvider>
+              <SubscriptionProtectedRoute>
+                <PreferencesProvider>
+                  <DashboardDataProvider>
+                    <DashboardLayout />
+                  </DashboardDataProvider>
+                </PreferencesProvider>
+              </SubscriptionProtectedRoute>
             </ProtectedRoute>
           }
         >
@@ -106,6 +123,9 @@ function App() {
             </SuperAdminRoute>
           } />
         </Route>
+
+        {/* Catch-all route to redirect unknown paths to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

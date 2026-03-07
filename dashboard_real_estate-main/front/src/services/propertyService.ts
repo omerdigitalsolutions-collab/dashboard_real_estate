@@ -8,7 +8,8 @@ import {
     query,
     where,
     serverTimestamp,
-    writeBatch
+    writeBatch,
+    documentId
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
@@ -104,6 +105,35 @@ export async function getPropertiesByAgency(
 
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Property));
+}
+
+/**
+ * Fetches multiple properties by their IDs.
+ * Because Firestore's `in` query accepts a maximum of 10 items, the IDs are chunked into groups of 10.
+ */
+export async function getPropertiesByIds(agencyId: string, propertyIds: string[]): Promise<Property[]> {
+    if (!propertyIds || propertyIds.length === 0) return [];
+
+    const uniqueIds = Array.from(new Set(propertyIds));
+    const chunks = [];
+
+    // Split into chunks of 10
+    for (let i = 0; i < uniqueIds.length; i += 10) {
+        chunks.push(uniqueIds.slice(i, i + 10));
+    }
+
+    const promises = chunks.map(async (chunk) => {
+        const q = query(
+            collection(db, COLLECTION),
+            where('agencyId', '==', agencyId),
+            where(documentId(), 'in', chunk)
+        );
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Property));
+    });
+
+    const results = await Promise.all(promises);
+    return results.flat();
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────

@@ -2,14 +2,18 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
-    PlayCircle,
     Star,
     ArrowLeft,
     Bot,
     Zap,
     Share2,
     LayoutDashboard,
-    XCircle
+    XCircle,
+    Phone,
+    Instagram,
+    Facebook,
+    Mail,
+    Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -85,15 +89,16 @@ export default function LandingPage() {
                         <span className="text-slate-500 text-base md:text-lg mt-2 block font-normal">מבית עומר פתרונות דיגיטלים.</span>
                     </p>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-8 py-4 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-xl shadow-emerald-500/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
                             {userData ? "כניסה למערכת" : "הירשם עכשיו"}
-                            <ArrowLeft size={20} />
+                            <ArrowLeft size={28} strokeWidth={2.5} />
                         </Link>
-                        <button className="w-full sm:w-auto px-8 py-4 rounded-full bg-white border-2 border-slate-200 hover:border-blue-900 hover:text-blue-900 text-slate-700 font-bold text-lg shadow-sm transition-all flex items-center justify-center gap-2 group">
-                            <PlayCircle size={24} className="text-slate-400 group-hover:text-blue-900 transition-colors" />
-                            צפה בהדגמה
-                        </button>
+                        {!userData && (
+                            <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
+                                🎁 7 ימי ניסיון ללא עלות!
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -209,97 +214,155 @@ export default function LandingPage() {
                             </p>
                         </div>
                     </div>
+
+                    <div className="mt-16 flex flex-col items-center justify-center gap-3">
+                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
+                            <ArrowLeft size={28} strokeWidth={2.5} />
+                        </Link>
+                        {!userData && (
+                            <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
+                                🎁 7 ימי ניסיון ללא עלות!
+                            </span>
+                        )}
+                    </div>
                 </div>
             </section>
 
             {/* ── "What Does an Agency Manager Actually Do?" — Old vs hOMER ── */}
             <section className="bg-[#020b18] text-white py-24 px-4 sm:px-6 lg:px-8 overflow-hidden" dir="rtl">
-                <div className="max-w-6xl mx-auto">
+                <div className="max-w-7xl mx-auto">
                     {/* Header */}
                     <div className="text-center mb-16 space-y-4">
-                        <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                            אז מה בתכלס מנהל משרד תיווך עושה?
+                        <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-6">
+                            תפסיק לנהל את הבלגן. תתחיל לנהל עסק.
                         </h2>
-                        <p className="text-xl text-[#8892b0] max-w-2xl mx-auto">
-                            המעבר מניהול מבוזר ומתיש, לשליטה מוחלטת ממקום אחד.
-                        </p>
-                    </div>
-
-                    {/* Desktop Column Headers */}
-                    <div className="hidden md:grid grid-cols-2 gap-16 mb-8 text-center relative">
-                        <h3 className="text-2xl font-bold text-red-400 flex items-center justify-center gap-2">
-                            הדרך הישנה <XCircle className="w-6 h-6" />
-                        </h3>
-                        <h3 className="text-2xl font-bold text-[#00e5ff] flex items-center justify-center gap-2">
-                            <CheckCircle2 className="w-6 h-6" /> הדרך של Homer
+                        <h3 className="text-xl md:text-2xl font-bold text-[#8892b0] max-w-4xl mx-auto leading-relaxed">
+                            בוא נהיה כנים: זה אתה עכשיו, מתוסכל ומבוזר, מול הגרסה המשודרגת שלך לאחר שנטמיע לך את מערכת hOMER ותחזיר לעצמך את השליטה.
                         </h3>
                     </div>
 
-                    {/* Grid Layout */}
-                    <div className="relative space-y-8 md:space-y-12">
-                        {/* Center Divider (Desktop) */}
-                        <div className="hidden md:block absolute top-0 bottom-0 left-1/2 w-px bg-gradient-to-b from-transparent via-[#00e5ff]/30 to-transparent -translate-x-1/2"></div>
+                    {/* Split Screen Headers */}
+                    <div className="grid md:grid-cols-2 gap-8 relative mb-12">
+                        {/* RIGHT COLUMN HEADER */}
+                        <div className="sticky top-24 bg-[#020b18]/90 backdrop-blur z-20 py-4 border-b border-red-500/20 flex justify-center shadow-[0_10px_20px_-10px_rgba(0,0,0,0.5)]">
+                            <h3 className="text-2xl md:text-3xl font-black text-red-500 flex items-center gap-3">
+                                זה אתה עכשיו <XCircle className="w-8 h-8" strokeWidth={2.5} />
+                            </h3>
+                        </div>
+
+                        {/* LEFT COLUMN HEADER */}
+                        <div className="sticky top-24 bg-[#020b18]/90 backdrop-blur z-20 py-4 border-b border-[#00e5ff]/30 flex justify-center shadow-[0_10px_20px_-10px_rgba(0,0,0,0.5)]">
+                            <h3 className="text-2xl md:text-3xl font-black text-[#00e5ff] flex items-center gap-3 drop-shadow-[0_0_10px_rgba(0,229,255,0.5)]">
+                                <CheckCircle2 className="w-8 h-8 filter drop-shadow-[0_0_8px_rgba(0,229,255,0.8)]" strokeWidth={2.5} /> זה אתה אחרי hOMER
+                            </h3>
+                        </div>
+                    </div>
+
+                    {/* Split Screen Content */}
+                    <div className="space-y-16 relative">
+                        {/* Central Glowing Divider (Desktop) */}
+                        <div className="hidden md:block absolute top-[20px] bottom-0 left-1/2 w-0.5 bg-gradient-to-b from-transparent via-[#00e5ff]/50 to-transparent -translate-x-1/2 shadow-[0_0_15px_rgba(0,229,255,0.8)]"></div>
 
                         {/* Stage 1 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center relative group">
-                            <div className="bg-[#0a192f]/50 border border-red-500/20 rounded-2xl p-6 md:p-8 backdrop-blur-md transition-all duration-300 hover:border-red-500/40">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-red-400 font-bold"><XCircle className="w-5 h-5" /> הדרך הישנה</div>
-                                <h4 className="text-xl font-bold text-white mb-3">איסוף וניתוב לידים</h4>
-                                <p className="text-[#8892b0] leading-relaxed">הכל ידני. פתקיות על השולחן, הודעות בוואטסאפ שהולכות לאיבוד, ולידים שנופלים בין הכיסאות.</p>
+                        <div className="relative">
+                            <div className="flex justify-center mb-8 relative z-10 w-full">
+                                <h4 className="text-xl md:text-2xl font-bold text-white bg-[#020b18] px-8 py-2.5 rounded-full border border-slate-800 shadow-[0_0_15px_rgba(0,229,255,0.1)] inline-block">1. לידים ושיווק</h4>
                             </div>
-                            <div className="bg-[#0a192f]/80 border border-[#00e5ff]/30 rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-[0_0_20px_rgba(0,229,255,0.05)] transition-all duration-300 hover:border-[#00e5ff]/60 hover:shadow-[0_0_30px_rgba(0,229,255,0.15)] relative overflow-hidden">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-[#00e5ff] font-bold"><CheckCircle2 className="w-5 h-5" /> הדרך של hOMER</div>
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00e5ff]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                <h4 className="text-xl font-bold text-white mb-3">איסוף וניתוב לידים</h4>
-                                <p className="text-[#00e5ff] leading-relaxed font-medium">קליטה אוטומטית מכל הקמפיינים, ניתוב חכם לסוכנים, ובוט AI שמחמם את הליד בזמן שאתם ישנים.</p>
+                            <div className="grid md:grid-cols-2 gap-8">
+                                {/* Right (Now) */}
+                                <div className="bg-red-950/20 border border-red-500/10 rounded-3xl p-8 backdrop-blur-sm group hover:bg-red-950/30 transition-all duration-300 flex items-center">
+                                    <p className="text-slate-400 text-lg leading-relaxed font-medium w-full text-center">
+                                        קמפיינים יקרים נשרפים. לידים נופלים בין הכיסאות, הודעות בוואטסאפ נשארות ללא מענה, ולקוחות חמים מתקררים כי שכחת לחזור אליהם.
+                                    </p>
+                                </div>
+                                {/* Left (Homer) */}
+                                <div className="bg-[#0a192f]/60 border border-[#00e5ff]/20 rounded-3xl p-8 backdrop-blur-md shadow-[0_8px_32px_rgba(0,229,255,0.05)] transition-all duration-500 hover:border-[#00e5ff]/50 hover:shadow-[0_8px_32px_rgba(0,229,255,0.15)] hover:-translate-y-1 overflow-hidden relative group flex items-center">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00e5ff]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#00e5ff]/20 transition-colors duration-500"></div>
+                                    <p className="text-[#00e5ff] text-lg leading-relaxed font-medium relative z-10 w-full text-center">
+                                        קליטה מידית מכל הקמפיינים למסך אחד. הליד מנותב אוטומטית לסוכן, ובוט AI כבר שולח לו הודעת "נעים להכיר" בווצאפ.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
                         {/* Stage 2 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center relative group">
-                            <div className="bg-[#0a192f]/50 border border-red-500/20 rounded-2xl p-6 md:p-8 backdrop-blur-md transition-all duration-300 hover:border-red-500/40">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-red-400 font-bold"><XCircle className="w-5 h-5" /> הדרך הישנה</div>
-                                <h4 className="text-xl font-bold text-white mb-3">ניהול סוכנים ובקרת ביצועים</h4>
-                                <p className="text-[#8892b0] leading-relaxed">שיחות טלפון אינסופיות של &#39;איפה הדברים עומדים?&#39;, ניחושים לגבי מי עובד ומי מורח זמן, ואפס שקיפות.</p>
+                        <div className="relative">
+                            <div className="flex justify-center mb-8 relative z-10 w-full">
+                                <h4 className="text-xl md:text-2xl font-bold text-white bg-[#020b18] px-8 py-2.5 rounded-full border border-slate-800 shadow-[0_0_15px_rgba(0,229,255,0.1)] inline-block">2. צוות וביצועים</h4>
                             </div>
-                            <div className="bg-[#0a192f]/80 border border-[#00e5ff]/30 rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-[0_0_20px_rgba(0,229,255,0.05)] transition-all duration-300 hover:border-[#00e5ff]/60 hover:shadow-[0_0_30px_rgba(0,229,255,0.15)] relative overflow-hidden">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-[#00e5ff] font-bold"><CheckCircle2 className="w-5 h-5" /> הדרך של hOMER</div>
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00e5ff]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                <h4 className="text-xl font-bold text-white mb-3">ניהול סוכנים ובקרת ביצועים</h4>
-                                <p className="text-[#00e5ff] leading-relaxed font-medium">לוח קנבן לכל סוכן, מעקב משימות אוטומטי, ודאשבורד מנהלים שמציג ביצועים ותחזית עמלות בזמן אמת.</p>
+                            <div className="grid md:grid-cols-2 gap-8">
+                                {/* Right (Now) */}
+                                <div className="bg-red-950/20 border border-red-500/10 rounded-3xl p-8 backdrop-blur-sm group hover:bg-red-950/30 transition-all duration-300 flex items-center">
+                                    <p className="text-slate-400 text-lg leading-relaxed font-medium w-full text-center">
+                                        "איפה הליד של אתמול?" – חוסר שליטה מוחלט. מנהל סוכנים דרך קבוצות ווצאפ חופרות, בלי שום מושג אמיתי מי באמת סוגר עסקאות.
+                                    </p>
+                                </div>
+                                {/* Left (Homer) */}
+                                <div className="bg-[#0a192f]/60 border border-[#00e5ff]/20 rounded-3xl p-8 backdrop-blur-md shadow-[0_8px_32px_rgba(0,229,255,0.05)] transition-all duration-500 hover:border-[#00e5ff]/50 hover:shadow-[0_8px_32px_rgba(0,229,255,0.15)] hover:-translate-y-1 overflow-hidden relative group flex items-center">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00e5ff]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#00e5ff]/20 transition-colors duration-500"></div>
+                                    <p className="text-[#00e5ff] text-lg leading-relaxed font-medium relative z-10 w-full text-center">
+                                        שקיפות של 100%. לוח קנבן ויזואלי לכל סוכן, תזכורות למשימות ופולואפ, ודאשבורד מנהלים שחושף מי הכוכב של המשרד.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
                         {/* Stage 3 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center relative group">
-                            <div className="bg-[#0a192f]/50 border border-red-500/20 rounded-2xl p-6 md:p-8 backdrop-blur-md transition-all duration-300 hover:border-red-500/40">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-red-400 font-bold"><XCircle className="w-5 h-5" /> הדרך הישנה</div>
-                                <h4 className="text-xl font-bold text-white mb-3">ניהול מאגר הנכסים</h4>
-                                <p className="text-[#8892b0] leading-relaxed">קובץ אקסל כבד, תמונות מפוזרות בטלפונים של הסוכנים, וסיוט לעדכן סטטוסים של בלעדיות.</p>
+                        <div className="relative">
+                            <div className="flex justify-center mb-8 relative z-10 w-full">
+                                <h4 className="text-xl md:text-2xl font-bold text-white bg-[#020b18] px-8 py-2.5 rounded-full border border-slate-800 shadow-[0_0_15px_rgba(0,229,255,0.1)] inline-block">3. מאגר נכסים</h4>
                             </div>
-                            <div className="bg-[#0a192f]/80 border border-[#00e5ff]/30 rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-[0_0_20px_rgba(0,229,255,0.05)] transition-all duration-300 hover:border-[#00e5ff]/60 hover:shadow-[0_0_30px_rgba(0,229,255,0.15)] relative overflow-hidden">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-[#00e5ff] font-bold"><CheckCircle2 className="w-5 h-5" /> הדרך של hOMER</div>
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00e5ff]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                <h4 className="text-xl font-bold text-white mb-3">ניהול מאגר הנכסים</h4>
-                                <p className="text-[#00e5ff] leading-relaxed font-medium">מאגר דיגיטלי חכם בענן. לחיצת כפתור אחת שולחת קטלוג נכסים מעוצב אישית ללקוח.</p>
+                            <div className="grid md:grid-cols-2 gap-8">
+                                {/* Right (Now) */}
+                                <div className="bg-red-950/20 border border-red-500/10 rounded-3xl p-8 backdrop-blur-sm group hover:bg-red-950/30 transition-all duration-300 flex items-center">
+                                    <p className="text-slate-400 text-lg leading-relaxed font-medium w-full text-center">
+                                        קובץ אקסל מסורבל ומייאש. תמונות מפוזרות בטלפונים של הסוכנים, לקוחות מקבלים פרטים חסרים, ונכסים שכבר נמכרו עדיין מפורסמים.
+                                    </p>
+                                </div>
+                                {/* Left (Homer) */}
+                                <div className="bg-[#0a192f]/60 border border-[#00e5ff]/20 rounded-3xl p-8 backdrop-blur-md shadow-[0_8px_32px_rgba(0,229,255,0.05)] transition-all duration-500 hover:border-[#00e5ff]/50 hover:shadow-[0_8px_32px_rgba(0,229,255,0.15)] hover:-translate-y-1 overflow-hidden relative group flex items-center">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00e5ff]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#00e5ff]/20 transition-colors duration-500"></div>
+                                    <p className="text-[#00e5ff] text-lg leading-relaxed font-medium relative z-10 w-full text-center">
+                                        מאגר דיגיטלי חכם בענן. לחיצת כפתור אחת מפיקה קטלוג נכסים דיגיטלי ויוקרתי שנשלח ישירות לווצאפ של הלקוח.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
                         {/* Stage 4 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center relative group">
-                            <div className="bg-[#0a192f]/50 border border-red-500/20 rounded-2xl p-6 md:p-8 backdrop-blur-md transition-all duration-300 hover:border-red-500/40">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-red-400 font-bold"><XCircle className="w-5 h-5" /> הדרך הישנה</div>
-                                <h4 className="text-xl font-bold text-white mb-3">כספים, דוחות ורווחיות</h4>
-                                <p className="text-[#8892b0] leading-relaxed">לאסוף קבלות מקומטות, הפתעות בסוף החודש מול רואה החשבון, וקושי לדעת אם המשרד בכלל רווחי.</p>
+                        <div className="relative">
+                            <div className="flex justify-center mb-8 relative z-10 w-full">
+                                <h4 className="text-xl md:text-2xl font-bold text-white bg-[#020b18] px-8 py-2.5 rounded-full border border-slate-800 shadow-[0_0_15px_rgba(0,229,255,0.1)] inline-block">4. כספים ו-P&L</h4>
                             </div>
-                            <div className="bg-[#0a192f]/80 border border-[#00e5ff]/30 rounded-2xl p-6 md:p-8 backdrop-blur-md shadow-[0_0_20px_rgba(0,229,255,0.05)] transition-all duration-300 hover:border-[#00e5ff]/60 hover:shadow-[0_0_30px_rgba(0,229,255,0.15)] relative overflow-hidden">
-                                <div className="md:hidden flex items-center gap-2 mb-4 text-[#00e5ff] font-bold"><CheckCircle2 className="w-5 h-5" /> הדרך של hOMER</div>
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00e5ff]/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                <h4 className="text-xl font-bold text-white mb-3">כספים, דוחות ורווחיות</h4>
-                                <p className="text-[#00e5ff] leading-relaxed font-medium">ייבוא הוצאות חכם עם AI, חישוב עמלות אוטומטי, ודוח רווח והפסד (P&L) מקיף בלחיצת כפתור.</p>
+                            <div className="grid md:grid-cols-2 gap-8">
+                                {/* Right (Now) */}
+                                <div className="bg-red-950/20 border border-red-500/10 rounded-3xl p-8 backdrop-blur-sm group hover:bg-red-950/30 transition-all duration-300 flex items-center">
+                                    <p className="text-slate-400 text-lg leading-relaxed font-medium w-full text-center">
+                                        רואה החשבון מתקשר ויש לך חור בבטן. ערימות של חשבוניות מקומטות, חישובי עמלות סוכנים ידניים, וקושי לדעת אם המשרד בכלל רווחי.
+                                    </p>
+                                </div>
+                                {/* Left (Homer) */}
+                                <div className="bg-[#0a192f]/60 border border-[#00e5ff]/20 rounded-3xl p-8 backdrop-blur-md shadow-[0_8px_32px_rgba(0,229,255,0.05)] transition-all duration-500 hover:border-[#00e5ff]/50 hover:shadow-[0_8px_32px_rgba(0,229,255,0.15)] hover:-translate-y-1 overflow-hidden relative group flex items-center">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00e5ff]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#00e5ff]/20 transition-colors duration-500"></div>
+                                    <p className="text-[#00e5ff] text-lg leading-relaxed font-medium relative z-10 w-full text-center">
+                                        ה-CFO הווירטואלי שלך. ייבוא קבצי בנק שמסווגים אוטומטית בעזרת AI, ודוח רווח והפסד (P&L) מהמם בלחיצת כפתור.
+                                    </p>
+                                </div>
                             </div>
                         </div>
+                    </div>
 
+                    <div className="mt-20 flex flex-col items-center justify-center gap-3">
+                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
+                            <ArrowLeft size={28} strokeWidth={2.5} />
+                        </Link>
+                        {!userData && (
+                            <span className="text-[#00e5ff] font-bold text-lg bg-[#00e5ff]/10 px-5 py-2 rounded-full shadow-[0_0_15px_rgba(0,229,255,0.2)] border border-[#00e5ff]/20">
+                                🎁 7 ימי ניסיון ללא עלות!
+                            </span>
+                        )}
                     </div>
                 </div>
             </section>
@@ -414,6 +477,21 @@ export default function LandingPage() {
                             </a>
                         </div>
                     </div>
+
+                    <div className="mt-16 flex flex-col items-center justify-center gap-3">
+                        <h4 className="text-xl md:text-2xl font-black text-blue-900 mb-4 text-center">
+                            הגעת עד לכאן ועוד לא נרשמת? הגיע הזמן!
+                        </h4>
+                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
+                            <ArrowLeft size={28} strokeWidth={2.5} />
+                        </Link>
+                        {!userData && (
+                            <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
+                                🎁 7 ימי ניסיון ללא עלות!
+                            </span>
+                        )}
+                    </div>
                 </div>
             </section>
 
@@ -424,10 +502,48 @@ export default function LandingPage() {
                         <img src="/homer-logo.png" alt="Homer CRM" className="h-16 md:h-20 w-auto grayscale hover:grayscale-0 transition-all" />
                     </div>
 
-                    <div className="flex gap-6 mb-8 text-sm font-semibold text-slate-600">
-                        <Link to="/terms" className="hover:text-blue-900 transition-colors">תנאי שימוש</Link>
-                        <Link to="/privacy" className="hover:text-blue-900 transition-colors">מדיניות פרטיות</Link>
-                        <Link to="/contact" className="hover:text-blue-900 transition-colors">צור קשר</Link>
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12 mb-8 w-full max-w-4xl mx-auto border-y border-slate-200/60 py-8">
+                        {/* Contact Details */}
+                        <div className="flex flex-col items-center md:items-start gap-4">
+                            <a href="tel:0507706024" className="flex items-center gap-2 text-slate-600 hover:text-blue-900 transition-colors font-medium">
+                                <Phone className="w-5 h-5 text-emerald-500" />
+                                <span dir="ltr">050-770-6024</span>
+                            </a>
+                            <a href="mailto:contact@homer.management" className="flex items-center gap-2 text-slate-600 hover:text-blue-900 transition-colors font-medium">
+                                <Mail className="w-5 h-5 text-emerald-500" />
+                                <span>omerdigitalsolutions@gmail.com
+                                </span>
+                            </a>
+                            <div className="flex items-center gap-2 text-slate-600 font-medium">
+                                <Clock className="w-5 h-5 text-emerald-500" />
+                                <span>א'-ה': 09:00 - 18:00</span>
+                            </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="hidden md:block w-px h-24 bg-slate-200"></div>
+                        <div className="md:hidden w-full h-px bg-slate-200"></div>
+
+                        {/* Social & WhatsApp */}
+                        <div className="flex flex-col items-center gap-5">
+                            <div className="flex items-center gap-4">
+                                <a href="https://www.instagram.com/omer.digital.solutions" target="_blank" rel="noopener noreferrer" className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-slate-400 hover:text-pink-600 hover:border-pink-200 transition-all hover:-translate-y-1">
+                                    <Instagram className="w-6 h-6" />
+                                </a>
+                                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all hover:-translate-y-1">
+                                    <Facebook className="w-6 h-6" />
+                                </a>
+                            </div>
+                            <a
+                                href="https://wa.me/972507706024"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white px-6 py-2.5 rounded-full font-bold shadow-lg shadow-[#25D366]/30 transition-all hover:-translate-y-0.5"
+                            >
+                                <MessageCircle className="w-5 h-5" />
+                                דברו איתנו בוואטסאפ
+                            </a>
+                        </div>
                     </div>
 
                     <p className="text-slate-500 text-sm md:text-base text-center font-medium">
@@ -435,6 +551,14 @@ export default function LandingPage() {
                     </p>
                 </div>
             </footer>
+
+            {/* Global Floating WhatsApp Button */}
+            <a href="https://wa.me/972507706024" target="_blank" rel="noopener noreferrer" className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-16 h-16 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 hover:bg-[#20bd5a] transition-all z-50 group">
+                <MessageCircle size={34} strokeWidth={2.5} />
+                <span className="absolute right-[calc(100%+1rem)] bg-white text-slate-800 px-4 py-2 rounded-xl text-sm md:text-base font-bold shadow-xl opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 pointer-events-none transition-all duration-300 origin-right whitespace-nowrap border border-slate-100 hidden sm:block">
+                    דברו איתנו בוואטסאפ
+                </span>
+            </a>
         </div>
     );
 }

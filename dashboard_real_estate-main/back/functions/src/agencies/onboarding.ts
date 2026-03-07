@@ -51,8 +51,28 @@ export const createAgencyAccount = onCall(async (request) => {
         );
     }
 
+    // ── Phone Eligibility Check (Anti-Abuse) ────────────────────────────────────
+    const normalizedPhone = phone.trim().replace(/\D/g, '');
+    let trialEligible = true;
+
+    if (normalizedPhone) {
+        const phoneRef = db.collection('used_phones').doc(normalizedPhone);
+        const phoneSnap = await phoneRef.get();
+        if (phoneSnap.exists) {
+            trialEligible = false; // Phone already used — no trial
+        } else {
+            // Mark phone as used for trial (write BEFORE batch to be safe)
+            await phoneRef.set({ uid, email, usedAt: FieldValue.serverTimestamp() });
+        }
+    }
+
+    // Trial ends 7 days from now (set only if eligible)
+    const trialEndsAt = trialEligible
+        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        : null;
+
     // ── Atomic Batch Write ──────────────────────────────────────────────────────
-    const agencyRef = db.collection('agencies').doc(); // auto-ID
+    const agencyRef = db.collection('agencies').doc();
     const userRef = db.doc(`users/${uid}`);
 
     const batch = db.batch();
@@ -60,12 +80,14 @@ export const createAgencyAccount = onCall(async (request) => {
     batch.set(agencyRef, {
         name: agencyName.trim(),
         subscriptionTier: 'free',
-        monthlyGoals: {
-            commissions: 100000,
-            deals: 5,
-            leads: 20,
-        },
+        monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
         settings: {},
+        billing: {
+            planId: 'free_trial',
+            status: trialEligible ? 'trialing' : 'past_due',
+            trialEndsAt: trialEndsAt,
+            ownerPhone: normalizedPhone,
+        },
         createdAt: FieldValue.serverTimestamp(),
     });
 

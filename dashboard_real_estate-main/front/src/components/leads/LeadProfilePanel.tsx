@@ -5,12 +5,14 @@ import {
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
     MessageSquare, Send, Loader2, Heart, Link, Copy, Check, ExternalLink
 } from 'lucide-react';
-import { Lead, AppUser, SharedCatalog } from '../../types';
+import { Lead, AppUser, Property } from '../../types';
 import { updateLead } from '../../services/leadService';
 import { getCatalogsByLeadId } from '../../services/catalogService';
+import { getPropertiesByIds } from '../../services/propertyService';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import BotToggle from './BotToggle';
 
 const conditionLabels: Record<string, string> = {
     new: 'חדש מקבלן',
@@ -126,8 +128,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     };
 
     // Liked properties from catalogs
-    type LikedPropertySnapshot = SharedCatalog['properties'][0];
-    const [likedProperties, setLikedProperties] = useState<LikedPropertySnapshot[]>([]);
+    const [likedProperties, setLikedProperties] = useState<Property[]>([]);
     const [loadingLikes, setLoadingLikes] = useState(false);
 
     // Fetch catalogs for this lead and extract liked properties
@@ -135,14 +136,18 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
         if (!lead.id || !lead.agencyId) return;
         setLoadingLikes(true);
         getCatalogsByLeadId(lead.id, lead.agencyId)
-            .then(catalogs => {
+            .then(async (catalogs) => {
                 const likedIds = new Set<string>();
                 for (const catalog of catalogs) {
                     (catalog.likedPropertyIds ?? []).forEach(id => likedIds.add(id));
                 }
-                // We'll need to fetch these properties by ID if we want to show their cards
-                // For now, let's keep the logic consistent with the UI
-                setLikedProperties([]); // We will need a follow-up to fetch these live
+
+                if (likedIds.size > 0) {
+                    const properties = await getPropertiesByIds(lead.agencyId, Array.from(likedIds));
+                    setLikedProperties(properties);
+                } else {
+                    setLikedProperties([]);
+                }
             })
             .catch(err => console.warn('[LeadProfilePanel] Could not load liked properties:', err))
             .finally(() => setLoadingLikes(false));
@@ -274,6 +279,11 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                 {/* WhatsApp Tab */}
                 {activeSection === 'whatsapp' && (
                     <div className="flex flex-col flex-1 overflow-hidden">
+                        {/* Bot Toggle — available for all leads */}
+                        <BotToggle
+                            leadId={lead.id}
+                            isBotActive={lead.isBotActive !== false}
+                        />
                         {/* Messages list */}
                         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
                             {messages.length === 0 ? (
@@ -404,7 +414,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 <InfoRow icon={MapPin} label="עיר מבוקשת" color="text-emerald-500"
                                     value={
                                         <div className="flex flex-wrap gap-1 mt-0.5">
-                                            {r.desiredCity.map(c => (
+                                            {r.desiredCity.map((c: string) => (
                                                 <span key={c} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full">{c}</span>
                                             ))}
                                         </div>
@@ -428,7 +438,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 <InfoRow icon={Building2} label="סוג נכס מבוקש" color="text-slate-500"
                                     value={
                                         <div className="flex flex-wrap gap-1 mt-0.5">
-                                            {r.propertyType.map(t => (
+                                            {r.propertyType.map((t: string) => (
                                                 <span key={t} className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
                                                     {t === 'sale' ? 'למכירה' : t === 'rent' ? 'להשכרה' : t}
                                                 </span>

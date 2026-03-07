@@ -3,6 +3,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
+import WhatsAppTermsModal from '../modals/WhatsAppTermsModal';
 import {
     MessageCircle,
     CheckCircle,
@@ -45,6 +46,7 @@ export const WhatsAppSettings = () => {
 
     // Modal/QR state
     const [showModal, setShowModal] = useState(false);
+    const [isTermsOpen, setIsTermsOpen] = useState(false);
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [loadingQR, setLoadingQR] = useState(false);
     const [error, setError] = useState('');
@@ -412,13 +414,22 @@ export const WhatsAppSettings = () => {
                 )}
 
                 <button
-                    onClick={handleConnect}
+                    onClick={() => setIsTermsOpen(true)}
                     className="w-full flex items-center justify-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors text-sm shadow-sm shadow-emerald-600/20"
                 >
                     <QrCode size={18} />
                     חבר ווצאפ
                 </button>
             </div>
+
+            <WhatsAppTermsModal
+                isOpen={isTermsOpen}
+                onClose={() => setIsTermsOpen(false)}
+                onAccept={() => {
+                    setIsTermsOpen(false);
+                    handleConnect();
+                }}
+            />
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

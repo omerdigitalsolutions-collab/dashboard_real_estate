@@ -37,7 +37,8 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
     }, [agencySettings?.customDealStages]);
 
     const [selectedStage, setSelectedStage] = useState<DealStage>(activeStages[0]?.id || 'qualification');
-    const [selectedLeadId, setSelectedLeadId] = useState<string>('');
+    const [selectedBuyerId, setSelectedBuyerId] = useState<string>('');
+    const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
     const [assignedAgentId, setAssignedAgentId] = useState<string>(property.agentId || '');
 
@@ -47,13 +48,13 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
     useEffect(() => {
         if (isOpen) {
             setSelectedStage(activeStages[0]?.id || 'qualification');
-            setSelectedLeadId('');
+            setSelectedBuyerId('');
+            setSelectedSellerId('');
             setCommissionPercentage('2');
             setAssignedAgentId(property.agentId || '');
             setErrorMsg('');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, property]);
+    }, [isOpen, property, activeStages]);
 
     if (!isOpen) return null;
 
@@ -73,14 +74,18 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
         try {
             setLoading(true);
 
-            await addDeal(userData.agencyId, {
-                leadId: selectedLeadId, // empty string = without lead
+            const dealPayload: any = {
                 propertyId: property.id,
                 ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
                 stage: selectedStage,
                 projectedCommission: calculatedCommission,
                 createdBy: userData.name || userData.email || 'Agent',
-            });
+            };
+
+            if (selectedBuyerId) dealPayload.buyerId = selectedBuyerId;
+            if (selectedSellerId) dealPayload.sellerId = selectedSellerId;
+
+            await addDeal(userData.agencyId, dealPayload);
 
             onSuccess('העסקה נוצרה בהצלחה!');
             onClose();
@@ -129,15 +134,32 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
                         </select>
                     </div>
 
-                    {/* Lead Selection */}
+                    {/* Buyer Selection */}
                     <div>
-                        <label className={labelCls}>ליד משויך</label>
+                        <label className={labelCls}>קונה הנכס</label>
                         <select
-                            value={selectedLeadId}
-                            onChange={(e) => setSelectedLeadId(e.target.value)}
+                            value={selectedBuyerId}
+                            onChange={(e) => setSelectedBuyerId(e.target.value)}
                             className={inputCls}
                         >
-                            <option value="">ללא ליד</option>
+                            <option value="">ללא קונה בעסקה</option>
+                            {leads.map((lead: Lead) => (
+                                <option key={lead.id} value={lead.id}>
+                                    {lead.name} {lead.phone ? `- ${lead.phone}` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Seller Selection */}
+                    <div>
+                        <label className={labelCls}>מוכר הנכס</label>
+                        <select
+                            value={selectedSellerId}
+                            onChange={(e) => setSelectedSellerId(e.target.value)}
+                            className={inputCls}
+                        >
+                            <option value="">ללא מוכר בעסקה</option>
                             {leads.map((lead: Lead) => (
                                 <option key={lead.id} value={lead.id}>
                                     {lead.name} {lead.phone ? `- ${lead.phone}` : ''}

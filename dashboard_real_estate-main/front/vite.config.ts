@@ -7,4 +7,12 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    proxy: {
+      '/__': {
+        target: 'https://homer.management',
+        changeOrigin: true,
+      }
+    }
+  }
 });

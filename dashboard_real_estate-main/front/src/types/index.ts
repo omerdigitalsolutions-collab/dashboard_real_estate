@@ -117,6 +117,8 @@ export interface Lead {
     catalogId?: string | null;
     catalogUrl?: string | null;
     notes?: string | null;
+    /** Controls whether the AI WhatsApp bot is allowed to auto-reply to this lead. */
+    isBotActive?: boolean;
     createdAt: Timestamp;
 }
 
@@ -185,7 +187,8 @@ export interface Deal {
     agentId?: string; // Often referred to alongside createdBy, mapped via createdBy
     createdBy: string;
     propertyId: string;
-    leadId: string;
+    buyerId?: string;
+    sellerId?: string;
     notes?: string;
     stage: DealStage;
     probability?: number;

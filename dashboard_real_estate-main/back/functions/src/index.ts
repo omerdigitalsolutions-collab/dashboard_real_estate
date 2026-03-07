@@ -92,3 +92,8 @@ export const superadmin = {
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';
+
+// ── AI WhatsApp Bot ────────────────────────────────────────────────────────────
+// Top-level export so the URL is clean (no namespace prefix):
+//   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI
+export { webhookWhatsAppAI } from './webhookWhatsAppAI';
