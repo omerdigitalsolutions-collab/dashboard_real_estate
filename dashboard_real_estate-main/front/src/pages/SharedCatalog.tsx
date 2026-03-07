@@ -450,6 +450,29 @@ export default function SharedCatalogPage() {
                 </div>
             )}
 
+            {/* ── Footer ──────────────────────────────────────────────────────── */}
+            <footer className="max-w-5xl mx-auto px-4 pb-32 pt-6 flex flex-col items-center text-center">
+                <div className="bg-white/60 backdrop-blur-sm rounded-3xl border border-slate-200/60 shadow-sm px-8 py-6 flex flex-col items-center gap-3 transition-all hover:bg-white hover:shadow-md w-full sm:w-auto">
+                    <p className="text-slate-500 text-sm font-medium">
+                        נוצר ע״י{' '}
+                        <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-800 hover:text-blue-600 transition-colors">
+                            homer הבית של המתווכים
+                        </a>
+                    </p>
+
+                    <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="block my-1 hover:scale-105 active:scale-95 transition-transform">
+                        <img src="/homer-logo.png" alt="Homer CRM" className="h-10 w-auto object-contain drop-shadow-sm" />
+                    </a>
+
+                    <p className="text-slate-400 text-xs font-medium">
+                        מבית{' '}
+                        <a href="https://www.instagram.com/omer.digital.solutions" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                            עומר פתרונות דיגיטלים
+                        </a>
+                    </p>
+                </div>
+            </footer>
+
             {/* ── Floating WhatsApp CTA ──────────────────────────────────────── */}
             <div className="fixed bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-6 pt-8 bg-gradient-to-t from-[#f5f6fa] via-[#f5f6fa]/90 to-transparent z-50 pointer-events-none">
                 <a
