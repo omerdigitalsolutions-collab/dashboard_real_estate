@@ -19,14 +19,12 @@ exports.updateProperty = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 // Fields that must never be changed by a client update
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 exports.updateProperty = (0, https_1.onCall)(async (request) => {
-    var _a;
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { propertyId, updates } = request.data;
     if (!(propertyId === null || propertyId === void 0 ? void 0 : propertyId.trim()))
         throw new https_1.HttpsError('invalid-argument', 'propertyId is required.');
@@ -40,8 +38,7 @@ exports.updateProperty = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', `Property ${propertyId} not found.`);
     }
     const propertyData = propertySnap.data();
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || ((_a = callerDoc.data()) === null || _a === void 0 ? void 0 : _a.agencyId) !== propertyData.agencyId) {
+    if (authData.agencyId !== propertyData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'You do not have access to this property.');
     }
     // ── Strip immutable fields from updates ─────────────────────────────────────

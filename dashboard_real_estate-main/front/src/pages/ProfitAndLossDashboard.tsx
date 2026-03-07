@@ -363,7 +363,7 @@ export default function ProfitAndLossDashboard() {
 
         const reportData: PnLReportData = {
             // @ts-ignore
-            agencyName: userData?.agencyName || 'hOMER Real Estate',
+            agencyName: userData?.agencyName || 'homer Real Estate',
             // @ts-ignore
             agencyLogo: userData?.agencyLogo || '',
             dateRangeLabel,
@@ -537,12 +537,14 @@ export default function ProfitAndLossDashboard() {
 
                 <div className={`bg-slate-900/60 border rounded-2xl p-6 flex items-center justify-between shadow-xl ${profit >= 0 ? 'border-cyan-500/30' : 'border-rose-500/30'}`}>
                     <div>
-                        <p className="text-sm text-slate-400 font-medium mb-1">רווח נקי (לפני מס)</p>
+                        <p className="text-sm text-slate-400 font-medium mb-1">
+                            {profit >= 0 ? 'רווח נקי (לפני מס)' : 'הפסד (לפני מס)'}
+                        </p>
                         <p className={`text-3xl font-black ${profit >= 0 ? 'text-cyan-400' : 'text-rose-500'}`}>
-                            {profit < 0 ? '-' : ''}₪{Math.abs(profit).toLocaleString()}
+                            ₪{Math.abs(profit).toLocaleString()}
                         </p>
                         <p className="text-xs text-slate-500 mt-2 bg-slate-800/50 inline-block px-2 py-1 rounded-md">
-                            שולי רווח: <span className={grossMargin >= 0 ? 'text-cyan-400 font-bold' : 'text-rose-400 font-bold'}>{grossMargin.toFixed(1)}%</span>
+                            שולי {profit >= 0 ? 'רווח' : 'הפסד'}: <span className={grossMargin >= 0 ? 'text-cyan-400 font-bold' : 'text-rose-400 font-bold'}>{Math.abs(grossMargin).toFixed(1)}%</span>
                         </p>
                     </div>
                 </div>

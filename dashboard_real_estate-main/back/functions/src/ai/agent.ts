@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as admin from 'firebase-admin';
+import { validateUserAuth } from '../config/authGuard';
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
@@ -13,25 +14,14 @@ export const askAgencyAgent = onCall(
             throw new HttpsError('invalid-argument', 'A valid message string must be provided.');
         }
 
-        const uid = request.auth?.uid;
-        if (!uid) {
-            throw new HttpsError('unauthenticated', 'User must be authenticated to use the AI Agent.');
-        }
-
         try {
+            const authData = await validateUserAuth(request);
+            const agencyId = authData.agencyId;
             const db = admin.firestore();
 
-            // 1. Fetch user's agencyId
-            const userDoc = await db.collection('users').doc(uid).get();
-            const userData = userDoc.data();
-            const agencyId = userData?.agencyId;
-
-            if (!agencyId) {
-                throw new HttpsError('failed-precondition', 'User is not associated with any agency.');
-            }
-
             // 2. Query Properties
-            const propertiesSnapshot = await db.collection(`agencies/${agencyId}/properties`)
+            const propertiesSnapshot = await db.collection('properties')
+                .where('agencyId', '==', agencyId)
                 .where('status', 'in', ['active', 'sold', 'rented']) // Fetch basic active ones or just without filter
                 .limit(50)
                 .get();
@@ -51,7 +41,8 @@ export const askAgencyAgent = onCall(
             });
 
             // 3. Query Leads
-            const leadsSnapshot = await db.collection(`agencies/${agencyId}/leads`)
+            const leadsSnapshot = await db.collection('leads')
+                .where('agencyId', '==', agencyId)
                 .limit(50)
                 .get();
 

@@ -14,6 +14,7 @@ export interface AgencyRow {
     adminEmail?: string;
     subscriptionTier?: 'free' | 'pro' | 'enterprise';
     status?: 'active' | 'suspended';
+    isWhatsappConnected?: boolean;
     createdAt?: Timestamp;
 }
 
@@ -95,8 +96,21 @@ export function useGlobalStats(): GlobalStats {
                     ...(d.data() as Omit<AgencyRow, 'id'>),
                 })) as AgencyRow[];
 
-                // Recent 10 agencies sorted in memory (avoids composite index)
+                // ── 2. Users (global, no agencyId filter) ─────────────────────
+                const usersSnap = await getDocs(collection(db, 'users'));
+                const allUsers = usersSnap.docs.map((d) => ({
+                    id: d.id,
+                    ...(d.data() as { createdAt?: Timestamp; email?: string; role?: string; agencyId?: string }),
+                }));
+
+                // Attach admin email & sort recent agencies
                 const recentAgencies = [...allAgencies]
+                    .map((ag) => {
+                        const adminUser = allUsers.find(
+                            (u) => u.agencyId === ag.id && u.role === 'admin' && !!u.email
+                        );
+                        return { ...ag, adminEmail: adminUser?.email };
+                    })
                     .sort((a, b) => {
                         const ta = a.createdAt?.seconds ?? 0;
                         const tb = b.createdAt?.seconds ?? 0;
@@ -116,12 +130,7 @@ export function useGlobalStats(): GlobalStats {
                     { name: 'Enterprise', value: tierCounts.enterprise, color: '#f97316' },
                 ];
 
-                // ── 2. Users (global, no agencyId filter) ─────────────────────
-                const usersSnap = await getDocs(collection(db, 'users'));
-                const allUsers = usersSnap.docs.map((d) => ({
-                    id: d.id,
-                    ...(d.data() as { createdAt?: Timestamp }),
-                }));
+                // (Users data already fetched in step 2)
 
                 // ── 3. Properties (active only) ────────────────────────────────
                 const propsSnap = await getDocs(

@@ -23,13 +23,12 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      // Optimiziation: Put this last in boolean chains to avoid document reads when possible
       return isAuthed() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
     }
 
     function isBootstrapAdmin() {
-      return isAuthed() && 
-        request.auth.token.email != null && 
+      return isAuthed() &&
+        request.auth.token.email != null &&
         request.auth.token.email_verified == true && (
           request.auth.token.email.lower() == 'omerdigitalsolutions@gmail.com' ||
           request.auth.token.email.lower() == 'omerfm4444@gmail.com' ||
@@ -57,24 +56,31 @@ service cloud.firestore {
      *  - billing.status is 'trialing' AND trial hasn't ended yet
      */
     function isBillingActive(agencyData) {
-      // No billing field: allow (onboarding in progress)
       let b = agencyData.get('billing', null);
       if (b == null) return true;
 
       let status = b.get('status', 'active');
 
-      // Explicitly active/paid
       if (status == 'active' || status == 'paid') return true;
 
-      // Trial: allow only if not expired
       if (status == 'trialing') {
         let trialEnd = b.get('trialEndsAt', null);
-        if (trialEnd == null) return true; // No end date = allow
+        if (trialEnd == null) return true;
         return request.time < trialEnd;
       }
 
       // past_due, canceled, or anything else = locked
       return false;
+    }
+
+    /**
+     * Checks that the caller's agency billing is active by reading the agency doc.
+     * Use this on writes inside top-level collections (leads, properties, etc.)
+     * where we can't pass the agency data inline.
+     */
+    function isBillingActiveForCaller() {
+      let agencyData = get(/databases/$(database)/documents/agencies/$(request.auth.token.agencyId)).data;
+      return isBillingActive(agencyData);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -94,12 +100,12 @@ service cloud.firestore {
         (inAgency(agencyId) && (isBillingActive(resource.data) || isAdmin()))
       );
       allow create: if isBootstrapAdmin();
-      
-      // ✅ SECURED: Removed 'agencyId' from mutable fields
+
+      // Only admins can modify their own agency — agencyId is immutable
       allow update: if isAuthed()
           && (isAgencyAdmin(agencyId) || isBootstrapAdmin())
           && (
-            isBootstrapAdmin() || 
+            isBootstrapAdmin() ||
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'monthlyGoals', 'yearlyGoals', 'settings',
               'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
@@ -110,7 +116,7 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // AGENCY AGENTS
+    // AGENCY AGENTS (subcollection — not to be confused with /users)
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/agents/{agentId} {
       allow read: if isAuthed() && (inAgency(agencyId) || isBootstrapAdmin());
@@ -122,7 +128,6 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/expenses/{expenseId} {
       allow read: if isAuthed() && inAgency(agencyId);
-      // ✅ SECURED: Enforced positive amounts, non-empty categories, and valid dates
       allow create, update: if isAuthed() && isAgencyAdmin(agencyId)
           && isPositiveNumber(request.resource.data.amount)
           && isNonEmptyString(request.resource.data.category)
@@ -132,7 +137,6 @@ service cloud.firestore {
 
     match /agencies/{agencyId}/incomes/{incomeId} {
       allow read: if isAuthed() && inAgency(agencyId);
-      // ✅ SECURED: Validations added
       allow create, update: if isAuthed() && isAgencyAdmin(agencyId)
           && isPositiveNumber(request.resource.data.amount)
           && isNonEmptyString(request.resource.data.title)
@@ -144,70 +148,75 @@ service cloud.firestore {
     // USERS
     // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId} {
+      // Read own doc, or any doc in same agency, or super/bootstrap admins
       allow read: if isAuthed() && (
-        request.auth.uid == userId 
-        || isSuperAdmin() 
+        request.auth.uid == userId
+        || isSuperAdmin()
         || isBootstrapAdmin()
         || (resource != null && inAgency(resource.data.agencyId))
         || (resource != null && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower())
       );
-      
-      // ✅ SECURED: Prevented malicious client filters. Agents can only list users in their agency.
+
+      // List: agents can only see their own agency
       allow list: if isAuthed() && (
         inAgency(resource.data.agencyId) || isSuperAdmin() || isBootstrapAdmin()
       );
 
+      // Allow creating own user doc on signup, or by bootstrap admin
       allow create: if isAuthed() && (request.auth.uid == userId || isBootstrapAdmin());
-      
+
+      // Regular users can only update their own profile fields (not role or agencyId)
       allow update: if isAuthed() && (
         (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'agencyId']))
-        || isAgencyAdmin(resource.data.agencyId) 
-        || isSuperAdmin() 
+        || isAgencyAdmin(resource.data.agencyId)
+        || isSuperAdmin()
         || isBootstrapAdmin()
       );
-      
+
       allow delete: if isSuperAdmin();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // PROPERTIES
+    // Security note: create/update/delete go through Cloud Functions which use
+    // validateUserAuth() to inject the agencyId server-side. Direct client
+    // creates are allowed only if the user is already in the agency (for
+    // scenarios where the function might fail gracefully). The important guard
+    // is that Server-Side injection overwrites any client-provided agencyId.
     // ══════════════════════════════════════════════════════════════════════════
     match /properties/{propertyId} {
       allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
-      allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
-          && isNonEmptyString(request.resource.data.city)
-          && isNonEmptyString(request.resource.data.address)
-          && isNonEmptyString(request.resource.data.type)
-          && isPositiveNumber(request.resource.data.price);
+
+      // Writes go through Cloud Functions — direct client create is denied
+      // to enforce server-side agencyId injection via validateUserAuth()
+      allow create: if false;
 
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
-          && request.resource.data.createdBy == resource.data.createdBy;
+          && isBillingActiveForCaller();
 
-      allow delete: if isAuthed() && (
-        isAgencyAdmin(resource.data.agencyId) ||
-        resource.data.createdBy == request.auth.uid
-      );
+      allow delete: if false; // Must go through deleteProperty Cloud Function
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // LEADS
+    // Same rationale: create/delete go through Cloud Functions.
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId} {
       allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
-      allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
-          && isNonEmptyString(request.resource.data.name)
-          && isNonEmptyString(request.resource.data.phone);
 
-      // ✅ SECURED: Prevent agents from reassigning leads or changing ownership
+      // Create must go through addLead Cloud Function — deny direct client writes
+      allow create: if false;
+
+      // Updates allowed directly (e.g., status changes from the board)
+      // but agencyId must not change and billing must be active
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
-          && (request.resource.data.createdBy == resource.data.createdBy || isAgencyAdmin(resource.data.agencyId))
-          && (request.resource.data.assignedTo == resource.data.assignedTo || isAgencyAdmin(resource.data.agencyId));
+          && isBillingActiveForCaller()
+          && (request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null) || isAgencyAdmin(resource.data.agencyId))
+          && (request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null) || isAgencyAdmin(resource.data.agencyId));
 
       allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
     }
@@ -216,11 +225,10 @@ service cloud.firestore {
     // LEAD MESSAGES
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId}/messages/{messageId} {
-      // ✅ OPTIMIZED: Grouped to clean up code (Note: still uses a document read)
       function parentAgency() {
         return get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId;
       }
-      
+
       allow read, create: if isAuthed() && inAgency(parentAgency());
       allow update: if isAuthed()
           && inAgency(parentAgency())
@@ -237,9 +245,10 @@ service cloud.firestore {
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
           && isNonEmptyString(request.resource.data.stage)
-          && isPositiveNumber(request.resource.data.projectedCommission);
-          
-      // ✅ SECURED: Prevent regular agents from marking as Won or inflating commissions
+          && isPositiveNumber(request.resource.data.projectedCommission)
+          && isBillingActiveForCaller();
+
+      // Prevent regular agents from marking as Won or inflating commissions
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
@@ -267,19 +276,23 @@ service cloud.firestore {
 
     // ══════════════════════════════════════════════════════════════════════════
     // ALERTS
+    // Alerts are written by Cloud Functions (triggers) — deny both create/delete
+    // from clients. Only allow reading and marking as read.
     // ══════════════════════════════════════════════════════════════════════════
     match /alerts/{alertId} {
-      allow read: if isAuthed() 
-          && inAgency(resource.data.agencyId) 
+      allow read: if isAuthed()
+          && inAgency(resource.data.agencyId)
           && resource.data.userId == request.auth.uid;
 
+      // Agents can only mark their own alerts as read
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && resource.data.userId == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
           && request.resource.data.isRead == true;
 
-      allow create, delete: if false; 
+      // Create/delete: Cloud Functions only (Admin SDK bypasses rules)
+      allow create, delete: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -287,21 +300,24 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /shared_catalogs/{catalogId} {
       allow read: if (resource.data.expiresAt > request.time) || (isAuthed() && inAgency(resource.data.agencyId));
-      
-      // ✅ SECURED: Require auth to prevent bot spam (Requires anonymous auth on frontend)
-      allow update: if isAuthed() 
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount']) 
+
+      // Allow incrementing viewCount (public link visitors use anonymous auth)
+      allow update: if isAuthed()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
           && request.resource.data.viewCount == (resource.data.viewCount + 1);
-      
+
+      // Allow updating liked properties list
       allow update: if isAuthed()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
           && request.resource.data.likedPropertyIds is list
           && request.resource.data.likedPropertyIds.size() <= 100;
 
+      // Agency admins can update the property list
       allow update: if isAuthed() && inAgency(resource.data.agencyId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['propertyIds', 'updatedAt']);
-                    
-      allow create, delete: if false; 
+
+      // Create/delete via Cloud Functions only
+      allow create, delete: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -310,41 +326,41 @@ service cloud.firestore {
     match /pending_leads/{leadId} {
       allow read: if isAuthed() && inAgency(resource.data.agencyId);
       allow create: if isAuthed() && inAgency(request.resource.data.agencyId);
-      // ✅ SECURED: Only Admins can delete pending leads
+      // Only admins can approve/delete pending leads
       allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PRIVATE & SYSTEM COLLECTIONS
+    // PRIVATE & SYSTEM COLLECTIONS — Server/Admin SDK only
     // ══════════════════════════════════════════════════════════════════════════
+
+    // Green API credentials and other secrets — never readable by clients
     match /agencies/{agencyId}/private_credentials/{document=**} {
       allow read, write: if false;
     }
 
     match /available_instances/{document=**} {
-      allow read, write: if false; 
+      allow read, write: if false;
     }
 
+    // Super Admin registry — users can only verify their own membership
     match /superAdmins/{userId} {
       allow read:  if isAuthed() && request.auth.uid == userId;
-      allow write: if false; 
+      allow write: if false;
     }
 
-    // ✅ SECURED: Protected entire admin_settings scope, not just finances
+    // Admin financial settings — only super admins
     match /admin_settings/{document=**} {
       allow read, write: if isSuperAdmin();
     }
 
+    // City/area reference data — public read, admin write
     match /cities/{cityId} {
       allow read: if isAuthed();
       allow create, update, delete: if isSuperAdmin();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // USED PHONES (Anti-abuse trial registry)
-    // Read: deny all clients (only Cloud Functions via Admin SDK can read)
-    // Write: deny all clients (only Cloud Functions via Admin SDK can write)
-    // ══════════════════════════════════════════════════════════════════════════
+    // Anti-abuse trial phone registry — Cloud Functions (Admin SDK) only
     match /used_phones/{phone} {
       allow read, write: if false;
     }

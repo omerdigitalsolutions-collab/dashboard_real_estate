@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
     CheckCircle2,
@@ -13,7 +14,8 @@ import {
     Instagram,
     Facebook,
     Mail,
-    Clock
+    Clock,
+    Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +26,49 @@ const MAX_TERMINAL_ID = import.meta.env.VITE_MAX_TERMINAL_ID || 'YOUR_TERMINAL_I
 export default function LandingPage() {
     const navigate = useNavigate();
     const { userData } = useAuth();
+
+    // Contact Form State
+    const [contactName, setContactName] = useState('');
+    const [contactPhone, setContactPhone] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
+    const [contactStatus, setContactStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+    const handleContactSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setContactStatus('loading');
+
+        // TODO: Replace this URL with the deployed Google Apps Script Web App URL
+        const GOOGLE_SCRIPT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz2XVMpUrISGf6TwoHOb9LFw_Q5AuGVpd7ZEbJBf0V9681fpbjSB9BDrvEMUUqrdelu/exec';
+
+        if (!GOOGLE_SCRIPT_WEBHOOK_URL) {
+            console.warn('Google Apps Script URL is missing. Cannot submit form.');
+            // Simulate success for now so user sees the UI state
+            setTimeout(() => setContactStatus('success'), 1500);
+            return;
+        }
+
+        try {
+            await fetch(GOOGLE_SCRIPT_WEBHOOK_URL, {
+                method: 'POST',
+                mode: 'no-cors', // standard way to post to AppScript without CORS issues
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: contactName,
+                    phone: contactPhone,
+                    email: contactEmail,
+                }),
+            });
+            setContactStatus('success');
+            setContactName('');
+            setContactPhone('');
+            setContactEmail('');
+        } catch (error) {
+            console.error('Submission error:', error);
+            setContactStatus('error');
+        }
+    };
 
     /**
      * Redirects the user to Max's Hosted Payment Page.
@@ -490,6 +535,93 @@ export default function LandingPage() {
                             <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
                                 🎁 7 ימי ניסיון ללא עלות!
                             </span>
+                        )}
+                    </div>
+                </div>
+            </section>
+
+            {/* Contact Form Section */}
+            <section id="contact" className="py-24 bg-white border-t border-slate-200" dir="rtl">
+                <div className="max-w-4xl mx-auto px-6 lg:px-8">
+                    <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-8 md:p-12 shadow-xl relative overflow-hidden">
+                        {/* Decorative Background Elements */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+
+                        <div className="relative z-10 text-center mb-10">
+                            <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tight">שנספר לכם עוד? השאירו פרטים 👇</h2>
+                            <p className="text-slate-600 text-lg max-w-2xl mx-auto">מלאו את הפרטים והצוות שלנו יחזור אליכם בהקדם לתכנון השדרוג של המשרד שלכם.</p>
+                        </div>
+
+                        {contactStatus === 'success' ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-center animate-in zoom-in duration-300">
+                                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 mb-2">תודה רבה!</h3>
+                                <p className="text-slate-600 text-lg">קיבלנו את הפנייה שלך. ניצור איתך קשר בהקדם.</p>
+                                <button
+                                    onClick={() => setContactStatus('idle')}
+                                    className="mt-8 text-emerald-600 font-bold hover:text-emerald-700 transition"
+                                >
+                                    חזור לטופס
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleContactSubmit} className="space-y-6 relative z-10 max-w-2xl mx-auto">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">שם מלא</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={contactName}
+                                            onChange={(e) => setContactName(e.target.value)}
+                                            placeholder="ישראל ישראלי"
+                                            className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all shadow-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">טלפון</label>
+                                        <input
+                                            type="tel"
+                                            required
+                                            value={contactPhone}
+                                            onChange={(e) => setContactPhone(e.target.value)}
+                                            placeholder="050-0000000"
+                                            dir="ltr"
+                                            className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all shadow-sm text-right"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2">אימייל (אופציונלי)</label>
+                                    <input
+                                        type="email"
+                                        value={contactEmail}
+                                        onChange={(e) => setContactEmail(e.target.value)}
+                                        placeholder="name@agency.co.il"
+                                        dir="ltr"
+                                        className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all shadow-sm text-right"
+                                    />
+                                </div>
+                                {contactStatus === 'error' && (
+                                    <p className="text-rose-500 text-sm font-bold text-center bg-rose-50 p-3 rounded-lg border border-rose-100">
+                                        אירעה שגיאה בשליחת הטופס. אנא נסה שוב או פנה אלינו בוואטסאפ.
+                                    </p>
+                                )}
+                                <button
+                                    type="submit"
+                                    disabled={contactStatus === 'loading'}
+                                    className="w-full py-4 bg-[#020b18] hover:bg-slate-800 text-white font-black text-lg text-center rounded-xl shadow-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center mt-4"
+                                >
+                                    {contactStatus === 'loading' ? (
+                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                    ) : (
+                                        'שלח פרטים'
+                                    )}
+                                </button>
+                            </form>
                         )}
                     </div>
                 </div>

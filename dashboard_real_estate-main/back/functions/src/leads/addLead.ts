@@ -18,16 +18,15 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
 export const addLead = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    // ── Auth & Agency validation ────────────────────────────────────────────────
+    const authData = await validateUserAuth(request);
 
     const data = request.data as {
-        agencyId?: string;
         name?: string;
         phone?: string;
         email?: string;
@@ -41,21 +40,14 @@ export const addLead = onCall(async (request) => {
     };
 
     // ── Validation ──────────────────────────────────────────────────────────────
-    if (!data.agencyId?.trim()) throw new HttpsError('invalid-argument', 'agencyId is required.');
     if (!data.name?.trim()) throw new HttpsError('invalid-argument', 'name is required.');
     if (!data.phone?.trim()) throw new HttpsError('invalid-argument', 'phone is required.');
-
-    // ── Agency membership check ─────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || callerDoc.data()?.agencyId !== data.agencyId) {
-        throw new HttpsError('permission-denied', 'You do not belong to this agency.');
-    }
 
     // ── Create lead ─────────────────────────────────────────────────────────────
     const leadRef = db.collection('leads').doc();
 
     await leadRef.set({
-        agencyId: data.agencyId,
+        agencyId: authData.agencyId,
         name: data.name.trim(),
         phone: data.phone.trim(),
         email: data.email?.trim() ?? null,
@@ -66,7 +58,7 @@ export const addLead = onCall(async (request) => {
             minRooms: data.requirements?.minRooms ?? null,
             propertyType: data.requirements?.propertyType ?? [],
         },
-        assignedAgentId: request.auth.uid,     // auto-assign to the creating agent
+        assignedAgentId: authData.uid,         // auto-assign to the creating agent
         notes: null,
         status: 'new',                          // always server-injected
         createdAt: FieldValue.serverTimestamp(),

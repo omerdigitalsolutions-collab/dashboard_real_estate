@@ -14,24 +14,19 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 
 export const getLiveLeads = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await validateUserAuth(request);
+    const agencyId = authData.agencyId;
 
-    const { agencyId, statusFilter } = request.data as {
-        agencyId?: string;
+    const { statusFilter } = request.data as {
         statusFilter?: string;
     };
-
-    if (!agencyId?.trim()) {
-        throw new HttpsError('invalid-argument', 'agencyId is required.');
-    }
 
     // Validate optional statusFilter
     if (statusFilter && !VALID_STATUSES.includes(statusFilter)) {
@@ -39,12 +34,6 @@ export const getLiveLeads = onCall(async (request) => {
             'invalid-argument',
             `Invalid statusFilter. Must be one of: ${VALID_STATUSES.join(', ')}`
         );
-    }
-
-    // ── Agency membership check ─────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || callerDoc.data()?.agencyId !== agencyId) {
-        throw new HttpsError('permission-denied', 'Access denied to this agency.');
     }
 
     // ── Query ───────────────────────────────────────────────────────────────────

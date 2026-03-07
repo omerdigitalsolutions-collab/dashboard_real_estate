@@ -51,7 +51,7 @@ const GlobalPropertyImport: React.FC = () => {
             const sampleData = [rows[0]];
 
             // Call AI mapping function
-            const getMappingFn = httpsCallable(functions, 'superadmin-superAdminGetImportMapping');
+            const getMappingFn = httpsCallable(functions, 'superadmin-superAdminGetImportMappingV2');
             const mappingRes = await getMappingFn({ headers, sampleData });
 
             const aiMapping = (mappingRes.data as any).mapping;
@@ -88,7 +88,7 @@ const GlobalPropertyImport: React.FC = () => {
             });
 
             // Call bulk import function
-            const importFn = httpsCallable(functions, 'superadmin-superAdminImportGlobalProperties');
+            const importFn = httpsCallable(functions, 'superadmin-superAdminImportGlobalPropertiesV2');
             const importRes = await importFn({ properties: mappedProperties });
 
             const data = importRes.data as any;
@@ -173,7 +173,7 @@ const GlobalPropertyImport: React.FC = () => {
                     {isParsing && (
                         <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold animate-pulse">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Gemini מנתח את מבנה הקובץ ומבצע מיפוי שדות...
+                            המערכת מנתחת את מבנה הקובץ ומבצעת מיפוי שדות...
                         </div>
                     )}
 
@@ -198,8 +198,8 @@ const GlobalPropertyImport: React.FC = () => {
                         onClick={handleUpload}
                         disabled={isUploading || isParsing || !mapping}
                         className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${isUploading
-                                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]'
+                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                            : 'bg-orange-500 hover:bg-orange-600 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]'
                             }`}
                     >
                         {isUploading ? (
@@ -219,8 +219,8 @@ const GlobalPropertyImport: React.FC = () => {
 
             {results && (
                 <div className={`mt-4 p-4 rounded-xl flex items-start gap-3 border ${results.success
-                        ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400'
-                        : 'bg-red-900/20 border-red-500/30 text-red-400'
+                    ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400'
+                    : 'bg-red-900/20 border-red-500/30 text-red-400'
                     }`}>
                     {results.success ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
                     <p className="text-sm font-medium">{results.message}</p>

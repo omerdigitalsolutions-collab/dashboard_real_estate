@@ -16,15 +16,14 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
 const TERMINAL_STAGES = ['won', 'lost', 'contract']; // Treat 'contract' as near-final too
 
 export const deleteProperty = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await validateUserAuth(request);
 
     const { propertyId } = request.data as { propertyId?: string };
 
@@ -43,14 +42,11 @@ export const deleteProperty = onCall(async (request) => {
     const propertyData = propertySnap.data()!;
 
     // ── Auth: caller must be admin in the same agency ───────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    const caller = callerDoc.data();
-
-    if (!callerDoc.exists || caller?.agencyId !== propertyData.agencyId) {
+    if (authData.agencyId !== propertyData.agencyId) {
         throw new HttpsError('permission-denied', 'You do not belong to this agency.');
     }
 
-    if (caller?.role !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new HttpsError('permission-denied', 'Only agency admins can delete properties.');
     }
 

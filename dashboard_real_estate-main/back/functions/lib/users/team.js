@@ -6,6 +6,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const params_1 = require("firebase-functions/params");
 const resend_1 = require("resend");
+const authGuard_1 = require("../config/authGuard");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = (0, firestore_1.getFirestore)();
 /**
@@ -19,9 +20,7 @@ const db = (0, firestore_1.getFirestore)();
  * Output: { success: true }
  */
 exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId, newRole } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'userId is required.');
@@ -30,16 +29,8 @@ exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('invalid-argument', 'newRole must be admin or agent.');
     }
     // ── Verify caller is admin ───────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists) {
-        throw new https_1.HttpsError('not-found', 'Caller user document not found.');
-    }
-    const caller = callerDoc.data();
-    if (caller.role !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can change roles.');
-    }
-    if (caller.isActive === false) {
-        throw new https_1.HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
     }
     // ── Verify target belongs to same agency ────────────────────────────────────
     const targetDoc = await db.doc(`users/${userId.trim()}`).get();
@@ -47,7 +38,7 @@ exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', 'Target user not found.');
     }
     const target = targetDoc.data();
-    if (target.agencyId !== caller.agencyId) {
+    if (target.agencyId !== authData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
     }
     await db.doc(`users/${userId.trim()}`).update({ role: newRole });
@@ -67,9 +58,7 @@ exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
  * Output: { success: true }
  */
 exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId, isActive } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'userId is required.');
@@ -78,20 +67,12 @@ exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('invalid-argument', 'isActive must be a boolean.');
     }
     // ── Prevent self-suspension ──────────────────────────────────────────────────
-    if (request.auth.uid === userId.trim()) {
+    if (authData.uid === userId.trim()) {
         throw new https_1.HttpsError('permission-denied', 'You cannot change your own active status.');
     }
     // ── Verify caller is admin ───────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists) {
-        throw new https_1.HttpsError('not-found', 'Caller user document not found.');
-    }
-    const caller = callerDoc.data();
-    if (caller.role !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can change agent status.');
-    }
-    if (caller.isActive === false) {
-        throw new https_1.HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
     }
     // ── Verify target belongs to same agency ────────────────────────────────────
     const targetDoc = await db.doc(`users/${userId.trim()}`).get();
@@ -99,7 +80,7 @@ exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', 'Target user not found.');
     }
     const target = targetDoc.data();
-    if (target.agencyId !== caller.agencyId) {
+    if (target.agencyId !== authData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
     }
     await db.doc(`users/${userId.trim()}`).update({ isActive });
@@ -117,28 +98,18 @@ exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
  * Output: { success: true }
  */
 exports.deleteAgent = (0, https_1.onCall)(async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'userId is required.');
     }
     // ── Prevent self-deletion ────────────────────────────────────────────────────
-    if (request.auth.uid === userId.trim()) {
+    if (authData.uid === userId.trim()) {
         throw new https_1.HttpsError('permission-denied', 'You cannot delete yourself.');
     }
     // ── Verify caller is admin ───────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists) {
-        throw new https_1.HttpsError('not-found', 'Caller user document not found.');
-    }
-    const caller = callerDoc.data();
-    if (caller.role !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can delete agents.');
-    }
-    if (caller.isActive === false) {
-        throw new https_1.HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
     }
     // ── Verify target belongs to same agency ────────────────────────────────────
     const targetDoc = await db.doc(`users/${userId.trim()}`).get();
@@ -146,7 +117,7 @@ exports.deleteAgent = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', 'Target user not found.');
     }
     const target = targetDoc.data();
-    if (target.agencyId !== caller.agencyId) {
+    if (target.agencyId !== authData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
     }
     // ── DELETE ──────────────────────────────────────────────────────────────────
@@ -227,10 +198,7 @@ function buildInviteEmail(agentName, agencyName, joinLink) {
  */
 exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {
     var _a;
-    // ── Auth Guard ──────────────────────────────────────────────────────────────
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'You must be signed in to invite agents.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     // ── Input Validation ────────────────────────────────────────────────────────
     const { email, name, role, phone, appUrl } = request.data;
     if (!(email === null || email === void 0 ? void 0 : email.trim()) || !(name === null || name === void 0 ? void 0 : name.trim())) {
@@ -242,29 +210,21 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (re
     }
     const normalizedRole = role === 'admin' ? 'admin' : 'agent';
     // ── RBAC: Verify caller is an admin ─────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists) {
-        throw new https_1.HttpsError('not-found', 'Caller user document not found.');
-    }
-    const callerData = callerDoc.data();
-    if (callerData.role !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can invite new team members.');
-    }
-    if (callerData.isActive === false) {
-        throw new https_1.HttpsError('permission-denied', 'Suspended accounts cannot perform this action.');
     }
     // ── Prevent duplicate stubs for same email in same agency ───────────────────
     const existingSnap = await db
         .collection('users')
         .where('email', '==', email.trim().toLowerCase())
-        .where('agencyId', '==', callerData.agencyId)
+        .where('agencyId', '==', authData.agencyId)
         .limit(1)
         .get();
     if (!existingSnap.empty) {
         throw new https_1.HttpsError('already-exists', `A user with email ${email} already exists in this agency.`);
     }
     // ── Read Agency Name ─────────────────────────────────────────────────────────
-    const agencyDoc = await db.doc(`agencies/${callerData.agencyId}`).get();
+    const agencyDoc = await db.doc(`agencies/${authData.agencyId}`).get();
     const agencyName = ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'הסוכנות שלנו';
     // ── Create Stub Document ─────────────────────────────────────────────────────
     const stubRef = await db.collection('users').add({
@@ -272,7 +232,7 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (re
         email: email.trim().toLowerCase(),
         name: name.trim(),
         role: normalizedRole,
-        agencyId: callerData.agencyId,
+        agencyId: authData.agencyId,
         phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
         isActive: true,
         createdAt: firestore_1.FieldValue.serverTimestamp(),

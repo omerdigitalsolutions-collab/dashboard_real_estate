@@ -23,16 +23,15 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
 export const addProperty = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    // ── Auth & Agency validation ────────────────────────────────────────────────
+    const authData = await validateUserAuth(request);
 
     const data = request.data as {
-        agencyId?: string;
         address?: string;
         city?: string;
         type?: 'sale' | 'rent';
@@ -46,17 +45,10 @@ export const addProperty = onCall(async (request) => {
     };
 
     // ── Validation ─────────────────────────────────────────────────────────────
-    if (!data.agencyId?.trim()) throw new HttpsError('invalid-argument', 'agencyId is required.');
     if (!data.address?.trim()) throw new HttpsError('invalid-argument', 'address is required.');
     if (!data.city?.trim()) throw new HttpsError('invalid-argument', 'city is required.');
     if (!data.type) throw new HttpsError('invalid-argument', 'type must be "sale" or "rent".');
     if (!data.price || data.price <= 0) throw new HttpsError('invalid-argument', 'price must be a positive number.');
-
-    // ── Agency membership check ─────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || callerDoc.data()?.agencyId !== data.agencyId) {
-        throw new HttpsError('permission-denied', 'You do not belong to this agency.');
-    }
 
     // ── Create the document ─────────────────────────────────────────────────────
     const propertyRef = db.collection('properties').doc();
@@ -72,7 +64,7 @@ export const addProperty = onCall(async (request) => {
         features: data.features ?? [],
         description: data.description?.trim() ?? null,
         assignedAgentId: data.assignedAgentId ?? null,
-        agencyId: data.agencyId,          // injected server-side
+        agencyId: authData.agencyId,      // injected server-side
         status: 'active',                  // injected server-side
         createdAt: FieldValue.serverTimestamp(),
     });

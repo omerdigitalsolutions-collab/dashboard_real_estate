@@ -19,12 +19,11 @@ exports.deleteProperty = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const TERMINAL_STAGES = ['won', 'lost', 'contract']; // Treat 'contract' as near-final too
 exports.deleteProperty = (0, https_1.onCall)(async (request) => {
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { propertyId } = request.data;
     if (!(propertyId === null || propertyId === void 0 ? void 0 : propertyId.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'propertyId is required.');
@@ -37,12 +36,10 @@ exports.deleteProperty = (0, https_1.onCall)(async (request) => {
     }
     const propertyData = propertySnap.data();
     // ── Auth: caller must be admin in the same agency ───────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    const caller = callerDoc.data();
-    if (!callerDoc.exists || (caller === null || caller === void 0 ? void 0 : caller.agencyId) !== propertyData.agencyId) {
+    if (authData.agencyId !== propertyData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'You do not belong to this agency.');
     }
-    if ((caller === null || caller === void 0 ? void 0 : caller.role) !== 'admin') {
+    if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only agency admins can delete properties.');
     }
     // ── Safe Deletion Check ─────────────────────────────────────────────────────

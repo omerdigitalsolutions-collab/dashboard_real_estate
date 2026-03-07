@@ -16,6 +16,7 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
@@ -23,9 +24,7 @@ const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 
 export const updateLead = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await validateUserAuth(request);
 
     const { leadId, updates } = request.data as {
         leadId?: string;
@@ -55,8 +54,7 @@ export const updateLead = onCall(async (request) => {
 
     const leadAgencyId = leadSnap.data()?.agencyId;
 
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || callerDoc.data()?.agencyId !== leadAgencyId) {
+    if (authData.agencyId !== leadAgencyId) {
         throw new HttpsError('permission-denied', 'You do not have access to this lead.');
     }
 

@@ -59,7 +59,7 @@ import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
 import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage } from './superadmin';
-import { superAdminImportGlobalProperties, superAdminGetImportMapping } from './admin/globalImport';
+import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
@@ -85,8 +85,8 @@ export const superadmin = {
     superAdminUpdateExpenses,
     superAdminGetDashboardStats,
     setupSuperAdmin,
-    superAdminImportGlobalProperties,
-    superAdminGetImportMapping,
+    superAdminImportGlobalPropertiesV2,
+    superAdminGetImportMappingV2,
     superAdminGetAgencyUsage
 };
 

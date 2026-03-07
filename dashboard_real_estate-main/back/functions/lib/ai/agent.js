@@ -38,28 +38,20 @@ const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const generative_ai_1 = require("@google/generative-ai");
 const admin = __importStar(require("firebase-admin"));
+const authGuard_1 = require("../config/authGuard");
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1' }, async (request) => {
-    var _a;
     const { message } = request.data;
     if (!message || typeof message !== 'string') {
         throw new https_1.HttpsError('invalid-argument', 'A valid message string must be provided.');
     }
-    const uid = (_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid;
-    if (!uid) {
-        throw new https_1.HttpsError('unauthenticated', 'User must be authenticated to use the AI Agent.');
-    }
     try {
+        const authData = await (0, authGuard_1.validateUserAuth)(request);
+        const agencyId = authData.agencyId;
         const db = admin.firestore();
-        // 1. Fetch user's agencyId
-        const userDoc = await db.collection('users').doc(uid).get();
-        const userData = userDoc.data();
-        const agencyId = userData === null || userData === void 0 ? void 0 : userData.agencyId;
-        if (!agencyId) {
-            throw new https_1.HttpsError('failed-precondition', 'User is not associated with any agency.');
-        }
         // 2. Query Properties
-        const propertiesSnapshot = await db.collection(`agencies/${agencyId}/properties`)
+        const propertiesSnapshot = await db.collection('properties')
+            .where('agencyId', '==', agencyId)
             .where('status', 'in', ['active', 'sold', 'rented']) // Fetch basic active ones or just without filter
             .limit(50)
             .get();
@@ -77,7 +69,8 @@ exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 
             };
         });
         // 3. Query Leads
-        const leadsSnapshot = await db.collection(`agencies/${agencyId}/leads`)
+        const leadsSnapshot = await db.collection('leads')
+            .where('agencyId', '==', agencyId)
             .limit(50)
             .get();
         const leadsContext = leadsSnapshot.docs.map(doc => {

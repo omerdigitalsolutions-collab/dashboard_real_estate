@@ -75,8 +75,8 @@ exports.superadmin = {
     superAdminUpdateExpenses: superadmin_1.superAdminUpdateExpenses,
     superAdminGetDashboardStats: superadmin_1.superAdminGetDashboardStats,
     setupSuperAdmin: superadmin_1.setupSuperAdmin,
-    superAdminImportGlobalProperties: globalImport_1.superAdminImportGlobalProperties,
-    superAdminGetImportMapping: globalImport_1.superAdminGetImportMapping,
+    superAdminImportGlobalPropertiesV2: globalImport_1.superAdminImportGlobalPropertiesV2,
+    superAdminGetImportMappingV2: globalImport_1.superAdminGetImportMappingV2,
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage
 };
 var stripeWebhook_1 = require("./stripeWebhook");

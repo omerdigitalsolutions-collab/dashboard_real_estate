@@ -221,11 +221,11 @@ export default function AgencyUsageWidget({ agencyId, agencyName }: Props) {
 
                         {/* Cost Estimate */}
                         <p className="text-xs text-slate-600 mt-3">
-                            עלות אחסון משוערת:{' '}
+                            עלות אחסון מדיה משוערת:{' '}
                             <span className="text-emerald-400 font-bold">${estimatedCostUSD} / חודש</span>
                         </p>
-                        <p className="text-[10px] text-slate-700 mt-0.5">
-                            לפי ${COST_PER_GB}/GB (Firebase Blaze)
+                        <p className="text-[10px] text-slate-700 mt-0.5 max-w-[200px] leading-tight mt-1">
+                            לפי אחסון לתמונות וקבצים במחיר של ${COST_PER_GB}/GB (Firebase Storage). אינו כולל חישובי Firestore (קריאות דיאגנוסטיקה אינן מגולמות).
                         </p>
                     </div>
 

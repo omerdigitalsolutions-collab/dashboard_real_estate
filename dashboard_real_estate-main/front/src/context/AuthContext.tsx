@@ -26,6 +26,8 @@ interface AuthContextType {
     requireOnboarding: boolean;
     /** Triggers a manual refetch of the Firestore user doc */
     refreshUserData: () => Promise<void>;
+    /** Allows manually overriding the user data (used for impersonation feature) */
+    setUserData: React.Dispatch<React.SetStateAction<AppUser | null>>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -185,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return unsubscribe; // Cleanup listener on unmount
     }, []);
 
-    const value: AuthContextType = { currentUser, userData, loading, requireOnboarding, refreshUserData };
+    const value: AuthContextType = { currentUser, userData, loading, requireOnboarding, refreshUserData, setUserData };
 
     return (
         <AuthContext.Provider value={value}>

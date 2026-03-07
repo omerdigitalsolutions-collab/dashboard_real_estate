@@ -17,25 +17,16 @@ exports.getLiveLeads = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 exports.getLiveLeads = (0, https_1.onCall)(async (request) => {
-    var _a;
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
-    }
-    const { agencyId, statusFilter } = request.data;
-    if (!(agencyId === null || agencyId === void 0 ? void 0 : agencyId.trim())) {
-        throw new https_1.HttpsError('invalid-argument', 'agencyId is required.');
-    }
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
+    const agencyId = authData.agencyId;
+    const { statusFilter } = request.data;
     // Validate optional statusFilter
     if (statusFilter && !VALID_STATUSES.includes(statusFilter)) {
         throw new https_1.HttpsError('invalid-argument', `Invalid statusFilter. Must be one of: ${VALID_STATUSES.join(', ')}`);
-    }
-    // ── Agency membership check ─────────────────────────────────────────────────
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || ((_a = callerDoc.data()) === null || _a === void 0 ? void 0 : _a.agencyId) !== agencyId) {
-        throw new https_1.HttpsError('permission-denied', 'Access denied to this agency.');
     }
     // ── Query ───────────────────────────────────────────────────────────────────
     // Uses index: agencyId ASC, createdAt DESC

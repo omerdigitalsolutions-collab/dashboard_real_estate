@@ -19,14 +19,13 @@ exports.updateLead = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 exports.updateLead = (0, https_1.onCall)(async (request) => {
-    var _a, _b;
-    if (!request.auth) {
-        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
-    }
+    var _a;
+    const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { leadId, updates } = request.data;
     if (!(leadId === null || leadId === void 0 ? void 0 : leadId.trim()))
         throw new https_1.HttpsError('invalid-argument', 'leadId is required.');
@@ -44,8 +43,7 @@ exports.updateLead = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('not-found', `Lead ${leadId} not found.`);
     }
     const leadAgencyId = (_a = leadSnap.data()) === null || _a === void 0 ? void 0 : _a.agencyId;
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || ((_b = callerDoc.data()) === null || _b === void 0 ? void 0 : _b.agencyId) !== leadAgencyId) {
+    if (authData.agencyId !== leadAgencyId) {
         throw new https_1.HttpsError('permission-denied', 'You do not have access to this lead.');
     }
     // ── Strip immutable fields ─────────────────────────────────────────────────

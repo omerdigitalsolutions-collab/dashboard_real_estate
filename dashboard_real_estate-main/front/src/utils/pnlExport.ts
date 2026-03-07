@@ -127,8 +127,10 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
                     <p style="margin: 0 0 5px 0; font-size: 14px; color: #6b7280;">סה"כ הוצאות</p>
                     <p style="margin: 0; font-size: 24px; font-weight: bold; color: #e11d48; text-align: left; direction: ltr;">₪${data.totalExpenses.toLocaleString()}</p>
                 </div>
-                <div style="flex: 1; padding: 20px; border-radius: 12px; ${profitBg}">
-                    <p style="margin: 0 0 5px 0; font-size: 14px; color: #6b7280;">רווח נקי (${data.profitMargin.toFixed(1)}%)</p>
+                <div className="flex: 1; padding: 20px; border-radius: 12px; ${profitBg}">
+                    <p style="margin: 0 0 5px 0; font-size: 14px; color: #6b7280;">
+                        ${isPositive ? 'רווח נקי' : 'הפסד'} (${Math.abs(data.profitMargin).toFixed(1)}%)
+                    </p>
                     <p style="margin: 0; font-size: 24px; font-weight: bold; text-align: left; direction: ltr; ${profitColor}">₪${Math.abs(data.netProfit).toLocaleString()}</p>
                 </div>
             </div>

@@ -1,18 +1,16 @@
 import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import { defineSecret } from 'firebase-functions/params';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 /**
  * Callable function for Super Admins to bulk-import properties into global cities collection.
  */
-export const superAdminImportGlobalProperties = functions.https.onCall({
+export const superAdminImportGlobalPropertiesV2 = functions.https.onCall({
     region: 'europe-west1',
     memory: '512MiB',
     timeoutSeconds: 300,
+    cors: true,
+    invoker: 'public',
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -80,12 +78,10 @@ export const superAdminImportGlobalProperties = functions.https.onCall({
     }
 });
 
-/**
- * Uses Gemini to determine the mapping between Excel headers and our internal Property keys.
- */
-export const superAdminGetImportMapping = functions.https.onCall({
+export const superAdminGetImportMappingV2 = functions.https.onCall({
     region: 'europe-west1',
-    secrets: [geminiApiKey],
+    cors: true,
+    invoker: 'public',
 }, async (request) => {
     // 1. Auth Guard
     if (!request.auth) {
@@ -97,53 +93,35 @@ export const superAdminGetImportMapping = functions.https.onCall({
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
     }
 
-    const { headers, sampleData } = request.data as { headers: string[], sampleData: any[] };
-    const apiKey = geminiApiKey.value();
+    const { headers } = request.data as { headers: string[] };
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // Use the reliable 1.5 flash model (2.5 doesn't exist yet)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const mapping: Record<string, string> = {};
 
-    const systemPrompt = `You are a data mapping assistant. I have an Excel file with specific headers.
-I need a JSON object that maps these headers to my database field names.
-Internal database fields:
-"city" - The city name
-"street" - The street address or neighborhood
-"price" - The property price (number)
-"rooms" - Number of rooms (number/string)
-"sqm" - Square meters (number)
-"floor" - Floor number
-"type" - 'sale' or 'rent'
-"kind" - 'דירה', 'בית פרטי', 'פנטהאוז' etc.
-"description" - Full property description
-"listingType" - 'exclusive' (בלעדיות), 'external' (שת"פ), or 'private' (פרטי)
-"isExclusive" - boolean (true for exclusivity)
-"agentName" - Responsible agent's name
-"notes" - Internal office notes
+    // Dictionary definition: DB key -> array of typical Hebrew/English column headers
+    const rules: Record<string, RegExp[]> = {
+        city: [/עיר/i, /יישוב/i, /ישוב/i, /city/i],
+        street: [/רחוב/i, /כתובת/i, /שכונה/i, /street/i, /address/i],
+        price: [/מחיר/i, /עלות/i, /price/i],
+        rooms: [/חדרים/i, /מספר חדרים/i, /rooms/i],
+        sqm: [/מ״ר/i, /מ"ר/i, /שטח/i, /גודל/i, /sqm/i, /size/i],
+        floor: [/קומה/i, /קומות/i, /floor/i],
+        type: [/סוג/i, /עסקה/i, /type/i], // sale or rent
+        kind: [/סוג נכס/i, /סוג מודעה/i, /kind/i, /property type/i],
+        description: [/תיאור/i, /מידע/i, /פרטים/i, /description/i],
+        listingType: [/בלעדיות/i, /בלעדי/i, /שיווק/i, /listing/i],
+        agentName: [/סוכן/i, /איש קשר/i, /מתווך/i, /agent/i],
+        notes: [/הערות/i, /הערה פנימית/i, /notes/i]
+    };
 
-Headers provided: ${JSON.stringify(headers)}
-Sample data (first row): ${JSON.stringify(sampleData)}
-
-Return ONLY a JSON object where keys are the Excel headers and values are the internal database field names.
-If a header doesn't map to anything useful, ignore it.
-Example: {"עיר": "city", "כתובת": "street"}`;
-
-    try {
-        const result = await model.generateContent(systemPrompt);
-        let text = result.response.text().trim();
-
-        // Clean potential markdown wrapping
-        text = text.replace(/```json|```/g, '').trim();
-
-        try {
-            const mapping = JSON.parse(text);
-            return { success: true, mapping };
-        } catch (e) {
-            console.error('[superAdminGetImportMapping] Invalid JSON:', text);
-            throw new functions.https.HttpsError('internal', 'AI returned invalid JSON mapping.');
+    headers.forEach((header) => {
+        const cleanHeader = header.trim();
+        for (const [dbKey, patterns] of Object.entries(rules)) {
+            if (patterns.some(p => p.test(cleanHeader))) {
+                mapping[header] = dbKey;
+                break; // Map to the first matched DB field
+            }
         }
-    } catch (apiError: any) {
-        console.error('[superAdminGetImportMapping] Gemini API Error:', apiError);
-        throw new functions.https.HttpsError('internal', 'Gemini API failed: ' + apiError.message);
-    }
+    });
+
+    return { success: true, mapping };
 });

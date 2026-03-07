@@ -16,6 +16,7 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
+import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
@@ -23,9 +24,7 @@ const db = getFirestore();
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 
 export const updateProperty = onCall(async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
+    const authData = await validateUserAuth(request);
 
     const { propertyId, updates } = request.data as {
         propertyId?: string;
@@ -47,8 +46,7 @@ export const updateProperty = onCall(async (request) => {
 
     const propertyData = propertySnap.data()!;
 
-    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
-    if (!callerDoc.exists || callerDoc.data()?.agencyId !== propertyData.agencyId) {
+    if (authData.agencyId !== propertyData.agencyId) {
         throw new HttpsError('permission-denied', 'You do not have access to this property.');
     }
 

@@ -30,33 +30,40 @@ function useAgencyCollection<T>(
         // Rule: EVERY query must be rigidly scoped to the agencyId.
         const q = query(colRef, where('agencyId', '==', agencyId), ...additionalConstraints);
 
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const results: T[] = snapshot.docs.map(doc => ({
-                    ...(doc.data() as DocumentData),
-                    id: doc.id,
-                })) as T[];
+        let unsubscribe = () => { };
+        try {
+            unsubscribe = onSnapshot(
+                q,
+                (snapshot) => {
+                    const results: T[] = snapshot.docs.map(doc => ({
+                        ...(doc.data() as DocumentData),
+                        id: doc.id,
+                    })) as T[];
 
-                setData(results);
-                setLoading(false);
-                setError(null);
-            },
-            (err) => {
-                // Firestore index errors contain a console link — always print the full message
-                if (err.message?.includes('index')) {
-                    console.error(
-                        `[useAgencyCollection] Missing Firestore index for "${collectionName}".`,
-                        '\nClick the link in the error below to create it:\n',
-                        err.message
-                    );
-                } else {
-                    console.error(`[useAgencyCollection] Error fetching ${collectionName}:`, err);
+                    setData(results);
+                    setLoading(false);
+                    setError(null);
+                },
+                (err) => {
+                    // Firestore index errors contain a console link — always print the full message
+                    if (err.message?.includes('index')) {
+                        console.error(
+                            `[useAgencyCollection] Missing Firestore index for "${collectionName}".`,
+                            '\nClick the link in the error below to create it:\n',
+                            err.message
+                        );
+                    } else {
+                        console.error(`[useAgencyCollection] Error fetching ${collectionName}:`, err);
+                    }
+                    setError(err);
+                    setLoading(false);
                 }
-                setError(err);
-                setLoading(false);
-            }
-        );
+            );
+        } catch (e: any) {
+            console.error(`[useAgencyCollection] Synchronous error onSnapshot for ${collectionName}:`, e);
+            setError(e);
+            setLoading(false);
+        }
 
         return () => unsubscribe();
     }, [agencyId, collectionName, JSON.stringify(additionalConstraints)]);

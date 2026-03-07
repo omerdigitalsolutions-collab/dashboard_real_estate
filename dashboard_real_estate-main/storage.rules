@@ -14,10 +14,14 @@ service firebase.storage {
     // USER PROFILE PICTURES
     // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId}/profile/{fileName} {
-      // ✅ FIX #1: Was open to ALL authenticated users — now restricted to the
-      //            profile owner only. Prevents any logged-in user from fetching
-      //            every other user's profile photo by guessing the path.
-      allow read: if request.auth != null && request.auth.uid == userId;
+      // Profile photos are readable by:
+      //  1. The owner themselves
+      //  2. ANY authenticated user in the SAME agency (so teammates see each other's avatars)
+      // Write/delete is always owner-only.
+      allow read: if request.auth != null && (
+        request.auth.uid == userId
+        || firestore.get(/databases/(default)/documents/users/$(userId)).data.agencyId == request.auth.token.agencyId
+      );
 
       allow create, update: if request.auth != null
                             && request.auth.uid == userId

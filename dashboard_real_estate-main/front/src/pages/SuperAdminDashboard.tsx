@@ -26,6 +26,9 @@ import {
     DollarSign,
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { BotMessageSquare, LogIn } from 'lucide-react';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
@@ -197,6 +200,9 @@ export default function SuperAdminDashboard() {
 
     const [search, setSearch] = useState('');
     const [selectedAgency, setSelectedAgency] = useState<AgencyRow | null>(null);
+
+    const { setUserData, userData } = useAuth();
+    const navigate = useNavigate();
 
     const filteredAgencies = recentAgencies.filter((ag) =>
         (ag.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
@@ -478,7 +484,7 @@ export default function SuperAdminDashboard() {
                     <table className="w-full text-sm text-right">
                         <thead>
                             <tr className="border-b border-slate-800">
-                                {['שם הסוכנות', 'מייל אדמין', 'תאריך הצטרפות', 'מנוי', 'סטטוס'].map((h) => (
+                                {['שם הסוכנות', 'מייל אדמין', 'תאריך הצטרפות', 'מנוי', 'בוט ציבורי', 'סטטוס', ''].map((h) => (
                                     <th
                                         key={h}
                                         className="px-6 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-600"
@@ -542,7 +548,33 @@ export default function SuperAdminDashboard() {
                                             <TierBadge tier={ag.subscriptionTier} />
                                         </td>
                                         <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <BotMessageSquare className={`w-4 h-4 ${ag.isWhatsappConnected ? 'text-cyan-400' : 'text-slate-600'}`} />
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <StatusBadge status={ag.status} />
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm(`האם אתה בטוח שברצונך להתחבר כעת לסוכנות ${ag.name}? (רענן עמוד ליציאה)`)) {
+                                                        if (userData) {
+                                                            setUserData({
+                                                                ...userData,
+                                                                agencyId: ag.id,
+                                                                // @ts-ignore
+                                                                agencyName: ag.name,
+                                                            });
+                                                            navigate('/');
+                                                        }
+                                                    }
+                                                }}
+                                                className="p-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/20 transition-colors flex items-center justify-center gap-2 text-xs font-bold whitespace-nowrap"
+                                            >
+                                                <LogIn className="w-3.5 h-3.5" /> היכנס כמנהל
+                                            </button>
                                         </td>
                                     </tr>
                                 ))

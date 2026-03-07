@@ -10,10 +10,10 @@ export default function SuperAdminRoute({ children }: SuperAdminRouteProps) {
 
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-slate-50">
+            <div className="flex h-screen items-center justify-center bg-slate-950">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600"></div>
-                    <p className="text-sm font-medium text-slate-500">Super Admin Authentication...</p>
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-800 border-t-cyan-500"></div>
+                    <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Master Authentication...</p>
                 </div>
             </div>
         );
@@ -24,5 +24,11 @@ export default function SuperAdminRoute({ children }: SuperAdminRouteProps) {
         return <Navigate to="/" replace />;
     }
 
+    if (!isSuperAdmin) {
+        // Not a super admin, redirect to main dashboard
+        return <Navigate to="/" replace />;
+    }
+
+    // Is Super Admin (verified securely by Firestore)
     return <>{children}</>;
 }

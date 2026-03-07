@@ -69,14 +69,21 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             where('agencyId', '==', agencyId)
         );
 
-        const unsubProperties = onSnapshot(qProperties, (snap) => {
-            setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property)));
+        let unsubProperties = () => { };
+        try {
+            unsubProperties = onSnapshot(qProperties, (snap) => {
+                setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property)));
+                loadedFlags.properties = true; checkLoaded();
+            }, (err) => {
+                console.error('[useLiveDashboardData] Properties Error:', err);
+                setError(err);
+                loadedFlags.properties = true; checkLoaded();
+            });
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] Properties Sync Error:', e);
+            setError(e);
             loadedFlags.properties = true; checkLoaded();
-        }, (err) => {
-            console.error('[useLiveDashboardData] Properties Error:', err);
-            setError(err);
-            loadedFlags.properties = true; checkLoaded();
-        });
+        }
 
         // 2. Deals Query
         const qDeals = query(
@@ -84,14 +91,21 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             where('agencyId', '==', agencyId)
         );
 
-        const unsubDeals = onSnapshot(qDeals, (snap) => {
-            setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
+        let unsubDeals = () => { };
+        try {
+            unsubDeals = onSnapshot(qDeals, (snap) => {
+                setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
+                loadedFlags.deals = true; checkLoaded();
+            }, (err) => {
+                console.error('[useLiveDashboardData] Deals Error:', err);
+                setError(err);
+                loadedFlags.deals = true; checkLoaded();
+            });
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] Deals Sync Error:', e);
+            setError(e);
             loadedFlags.deals = true; checkLoaded();
-        }, (err) => {
-            console.error('[useLiveDashboardData] Deals Error:', err);
-            setError(err);
-            loadedFlags.deals = true; checkLoaded();
-        });
+        }
 
         // 3. Tasks Query (Only for current user)
         const qTasks = query(
@@ -100,12 +114,18 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             where('createdBy', '==', uid)
         );
 
-        const unsubTasks = onSnapshot(qTasks, (snap) => {
-            setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppTask)));
-        }, (err) => {
-            console.error('[useLiveDashboardData] Tasks Error:', err);
-            setError(err);
-        });
+        let unsubTasks = () => { };
+        try {
+            unsubTasks = onSnapshot(qTasks, (snap) => {
+                setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppTask)));
+            }, (err) => {
+                console.error('[useLiveDashboardData] Tasks Error:', err);
+                setError(err);
+            });
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] Tasks Sync Error:', e);
+            setError(e);
+        }
 
         // 3.5. Leads Query (Sort client-side to avoid composite index requirement)
         const qLeads = query(
@@ -113,20 +133,27 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             where('agencyId', '==', agencyId)
         );
 
-        const unsubLeads = onSnapshot(qLeads, (snap) => {
-            const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-            rawLeads.sort((a, b) => {
-                const tA = (a.createdAt as any)?.toMillis?.() || 0;
-                const tB = (b.createdAt as any)?.toMillis?.() || 0;
-                return tB - tA;
+        let unsubLeads = () => { };
+        try {
+            unsubLeads = onSnapshot(qLeads, (snap) => {
+                const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                rawLeads.sort((a, b) => {
+                    const tA = (a.createdAt as any)?.toMillis?.() || 0;
+                    const tB = (b.createdAt as any)?.toMillis?.() || 0;
+                    return tB - tA;
+                });
+                setLeads(rawLeads);
+                loadedFlags.leads = true; checkLoaded();
+            }, (err) => {
+                console.error('Error fetching leads:', err);
+                setError(err);
+                loadedFlags.leads = true; checkLoaded();
             });
-            setLeads(rawLeads);
+        } catch (e: any) {
+            console.error('Sync Error fetching leads:', e);
+            setError(e);
             loadedFlags.leads = true; checkLoaded();
-        }, (err) => {
-            console.error('Error fetching leads:', err);
-            setError(err);
-            loadedFlags.leads = true; checkLoaded();
-        });
+        }
 
         // 4. Alerts Query (Targeted to user OR broadcast 'all')
         const qAlertsPersonal = query(
@@ -159,48 +186,67 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             setAlerts(deduped);
         };
 
-        const unsubAlertsPersonal = onSnapshot(qAlertsPersonal, (snap) => {
-            currentPersonalAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-            updateAlertsState();
-        }, (err) => setError(err));
+        let unsubAlertsPersonal = () => { };
+        let unsubAlertsBroadcast = () => { };
+        try {
+            unsubAlertsPersonal = onSnapshot(qAlertsPersonal, (snap) => {
+                currentPersonalAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
+                updateAlertsState();
+            }, (err) => setError(err));
+        } catch (e: any) {
+            console.error('Sync error on personal alerts', e);
+            setError(e);
+        }
 
-        const unsubAlertsBroadcast = onSnapshot(qAlertsBroadcast, (snap) => {
-            currentBroadcastAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-            updateAlertsState();
-        }, (err) => setError(err));
+        try {
+            unsubAlertsBroadcast = onSnapshot(qAlertsBroadcast, (snap) => {
+                currentBroadcastAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
+                updateAlertsState();
+            }, (err) => setError(err));
+        } catch (e: any) {
+            console.error('Sync error on broadcast alerts', e);
+            setError(e);
+        }
 
         // 6. Agency Settings Query
         const agencyRef = doc(db, 'agencies', agencyId);
-        const unsubAgency = onSnapshot(agencyRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                const settings = data?.settings || {};
+        let unsubAgency = () => { };
+        try {
+            unsubAgency = onSnapshot(agencyRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const settings = data?.settings || {};
 
-                // Merge legacy root-level logoUrl if it's missing from settings
-                let logo = settings.logoUrl || data?.logoUrl;
+                    // Merge legacy root-level logoUrl if it's missing from settings
+                    let logo = settings.logoUrl || data?.logoUrl;
 
-                if (logo) {
-                    // console.log('[useLiveDashboardData] Agency Logo found:', logo);
-                    settings.logoUrl = logo;
-                    setAgencyLogo(logo);
+                    if (logo) {
+                        // console.log('[useLiveDashboardData] Agency Logo found:', logo);
+                        settings.logoUrl = logo;
+                        setAgencyLogo(logo);
+                    }
+
+                    setAgencySettings(settings);
+
+                    const rawName = data?.agencyName || data?.name || null;
+                    // Cleanse if it's the auto-generated UID name from healing
+                    if (rawName && rawName.includes(agencyId) && userData?.name) {
+                        setAgencyName("סוכנות " + userData.name);
+                    } else {
+                        setAgencyName(rawName);
+                    }
                 }
-
-                setAgencySettings(settings);
-
-                const rawName = data?.agencyName || data?.name || null;
-                // Cleanse if it's the auto-generated UID name from healing
-                if (rawName && rawName.includes(agencyId) && userData?.name) {
-                    setAgencyName("סוכנות " + userData.name);
-                } else {
-                    setAgencyName(rawName);
-                }
-            }
+                loadedFlags.agency = true; checkLoaded();
+            }, (err) => {
+                console.error('[useLiveDashboardData] Agency Error:', err);
+                setError(err);
+                loadedFlags.agency = true; checkLoaded();
+            });
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] Agency Sync Error:', e);
+            setError(e);
             loadedFlags.agency = true; checkLoaded();
-        }, (err) => {
-            console.error('[useLiveDashboardData] Agency Error:', err);
-            setError(err);
-            loadedFlags.agency = true; checkLoaded();
-        });
+        }
 
 
         return () => {
