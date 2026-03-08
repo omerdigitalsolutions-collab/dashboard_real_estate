@@ -24,6 +24,7 @@ import {
     Cpu,
     RefreshCw,
     DollarSign,
+    Settings
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +33,8 @@ import { BotMessageSquare, LogIn } from 'lucide-react';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../config/firebase';
 
 // ─── Tooltip customisation ───────────────────────────────────────────────────
 const NeonBarTooltip = ({ active, payload, label }: any) => {
@@ -216,6 +219,28 @@ export default function SuperAdminDashboard() {
         (ag.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (ag.adminEmail ?? '').toLowerCase().includes(search.toLowerCase())
     );
+
+    const handleUpdatePlan = async (e: React.MouseEvent, agencyId: string, currentPlan: string) => {
+        e.stopPropagation();
+        const newPlan = window.prompt(`הזן את המסלול החדש עבור סוכנות זו (starter / pro / enterprise):`, currentPlan || "starter");
+        if (!newPlan) return;
+
+        const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
+        if (!validPlans.includes(newPlan.toLowerCase())) {
+            alert("מסלול שגוי. יש להזין starter, pro או enterprise.");
+            return;
+        }
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminUpdateAgencyPlan');
+            await fn({ agencyId: agencyId, newPlanId: newPlan.toLowerCase() });
+            alert("המסלול עודכן בהצלחה! מרענן את המסך...");
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Update Plan Error:', err);
+            alert("שגיאה בעדכון המסלול: " + err.message);
+        }
+    };
 
     return (
         <div
@@ -553,7 +578,16 @@ export default function SuperAdminDashboard() {
                                                 : '—'}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <TierBadge plan={ag.planId} />
+                                            <div className="flex items-center justify-end gap-2">
+                                                <TierBadge plan={ag.planId} />
+                                                <button
+                                                    onClick={(e) => handleUpdatePlan(e, ag.id, ag.planId || 'starter')}
+                                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-400 transition-colors border border-slate-700 hover:border-cyan-500/50"
+                                                    title="שנה מסלול מנוי"
+                                                >
+                                                    <Settings className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">

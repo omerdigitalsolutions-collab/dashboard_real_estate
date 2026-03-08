@@ -5,6 +5,23 @@ import { getAuth } from 'firebase-admin/auth';
 const db = getFirestore();
 
 /**
+ * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
+ */
+export const checkPhoneAvailable = onCall(async (request) => {
+    let { phone } = request.data as { phone?: string };
+    if (!phone?.trim()) {
+        throw new HttpsError('invalid-argument', 'phone is required.');
+    }
+
+    // Assume phone arrives in E.164 format from the client e.g. +9725...
+    // The normalized phone for the DB is exactly the E.164 string to be strict.
+    const phoneRef = db.collection('used_phones').doc(phone);
+    const snap = await phoneRef.get();
+
+    return { available: !snap.exists };
+});
+
+/**
  * createAgencyAccount — Called when a new admin completes onboarding.
  *
  * Creates:
@@ -67,18 +84,30 @@ export const createAgencyAccount = onCall(async (request) => {
         );
     }
 
-    // Secondary Anti-Abuse: Phone Number check
-    const normalizedPhone = phone.trim().replace(/\D/g, '');
-    if (normalizedPhone) {
-        const phoneRef = db.collection('used_phones').doc(normalizedPhone);
-        const phoneSnap = await phoneRef.get();
-        if (phoneSnap.exists) {
-            trialEligible = false; // Phone already used — no trial
-        } else {
-            // Mark phone as used for trial (write BEFORE batch to be safe)
-            await phoneRef.set({ uid, email, usedAt: FieldValue.serverTimestamp() });
-        }
+    // ── Phone Verification & Uniqueness Check ───────────────────────────────────
+    // Phone must arrive in E.164 format (e.g., +97250...)
+    const normalizedPhone = phone.trim();
+
+    // 1. Ensure the user actually verified this phone via Firebase Phone Auth
+    const userRecord = await getAuth().getUser(uid);
+    if (userRecord.phoneNumber !== normalizedPhone) {
+        throw new HttpsError(
+            'permission-denied',
+            `Phone number mismatch or not verified. Expected ${normalizedPhone} but Auth has ${userRecord.phoneNumber || 'None'}`
+        );
     }
+
+    // 2. Ensure phone is absolutely unique
+    const phoneRef = db.collection('used_phones').doc(normalizedPhone);
+    const phoneSnap = await phoneRef.get();
+    if (phoneSnap.exists) {
+        throw new HttpsError(
+            'already-exists',
+            'This phone number is already registered to an agency.'
+        );
+    }
+    // Mark phone as used (write BEFORE batch to prevent quick double submissions)
+    await phoneRef.set({ uid, email, usedAt: FieldValue.serverTimestamp() });
 
     // Trial ends 7 days from now (set only if eligible)
     const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
