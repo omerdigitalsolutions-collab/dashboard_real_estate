@@ -2,25 +2,18 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { Loader2, Mail, Lock, User, Building, Phone } from 'lucide-react';
-import { signInWithGoogle, checkUserExists, completeOnboarding, checkPhoneAvailableService } from '../services/authService';
-import { isValidEmail, isValidPhone, normalizePhoneIL } from '../utils/validation';
-import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
+import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { signInWithGoogle, checkUserExists } from '../services/authService';
+import { isValidEmail } from '../utils/validation';
 
 export default function Register() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
-    const [agencyName, setAgencyName] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-
-    // SMS Verification State
-    const [showSmsModal, setShowSmsModal] = useState(false);
-    const [normalizedPhone, setNormalizedPhone] = useState('');
 
     const navigate = useNavigate();
 
@@ -43,39 +36,14 @@ export default function Register() {
             return;
         }
 
-        if (!phone) {
-            setError('מספר טלפון הוא שדה חובה');
-            return;
-        }
-
-        if (!isValidPhone(phone)) {
-            setError('מספר הטלפון שהוזן אינו תקין');
-            return;
-        }
-
-        const normalized = normalizePhoneIL(phone);
-        if (!normalized) {
-            setError('שגיאה בנרמול מספר הטלפון');
-            return;
-        }
-
         setIsLoading(true);
 
         try {
-            // 0. Check strict phone availability first before creating the auth user
-            const isAvail = await checkPhoneAvailableService(normalized);
-            if (!isAvail) {
-                setError('מספר הטלפון הזה כבר מקושר לסוכנות אחרת במערכת.');
-                setIsLoading(false);
-                return;
-            }
-
             // 1. Create the user in Firebase Auth
             await createUserWithEmailAndPassword(auth, email, password);
 
-            // 2. We don't complete onboarding yet. We popup the SMS verification.
-            setNormalizedPhone(normalized);
-            setShowSmsModal(true);
+            // 2. Redirect to Onboarding
+            navigate('/onboarding');
             setIsLoading(false);
 
         } catch (err: any) {
@@ -87,31 +55,6 @@ export default function Register() {
             }
             setIsLoading(false);
         }
-    };
-
-    const handleSmsVerified = async () => {
-        setShowSmsModal(false);
-        setIsLoading(true);
-        setError('');
-
-        try {
-            const user = auth.currentUser;
-            if (!user) throw new Error("No user found after SMS auth");
-
-            // 3. SMS passed, now complete onboarding
-            await completeOnboarding(user.uid, user.email || '', name, normalizedPhone, agencyName);
-            navigate('/');
-        } catch (onboardingError: any) {
-            console.error('Error during onboarding:', onboardingError);
-            setError(onboardingError.message || 'שגיאה ביצירת המשרד. אנא פנה לתמיכה.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleSmsCancel = () => {
-        setShowSmsModal(false);
-        setError('עליך לאמת את מספר הטלפון שלך כדי לסיים את ההרשמה.');
     };
 
     const handleGoogleRegister = async () => {
@@ -169,48 +112,7 @@ export default function Register() {
                             </div>
                         </div>
 
-                        <div>
-                            <label htmlFor="agencyName" className="block text-sm font-medium text-slate-700">
-                                שם משרד התיווך
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                    <Building className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <input
-                                    id="agencyName"
-                                    name="agencyName"
-                                    type="text"
-                                    required
-                                    value={agencyName}
-                                    onChange={(e) => setAgencyName(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-colors"
-                                    placeholder="ישראלי נכסים"
-                                />
-                            </div>
-                        </div>
 
-                        <div>
-                            <label htmlFor="phone" className="block text-sm font-medium text-slate-700">
-                                טלפון (חובה עבור אימות SMS) *
-                            </label>
-                            <div className="mt-1 relative rounded-md shadow-sm">
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                    <Phone className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <input
-                                    id="phone"
-                                    name="phone"
-                                    type="tel"
-                                    required
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-colors"
-                                    placeholder="050-0000000"
-                                    dir="ltr"
-                                />
-                            </div>
-                        </div>
 
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-slate-700">
@@ -344,13 +246,6 @@ export default function Register() {
                     </p>
                 </div>
             </div>
-
-            <VerifyPhoneModal
-                phone={normalizedPhone}
-                isOpen={showSmsModal}
-                onVerified={handleSmsVerified}
-                onCancel={handleSmsCancel}
-            />
         </div>
     );
 }

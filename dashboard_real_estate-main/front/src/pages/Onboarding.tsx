@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { httpsCallable } from 'firebase/functions';
-import { functions, auth } from '../config/firebase';
+import { auth } from '../config/firebase';
 import {
     Loader2, User, Phone, Building2, CheckCircle2,
     MapPin, BadgeCheck, Camera, Star, Briefcase, ChevronLeft, ChevronRight,
@@ -10,7 +9,7 @@ import {
 } from 'lucide-react';
 import { completeOnboarding, uploadAgencyLogo, updateAgencyGoals } from '../services/agencyService';
 import { updateUserProfile } from '../services/userService';
-import { checkPhoneAvailableService } from '../services/authService';
+import { checkPhoneAvailableService, completeOnboarding as completeAuthOnboarding } from '../services/authService';
 import type { AgencySpecialization } from '../types';
 import { isValidPhone, normalizePhoneIL } from '../utils/validation';
 import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
@@ -154,18 +153,17 @@ export default function Onboarding() {
         let newAgencyId = '';
         try {
             // Step 1: Create the agency via Cloud Function
-            const createAgencyAccount = httpsCallable<
-                { agencyName: string; userName: string; phone: string },
-                { success: boolean; agencyId: string }
-            >(functions, 'agencies-createAgencyAccount');
+            if (!currentUser) throw new Error("No user found");
 
-            const result = await createAgencyAccount({
-                agencyName: agencyName.trim(),
-                userName: fullName.trim(),
-                phone: normalizedPhone,
-            });
+            const result = await completeAuthOnboarding(
+                currentUser.uid,
+                currentUser.email || '',
+                fullName.trim(),
+                normalizedPhone,
+                agencyName.trim()
+            );
 
-            newAgencyId = result.data.agencyId;
+            newAgencyId = result.agencyId;
 
             // Force token refresh so custom claims (agencyId, role) are immediately
             // present in the JWT — without this, Firestore rules deny all listeners.
