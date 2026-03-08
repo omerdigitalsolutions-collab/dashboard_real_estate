@@ -8,11 +8,10 @@ import {
     Target, BarChart4
 } from 'lucide-react';
 import { completeOnboarding, uploadAgencyLogo, updateAgencyGoals } from '../services/agencyService';
-import { updateUserProfile } from '../services/userService';
 import { checkPhoneAvailableService, completeOnboarding as completeAuthOnboarding } from '../services/authService';
+import { updateUserProfile } from '../services/userService';
 import type { AgencySpecialization } from '../types';
 import { isValidPhone, normalizePhoneIL } from '../utils/validation';
-import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
 
 const inputCls = 'appearance-none block w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-slate-50 focus:bg-white text-sm transition-all';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
@@ -35,13 +34,8 @@ export default function Onboarding() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // SMS Verification State
-    const [showSmsModal, setShowSmsModal] = useState(false);
-    const [normalizedPhone, setNormalizedPhone] = useState('');
-
     // Step 1: Personal
     const [fullName, setFullName] = useState('');
-    const [phone, setPhone] = useState('');
 
     // Step 2: Agency basics
     const [agencyName, setAgencyName] = useState('');
@@ -74,17 +68,13 @@ export default function Onboarding() {
     };
 
     const canAdvance = () => {
-        if (step === 0) return fullName.trim() && phone.trim();
+        if (step === 0) return fullName.trim().length > 0;
         if (step === 1) return agencyName.trim() && officePhone.trim();
         return true;
     };
 
     const handleNext = () => {
         setError('');
-        if (step === 0 && !isValidPhone(phone)) {
-            setError('מספר הטלפון שהוזן אינו תקין');
-            return;
-        }
         if (step === 1 && !isValidPhone(officePhone)) {
             setError('טלפון המשרד שהוזן אינו תקין');
             return;
@@ -102,64 +92,43 @@ export default function Onboarding() {
         setError('');
         if (!currentUser) return;
 
-        if (!isValidPhone(phone)) {
-            setError('מספר הטלפון (פרטים אישיים) אינו תקין');
-            setStep(0);
-            return;
-        }
-
         if (!isValidPhone(officePhone)) {
             setError('טלפון המשרד שהוזן אינו תקין');
             setStep(1);
             return;
         }
 
-        const normalized = normalizePhoneIL(phone);
-        if (!normalized) {
-            setError('שגיאה בנרמול מספר הטלפון (פרטים אישיים)');
-            setStep(0);
+        const verifiedPhone = currentUser?.phoneNumber;
+        if (!verifiedPhone) {
+            setError('שגיאה חמורה: לא נמצא מספר טלפון מאומת למשתמש.');
             return;
         }
 
         setIsLoading(true);
 
+        let newAgencyId = '';
         try {
             // First check phone availability
-            const isAvail = await checkPhoneAvailableService(normalized);
-            if (!isAvail) {
-                setError('מספר הטלפון הזה כבר מוגדר לסוכנות קיימת. אנא השתמש במספר אחר.');
-                setStep(0);
+            const normalizedVerifiedPhone = normalizePhoneIL(verifiedPhone);
+            if (!normalizedVerifiedPhone) {
+                setError('שגיאה בנרמול מספר הטלפון המאומת.');
                 setIsLoading(false);
                 return;
             }
 
-            // All valid - trigger SMS modal 
-            setNormalizedPhone(normalized);
-            setShowSmsModal(true);
-            setIsLoading(false);
+            const isAvail = await checkPhoneAvailableService(normalizedVerifiedPhone);
+            if (!isAvail) {
+                setError('מספר הטלפון המאומת שלך כבר משויך לסוכנות קיימת. אנא פנה לתמיכה.');
+                setIsLoading(false);
+                return;
+            }
 
-        } catch (err: any) {
-            console.error('Phone check error:', err);
-            setError('שגיאה בבדיקת מספר הטלפון. אנא נסה שוב.');
-            setIsLoading(false);
-        }
-    };
-
-    const handleSmsVerified = async () => {
-        setShowSmsModal(false);
-        setIsLoading(true);
-        setError('');
-
-        let newAgencyId = '';
-        try {
             // Step 1: Create the agency via Cloud Function
-            if (!currentUser) throw new Error("No user found");
-
             const result = await completeAuthOnboarding(
                 currentUser.uid,
                 currentUser.email || '',
                 fullName.trim(),
-                normalizedPhone,
+                normalizedVerifiedPhone,
                 agencyName.trim()
             );
 
@@ -237,18 +206,9 @@ export default function Onboarding() {
 
             // Head to the dashboard!
             navigate('/');
-        } catch (err2: any) {
-            console.error('Extended profile save error:', err2);
-            // Non-critical — agency was created, just navigate
-            navigate('/');
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const handleSmsCancel = () => {
-        setShowSmsModal(false);
-        setError('עליך לאמת את מספר הטלפון כדי לסיים את הקמת המשרד.');
     };
 
     return (
@@ -295,12 +255,12 @@ export default function Onboarding() {
                                 </div>
                             </div>
                             <div>
-                                <label className={labelCls}>מספר טלפון *</label>
+                                <label className={labelCls}>מספר טלפון (מאומת) <CheckCircle2 className="inline w-3 h-3 text-emerald-500 mr-1" /></label>
                                 <div className="relative">
                                     <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none">
-                                        <Phone className="h-4 w-4 text-slate-400" />
+                                        <Phone className="h-4 w-4 text-emerald-500" />
                                     </div>
-                                    <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} placeholder="050-0000000" className={inputCls} dir="ltr" />
+                                    <input type="tel" disabled value={currentUser?.phoneNumber || ''} className={`${inputCls} bg-emerald-50/50 text-slate-500 cursor-not-allowed border-emerald-100`} dir="ltr" />
                                 </div>
                             </div>
                         </div>
@@ -506,13 +466,6 @@ export default function Onboarding() {
                     </div>
                 </form>
             </div>
-
-            <VerifyPhoneModal
-                phone={normalizedPhone}
-                isOpen={showSmsModal}
-                onVerified={handleSmsVerified}
-                onCancel={handleSmsCancel}
-            />
         </div>
     );
 }

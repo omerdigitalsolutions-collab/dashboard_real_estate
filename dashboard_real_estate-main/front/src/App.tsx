@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ResetPassword from './pages/ResetPassword';
 import Onboarding from './pages/Onboarding';
+import VerifyPhonePage from './pages/VerifyPhonePage';
 import AgentJoin from './pages/AgentJoin';
 import AgentSetup from './pages/AgentSetup';
 import Dashboard from './pages/Dashboard';
@@ -74,6 +75,16 @@ function App() {
           element={
             <ProtectedRoute>
               <Onboarding />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Dedicated SMS Verification before full onboarding */}
+        <Route
+          path="/verify-phone"
+          element={
+            <ProtectedRoute>
+              <VerifyPhonePage />
             </ProtectedRoute>
           }
         />

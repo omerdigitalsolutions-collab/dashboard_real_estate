@@ -18,11 +18,20 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         return <Navigate to="/login" replace />;
     }
 
-    if (requireOnboarding && location.pathname !== '/onboarding') {
-        return <Navigate to="/onboarding" replace />;
+    if (requireOnboarding) {
+        // If they don't have a verified phone, send to verify-phone
+        // (Unless they are already there)
+        if (!currentUser.phoneNumber && location.pathname !== '/verify-phone') {
+            return <Navigate to="/verify-phone" replace />;
+        }
+        // If they DO have a verified phone, send to onboarding
+        // (Unless they are already there or at /verify-phone where we do local redirect)
+        if (currentUser.phoneNumber && location.pathname !== '/onboarding' && location.pathname !== '/verify-phone') {
+            return <Navigate to="/onboarding" replace />;
+        }
     }
 
-    if (!requireOnboarding && location.pathname === '/onboarding') {
+    if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone')) {
         return <Navigate to="/" replace />;
     }
 
