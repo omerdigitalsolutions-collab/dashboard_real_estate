@@ -58,7 +58,7 @@ import { askCopilot } from './ai/copilot';
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
-import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage } from './superadmin';
+import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan } from './superadmin';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
@@ -90,7 +90,8 @@ export const superadmin = {
     setupSuperAdmin,
     superAdminImportGlobalPropertiesV2,
     superAdminGetImportMappingV2,
-    superAdminGetAgencyUsage
+    superAdminGetAgencyUsage,
+    superAdminUpdateAgencyPlan
 };
 
 export const scheduled = { checkTrialExpiry };

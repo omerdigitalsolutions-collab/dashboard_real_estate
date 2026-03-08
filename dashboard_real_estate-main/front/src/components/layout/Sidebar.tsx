@@ -28,7 +28,7 @@ const navItems = [
 
 export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
   const { userData } = useAuth();
-  const { agencySettings, rawAgency } = useLiveDashboardData();
+  const { rawAgency } = useLiveDashboardData();
 
   // Filter navigation based on user role
   const filteredNavItems = navItems.filter(item =>
@@ -36,7 +36,7 @@ export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
   );
 
   // Trial calculations
-  const billing = agencySettings?.billing;
+  const billing = rawAgency?.billing;
   const isTrial = billing?.status === 'trialing';
   let trialDaysLeft = 0;
 

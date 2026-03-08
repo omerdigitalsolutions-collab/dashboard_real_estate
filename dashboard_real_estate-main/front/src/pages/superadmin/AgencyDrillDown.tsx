@@ -16,8 +16,12 @@ import {
     Activity,
     MapPin,
     AlertCircle,
-    UserCircle2
+    UserCircle2,
+    Settings
 } from 'lucide-react';
+
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../config/firebase';
 
 // ─── Tier badge ──────────────────────────────────────────────────────────────
 const TIER_STYLES: Record<string, string> = {
@@ -170,6 +174,29 @@ export default function AgencyDrillDown() {
         );
     }
 
+    const handleUpdatePlan = async () => {
+        const newPlan = window.prompt("הזן את המסלול החדש (starter / pro / enterprise):", agency.planId || "starter");
+        if (!newPlan) return;
+
+        const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
+        if (!validPlans.includes(newPlan.toLowerCase())) {
+            alert("מסלול שגוי. יש להזין starter, pro או enterprise.");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminUpdateAgencyPlan');
+            await fn({ agencyId: agency.id, newPlanId: newPlan.toLowerCase() });
+            alert("המסלול עודכן בהצלחה!");
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Update Plan Error:', err);
+            alert("שגיאה בעדכון המסלול: " + err.message);
+            setLoading(false);
+        }
+    };
+
     const primaryManager = managers.length > 0 ? managers[0] : null;
     const activeProperties = properties.filter(p => p.status === 'active');
 
@@ -207,6 +234,13 @@ export default function AgencyDrillDown() {
                                 <TierBadge plan={agency.planId} />
                             </>
                         )}
+                        <button
+                            onClick={handleUpdatePlan}
+                            className="ml-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-400 transition-colors border border-slate-700 hover:border-cyan-500/50"
+                            title="שנה מסלול מנוי"
+                        >
+                            <Settings className="w-3.5 h-3.5" />
+                        </button>
                     </div>
                 </div>
             </div>

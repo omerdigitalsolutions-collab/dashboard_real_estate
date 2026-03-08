@@ -246,7 +246,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     }
 
                     setAgencySettings(settings);
-                    setRawAgency({ id: doc.id, ...data } as Agency);
+                    setRawAgency({ id: agencyRef.id, ...data } as Agency);
 
                     const rawName = data?.agencyName || data?.name || null;
                     if (rawName && rawName.includes(agencyId) && userData?.name) {
@@ -337,7 +337,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     }, [tasks]);
 
     return (
-        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, agencySettings, agencyName, agencyLogo, loading, error }}>
+        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, agencySettings, rawAgency, agencyName, agencyLogo, loading, error }}>
             {children}
         </DashboardDataContext.Provider>
     );
