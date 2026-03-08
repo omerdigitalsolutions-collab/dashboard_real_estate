@@ -22,7 +22,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const TERMINAL_STAGES = ['won', 'lost', 'contract']; // Treat 'contract' as near-final too
-exports.deleteProperty = (0, https_1.onCall)(async (request) => {
+exports.deleteProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { propertyId } = request.data;
     if (!(propertyId === null || propertyId === void 0 ? void 0 : propertyId.trim())) {

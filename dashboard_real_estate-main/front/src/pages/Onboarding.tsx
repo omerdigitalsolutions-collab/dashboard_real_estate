@@ -10,8 +10,10 @@ import {
 } from 'lucide-react';
 import { completeOnboarding, uploadAgencyLogo, updateAgencyGoals } from '../services/agencyService';
 import { updateUserProfile } from '../services/userService';
+import { checkPhoneAvailableService } from '../services/authService';
 import type { AgencySpecialization } from '../types';
-import { isValidPhone } from '../utils/validation';
+import { isValidPhone, normalizePhoneIL } from '../utils/validation';
+import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
 
 const inputCls = 'appearance-none block w-full px-4 py-3 pr-11 border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-slate-50 focus:bg-white text-sm transition-all';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
@@ -33,6 +35,10 @@ export default function Onboarding() {
     const [step, setStep] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // SMS Verification State
+    const [showSmsModal, setShowSmsModal] = useState(false);
+    const [normalizedPhone, setNormalizedPhone] = useState('');
 
     // Step 1: Personal
     const [fullName, setFullName] = useState('');
@@ -109,7 +115,42 @@ export default function Onboarding() {
             return;
         }
 
+        const normalized = normalizePhoneIL(phone);
+        if (!normalized) {
+            setError('שגיאה בנרמול מספר הטלפון (פרטים אישיים)');
+            setStep(0);
+            return;
+        }
+
         setIsLoading(true);
+
+        try {
+            // First check phone availability
+            const isAvail = await checkPhoneAvailableService(normalized);
+            if (!isAvail) {
+                setError('מספר הטלפון הזה כבר מוגדר לסוכנות קיימת. אנא השתמש במספר אחר.');
+                setStep(0);
+                setIsLoading(false);
+                return;
+            }
+
+            // All valid - trigger SMS modal 
+            setNormalizedPhone(normalized);
+            setShowSmsModal(true);
+            setIsLoading(false);
+
+        } catch (err: any) {
+            console.error('Phone check error:', err);
+            setError('שגיאה בבדיקת מספר הטלפון. אנא נסה שוב.');
+            setIsLoading(false);
+        }
+    };
+
+    const handleSmsVerified = async () => {
+        setShowSmsModal(false);
+        setIsLoading(true);
+        setError('');
+
         let newAgencyId = '';
         try {
             // Step 1: Create the agency via Cloud Function
@@ -121,7 +162,7 @@ export default function Onboarding() {
             const result = await createAgencyAccount({
                 agencyName: agencyName.trim(),
                 userName: fullName.trim(),
-                phone: phone.trim(),
+                phone: normalizedPhone,
             });
 
             newAgencyId = result.data.agencyId;
@@ -183,15 +224,17 @@ export default function Onboarding() {
             }
 
             if (monthlyPersonalRevenue || monthlyPersonalDeals) {
-                await updateUserProfile(currentUser.uid, {
-                    goals: {
-                        monthly: {
-                            revenue: monthlyPersonalRevenue || 0,
-                            deals: monthlyPersonalDeals || 0
-                        },
-                        yearly: { revenue: 0, deals: 0 } // default blank yearly for now
-                    }
-                });
+                if (currentUser) {
+                    await updateUserProfile(currentUser.uid, {
+                        goals: {
+                            monthly: {
+                                revenue: monthlyPersonalRevenue || 0,
+                                deals: monthlyPersonalDeals || 0
+                            },
+                            yearly: { revenue: 0, deals: 0 } // default blank yearly for now
+                        }
+                    });
+                }
             }
 
             // Head to the dashboard!
@@ -203,6 +246,11 @@ export default function Onboarding() {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleSmsCancel = () => {
+        setShowSmsModal(false);
+        setError('עליך לאמת את מספר הטלפון כדי לסיים את הקמת המשרד.');
     };
 
     return (
@@ -460,6 +508,13 @@ export default function Onboarding() {
                     </div>
                 </form>
             </div>
+
+            <VerifyPhoneModal
+                phone={normalizedPhone}
+                isOpen={showSmsModal}
+                onVerified={handleSmsVerified}
+                onCancel={handleSmsCancel}
+            />
         </div>
     );
 }

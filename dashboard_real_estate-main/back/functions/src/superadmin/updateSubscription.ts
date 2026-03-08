@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import { getFirestore } from 'firebase-admin/firestore';
 
-export const superAdminUpdateAgencyPlan = functions.https.onCall(async (request) => {
+export const superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true
     if (!request.auth || request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError(

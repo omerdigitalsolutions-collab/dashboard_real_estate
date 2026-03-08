@@ -20,7 +20,7 @@ const db = getFirestore();
 
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 
-export const getLiveLeads = onCall(async (request) => {
+export const getLiveLeads = onCall({ cors: true }, async (request) => {
     const authData = await validateUserAuth(request);
     const agencyId = authData.agencyId;
 

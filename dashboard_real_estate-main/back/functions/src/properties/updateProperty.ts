@@ -23,7 +23,7 @@ const db = getFirestore();
 // Fields that must never be changed by a client update
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 
-export const updateProperty = onCall(async (request) => {
+export const updateProperty = onCall({ cors: true }, async (request) => {
     const authData = await validateUserAuth(request);
 
     const { propertyId, updates } = request.data as {

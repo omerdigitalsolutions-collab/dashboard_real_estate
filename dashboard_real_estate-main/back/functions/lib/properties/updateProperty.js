@@ -23,7 +23,7 @@ const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 // Fields that must never be changed by a client update
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
-exports.updateProperty = (0, https_1.onCall)(async (request) => {
+exports.updateProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { propertyId, updates } = request.data;
     if (!(propertyId === null || propertyId === void 0 ? void 0 : propertyId.trim()))

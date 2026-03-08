@@ -23,7 +23,7 @@ const db = getFirestore();
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 
-export const updateLead = onCall(async (request) => {
+export const updateLead = onCall({ cors: true }, async (request) => {
     const authData = await validateUserAuth(request);
 
     const { leadId, updates } = request.data as {

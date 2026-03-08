@@ -38,7 +38,7 @@ interface LeadRequirements {
     propertyType?: string[];
 }
 
-export const matchPropertiesForLead = onCall(async (request) => {
+export const matchPropertiesForLead = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }

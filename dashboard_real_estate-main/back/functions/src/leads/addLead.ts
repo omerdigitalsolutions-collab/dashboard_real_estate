@@ -22,7 +22,7 @@ import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
-export const addLead = onCall(async (request) => {
+export const addLead = onCall({ cors: true }, async (request) => {
     // ── Auth & Agency validation ────────────────────────────────────────────────
     const authData = await validateUserAuth(request);
 

@@ -40,7 +40,7 @@ const generative_ai_1 = require("@google/generative-ai");
 const admin = __importStar(require("firebase-admin"));
 const authGuard_1 = require("../config/authGuard");
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
-exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1' }, async (request) => {
+exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1', cors: true }, async (request) => {
     const { message } = request.data;
     if (!message || typeof message !== 'string') {
         throw new https_1.HttpsError('invalid-argument', 'A valid message string must be provided.');

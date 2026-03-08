@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { Loader2, Mail, Lock, User, Building } from 'lucide-react';
-import { signInWithGoogle, checkUserExists, completeOnboarding } from '../services/authService';
-import { isValidEmail, isValidPhone } from '../utils/validation';
+import { Loader2, Mail, Lock, User, Building, Phone } from 'lucide-react';
+import { signInWithGoogle, checkUserExists, completeOnboarding, checkPhoneAvailableService } from '../services/authService';
+import { isValidEmail, isValidPhone, normalizePhoneIL } from '../utils/validation';
+import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
 
 export default function Register() {
     const [name, setName] = useState('');
@@ -16,6 +17,11 @@ export default function Register() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+    // SMS Verification State
+    const [showSmsModal, setShowSmsModal] = useState(false);
+    const [normalizedPhone, setNormalizedPhone] = useState('');
+
     const navigate = useNavigate();
 
     const handleRegister = async (e: React.FormEvent) => {
@@ -37,41 +43,75 @@ export default function Register() {
             return;
         }
 
-        if (phone && !isValidPhone(phone)) {
+        if (!phone) {
+            setError('מספר טלפון הוא שדה חובה');
+            return;
+        }
+
+        if (!isValidPhone(phone)) {
             setError('מספר הטלפון שהוזן אינו תקין');
+            return;
+        }
+
+        const normalized = normalizePhoneIL(phone);
+        if (!normalized) {
+            setError('שגיאה בנרמול מספר הטלפון');
             return;
         }
 
         setIsLoading(true);
 
         try {
-            // 1. Create the user in Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            try {
-                // 2. Complete onboarding to create the agency and user document in Firestore
-                // We pass a dummy phone number if they didn't provide one, or require it
-                const actualPhone = phone || '0000000000';
-                await completeOnboarding(user.uid, user.email || '', name, actualPhone, agencyName);
-
-                // 3. Navigate to dashboard
-                navigate('/');
-            } catch (onboardingError: any) {
-                console.error('Error during onboarding:', onboardingError);
-                setError('שגיאה ביצירת המשרד. אנא פנה לתמיכה.');
-                // Note: user is created in Auth but Firestore docs might be missing
+            // 0. Check strict phone availability first before creating the auth user
+            const isAvail = await checkPhoneAvailableService(normalized);
+            if (!isAvail) {
+                setError('מספר הטלפון הזה כבר מקושר לסוכנות אחרת במערכת.');
+                setIsLoading(false);
+                return;
             }
+
+            // 1. Create the user in Firebase Auth
+            await createUserWithEmailAndPassword(auth, email, password);
+
+            // 2. We don't complete onboarding yet. We popup the SMS verification.
+            setNormalizedPhone(normalized);
+            setShowSmsModal(true);
+            setIsLoading(false);
+
         } catch (err: any) {
             console.error('Registration error:', err);
             if (err.code === 'auth/email-already-in-use') {
                 setError('כתובת האימייל הזו כבר נמצאת בשימוש');
             } else {
-                setError('שגיאה ביצירת החשבון');
+                setError('שגיאה ביצירת החשבון: ' + err.message);
             }
+            setIsLoading(false);
+        }
+    };
+
+    const handleSmsVerified = async () => {
+        setShowSmsModal(false);
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const user = auth.currentUser;
+            if (!user) throw new Error("No user found after SMS auth");
+
+            // 3. SMS passed, now complete onboarding
+            await completeOnboarding(user.uid, user.email || '', name, normalizedPhone, agencyName);
+            navigate('/');
+        } catch (onboardingError: any) {
+            console.error('Error during onboarding:', onboardingError);
+            setError(onboardingError.message || 'שגיאה ביצירת המשרד. אנא פנה לתמיכה.');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleSmsCancel = () => {
+        setShowSmsModal(false);
+        setError('עליך לאמת את מספר הטלפון שלך כדי לסיים את ההרשמה.');
     };
 
     const handleGoogleRegister = async () => {
@@ -152,16 +192,20 @@ export default function Register() {
 
                         <div>
                             <label htmlFor="phone" className="block text-sm font-medium text-slate-700">
-                                טלפון (אופציונלי)
+                                טלפון (חובה עבור אימות SMS) *
                             </label>
                             <div className="mt-1 relative rounded-md shadow-sm">
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                    <Phone className="h-5 w-5 text-slate-400" />
+                                </div>
                                 <input
                                     id="phone"
                                     name="phone"
                                     type="tel"
+                                    required
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-colors"
+                                    className="appearance-none block w-full px-3 py-2 pr-10 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm transition-colors"
                                     placeholder="050-0000000"
                                     dir="ltr"
                                 />
@@ -300,6 +344,13 @@ export default function Register() {
                     </p>
                 </div>
             </div>
+
+            <VerifyPhoneModal
+                phone={normalizedPhone}
+                isOpen={showSmsModal}
+                onVerified={handleSmsVerified}
+                onCancel={handleSmsCancel}
+            />
         </div>
     );
 }

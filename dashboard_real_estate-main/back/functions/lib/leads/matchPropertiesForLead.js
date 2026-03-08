@@ -32,7 +32,7 @@ exports.matchPropertiesForLead = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const db = (0, firestore_1.getFirestore)();
-exports.matchPropertiesForLead = (0, https_1.onCall)(async (request) => {
+exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a, _b, _c, _d;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');

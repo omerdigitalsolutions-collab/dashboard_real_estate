@@ -15,7 +15,7 @@ setGlobalOptions({ region: 'europe-west1' });
 import './config/admin';
 
 // ── Agencies Module ────────────────────────────────────────────────────────────
-import { createAgencyAccount } from './agencies/onboarding';
+import { createAgencyAccount, checkPhoneAvailable } from './agencies/onboarding';
 
 // ── Users Module ───────────────────────────────────────────────────────────────
 import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup } from './users/team';
@@ -74,7 +74,7 @@ import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
-export const agencies = { createAgencyAccount };
+export const agencies = { createAgencyAccount, checkPhoneAvailable };
 export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };

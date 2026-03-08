@@ -11,7 +11,8 @@ const params_1 = require("firebase-functions/params");
 // Initialize Gemini API Key via Secret Manager
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 exports.importPropertyFromUrl = (0, https_1.onCall)({
-    secrets: [geminiApiKey]
+    secrets: [geminiApiKey],
+    cors: true
 }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');

@@ -1,10 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createAgencyAccount = void 0;
+exports.createAgencyAccount = exports.checkPhoneAvailable = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const db = (0, firestore_1.getFirestore)();
+/**
+ * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
+ */
+exports.checkPhoneAvailable = (0, https_1.onCall)({ cors: true }, async (request) => {
+    let { phone } = request.data;
+    if (!(phone === null || phone === void 0 ? void 0 : phone.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'phone is required.');
+    }
+    // Assume phone arrives in E.164 format from the client e.g. +9725...
+    // The normalized phone for the DB is exactly the E.164 string to be strict.
+    const phoneRef = db.collection('used_phones').doc(phone);
+    const snap = await phoneRef.get();
+    return { available: !snap.exists };
+});
 /**
  * createAgencyAccount — Called when a new admin completes onboarding.
  *
@@ -17,7 +31,7 @@ const db = (0, firestore_1.getFirestore)();
  * Input:  { agencyName: string, userName: string, phone: string }
  * Output: { success: true, agencyId: string }
  */
-exports.createAgencyAccount = (0, https_1.onCall)(async (request) => {
+exports.createAgencyAccount = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     // ── Auth Guard ──────────────────────────────────────────────────────────────
     if (!request.auth) {
@@ -45,19 +59,22 @@ exports.createAgencyAccount = (0, https_1.onCall)(async (request) => {
     if (!oldTrialsMap.empty) {
         throw new https_1.HttpsError('permission-denied', 'You have already used your free trial on another agency account.');
     }
-    // Secondary Anti-Abuse: Phone Number check
-    const normalizedPhone = phone.trim().replace(/\D/g, '');
-    if (normalizedPhone) {
-        const phoneRef = db.collection('used_phones').doc(normalizedPhone);
-        const phoneSnap = await phoneRef.get();
-        if (phoneSnap.exists) {
-            trialEligible = false; // Phone already used — no trial
-        }
-        else {
-            // Mark phone as used for trial (write BEFORE batch to be safe)
-            await phoneRef.set({ uid, email, usedAt: firestore_1.FieldValue.serverTimestamp() });
-        }
+    // ── Phone Verification & Uniqueness Check ───────────────────────────────────
+    // Phone must arrive in E.164 format (e.g., +97250...)
+    const normalizedPhone = phone.trim();
+    // 1. Ensure the user actually verified this phone via Firebase Phone Auth
+    const userRecord = await (0, auth_1.getAuth)().getUser(uid);
+    if (userRecord.phoneNumber !== normalizedPhone) {
+        throw new https_1.HttpsError('permission-denied', `Phone number mismatch or not verified. Expected ${normalizedPhone} but Auth has ${userRecord.phoneNumber || 'None'}`);
     }
+    // 2. Ensure phone is absolutely unique
+    const phoneRef = db.collection('used_phones').doc(normalizedPhone);
+    const phoneSnap = await phoneRef.get();
+    if (phoneSnap.exists) {
+        throw new https_1.HttpsError('already-exists', 'This phone number is already registered to an agency.');
+    }
+    // Mark phone as used (write BEFORE batch to prevent quick double submissions)
+    await phoneRef.set({ uid, email, usedAt: firestore_1.FieldValue.serverTimestamp() });
     // Trial ends 7 days from now (set only if eligible)
     const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const trialEndsAt = trialEligible ? trialEndsDate : null;

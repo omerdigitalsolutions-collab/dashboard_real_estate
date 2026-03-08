@@ -40,6 +40,30 @@ export function isValidPhone(phone?: string | null): boolean {
 }
 
 /**
+ * Normalizes a phone number to strict E.164 format.
+ * Primarily handles converting local Israeli numbers (05...) to +9725...
+ * If the number already has a +, it strips non-digits.
+ */
+export function normalizePhoneIL(phone?: string | null): string {
+    if (!phone) return '';
+
+    // Remove spaces, dashes, and parens
+    let cleaned = phone.replace(/[-\s()]/g, '');
+
+    // If it starts with 0 and is 9-10 digits long, assume it's Israel local
+    if (cleaned.startsWith('0') && (cleaned.length === 9 || cleaned.length === 10)) {
+        return '+972' + cleaned.substring(1);
+    }
+
+    // If it doesn't start with +, add it (assumes international input without +)
+    if (!cleaned.startsWith('+')) {
+        return '+' + cleaned;
+    }
+
+    return cleaned;
+}
+
+/**
  * Validates a real estate commission percentage.
  * Must be a pure number between 0 and 100.
  * Rejects inputs with letters or out of range.

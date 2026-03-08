@@ -25,7 +25,7 @@ const db = getFirestore();
  * Input:  { agencyId: string }
  * Output: { properties: Property[] }
  */
-export const getLiveProperties = onCall(async (request) => {
+export const getLiveProperties = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Authentication required.');
     }

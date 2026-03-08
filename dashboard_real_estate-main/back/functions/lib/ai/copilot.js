@@ -189,7 +189,7 @@ async function getSummaryStats(db, agencyId) {
     };
 }
 // ── Main Cloud Function ────────────────────────────────────────────────────────
-exports.askCopilot = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1' }, async (request) => {
+exports.askCopilot = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1', cors: true }, async (request) => {
     // 1. Auth guard
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'You must be logged in to use the AI Copilot.');

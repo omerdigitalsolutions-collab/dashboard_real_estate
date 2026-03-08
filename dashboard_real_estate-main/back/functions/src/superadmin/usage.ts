@@ -8,7 +8,7 @@ import { getStorage } from 'firebase-admin/storage';
  * Returns Firebase Storage usage (bytes / MB) and Firestore document counts
  * for a specific agency. Restricted to Super Admin callers.
  */
-export const superAdminGetAgencyUsage = functions.https.onCall(async (request) => {
+export const superAdminGetAgencyUsage = functions.https.onCall({ cors: true }, async (request) => {
     // ── Auth Guard ────────────────────────────────────────────────────────────
     if (!request.auth || request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');

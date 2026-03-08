@@ -26,7 +26,7 @@ const db = (0, firestore_1.getFirestore)();
  * Input:  { agencyId: string }
  * Output: { properties: Property[] }
  */
-exports.getLiveProperties = (0, https_1.onCall)(async (request) => {
+exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');

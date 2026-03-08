@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminUpdateAgencyPlan = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const firestore_1 = require("firebase-admin/firestore");
-exports.superAdminUpdateAgencyPlan = functions.https.onCall(async (request) => {
+exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true
     if (!request.auth || request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'You must be a Super Admin to perform this action.');

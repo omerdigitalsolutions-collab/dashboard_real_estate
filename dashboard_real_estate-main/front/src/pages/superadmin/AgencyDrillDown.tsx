@@ -16,8 +16,7 @@ import {
     Activity,
     MapPin,
     AlertCircle,
-    UserCircle2,
-    Settings
+    UserCircle2
 } from 'lucide-react';
 
 import { httpsCallable } from 'firebase/functions';
@@ -174,9 +173,14 @@ export default function AgencyDrillDown() {
         );
     }
 
-    const handleUpdatePlan = async () => {
-        const newPlan = window.prompt("הזן את המסלול החדש (starter / pro / enterprise):", agency.planId || "starter");
+    const handleUpdatePlan = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newPlan = e.target.value;
         if (!newPlan) return;
+
+        if (!window.confirm(`האם אתה בטוח שברצונך לשנות את מנוי הסוכנות למסלול ${newPlan}?`)) {
+            e.target.value = agency.planId || 'starter';
+            return;
+        }
 
         const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
         if (!validPlans.includes(newPlan.toLowerCase())) {
@@ -232,15 +236,18 @@ export default function AgencyDrillDown() {
                             <>
                                 <span className="text-slate-600">|</span>
                                 <TierBadge plan={agency.planId} />
+                                <select
+                                    defaultValue={agency.planId || 'starter'}
+                                    onChange={handleUpdatePlan}
+                                    className="ml-2 bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 outline-none cursor-pointer hover:border-cyan-500/50 transition-colors"
+                                    title="שנה מסלול מנוי"
+                                >
+                                    <option value="starter">Starter</option>
+                                    <option value="pro">Pro</option>
+                                    <option value="enterprise">Enterprise</option>
+                                </select>
                             </>
                         )}
-                        <button
-                            onClick={handleUpdatePlan}
-                            className="ml-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-400 transition-colors border border-slate-700 hover:border-cyan-500/50"
-                            title="שנה מסלול מנוי"
-                        >
-                            <Settings className="w-3.5 h-3.5" />
-                        </button>
                     </div>
                 </div>
             </div>

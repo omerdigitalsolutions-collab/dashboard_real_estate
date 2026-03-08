@@ -7,7 +7,7 @@ const db = getFirestore();
 /**
  * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
  */
-export const checkPhoneAvailable = onCall(async (request) => {
+export const checkPhoneAvailable = onCall({ cors: true }, async (request) => {
     let { phone } = request.data as { phone?: string };
     if (!phone?.trim()) {
         throw new HttpsError('invalid-argument', 'phone is required.');
@@ -33,7 +33,7 @@ export const checkPhoneAvailable = onCall(async (request) => {
  * Input:  { agencyName: string, userName: string, phone: string }
  * Output: { success: true, agencyId: string }
  */
-export const createAgencyAccount = onCall(async (request) => {
+export const createAgencyAccount = onCall({ cors: true }, async (request) => {
     // ── Auth Guard ──────────────────────────────────────────────────────────────
     if (!request.auth) {
         throw new HttpsError(

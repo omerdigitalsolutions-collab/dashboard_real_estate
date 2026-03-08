@@ -7,7 +7,8 @@ import { defineSecret } from 'firebase-functions/params';
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 export const importPropertyFromUrl = onCall({
-    secrets: [geminiApiKey]
+    secrets: [geminiApiKey],
+    cors: true
 }, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'Authentication required.');

@@ -19,7 +19,7 @@ const db = (0, firestore_1.getFirestore)();
  * Input:  { userId: string, newRole: 'admin' | 'agent' }
  * Output: { success: true }
  */
-exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
+exports.updateAgentRole = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId, newRole } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
@@ -57,7 +57,7 @@ exports.updateAgentRole = (0, https_1.onCall)(async (request) => {
  * Input:  { userId: string, isActive: boolean }
  * Output: { success: true }
  */
-exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
+exports.toggleAgentStatus = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId, isActive } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
@@ -97,7 +97,7 @@ exports.toggleAgentStatus = (0, https_1.onCall)(async (request) => {
  * Input:  { userId: string }
  * Output: { success: true }
  */
-exports.deleteAgent = (0, https_1.onCall)(async (request) => {
+exports.deleteAgent = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { userId } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
@@ -196,7 +196,7 @@ function buildInviteEmail(agentName, agencyName, joinLink) {
  * Input:  { email: string, name: string, role: 'admin' | 'agent', phone?: string, appUrl?: string }
  * Output: { success: true, stubId: string, whatsappUrl?: string }
  */
-exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {
+exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true }, async (request) => {
     var _a;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     // ── Input Validation ────────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (re
  * Input:  { token: string }   (token === Firestore stub document ID)
  * Output: { agencyName: string, agentName: string, email: string }
  */
-exports.getInviteInfo = (0, https_1.onCall)(async (request) => {
+exports.getInviteInfo = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     const { token } = request.data;
     if (!(token === null || token === void 0 ? void 0 : token.trim())) {
@@ -320,7 +320,7 @@ exports.getInviteInfo = (0, https_1.onCall)(async (request) => {
  * Input:  { token: string, name?: string, phone?: string }
  * Output: { success: true }
  */
-exports.completeAgentSetup = (0, https_1.onCall)(async (request) => {
+exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
     }

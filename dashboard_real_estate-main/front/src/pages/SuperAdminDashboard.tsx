@@ -23,8 +23,7 @@ import {
     Activity,
     Cpu,
     RefreshCw,
-    DollarSign,
-    Settings
+    DollarSign
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
@@ -220,10 +219,16 @@ export default function SuperAdminDashboard() {
         (ag.adminEmail ?? '').toLowerCase().includes(search.toLowerCase())
     );
 
-    const handleUpdatePlan = async (e: React.MouseEvent, agencyId: string, currentPlan: string) => {
+    const handleUpdatePlan = async (e: React.ChangeEvent<HTMLSelectElement>, agencyId: string, currentPlan: string) => {
         e.stopPropagation();
-        const newPlan = window.prompt(`הזן את המסלול החדש עבור סוכנות זו (starter / pro / enterprise):`, currentPlan || "starter");
+        const newPlan = e.target.value;
         if (!newPlan) return;
+
+        if (!window.confirm(`האם אתה בטוח שברצונך לשנות את מנוי הסוכנות למסלול ${newPlan}?`)) {
+            // Revert select visually
+            e.target.value = currentPlan;
+            return;
+        }
 
         const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
         if (!validPlans.includes(newPlan.toLowerCase())) {
@@ -234,7 +239,7 @@ export default function SuperAdminDashboard() {
         try {
             const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminUpdateAgencyPlan');
             await fn({ agencyId: agencyId, newPlanId: newPlan.toLowerCase() });
-            alert("המסלול עודכן בהצלחה! מרענן את המסך...");
+            alert("המסלול עודכן בהצלחה!");
             window.location.reload();
         } catch (err: any) {
             console.error('Update Plan Error:', err);
@@ -580,13 +585,17 @@ export default function SuperAdminDashboard() {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-2">
                                                 <TierBadge plan={ag.planId} />
-                                                <button
-                                                    onClick={(e) => handleUpdatePlan(e, ag.id, ag.planId || 'starter')}
-                                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-400 transition-colors border border-slate-700 hover:border-cyan-500/50"
+                                                <select
+                                                    defaultValue={ag.planId || 'starter'}
+                                                    onChange={(e) => handleUpdatePlan(e, ag.id, ag.planId || 'starter')}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-cyan-500/50 transition-colors"
                                                     title="שנה מסלול מנוי"
                                                 >
-                                                    <Settings className="w-3.5 h-3.5" />
-                                                </button>
+                                                    <option value="starter">Starter</option>
+                                                    <option value="pro">Pro</option>
+                                                    <option value="enterprise">Enterprise</option>
+                                                </select>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">

@@ -11,6 +11,7 @@ exports.extractAiData = (0, https_1.onCall)({
     region: 'europe-west1',
     timeoutSeconds: 300,
     memory: '1GiB',
+    cors: true,
 }, async (request) => {
     // Enforce feature access
     await (0, featureGuard_1.requireFeatureAccess)(request, 'AI_IMPORT_TEXT');

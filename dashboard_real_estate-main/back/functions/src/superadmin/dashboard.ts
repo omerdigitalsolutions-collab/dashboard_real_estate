@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import { getFirestore } from 'firebase-admin/firestore';
 
-export const superAdminGetDashboardStats = functions.https.onCall(async (request) => {
+export const superAdminGetDashboardStats = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true
     if (!request.auth || request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');

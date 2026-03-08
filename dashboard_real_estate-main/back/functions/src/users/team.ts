@@ -22,7 +22,7 @@ type Role = 'admin' | 'agent';
  * Input:  { userId: string, newRole: 'admin' | 'agent' }
  * Output: { success: true }
  */
-export const updateAgentRole = onCall(async (request) => {
+export const updateAgentRole = onCall({ cors: true }, async (request) => {
   const authData = await validateUserAuth(request);
 
   const { userId, newRole } = request.data as { userId?: string; newRole?: string };
@@ -70,7 +70,7 @@ export const updateAgentRole = onCall(async (request) => {
  * Input:  { userId: string, isActive: boolean }
  * Output: { success: true }
  */
-export const toggleAgentStatus = onCall(async (request) => {
+export const toggleAgentStatus = onCall({ cors: true }, async (request) => {
   const authData = await validateUserAuth(request);
 
   const { userId, isActive } = request.data as { userId?: string; isActive?: boolean };
@@ -119,7 +119,7 @@ export const toggleAgentStatus = onCall(async (request) => {
  * Input:  { userId: string }
  * Output: { success: true }
  */
-export const deleteAgent = onCall(async (request) => {
+export const deleteAgent = onCall({ cors: true }, async (request) => {
   const authData = await validateUserAuth(request);
 
   const { userId } = request.data as { userId?: string };
@@ -230,7 +230,7 @@ function buildInviteEmail(agentName: string, agencyName: string, joinLink: strin
  * Output: { success: true, stubId: string, whatsappUrl?: string }
  */
 export const inviteAgent = onCall(
-  { secrets: [resendApiKey] },
+  { secrets: [resendApiKey], cors: true },
   async (request) => {
     const authData = await validateUserAuth(request);
 
@@ -343,7 +343,7 @@ export const inviteAgent = onCall(
  * Input:  { token: string }   (token === Firestore stub document ID)
  * Output: { agencyName: string, agentName: string, email: string }
  */
-export const getInviteInfo = onCall(async (request) => {
+export const getInviteInfo = onCall({ cors: true }, async (request) => {
   const { token } = request.data as { token?: string };
 
   if (!token?.trim()) {
@@ -393,7 +393,7 @@ export const getInviteInfo = onCall(async (request) => {
  * Input:  { token: string, name?: string, phone?: string }
  * Output: { success: true }
  */
-export const completeAgentSetup = onCall(async (request) => {
+export const completeAgentSetup = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }

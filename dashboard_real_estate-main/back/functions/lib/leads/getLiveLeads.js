@@ -20,7 +20,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
-exports.getLiveLeads = (0, https_1.onCall)(async (request) => {
+exports.getLiveLeads = (0, https_1.onCall)({ cors: true }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const agencyId = authData.agencyId;
     const { statusFilter } = request.data;

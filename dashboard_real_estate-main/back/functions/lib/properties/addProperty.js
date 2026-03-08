@@ -28,7 +28,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
-exports.addProperty = (0, https_1.onCall)(async (request) => {
+exports.addProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     // ── Auth & Agency validation ────────────────────────────────────────────────
     const authData = await (0, authGuard_1.validateUserAuth)(request);

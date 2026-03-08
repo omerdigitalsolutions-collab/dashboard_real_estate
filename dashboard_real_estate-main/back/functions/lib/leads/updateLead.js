@@ -23,7 +23,7 @@ const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
-exports.updateLead = (0, https_1.onCall)(async (request) => {
+exports.updateLead = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { leadId, updates } = request.data;

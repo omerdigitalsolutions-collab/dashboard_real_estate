@@ -22,7 +22,7 @@ const db = getFirestore();
 
 const TERMINAL_STAGES = ['won', 'lost', 'contract']; // Treat 'contract' as near-final too
 
-export const deleteProperty = onCall(async (request) => {
+export const deleteProperty = onCall({ cors: true }, async (request) => {
     const authData = await validateUserAuth(request);
 
     const { propertyId } = request.data as { propertyId?: string };

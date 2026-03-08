@@ -178,7 +178,7 @@ async function getSummaryStats(db: admin.firestore.Firestore, agencyId: string) 
 
 // ── Main Cloud Function ────────────────────────────────────────────────────────
 export const askCopilot = onCall(
-    { secrets: [geminiApiKey], region: 'europe-west1' },
+    { secrets: [geminiApiKey], region: 'europe-west1', cors: true },
     async (request) => {
         // 1. Auth guard
         if (!request.auth) {

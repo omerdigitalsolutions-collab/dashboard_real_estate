@@ -7,7 +7,7 @@ import { validateUserAuth } from '../config/authGuard';
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 export const askAgencyAgent = onCall(
-    { secrets: [geminiApiKey], region: 'europe-west1' },
+    { secrets: [geminiApiKey], region: 'europe-west1', cors: true },
     async (request) => {
         const { message } = request.data;
         if (!message || typeof message !== 'string') {

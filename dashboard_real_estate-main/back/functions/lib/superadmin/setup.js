@@ -41,7 +41,7 @@ const firestore_1 = require("firebase-admin/firestore");
  * Temporary function to grant superAdmin custom claims to authorized users.
  * Checks if the user's UID exists in the 'superAdmins' Firestore collection.
  */
-exports.setupSuperAdmin = functions.https.onCall(async (request) => {
+exports.setupSuperAdmin = functions.https.onCall({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'The function must be called while authenticated.');
     }

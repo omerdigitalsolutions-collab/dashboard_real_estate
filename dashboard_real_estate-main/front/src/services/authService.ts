@@ -66,6 +66,21 @@ export const checkUserExists = async (uid: string): Promise<boolean> => {
 };
 
 /**
+ * Check if a phone number is available for registration via Cloud Function.
+ * @param phone - E.164 formatted phone number.
+ */
+export const checkPhoneAvailableService = async (phone: string): Promise<boolean> => {
+    try {
+        const checkFn = httpsCallable<{ phone: string }, { available: boolean }>(functions, 'agencies-checkPhoneAvailable');
+        const result = await checkFn({ phone });
+        return result.data.available;
+    } catch (error) {
+        console.error("Error checking phone availability:", error);
+        throw error;
+    }
+};
+
+/**
  * Complete the onboarding process by calling the secure Cloud Function.
  * The function creates the agency and user documents server-side using Admin SDK.
  */
