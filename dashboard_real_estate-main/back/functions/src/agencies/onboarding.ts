@@ -8,17 +8,28 @@ const db = getFirestore();
  * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
  */
 export const checkPhoneAvailable = onCall({ cors: true }, async (request) => {
-    let { phone } = request.data as { phone?: string };
-    if (!phone?.trim()) {
-        throw new HttpsError('invalid-argument', 'phone is required.');
+    try {
+        let { phone } = request.data as { phone?: string };
+        if (!phone?.trim()) {
+            throw new HttpsError('invalid-argument', 'phone is required.');
+        }
+
+        // Assume phone arrives in E.164 format from the client e.g. +9725...
+        // The normalized phone for the DB is exactly the E.164 string to be strict.
+        const phoneRef = db.collection('used_phones').doc(phone);
+        const snap = await phoneRef.get();
+
+        return { available: !snap.exists };
+    } catch (error: any) {
+        console.error('[checkPhoneAvailable] Error:', error);
+
+        // If it's already an HttpsError, rethrow it
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+
+        throw new HttpsError('internal', 'שגיאה בבדיקת זמינות מספר הטלפון. אנא נסה שוב.');
     }
-
-    // Assume phone arrives in E.164 format from the client e.g. +9725...
-    // The normalized phone for the DB is exactly the E.164 string to be strict.
-    const phoneRef = db.collection('used_phones').doc(phone);
-    const snap = await phoneRef.get();
-
-    return { available: !snap.exists };
 });
 
 /**

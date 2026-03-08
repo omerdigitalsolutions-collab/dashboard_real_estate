@@ -9,15 +9,25 @@ const db = (0, firestore_1.getFirestore)();
  * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
  */
 exports.checkPhoneAvailable = (0, https_1.onCall)({ cors: true }, async (request) => {
-    let { phone } = request.data;
-    if (!(phone === null || phone === void 0 ? void 0 : phone.trim())) {
-        throw new https_1.HttpsError('invalid-argument', 'phone is required.');
+    try {
+        let { phone } = request.data;
+        if (!(phone === null || phone === void 0 ? void 0 : phone.trim())) {
+            throw new https_1.HttpsError('invalid-argument', 'phone is required.');
+        }
+        // Assume phone arrives in E.164 format from the client e.g. +9725...
+        // The normalized phone for the DB is exactly the E.164 string to be strict.
+        const phoneRef = db.collection('used_phones').doc(phone);
+        const snap = await phoneRef.get();
+        return { available: !snap.exists };
     }
-    // Assume phone arrives in E.164 format from the client e.g. +9725...
-    // The normalized phone for the DB is exactly the E.164 string to be strict.
-    const phoneRef = db.collection('used_phones').doc(phone);
-    const snap = await phoneRef.get();
-    return { available: !snap.exists };
+    catch (error) {
+        console.error('[checkPhoneAvailable] Error:', error);
+        // If it's already an HttpsError, rethrow it
+        if (error instanceof https_1.HttpsError) {
+            throw error;
+        }
+        throw new https_1.HttpsError('internal', 'שגיאה בבדיקת זמינות מספר הטלפון. אנא נסה שוב.');
+    }
 });
 /**
  * createAgencyAccount — Called when a new admin completes onboarding.
