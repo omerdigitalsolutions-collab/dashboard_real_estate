@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
+import UpgradeModal from '../ui/UpgradeModal';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable, getFunctions } from 'firebase/functions';
@@ -47,6 +48,33 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [isExtracting, setIsExtracting] = useState(false);
 
     const [loading, setLoading] = useState(false);
+
+    // Feature gating
+    const [userPlan, setUserPlan] = useState<string>('starter');
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+    const [attemptedFeature, setAttemptedFeature] = useState('');
+
+    useEffect(() => {
+        // Fetch the user's plan to determine feature access
+        const fetchPlan = async () => {
+            const user = userData;
+            if (user?.agencyId) {
+                try {
+                    const { getDoc, doc: fsDoc } = await import('firebase/firestore');
+                    const { db } = await import('../../config/firebase');
+                    const snap = await getDoc(fsDoc(db, 'agencies', user.agencyId));
+                    if (snap.exists()) {
+                        setUserPlan(snap.data()?.planId || 'starter');
+                    }
+                } catch (err) {
+                    console.error('Error fetching plan:', err);
+                }
+            }
+        };
+        if (isOpen) {
+            fetchPlan();
+        }
+    }, [userData, isOpen]);
 
     const showToast = (message: string, isOk: boolean = true) => {
         if (isOk) toast.success(message);
@@ -136,6 +164,12 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     };
 
     const handleMagicImport = async () => {
+        if (userPlan === 'starter') {
+            setAttemptedFeature('יבוא חכם מלינק (AI)');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (!importUrl || !importUrl.startsWith('http')) {
             showToast('יש להזין לינק תקין (URL)', false);
             return;
@@ -173,6 +207,12 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     };
 
     const handleAIExtract = async () => {
+        if (userPlan === 'starter') {
+            setAttemptedFeature('חילוץ אוטומטי מטקסט (AI)');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (!rawText.trim()) {
             showToast('יש להזין טקסט לחילוץ', false);
             return;
@@ -551,6 +591,12 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                     </form>
                 </div>
             </div>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName={attemptedFeature}
+            />
         </div>
     );
 }

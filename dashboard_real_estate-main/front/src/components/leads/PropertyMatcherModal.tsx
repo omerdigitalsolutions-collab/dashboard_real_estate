@@ -5,6 +5,9 @@ import { createCatalog, getCatalogsByLeadId, updateCatalog } from '../../service
 import { matchPropertiesForLead, updateLead } from '../../services/leadService';
 import { Lead, Property } from '../../types';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../config/firebase';
+import UpgradeModal from '../ui/UpgradeModal';
 
 interface PropertyMatcherModalProps {
     lead: Lead;
@@ -115,8 +118,32 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function PropertyMatcherModal({ lead, allProperties, onClose, onSuccess }: PropertyMatcherModalProps) {
+    const { userData } = useAuth();
     const matchedProperties = matchPropertiesForLead(lead.requirements, allProperties);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
+
+    // Feature gating
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchPlan = async () => {
+            if (userData?.agencyId) {
+                try {
+                    const { getDoc, doc: fsDoc } = await import('firebase/firestore');
+                    const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
+                    if (snap.exists()) {
+                        const plan = snap.data()?.planId || 'starter';
+                        if (plan === 'starter') {
+                            setIsUpgradeModalOpen(true);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error fetching plan:', err);
+                }
+            }
+        };
+        fetchPlan();
+    }, [userData]);
 
     // Liked properties
     const [likedPropertyIds, setLikedPropertyIds] = useState<Set<string>>(new Set());
@@ -636,6 +663,15 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                     )}
                 </div>
             </div>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => {
+                    setIsUpgradeModalOpen(false);
+                    onClose(); // Close the parent matcher modal too since they don't have access
+                }}
+                featureName="התאמה בין ליד לדירה"
+            />
         </div>
     );
 }

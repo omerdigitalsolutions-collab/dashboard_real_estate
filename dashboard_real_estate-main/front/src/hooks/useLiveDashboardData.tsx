@@ -63,6 +63,20 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             setLoading(false);
         }, 2000);
 
+        let currentAgencyProperties: Property[] = [];
+        let currentCityProperties: Property[] = [];
+
+        const updatePropertiesState = () => {
+            const merged = [...currentAgencyProperties, ...currentCityProperties];
+            const seen = new Set<string>();
+            const deduped = merged.filter((p) => {
+                if (seen.has(p.id)) return false;
+                seen.add(p.id);
+                return true;
+            });
+            setProperties(deduped);
+        };
+
         // 1. Properties Query
         const qProperties = query(
             collection(db, 'properties'),
@@ -72,7 +86,8 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let unsubProperties = () => { };
         try {
             unsubProperties = onSnapshot(qProperties, (snap) => {
-                setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property)));
+                currentAgencyProperties = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property));
+                updatePropertiesState();
                 loadedFlags.properties = true; checkLoaded();
             }, (err) => {
                 console.error('[useLiveDashboardData] Properties Error:', err);
@@ -211,6 +226,9 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         // 6. Agency Settings Query
         const agencyRef = doc(db, 'agencies', agencyId);
         let unsubAgency = () => { };
+        let unsubCityProperties = () => { };
+        let activeCity = '';
+
         try {
             unsubAgency = onSnapshot(agencyRef, (snap) => {
                 if (snap.exists()) {
@@ -221,7 +239,6 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     let logo = settings.logoUrl || data?.logoUrl;
 
                     if (logo) {
-                        // console.log('[useLiveDashboardData] Agency Logo found:', logo);
                         settings.logoUrl = logo;
                         setAgencyLogo(logo);
                     }
@@ -229,11 +246,28 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     setAgencySettings(settings);
 
                     const rawName = data?.agencyName || data?.name || null;
-                    // Cleanse if it's the auto-generated UID name from healing
                     if (rawName && rawName.includes(agencyId) && userData?.name) {
                         setAgencyName("סוכנות " + userData.name);
                     } else {
                         setAgencyName(rawName);
+                    }
+
+                    // Dynamically subscribe to global city's properties if set
+                    const newCity = data?.mainServiceArea;
+                    if (newCity && newCity !== activeCity) {
+                        activeCity = newCity;
+                        unsubCityProperties();
+
+                        const qCityProps = collection(db, 'cities', newCity, 'properties');
+                        unsubCityProperties = onSnapshot(qCityProps, (citySnap) => {
+                            currentCityProperties = citySnap.docs.map(doc => ({
+                                id: doc.id,
+                                ...doc.data(),
+                                isGlobalCityProperty: true,
+                                readonly: true
+                            } as Property));
+                            updatePropertiesState();
+                        }, (err) => console.error("[useLiveDashboardData] City properties error:", err));
                     }
                 }
                 loadedFlags.agency = true; checkLoaded();
@@ -258,6 +292,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubAlertsPersonal();
             unsubAlertsBroadcast();
             unsubAgency();
+            unsubCityProperties();
         };
     }, [userData?.agencyId, userData?.uid]);
 

@@ -4,6 +4,7 @@ exports.extractAiData = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const generative_ai_1 = require("@google/generative-ai");
+const featureGuard_1 = require("../config/featureGuard");
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 exports.extractAiData = (0, https_1.onCall)({
     secrets: [geminiApiKey],
@@ -11,6 +12,8 @@ exports.extractAiData = (0, https_1.onCall)({
     timeoutSeconds: 300,
     memory: '1GiB',
 }, async (request) => {
+    // Enforce feature access
+    await (0, featureGuard_1.requireFeatureAccess)(request, 'AI_IMPORT_TEXT');
     const { payload, mode = 'single', entityType } = request.data;
     if (!payload || !entityType) {
         throw new https_1.HttpsError('invalid-argument', 'Missing payload or entityType.');

@@ -4,6 +4,8 @@ import { Lead } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
 import { updateUserWhatsAppTemplates } from '../../services/userService';
+import UpgradeModal from '../ui/UpgradeModal';
+import { db } from '../../config/firebase';
 
 interface BulkWhatsAppModalProps {
     isOpen: boolean;
@@ -24,17 +26,42 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
     const [newTemplateName, setNewTemplateName] = useState('');
     const [showTemplateForm, setShowTemplateForm] = useState(false);
 
+    // Feature gating
+    const [userPlan, setUserPlan] = useState<string>('starter');
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
     useEffect(() => {
         if (!isOpen) {
             setMessage('');
             setShowTemplateForm(false);
             setNewTemplateName('');
+        } else {
+            // Fetch plan when modal opens
+            const fetchPlan = async () => {
+                if (userData?.agencyId) {
+                    try {
+                        const { getDoc, doc: fsDoc } = await import('firebase/firestore');
+                        const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
+                        if (snap.exists()) {
+                            setUserPlan(snap.data()?.planId || 'starter');
+                        }
+                    } catch (err) {
+                        console.error('Error fetching plan:', err);
+                    }
+                }
+            };
+            fetchPlan();
         }
-    }, [isOpen]);
+    }, [isOpen, userData]);
 
     if (!isOpen) return null;
 
     const handleSend = async () => {
+        if (userPlan === 'starter') {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (!message.trim()) return;
         setSending(true);
 
@@ -240,6 +267,12 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
                 </div>
 
             </div>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName="הודעות תפוצה בווטסאפ"
+            />
         </div>
     );
 }

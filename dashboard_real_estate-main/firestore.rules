@@ -360,6 +360,11 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    match /cities/{cityId}/properties/{propertyId} {
+      allow read: if isAuthed();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
     // Anti-abuse trial phone registry — Cloud Functions (Admin SDK) only
     match /used_phones/{phone} {
       allow read, write: if false;

@@ -418,13 +418,20 @@ export default function Properties() {
                                                 <Handshake size={13} />
                                                 צור עסקה
                                             </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
-                                                className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors"
-                                                title="ערוך נכס"
-                                            >
-                                                <Pencil size={14} />
-                                            </button>
+                                            {prop.isGlobalCityProperty && (
+                                                <div className="p-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[10px] font-bold" title="מאגר כללי">
+                                                    מאגר
+                                                </div>
+                                            )}
+                                            {!prop.readonly && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
+                                                    className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors"
+                                                    title="ערוך נכס"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                            )}
                                             {prop.listingType === 'external' && prop.externalAgentPhone && (
                                                 <a
                                                     href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
@@ -484,13 +491,15 @@ export default function Properties() {
                                                 onClick={() => setSelectedProperty(prop)}
                                                 className={`hover:bg-slate-50/80 transition-colors group cursor-pointer ${selectedPropertyIds.has(prop.id) ? 'bg-blue-50/60' : ''}`}
                                             >
-                                                <td className="px-4 py-4 text-center" onClick={e => toggleSelect(prop.id, e)}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedPropertyIds.has(prop.id)}
-                                                        onChange={() => { }}
-                                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    />
+                                                <td className="px-4 py-4 text-center" onClick={e => !prop.readonly && toggleSelect(prop.id, e)}>
+                                                    {!prop.readonly && (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedPropertyIds.has(prop.id)}
+                                                            onChange={() => { }}
+                                                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3">
@@ -552,13 +561,20 @@ export default function Properties() {
                                                                 <MessageCircle size={14} /> שת״פ
                                                             </a>
                                                         )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
-                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
-                                                            title="ערוך נכס"
-                                                        >
-                                                            <Pencil size={16} />
-                                                        </button>
+                                                        {prop.isGlobalCityProperty && (
+                                                            <div className="bg-blue-50 text-blue-600 px-2 rounded-lg text-xs font-bold leading-[28px] shrink-0" title="מאגר כללי">
+                                                                מאגר ציבורי
+                                                            </div>
+                                                        )}
+                                                        {!prop.readonly && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
+                                                                title="ערוך נכס"
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
                                                             className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors shrink-0"
@@ -566,23 +582,25 @@ export default function Properties() {
                                                         >
                                                             <Handshake size={16} />
                                                         </button>
-                                                        <button
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation();
-                                                                if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
-                                                                    try {
-                                                                        await deleteProperty(prop.id);
-                                                                    } catch (err) {
-                                                                        console.error('Failed to delete property', err);
-                                                                        alert('שגיאה במחיקת הנכס. נסה שוב.');
+                                                        {!prop.readonly && (
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
+                                                                        try {
+                                                                            await deleteProperty(prop.id);
+                                                                        } catch (err) {
+                                                                            console.error('Failed to delete property', err);
+                                                                            alert('שגיאה במחיקת הנכס. נסה שוב.');
+                                                                        }
                                                                     }
-                                                                }
-                                                            }}
-                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                            title="מחק נכס"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                                }}
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                                title="מחק נכס"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

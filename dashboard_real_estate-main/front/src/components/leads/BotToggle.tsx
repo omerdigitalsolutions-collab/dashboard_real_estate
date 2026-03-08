@@ -8,9 +8,10 @@
  */
 
 import { doc, updateDoc } from 'firebase/firestore';
-import { useState } from 'react';
-import { db } from '../../config/firebase';
+import { useState, useEffect } from 'react';
+import { db, auth } from '../../config/firebase';
 import { Bot, BotMessageSquare, Loader2 } from 'lucide-react';
+import UpgradeModal from '../ui/UpgradeModal';
 
 interface BotToggleProps {
     leadId: string;
@@ -20,8 +21,41 @@ interface BotToggleProps {
 export default function BotToggle({ leadId, isBotActive }: BotToggleProps) {
     const [loading, setLoading] = useState(false);
     const [localActive, setLocalActive] = useState(isBotActive);
+    const [userPlan, setUserPlan] = useState<string>('starter');
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+    useEffect(() => {
+        // Fetch the user's plan to determine feature access
+        const fetchPlan = async () => {
+            const user = auth.currentUser;
+            if (user) {
+                try {
+                    // Try to get custom claims first, or fetch from Firestore if needed
+                    // For now, let's fetch the agency doc directly for safety:
+                    const tokenResult = await user.getIdTokenResult();
+                    const agencyId = tokenResult.claims.agencyId as string;
+                    if (agencyId) {
+                        const { getDoc, doc: fsDoc } = await import('firebase/firestore');
+                        const snap = await getDoc(fsDoc(db, 'agencies', agencyId));
+                        if (snap.exists()) {
+                            setUserPlan(snap.data()?.planId || 'starter');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error fetching plan:', err);
+                }
+            }
+        };
+        fetchPlan();
+    }, []);
 
     const handleToggle = async () => {
+        // Enforce Feature Gating
+        if (userPlan === 'starter') {
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
         if (loading) return;
         setLoading(true);
         const next = !localActive;
@@ -74,6 +108,12 @@ export default function BotToggle({ leadId, isBotActive }: BotToggleProps) {
                     ? '● הבוט פעיל — מגיב אוטומטית להודעות'
                     : '○ הבוט מושתק — מגיב רק אתה'}
             </p>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName="בוט WhatsApp AI וסינון"
+            />
         </div>
     );
 }

@@ -1,6 +1,8 @@
-import { X, Calendar, DollarSign, User, MapPin, Building2, TrendingUp, Clock, FileText, CheckSquare } from 'lucide-react';
+import { useState } from 'react';
+import { X, Calendar, DollarSign, User, MapPin, Building2, TrendingUp, Clock, FileText, CheckSquare, Edit2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Deal, Lead, Property, CustomDealStage } from '../../types';
+import EditDealModal from './EditDealModal';
 
 interface DealProfileModalProps {
     deal: Deal;
@@ -13,6 +15,8 @@ interface DealProfileModalProps {
 }
 
 export default function DealProfileModal({ deal, buyer, seller, property, stages, isOpen, onClose }: DealProfileModalProps) {
+    const [isEditing, setIsEditing] = useState(false);
+
     if (!isOpen) return null;
 
     const currentStageInfo = stages.find(s => s.id === deal.stage) || { label: deal.stage, color: 'text-slate-700', bg: 'bg-slate-100' };
@@ -40,12 +44,21 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
                         <div className="w-full h-full bg-gradient-to-br from-blue-900 to-slate-900" />
                     )}
 
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 left-4 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all"
-                    >
-                        <X size={20} />
-                    </button>
+                    <div className="absolute top-4 left-4 flex gap-2">
+                        <button
+                            onClick={() => setIsEditing(true)}
+                            className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-sm"
+                            title="ערוך עסקה"
+                        >
+                            <Edit2 size={20} />
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
 
                     <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-900/90 to-transparent flex items-end justify-between">
                         <div>
@@ -238,6 +251,19 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
                     </div>
                 </div>
             </div>
+
+            {/* Edit Deal Modal Overlay */}
+            <EditDealModal
+                deal={deal}
+                isOpen={isEditing}
+                onClose={() => setIsEditing(false)}
+                onUpdated={() => {
+                    // Refetching happens automatically via Firebase listener,
+                    // but we close both modals here for better UX
+                    setIsEditing(false);
+                    onClose();
+                }}
+            />
         </div>
     );
 }

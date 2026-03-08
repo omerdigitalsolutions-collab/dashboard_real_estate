@@ -87,32 +87,151 @@ const ENTITY_LABELS: Record<ModalEntityType, string> = {
     combined: 'ליד + נכס (שורה אחת)',
 };
 
-// Hebrew → field key auto-detection
+// Hebrew → field key auto-detection (extended dictionary)
 const HEBREW_MAP: Record<string, string> = {
+    // Name / Lead
     'שם': 'name', 'שם מלא': 'name', 'שם הלקוח': 'name', 'לקוח': 'name',
+    'fullname': 'name', 'full name': 'name', 'client name': 'name', 'contact': 'name',
+    'שם_ליד': 'name', 'שם ליד': 'name', 'שם בעל הנכס': 'name', 'בעלים': 'name',
+    // Phone
     'טלפון': 'phone', 'נייד': 'phone', 'פלאפון': 'phone', 'נייד לקוח': 'phone',
+    'phone': 'phone', 'mobile': 'phone', 'cell': 'phone', 'tel': 'phone',
+    'טל': 'phone', 'טל\'': 'phone', 'מספר טלפון': 'phone',
+    // Email
     'אימייל': 'email', 'מייל': 'email', 'דואל': 'email', 'דוא"ל': 'email',
-    'עיר': 'city', 'יישוב': 'city', 'שכונה': 'city',
-    'כתובת': 'address', 'רחוב': 'address', 'כתובת הנכס': 'address',
+    'email': 'email', 'mail': 'email', 'e-mail': 'email',
+    // City
+    'עיר': 'city', 'יישוב': 'city', 'שכונה': 'city', 'מיקום': 'city',
+    'city': 'city', 'location': 'city', 'area': 'city', 'אזור': 'city',
+    'עיר מבוקשת': 'city', 'עיר הנכס': 'city',
+    // Address
+    'כתובת': 'address', 'רחוב': 'address', 'כתובת הנכס': 'address', 'כתובת מלאה': 'address',
+    'address': 'address', 'street': 'address', 'רח\'': 'address',
+    // Price
     'מחיר': 'price', 'סכום': 'price', 'מחיר מבוקש': 'price', 'מחיר שיווק': 'price',
+    'price': 'price', 'value': 'price', 'ערך': 'price', 'סכום מבוקש': 'price',
+    'מחיר אסקינג': 'price', 'עלות': 'price',
+    // Transaction type
     'סוג עסקה': 'type', 'סוג מכירה': 'type', 'עסקה': 'type',
+    'מכירה/השכרה': 'type', 'סוג העסקה': 'type',
+    'type': 'type', 'deal type': 'type', 'transaction': 'type',
+    // Property kind
     'סוג נכס': 'kind', 'סוג': 'kind', 'סוג הנכס': 'kind', 'קטגוריה': 'kind',
-    'חדרים': 'rooms', 'מספר חדרים': 'rooms',
-    'קומה': 'floor', 'מספר קומה': 'floor',
+    'kind': 'kind', 'property type': 'kind', 'נכס סוג': 'kind', 'בניין סוג': 'kind',
+    // Rooms
+    'חדרים': 'rooms', 'מספר חדרים': 'rooms', 'כמות חדרים': 'rooms',
+    'rooms': 'rooms', 'bedrooms': 'rooms', 'br': 'rooms',
+    // Floor
+    'קומה': 'floor', 'מספר קומה': 'floor', 'קומת הנכס': 'floor',
+    'floor': 'floor', 'storey': 'floor',
+    // Sqm
     'שטח': 'sqm', 'מ"ר': 'sqm', 'גודל': 'sqm', 'שטח מ"ר': 'sqm',
-    'בלעדיות': 'isExclusive', 'בלעדי': 'isExclusive',
+    'שטח בנוי': 'sqm', 'שטח נטו': 'sqm', 'מ"ר בנוי': 'sqm',
+    'sqm': 'sqm', 'size': 'sqm', 'area sqm': 'sqm', 'meters': 'sqm',
+    // Exclusivity
+    'בלעדיות': 'isExclusive', 'בלעדי': 'isExclusive', 'exclusive': 'isExclusive',
     'סיום בלעדיות': 'exclusivityEndDate', 'תאריך סיום בלעדיות': 'exclusivityEndDate',
-    'הערות': 'notes', 'הערה': 'notes', 'היסטוריה': 'notes', 'פירוט': 'notes', 'היסטוריית טיפול': 'notes', 'הערות טיפול': 'notes',
-    'תקציב': 'budget', 'תקציב מקסימלי': 'budget',
-    'תפקיד': 'role', 'הרשאה': 'role',
-    'תיאור': 'description', 'תיאור נכס': 'description',
+    'תוקף בלעדיות': 'exclusivityEndDate', 'תאריך תם בלעדיות': 'exclusivityEndDate',
+    // Notes
+    'הערות': 'notes', 'הערה': 'notes', 'היסטוריה': 'notes', 'פירוט': 'notes',
+    'היסטוריית טיפול': 'notes', 'הערות טיפול': 'notes', 'notes': 'notes', 'remarks': 'notes',
+    'תגובות': 'notes', 'פרטים נוספים': 'notes',
+    // Budget
+    'תקציב': 'budget', 'תקציב מקסימלי': 'budget', 'budget': 'budget', 'max budget': 'budget',
+    // Role
+    'תפקיד': 'role', 'הרשאה': 'role', 'role': 'role', 'permission': 'role',
+    // Description
+    'תיאור': 'description', 'תיאור נכס': 'description', 'תאור': 'description',
+    'description': 'description', 'details': 'description', 'אודות': 'description',
+    // Property name (for deals)
     'נכס': 'propertyName', 'שם הנכס': 'propertyName', 'שם נכס': 'propertyName',
+    'property name': 'propertyName', 'property': 'propertyName',
+    // Commission
     'עמלה': 'projectedCommission', 'עמלה צפויה': 'projectedCommission',
-    'שלב': 'stage', 'שלב בעסקה': 'stage',
-    'סבירות': 'probability', 'אחוז סבירות': 'probability',
-    'שם סוכן': 'agentName', 'סוכן': 'agentName',
+    'commission': 'projectedCommission', 'projected commission': 'projectedCommission',
+    // Stage
+    'שלב': 'stage', 'שלב בעסקה': 'stage', 'stage': 'stage', 'status': 'stage',
+    'סטטוס עסקה': 'stage',
+    // Probability
+    'סבירות': 'probability', 'אחוז סבירות': 'probability', 'probability': 'probability',
+    'chance': 'probability', 'אחוז': 'probability',
+    // Agent
+    'שם סוכן': 'agentName', 'סוכן': 'agentName', 'agent': 'agentName',
+    'agent name': 'agentName', 'אחראי': 'agentName', 'מטפל': 'agentName',
+    'שם הסוכן': 'agentName', 'איש קשר': 'agentName',
+    // Lead name/phone (for deal imports)
     'שם לקוח': 'leadName', 'טלפון לקוח': 'leadPhone',
+    'lead name': 'leadName', 'buyer name': 'leadName', 'client': 'leadName',
 };
+
+// ─── Smart column mapping utilities ─────────────────────────────────────────
+
+/** Levenshtein distance between two strings (used for fuzzy header matching). */
+function levenshtein(a: string, b: string): number {
+    const m = a.length, n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
+/** Normalise header for comparison: lowercase, strip spaces/underscores/dashes. */
+const normalise = (s: string) => s.toLowerCase().replace(/[\s_\-'"]/g, '');
+
+/**
+ * Attempts to match a raw Excel column header to a system field key.
+ * Priority: 1) Exact HEBREW_MAP hit  2) Fuzzy HEBREW_MAP hit  3) Fallback to __custom__
+ */
+function smartMatchHeader(header: string, validFieldKeys: string[]): string {
+    const clean = header.trim();
+    const lower = clean.toLowerCase();
+    const norm = normalise(clean);
+
+    // 1. Exact dictionary hit
+    const exact = HEBREW_MAP[clean] ?? HEBREW_MAP[lower];
+    if (exact && validFieldKeys.includes(exact)) return exact;
+
+    // 2. Fuzzy dictionary: find closest HEBREW_MAP key within edit distance 2
+    let bestKey: string | null = null;
+    let bestScore = Infinity;
+    for (const dictKey of Object.keys(HEBREW_MAP)) {
+        const dist = levenshtein(norm, normalise(dictKey));
+        const maxLen = Math.max(norm.length, normalise(dictKey).length);
+        // Similarity threshold: ≥80% similarity
+        if (dist < bestScore && dist / maxLen < 0.25) {
+            bestScore = dist;
+            bestKey = HEBREW_MAP[dictKey];
+        }
+    }
+    if (bestKey && validFieldKeys.includes(bestKey)) return bestKey;
+
+    // 3. Try matching the header directly against field key names or labels
+    const directMatch = validFieldKeys.find(k => normalise(k) === norm);
+    if (directMatch) return directMatch;
+
+    return `__custom__${clean}`;
+}
+
+/**
+ * Improved auto-mapping using the extended HEBREW_MAP + fuzzy matching.
+ * Replaces the old buildAutoMapping (simple dictionary lookup only).
+ */
+function buildSmartAutoMapping(headers: string[], type: EntityType): Record<string, string> {
+    const opts = FIELD_OPTIONS[type];
+    const validFieldKeys = opts.map(o => o.key);
+    const newMapping: Record<string, string> = {};
+    headers.forEach(h => {
+        newMapping[h] = smartMatchHeader(h, validFieldKeys);
+    });
+    return newMapping;
+}
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
@@ -195,7 +314,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const [summary, setSummary] = useState({ success: 0, failed: 0, leads: 0, properties: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [isExtracting, setIsExtracting] = useState(false);
-    const [isAiMapping, setIsAiMapping] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -323,70 +441,19 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setRawHeaders(headers);
             setRawRows(rows);
 
-            // HYBRID LOGIC: If <= 1500 data rows, attempt AI extraction for any entity type.
-            if (rows.length > 0 && rows.length <= 1500) {
-                setIsExtracting(true); // Re-using isExtracting state for loading UI
-                try {
-                    const csvLines = [headers.join(',')];
-                    rows.forEach((r: any) => {
-                        const line = headers.map((h: string) => {
-                            const val = r[h] ?? '';
-                            return typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val;
-                        }).join(',');
-                        csvLines.push(line);
-                    });
-                    const payloadCsv = csvLines.join('\n');
-
-                    const fns = getFunctions(undefined, 'europe-west1');
-                    const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
-
-                    const result = await extractAiData({
-                        payload: payloadCsv,
-                        mode: 'bulk',
-                        entityType: entityType === 'property' ? 'properties' : (entityType === 'lead' ? 'leads' : entityType)
-                    });
-
-                    if (result.data.success && Array.isArray(result.data.data)) {
-                        const extractedRows = result.data.data;
-                        const validRows: TransformedRow[] = extractedRows.map(r => ({ ...r, _status: 'valid' } as TransformedRow));
-
-                        if (entityType === 'mixed') {
-                            // Split based on what AI detected
-                            const leads = validRows.filter(r => (r as any).entityType === 'lead');
-                            const properties = validRows.filter(r => (r as any).entityType === 'property');
-                            const combined = validRows.filter(r => (r as any).entityType === 'combined');
-
-                            setValidLeadRows([...leads, ...combined]);
-                            setValidPropertyRows([...properties, ...combined]);
-                            setValidation({ valid: validRows, invalid: [] });
-                        } else {
-                            setValidation({ valid: validRows, invalid: [] });
-                        }
-
-                        setStep(3);
-                        setIsExtracting(false);
-                        return; // Early return to completely bypass standard flow!
-                    }
-                } catch (aiErr: any) {
-                    console.error('AI Hybrid mapping failed, falling back to traditional routing:', aiErr);
-                }
-                setIsExtracting(false);
-            }
-
-            // TRADITIONAL FALLBACK LOGIC
+            // Code-based smart mapping (no AI calls needed for structured files)
             if (entityType === 'mixed') {
                 const { nl, np } = buildMixedMapping(headers);
                 setLeadMapping(nl);
                 setPropertyMapping(np);
             } else {
-                setMapping(buildAutoMapping(headers, entityType as EntityType));
+                setMapping(buildSmartAutoMapping(headers, entityType as EntityType));
             }
 
             setDiscriminatorCol('');
             setStep(2);
         } catch (err: any) {
             setErrorMsg(err.message);
-            setIsExtracting(false);
         }
     };
 
@@ -450,40 +517,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setAgentMapping(na);
             return;
         }
-        setMapping(buildAutoMapping(rawHeaders, entityType as EntityType));
-    };
-
-    const handleAiMapping = async () => {
-        if (rawHeaders.length === 0) return;
-        setErrorMsg('');
-        setIsAiMapping(true);
-        try {
-            const fns = getFunctions(undefined, 'europe-west1');
-            const getMappingFn = httpsCallable(fns, 'superadmin-superAdminGetImportMapping');
-
-            // Note: Even though it's in the superadmin namespace, we might need a generic one 
-            // but for now we'll use this since it's already implemented. 
-            // In a real prod app we might move it to a more generic location.
-            const result = await getMappingFn({
-                headers: rawHeaders,
-                sampleData: rawRows.slice(0, 1)
-            });
-
-            const aiMapping = (result.data as any).mapping;
-            if (entityType === 'mixed') {
-                // For mixed, we might need a more complex AI prompt but let's try applying it to all
-                setLeadMapping(prev => ({ ...prev, ...aiMapping }));
-                setPropertyMapping(prev => ({ ...prev, ...aiMapping }));
-                setAgentMapping(prev => ({ ...prev, ...aiMapping }));
-            } else {
-                setMapping(prev => ({ ...prev, ...aiMapping }));
-            }
-        } catch (err: any) {
-            console.error('AI Mapping failed:', err);
-            setErrorMsg('מיפוי AI נכשל. נסה מיפוי ידני.');
-        } finally {
-            setIsAiMapping(false);
-        }
+        setMapping(buildSmartAutoMapping(rawHeaders, entityType as EntityType));
     };
 
     const handleValidate = () => {
@@ -842,17 +876,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     <p className="text-xs text-slate-400 mt-0.5">{rawRows.length} שורות זוהו בקובץ</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={handleAiMapping}
-                                        disabled={isAiMapping}
-                                        className="flex items-center gap-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
-                                    >
-                                        {isAiMapping ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                                        מיפוי AI
-                                    </button>
                                     <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">
                                         <TableIcon size={15} />
-                                        זיהוי רגיל
+                                        זיהוי שדות אוטומטי
                                     </button>
                                 </div>
                             </div>
@@ -875,17 +901,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                                     <p className="text-xs text-slate-400 mt-0.5">{rawRows.length} שורות זוהו</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={handleAiMapping}
-                                        disabled={isAiMapping}
-                                        className="flex items-center gap-2 text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-2 rounded-xl transition-colors disabled:opacity-50"
-                                    >
-                                        {isAiMapping ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                                        מיפוי AI
-                                    </button>
                                     <button onClick={handleAutoMap} className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl transition-colors">
                                         <TableIcon size={15} />
-                                        זיהוי רגיל
+                                        זיהוי שדות אוטומטי
                                     </button>
                                 </div>
                             </div>

@@ -1,10 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { UploadCloud, CheckCircle2, AlertTriangle, Loader2, TrendingUp, TrendingDown, SplitSquareHorizontal, X } from 'lucide-react';
+import UpgradeModal from '../ui/UpgradeModal';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../../config/firebase';
+import { functions, db } from '../../config/firebase';
 import { useExpenses } from '../../hooks/useExpenses';
+import { useAuth } from '../../context/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -33,10 +35,39 @@ export default function AiExpenseImporter({ onImported }: { onImported?: () => v
     const [status, setStatus] = useState<'idle' | 'parsing' | 'ai_processing' | 'review' | 'saving' | 'success' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
     const [aiResults, setAiResults] = useState<ParsedRow[]>([]);
+    const { userData } = useAuth();
+
+    // Feature gating
+    const [userPlan, setUserPlan] = useState<string>('starter');
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchPlan = async () => {
+            if (userData?.agencyId) {
+                try {
+                    const { getDoc, doc: fsDoc } = await import('firebase/firestore');
+                    const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
+                    if (snap.exists()) {
+                        setUserPlan(snap.data()?.planId || 'starter');
+                    }
+                } catch (err) {
+                    console.error('Error fetching plan:', err);
+                }
+            }
+        };
+        fetchPlan();
+    }, [userData]);
 
     // ── File Selection ────────────────────────────────────────────────────────
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (userPlan === 'starter') {
+            setIsUpgradeModalOpen(true);
+            // Reset input so they can click it again later
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
         const selected = e.target.files?.[0];
         if (!selected) return;
         setFile(selected);
@@ -404,6 +435,12 @@ export default function AiExpenseImporter({ onImported }: { onImported?: () => v
                     </p>
                 </div>
             )}
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName="יבוא הוצאות מקובץ (AI)"
+            />
         </div>
     );
 }

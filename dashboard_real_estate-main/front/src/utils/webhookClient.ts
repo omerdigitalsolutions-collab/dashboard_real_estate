@@ -16,6 +16,7 @@ const fns = getFunctions(undefined, 'europe-west1');
 interface SendPayload {
     phone: string;
     message: string;
+    isBroadcast?: boolean;
 }
 
 const cfSend = httpsCallable<SendPayload, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
@@ -24,9 +25,9 @@ const cfSend = httpsCallable<SendPayload, { success: boolean }>(fns, 'whatsapp-s
  * Send a single WhatsApp message to a lead.
  * Returns `true` on success, `false` on any error.
  */
-export async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
+export async function sendWhatsAppMessage(phone: string, message: string, isBroadcast = false): Promise<boolean> {
     try {
-        const result = await cfSend({ phone, message });
+        const result = await cfSend({ phone, message, isBroadcast });
         return result.data.success === true;
     } catch (err) {
         console.error('[WhatsApp] sendWhatsAppMessage failed:', err);
@@ -52,7 +53,7 @@ export async function sendWhatsAppBulk(
         if (!lead.phone) continue;
 
         const personalised = message.replace(/\{\{שם_לקוח\}\}/g, lead.name || '');
-        const ok = await sendWhatsAppMessage(lead.phone, personalised);
+        const ok = await sendWhatsAppMessage(lead.phone, personalised, true);
         if (ok) successCount++;
     }
 

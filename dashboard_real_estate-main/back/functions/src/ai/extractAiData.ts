@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { requireFeatureAccess } from '../config/featureGuard';
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
@@ -12,6 +13,9 @@ export const extractAiData = onCall(
         memory: '1GiB',
     },
     async (request) => {
+        // Enforce feature access
+        await requireFeatureAccess(request, 'AI_IMPORT_TEXT');
+
         const { payload, mode = 'single', entityType } = request.data as any;
 
         if (!payload || !entityType) {

@@ -165,6 +165,8 @@ export interface Property {
     listingType?: 'exclusive' | 'external' | 'private';
     agencyName?: string;
     yad2Link?: string;
+    isGlobalCityProperty?: boolean;
+    readonly?: boolean;
 }
 
 export interface PendingLead {

@@ -4,6 +4,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { requireFeatureAccess } from './config/featureGuard';
 
 const masterKey = defineSecret('ENCRYPTION_MASTER_KEY');
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
@@ -434,8 +435,13 @@ export const sendWhatsappMessage = onCall({
 }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Must be logged in.');
 
-  const { phone, message } = request.data as { phone: string; message: string };
+  const { phone, message, isBroadcast } = request.data as { phone: string; message: string; isBroadcast?: boolean };
   if (!phone || !message) throw new HttpsError('invalid-argument', 'phone and message are required.');
+
+  // Check feature guard if it's a broadcast
+  if (isBroadcast) {
+    await requireFeatureAccess(request, 'WHATSAPP_BROADCAST');
+  }
 
   const agencyId = await getAgencyId(request.auth.uid);
   const wa = await getAgencyWhatsApp(agencyId);

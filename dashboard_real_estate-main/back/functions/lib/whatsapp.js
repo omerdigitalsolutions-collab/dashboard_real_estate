@@ -43,6 +43,7 @@ const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
 const generative_ai_1 = require("@google/generative-ai");
+const featureGuard_1 = require("./config/featureGuard");
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 /**
@@ -438,9 +439,13 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     var _a;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
-    const { phone, message } = request.data;
+    const { phone, message, isBroadcast } = request.data;
     if (!phone || !message)
         throw new https_1.HttpsError('invalid-argument', 'phone and message are required.');
+    // Check feature guard if it's a broadcast
+    if (isBroadcast) {
+        await (0, featureGuard_1.requireFeatureAccess)(request, 'WHATSAPP_BROADCAST');
+    }
     const agencyId = await getAgencyId(request.auth.uid);
     const wa = await getAgencyWhatsApp(agencyId);
     if (!wa || ((_a = wa.status) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== 'CONNECTED') {
