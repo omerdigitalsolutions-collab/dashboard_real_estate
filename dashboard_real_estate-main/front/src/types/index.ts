@@ -17,6 +17,7 @@ export interface Agency {
     mainServiceArea?: string;
     specialization?: AgencySpecialization;
     subscriptionTier: 'free' | 'pro' | 'enterprise';
+    planId?: string;
     monthlyGoals: {
         commissions: number;
         deals: number;
@@ -26,6 +27,12 @@ export interface Agency {
         commissions: number;
         deals: number;
         leads: number;
+    };
+    billing?: {
+        planId?: string;
+        status?: string;
+        trialEndsAt?: any; // Firestore Timestamp
+        ownerPhone?: string;
     };
     settings: {
         logoUrl?: string;

@@ -51,10 +51,24 @@ export const createAgencyAccount = onCall(async (request) => {
         );
     }
 
-    // ── Phone Eligibility Check (Anti-Abuse) ────────────────────────────────────
-    const normalizedPhone = phone.trim().replace(/\D/g, '');
+    // ── Trial Eligibility Check (`activeTrials`) ────────────────────────────────
     let trialEligible = true;
 
+    // We check if this UID or Email already has an active or expired trial
+    const oldTrialsMap = await db.collection('activeTrials')
+        .where('uid', '==', uid)
+        .where('hasUsedTrial', '==', true)
+        .get();
+
+    if (!oldTrialsMap.empty) {
+        throw new HttpsError(
+            'permission-denied',
+            'You have already used your free trial on another agency account.'
+        );
+    }
+
+    // Secondary Anti-Abuse: Phone Number check
+    const normalizedPhone = phone.trim().replace(/\D/g, '');
     if (normalizedPhone) {
         const phoneRef = db.collection('used_phones').doc(normalizedPhone);
         const phoneSnap = await phoneRef.get();
@@ -67,13 +81,13 @@ export const createAgencyAccount = onCall(async (request) => {
     }
 
     // Trial ends 7 days from now (set only if eligible)
-    const trialEndsAt = trialEligible
-        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        : null;
+    const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const trialEndsAt = trialEligible ? trialEndsDate : null;
 
     // ── Atomic Batch Write ──────────────────────────────────────────────────────
     const agencyRef = db.collection('agencies').doc();
     const userRef = db.doc(`users/${uid}`);
+    const trialRef = db.collection('activeTrials').doc();
 
     const batch = db.batch();
 
@@ -101,6 +115,17 @@ export const createAgencyAccount = onCall(async (request) => {
         isActive: true,
         createdAt: FieldValue.serverTimestamp(),
     });
+
+    if (trialEligible) {
+        batch.set(trialRef, {
+            agencyId: agencyRef.id,
+            uid,
+            trialEndsAt: trialEndsDate,
+            hasUsedTrial: false,
+            status: 'active',
+            createdAt: FieldValue.serverTimestamp()
+        });
+    }
 
     await batch.commit();
 

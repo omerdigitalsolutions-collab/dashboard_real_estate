@@ -142,16 +142,24 @@ function StatusBadge({ status }: { status?: string }) {
 // ─── Tier badge ──────────────────────────────────────────────────────────────
 const TIER_STYLES: Record<string, string> = {
     free: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    starter: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
     pro: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    boutique: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
     enterprise: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
 };
-const TIER_LABELS: Record<string, string> = { free: 'חינמי', pro: 'Pro', enterprise: 'Enterprise' };
+const TIER_LABELS: Record<string, string> = {
+    free: 'Starter',
+    starter: 'Starter',
+    pro: 'Pro',
+    boutique: 'Pro',
+    enterprise: 'Enterprise'
+};
 
-function TierBadge({ tier }: { tier?: string }) {
-    const t = tier ?? 'free';
+function TierBadge({ plan }: { plan?: string }) {
+    const t = (plan ?? 'starter').toLowerCase();
     return (
-        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${TIER_STYLES[t] ?? TIER_STYLES.free}`}>
-            {TIER_LABELS[t] ?? t}
+        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${TIER_STYLES[t] ?? TIER_STYLES.starter}`}>
+            {TIER_LABELS[t] ?? plan}
         </span>
     );
 }
@@ -545,7 +553,7 @@ export default function SuperAdminDashboard() {
                                                 : '—'}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <TierBadge tier={ag.subscriptionTier} />
+                                            <TierBadge plan={ag.planId} />
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">

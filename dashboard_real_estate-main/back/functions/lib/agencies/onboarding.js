@@ -35,9 +35,18 @@ exports.createAgencyAccount = (0, https_1.onCall)(async (request) => {
     if (existingUser.exists) {
         throw new https_1.HttpsError('already-exists', 'User is already associated with an agency.');
     }
-    // ── Phone Eligibility Check (Anti-Abuse) ────────────────────────────────────
-    const normalizedPhone = phone.trim().replace(/\D/g, '');
+    // ── Trial Eligibility Check (`activeTrials`) ────────────────────────────────
     let trialEligible = true;
+    // We check if this UID or Email already has an active or expired trial
+    const oldTrialsMap = await db.collection('activeTrials')
+        .where('uid', '==', uid)
+        .where('hasUsedTrial', '==', true)
+        .get();
+    if (!oldTrialsMap.empty) {
+        throw new https_1.HttpsError('permission-denied', 'You have already used your free trial on another agency account.');
+    }
+    // Secondary Anti-Abuse: Phone Number check
+    const normalizedPhone = phone.trim().replace(/\D/g, '');
     if (normalizedPhone) {
         const phoneRef = db.collection('used_phones').doc(normalizedPhone);
         const phoneSnap = await phoneRef.get();
@@ -50,12 +59,12 @@ exports.createAgencyAccount = (0, https_1.onCall)(async (request) => {
         }
     }
     // Trial ends 7 days from now (set only if eligible)
-    const trialEndsAt = trialEligible
-        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        : null;
+    const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const trialEndsAt = trialEligible ? trialEndsDate : null;
     // ── Atomic Batch Write ──────────────────────────────────────────────────────
     const agencyRef = db.collection('agencies').doc();
     const userRef = db.doc(`users/${uid}`);
+    const trialRef = db.collection('activeTrials').doc();
     const batch = db.batch();
     batch.set(agencyRef, {
         name: agencyName.trim(),
@@ -80,6 +89,16 @@ exports.createAgencyAccount = (0, https_1.onCall)(async (request) => {
         isActive: true,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
+    if (trialEligible) {
+        batch.set(trialRef, {
+            agencyId: agencyRef.id,
+            uid,
+            trialEndsAt: trialEndsDate,
+            hasUsedTrial: false,
+            status: 'active',
+            createdAt: firestore_1.FieldValue.serverTimestamp()
+        });
+    }
     await batch.commit();
     // Set custom claims mapping the user to this new agency as an admin.
     await (0, auth_1.getAuth)().setCustomUserClaims(uid, { agencyId: agencyRef.id, role: 'admin' });

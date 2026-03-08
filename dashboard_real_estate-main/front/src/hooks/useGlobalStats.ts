@@ -12,7 +12,7 @@ export interface AgencyRow {
     id: string;
     name: string;
     adminEmail?: string;
-    subscriptionTier?: 'free' | 'pro' | 'enterprise';
+    planId?: string;
     status?: 'active' | 'suspended';
     isWhatsappConnected?: boolean;
     createdAt?: Timestamp;
@@ -119,13 +119,16 @@ export function useGlobalStats(): GlobalStats {
                     .slice(0, 10);
 
                 // Subscription breakdown
-                const tierCounts: Record<string, number> = { free: 0, pro: 0, enterprise: 0 };
+                const tierCounts: Record<string, number> = { starter: 0, pro: 0, enterprise: 0 };
                 for (const ag of allAgencies) {
-                    const tier = ag.subscriptionTier ?? 'free';
-                    tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
+                    const plan = ag.planId?.toLowerCase() || 'starter';
+                    let bucket = 'starter';
+                    if (plan === 'pro' || plan === 'boutique') bucket = 'pro';
+                    else if (plan === 'enterprise') bucket = 'enterprise';
+                    tierCounts[bucket] = (tierCounts[bucket] ?? 0) + 1;
                 }
                 const subscriptionBreakdown: SubscriptionBreakdown[] = [
-                    { name: 'חינמי', value: tierCounts.free, color: '#06b6d4' },
+                    { name: 'Starter', value: tierCounts.starter, color: '#06b6d4' },
                     { name: 'Pro', value: tierCounts.pro, color: '#a855f7' },
                     { name: 'Enterprise', value: tierCounts.enterprise, color: '#f97316' },
                 ];

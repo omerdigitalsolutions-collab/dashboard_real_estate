@@ -61,6 +61,9 @@ import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage } from './superadmin';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
+// ── Scheduled Jobs ─────────────────────────────────────────────────────────────
+import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
+
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
 //   agencies-createAgencyAccount
@@ -89,6 +92,8 @@ export const superadmin = {
     superAdminGetImportMappingV2,
     superAdminGetAgencyUsage
 };
+
+export const scheduled = { checkTrialExpiry };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

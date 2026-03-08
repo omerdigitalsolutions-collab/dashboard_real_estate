@@ -19,6 +19,31 @@ import {
     UserCircle2
 } from 'lucide-react';
 
+// ─── Tier badge ──────────────────────────────────────────────────────────────
+const TIER_STYLES: Record<string, string> = {
+    free: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    starter: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    pro: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    boutique: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    enterprise: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
+};
+const TIER_LABELS: Record<string, string> = {
+    free: 'Starter',
+    starter: 'Starter',
+    pro: 'Pro',
+    boutique: 'Pro',
+    enterprise: 'Enterprise'
+};
+
+function TierBadge({ plan }: { plan?: string }) {
+    const t = (plan ?? 'starter').toLowerCase();
+    return (
+        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${TIER_STYLES[t] ?? TIER_STYLES.starter}`}>
+            {TIER_LABELS[t] ?? plan}
+        </span>
+    );
+}
+
 export default function AgencyDrillDown() {
     const { agencyId } = useParams();
     const navigate = useNavigate();
@@ -176,12 +201,10 @@ export default function AgencyDrillDown() {
                         <span className="text-cyan-400 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> סוכנות רשומה</span>
                         <span className="text-slate-600">|</span>
                         <span className="text-slate-400">הוקם ב: {formatDate(agency.createdAt)}</span>
-                        {agency.subscriptionTier && (
+                        {agency.planId && (
                             <>
                                 <span className="text-slate-600">|</span>
-                                <span className="uppercase text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 text-xs">
-                                    {agency.subscriptionTier}
-                                </span>
+                                <TierBadge plan={agency.planId} />
                             </>
                         )}
                     </div>

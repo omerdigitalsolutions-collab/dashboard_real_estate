@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -51,6 +51,8 @@ const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
 const superadmin_1 = require("./superadmin");
 const globalImport_1 = require("./admin/globalImport");
+// ── Scheduled Jobs ─────────────────────────────────────────────────────────────
+const checkTrialExpiry_1 = require("./scheduled/checkTrialExpiry");
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
 //   agencies-createAgencyAccount
@@ -79,6 +81,7 @@ exports.superadmin = {
     superAdminGetImportMappingV2: globalImport_1.superAdminGetImportMappingV2,
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage
 };
+exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");

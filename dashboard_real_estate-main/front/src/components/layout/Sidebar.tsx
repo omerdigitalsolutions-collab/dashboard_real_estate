@@ -7,8 +7,10 @@ import {
   Settings,
   X,
   Sparkles,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 
 interface SidebarProps {
   open: boolean;
@@ -26,11 +28,23 @@ const navItems = [
 
 export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
   const { userData } = useAuth();
+  const { agencySettings, rawAgency } = useLiveDashboardData();
 
   // Filter navigation based on user role
   const filteredNavItems = navItems.filter(item =>
     !item.roles || (userData?.role && item.roles.includes(userData.role))
   );
+
+  // Trial calculations
+  const billing = agencySettings?.billing;
+  const isTrial = billing?.status === 'trialing';
+  let trialDaysLeft = 0;
+
+  if (isTrial && billing?.trialEndsAt) {
+    const endsAt = billing.trialEndsAt.toDate ? billing.trialEndsAt.toDate() : new Date(billing.trialEndsAt);
+    const diffMs = endsAt.getTime() - Date.now();
+    trialDaysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }
 
   return (
     <>
@@ -60,6 +74,18 @@ export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {isTrial && trialDaysLeft > 0 && (
+            <div className="mb-4 px-3 py-2.5 mx-1 bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-lg flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2 text-blue-200">
+                <Clock size={16} className="text-blue-400" />
+                <span className="text-xs font-semibold">תקופת ניסיון</span>
+              </div>
+              <div className="text-xs font-bold text-white bg-blue-600/80 px-2 py-0.5 rounded-md">
+                {trialDaysLeft} ימים
+              </div>
+            </div>
+          )}
+
           <p className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest px-3 pb-2 pt-1">
             תפריט ראשי
           </p>

@@ -11,6 +11,7 @@ interface LiveDashboardData {
     alerts: Alert[];
     leads: Lead[];
     agencySettings: Agency['settings'] | null;
+    rawAgency: Agency | null;
     agencyName: string | null;
     agencyLogo: string | null;
     loading: boolean;
@@ -28,6 +29,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [agencySettings, setAgencySettings] = useState<Agency['settings'] | null>(null);
+    const [rawAgency, setRawAgency] = useState<Agency | null>(null);
     const [agencyName, setAgencyName] = useState<string | null>(null);
     const [agencyLogo, setAgencyLogo] = useState<string | null>(null);
 
@@ -244,6 +246,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     }
 
                     setAgencySettings(settings);
+                    setRawAgency({ id: doc.id, ...data } as Agency);
 
                     const rawName = data?.agencyName || data?.name || null;
                     if (rawName && rawName.includes(agencyId) && userData?.name) {

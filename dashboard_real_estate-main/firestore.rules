@@ -369,5 +369,9 @@ service cloud.firestore {
     match /used_phones/{phone} {
       allow read, write: if false;
     }
+    // Server-managed active trials collection
+    match /activeTrials/{document=**} {
+      allow read, write: if false;
+    }
   }
 }
