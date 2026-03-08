@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [userData, setUserData] = useState<AppUser | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isInitial, setIsInitial] = useState(true);
     const [requireOnboarding, setRequireOnboarding] = useState(false);
 
     const refreshUserData = async (uid?: string) => {
@@ -81,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          */
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             console.log('[AuthContext] onAuthStateChanged fired:', firebaseUser ? `User: ${firebaseUser.email} (UID: ${firebaseUser.uid})` : 'LOGGED OUT');
+
+            setLoading(true);
 
             try {
                 setCurrentUser(firebaseUser);
@@ -181,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } finally {
                 console.log('[AuthContext] Setting loading to FALSE');
                 setLoading(false);
+                setIsInitial(false);
             }
         });
 
@@ -193,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <AuthContext.Provider value={value}>
             {/* Block rendering until initial auth state is resolved.
           This prevents a flash of the login screen for persisted sessions. */}
-            {!loading && children}
+            {!isInitial && children}
         </AuthContext.Provider>
     );
 }
