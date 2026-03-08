@@ -198,24 +198,24 @@ export default function LandingPage() {
                     </div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                        {/* Feature 1: AI Import */}
+                        {/* Feature 1: AI WhatsApp */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <Zap size={28} />
+                                <Bot size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">יבוא נכסים חכם (AI)</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">אל תסננו. הבוט כבר עשה את זה.</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                הדבק טקסט חופשי, העלה צילום מסך או קובץ אקסל - ה-AI (Gemini) ינתח ויזין את כל נתוני הנכס אוטומטית למערכת בתוך שניות.
+                                סייען וירטואלי שיושב על הווטסאפ שלכם. ממיין לידים, מבין מה הם מחפשים ומכניס לפייפליין. עניתם בעצמכם? מנגנון ה-AI Firewall משתיק את הבוט אוטומטית. אפס פדיחות.
                             </p>
                         </div>
-                        {/* Feature 2: WhatsApp B2B */}
+                        {/* Feature 2: Matchmaking */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <MessageCircle size={28} />
+                                <Star size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">ניטור קבוצות WhatsApp</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">אל תחפשו קונים. חברו ביניהם.</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                המערכת סורקת אוטומטית קבוצות B2B של מתווכים, מזהה נכסים חדשים ומקימה אותם כטיוטות מוכנות לשיווק במשרד שלכם.
+                                קסם בקליק. מנוע ה-Matchmaking סורק אלפי נכסים ומתאים עבור כל לקוח בדיוק את הנכס שעונה לדרישות שלו. בלי לנחש, בלי אקסלים מיוזעים.
                             </p>
                         </div>
                         {/* Feature 3: Webot Catalog */}
@@ -223,39 +223,39 @@ export default function LandingPage() {
                             <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <Share2 size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">קטלוג "הוובוט" הדיגיטלי</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">אל תשלחו תמונות. שלחו חוויות.</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                יצירת מיני-סייט שיווקי אישי לכל ליד עם נכסים מותאמים. הלקוח מסמן ❤️ ואתם מקבלים התראה מיידית למערכת.
+                                הלקוחות שונאים לקבל 15 תמונות מטושטשות בווטסאפ. המערכת מייצרת מיני-סייט יוקרתי של הנכס לכל לקוח. עשו 'לייק'? אתם מקבלים התראה מיד ב-CRM.
                             </p>
                         </div>
-                        {/* Feature 4: Smart Dashboard */}
+                        {/* Feature 4: Smart Dashboard / P&L */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                 <LayoutDashboard size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">Dashboard מותאם אישית</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">מבט מגבוה על הכסף שלכם</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                לוח בקרה מבוסס ווידג'טים שניתן לסדר בגרירה. ניתוח "הכנסות ריאליות" (Actual Revenue) לקבלת תמונה עסקית מדויקת.
+                                דאשבורד מעוצב שמרכז עסקאות סגורות מול הוצאות משרד, רווחיות, ויעדי סוכנים שנותן לכם שליטה אבסולוטית על התזרים. דוח רווח והפסד (P&L) בלחיצת כפתור.
                             </p>
                         </div>
-                        {/* Feature 5: AI Copilot */}
+                        {/* Feature 5: Broadcast */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-blue-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <Bot size={28} />
+                                <MessageCircle size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">העוזר החכם AI Agent</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">תפוצת הודעות המונית בווטסאפ</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                צ'אט בוט שמכיר את כל הדאטה של המשרד שלכם. שאלו אותו "מי הלידים הכי חמים?" או "מצא לי דירות 4 חדרים מתחת ל-3 מיליון".
+                                שליחת הודעות תפוצה בווצאפ לעשרות לידים בלחיצת כפתור ע"י סינון מורכב ישירות מהמערכת - הגיע נכס חדש? כל מי שחיפש אותו יקבל הודעה שיווקית מיד.
                             </p>
                         </div>
-                        {/* Feature 6: WhatsApp Triage */}
+                        {/* Feature 6: AI Import / Data */}
                         <div className="bg-white rounded-3xl p-8 border border-slate-100 transition-all hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 group">
                             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <CheckCircle2 size={28} />
+                                <Zap size={28} />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">מיון הודעות אוטומטי</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-3">יבוא חכם ויצירת נכסים ב-AI</h3>
                             <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">
-                                המערכת מנתחת הודעות ממספרים לא מוכרים בוואטסאפ, מסכמת אותן ומציעה לכם להקים ליד חדש בלחיצת כפתור.
+                                חסכו שעות של הקלדה. ה-AI סורק טקסטים חופשיים, תמונות ואקסלים מלאים, ומקים נכסים אוטומטית. סריקת קבוצות B2B של מתווכים מייצרת נכסים מלאים מההודעות שלהם.
                             </p>
                         </div>
                     </div>
@@ -420,105 +420,172 @@ export default function LandingPage() {
                     </div>
 
                     <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-start">
-                        {/* Tier 1 */}
-                        <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full">
-                            <h3 className="text-2xl font-bold text-slate-900">סוכן עצמאי</h3>
-                            <div className="mt-4 flex items-baseline gap-2">
-                                <span className="text-5xl font-black text-blue-900">₪199</span>
-                                <span className="text-slate-500 font-medium whitespace-nowrap">/ לחודש</span>
+                        {/* Tier 1 - Starter */}
+                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-slate-800 shadow-sm hover:border-[#00e5ff]/30 transition-all flex flex-col h-full group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Starter</h3>
+                                    <p className="text-slate-400 text-sm mt-1 font-medium">לעשות סדר בבלגן</p>
+                                </div>
                             </div>
                             <ul className="mt-8 space-y-5 mb-8 flex-1">
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>CRM בסיסי</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>ניהול נכסים מלא</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>חיבור לווטסאפ אחד</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>מערכת Matchmaking</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>ניהול לידים ונכסים אישי</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>קטלוגים דיגיטליים</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">בוט WhatsApp AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">מסך P&L</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">יבוא נכסים ב-AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">סריקת B2B קבוצות</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">משתמשים ללא הגבלה</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">ריבוי מספרי ווטסאפ</span>
                                 </li>
                             </ul>
                             <button
                                 onClick={() => handleSubscribe('solo')}
-                                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors"
+                                className="w-full py-4 bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white font-bold text-lg text-center rounded-xl transition-all"
                             >
-                                הירשם עכשיו
+                                בחר Starter
                             </button>
                         </div>
 
-                        {/* Tier 2 (Recommended) */}
-                        <div className="bg-blue-900 rounded-[2rem] p-8 border border-blue-800 shadow-2xl shadow-blue-900/40 transform lg:-translate-y-4 flex flex-col h-full relative">
+                        {/* Tier 2 (Recommended) - Pro */}
+                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-[#00e5ff]/50 shadow-[0_0_30px_rgba(0,229,255,0.15)] transform lg:-translate-y-4 flex flex-col h-full relative group">
                             <div className="absolute top-0 inset-x-0 flex justify-center -translate-y-1/2">
-                                <div className="bg-emerald-500 text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
-                                    <Star size={14} className="fill-white" />
-                                    מומלץ
+                                <div className="bg-[#00e5ff] text-[#020b18] text-sm font-black px-5 py-1.5 rounded-full shadow-[0_0_15px_rgba(0,229,255,0.4)]">
+                                    הבחירה הפופולרית
                                 </div>
                             </div>
-                            <h3 className="text-2xl font-bold text-white mt-2">משרד בוטיק</h3>
-                            <div className="mt-4 flex items-baseline gap-2">
-                                <span className="text-5xl font-black text-white">₪499</span>
-                                <span className="text-blue-200 font-medium whitespace-nowrap">/ לחודש</span>
+                            <div className="flex justify-between items-start mb-4 mt-2">
+                                <div>
+                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Pro</h3>
+                                    <p className="text-[#00e5ff]/80 text-sm mt-1 font-medium">למשרדים שרוצים לגדול</p>
+                                </div>
                             </div>
                             <ul className="mt-8 space-y-5 mb-8 flex-1">
-                                <li className="flex items-start gap-3 text-blue-50 font-medium">
-                                    <CheckCircle2 className="text-emerald-400 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>עד 5 סוכנים</span>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>ניהול נכסים מלא</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-blue-50 font-medium">
-                                    <CheckCircle2 className="text-emerald-400 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>חתימות דיגיטליות ללא הגבלה</span>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>מערכת Matchmaking</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-blue-50 font-medium">
-                                    <CheckCircle2 className="text-emerald-400 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>יבוא אקסל</span>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>קטלוגים דיגיטליים</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-blue-50 font-medium">
-                                    <CheckCircle2 className="text-emerald-400 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>מחולל קטלוגים לנכסים</span>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span className="font-bold">בוט WhatsApp AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>מסך P&L</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>יבוא נכסים ב-AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">סריקת B2B קבוצות</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">משתמשים ללא הגבלה</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-3 strike-through">
+                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
+                                    <span className="line-through">ריבוי מספרי ווטסאפ</span>
                                 </li>
                             </ul>
                             <button
                                 onClick={() => handleSubscribe('boutique')}
-                                className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-lg text-center rounded-xl shadow-lg transition-colors"
+                                className="w-full py-4 bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black text-lg text-center rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all hover:-translate-y-1"
                             >
-                                הירשם עכשיו
+                                התחל 7 ימים חינם
                             </button>
                         </div>
 
-                        {/* Tier 3 */}
-                        <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full">
-                            <h3 className="text-2xl font-bold text-slate-900">רשת ברוקרים</h3>
-                            <div className="mt-4 flex items-baseline gap-2">
-                                <span className="text-4xl font-black text-blue-900">בהתאמה אישית</span>
+                        {/* Tier 3 - Enterprise */}
+                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-slate-800 shadow-sm hover:border-[#00e5ff]/30 transition-all flex flex-col h-full group">
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Enterprise</h3>
+                                    <p className="text-slate-400 text-sm mt-1 font-medium">לרשתות תיווך</p>
+                                </div>
                             </div>
                             <ul className="mt-8 space-y-5 mb-8 flex-1">
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>סוכנים ללא הגבלה</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>ניהול נכסים מלא</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>דאשבורד סופר-אדמין</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>מערכת Matchmaking</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>אינטגרציות API</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>קטלוגים דיגיטליים</span>
                                 </li>
-                                <li className="flex items-start gap-3 text-slate-700 font-medium">
-                                    <CheckCircle2 className="text-emerald-500 w-6 h-6 flex-shrink-0 mt-0.5" />
-                                    <span>מנהל תיק אישי</span>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>בוט WhatsApp AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>מסך P&L</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span>יבוא נכסים ב-AI</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span className="font-bold">סריקת B2B קבוצות</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span className="font-bold">משתמשים ללא הגבלה</span>
+                                </li>
+                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-3">
+                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
+                                    <span className="font-bold">ריבוי מספרי ווטסאפ</span>
                                 </li>
                             </ul>
                             <a
-                                href="https://wa.me/972500000000?text=%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%9C%20%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%AA%20hOMER%20%D7%A8%D7%A9%D7%AA%20%D7%91%D7%A8%D7%95%D7%A7%D7%A8%D7%99%D7%9D"
+                                href="https://wa.me/972500000000?text=%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%9C%20%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%AA%20hOMER%20%D7%90%D7%A0%D7%98%D7%A8%D7%A4%D7%A8%D7%99%D7%99%D7%96"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-full py-4 bg-slate-100 hover:bg-slate-200 text-blue-900 font-bold text-lg text-center rounded-xl transition-colors block"
+                                className="w-full py-4 bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white font-bold text-lg text-center rounded-xl transition-all block"
                             >
-                                צור קשר
+                                דברו איתנו
                             </a>
                         </div>
                     </div>
