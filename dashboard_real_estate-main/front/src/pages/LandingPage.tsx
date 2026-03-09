@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
@@ -18,13 +18,11 @@ import {
     Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import SubscriptionRequestModal from '../components/billing/SubscriptionRequestModal';
 
-// ─── Max payment terminal identifier ─────────────────────────────────────────
-// Replace this with your actual Max Terminal ID (from the merchant portal).
-const MAX_TERMINAL_ID = import.meta.env.VITE_MAX_TERMINAL_ID || 'YOUR_TERMINAL_ID';
+// ─── Payment handled manually via SubscriptionRequestModal ──────────
 
 export default function LandingPage() {
-    const navigate = useNavigate();
     const { userData } = useAuth();
 
     // Contact Form State
@@ -70,25 +68,20 @@ export default function LandingPage() {
         }
     };
 
-    /**
-     * Redirects the user to Max's Hosted Payment Page.
-     * URL params are passed through to the IPN webhook via Max's
-     * "Additional Data" / "Custom Fields" configuration in the merchant portal.
-     */
-    const handleSubscribe = (plan: 'solo' | 'boutique') => {
-        if (!userData) {
-            // Guest — send to register first
-            navigate('/register');
-            return;
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState('');
+
+    const scrollToPricing = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const pricingSect = document.getElementById('pricing');
+        if (pricingSect) {
+            pricingSect.scrollIntoView({ behavior: 'smooth' });
         }
-        const params = new URLSearchParams({
-            terminal: MAX_TERMINAL_ID,
-            plan,
-            uid: userData.uid ?? '',
-            email: userData.email ?? '',
-            name: userData.name ?? '',
-        });
-        window.location.href = `https://pay.max.co.il/payment?${params.toString()}`;
+    };
+
+    const handleSubscribe = (plan: 'solo' | 'boutique' | 'pro' | 'enterprise') => {
+        setSelectedPlan(plan);
+        setIsModalOpen(true);
     };
     return (
         <div className="min-h-screen bg-[#eff5f5] font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden text-slate-900" dir="rtl">
@@ -107,9 +100,9 @@ export default function LandingPage() {
                             <Link to="/login" className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors">
                                 התחברות
                             </Link>
-                            <Link to="/register" className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                            <a href="#pricing" onClick={scrollToPricing} className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 cursor-pointer">
                                 הירשם עכשיו
-                            </Link>
+                            </a>
                         </>
                     )}
                 </div>
@@ -135,10 +128,17 @@ export default function LandingPage() {
                     </p>
 
                     <div className="flex flex-col items-center justify-center gap-3">
-                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
-                            <ArrowLeft size={28} strokeWidth={2.5} />
-                        </Link>
+                        {userData ? (
+                            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                                כניסה למערכת
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </Link>
+                        ) : (
+                            <a href="#pricing" onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                                הירשם עכשיו (7 ימי ניסיון בחינם)
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </a>
+                        )}
                         {!userData && (
                             <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
                                 🎁 7 ימי ניסיון ללא עלות!
@@ -546,10 +546,10 @@ export default function LandingPage() {
                                 </li>
                             </ul>
                             <button
-                                onClick={() => handleSubscribe('boutique')}
+                                onClick={() => handleSubscribe('pro')}
                                 className="w-full py-4 bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black text-lg text-center rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all hover:-translate-y-1"
                             >
-                                התחל 7 ימים חינם
+                                התחל 7 ימים ניסיון
                             </button>
                         </div>
 
@@ -587,14 +587,12 @@ export default function LandingPage() {
                                     <span className="font-bold">מנהל תיק אישי ואינטגרציות API</span>
                                 </li>
                             </ul>
-                            <a
-                                href="https://wa.me/972507706024?text=%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%9C%20%D7%AA%D7%95%D7%9B%D7%A0%D7%99%D7%AA%20hOMER%20%D7%90%D7%A0%D7%98%D7%A8%D7%A4%D7%A8%D7%99%D7%99%D7%96"
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            <button
+                                onClick={() => handleSubscribe('enterprise')}
                                 className="w-full py-4 mt-auto bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white font-bold text-lg text-center rounded-xl transition-all block"
                             >
-                                דברו איתנו
-                            </a>
+                                קבל 7 ימים ניסיון דמו
+                            </button>
                         </div>
                     </div>
 
@@ -838,6 +836,13 @@ export default function LandingPage() {
                     דברו איתנו בוואטסאפ
                 </span>
             </a>
+            {/* Subscription Modal */}
+            <SubscriptionRequestModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                planName={selectedPlan}
+                userData={userData}
+            />
         </div>
     );
 }

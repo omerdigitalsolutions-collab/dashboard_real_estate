@@ -1,8 +1,11 @@
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
+import { useAuth } from '../context/AuthContext';
 import { Clock, Zap, CheckCircle2, LogOut } from 'lucide-react';
+import SubscriptionRequestModal from '../components/billing/SubscriptionRequestModal';
 
 const PLAN_FEATURES = [
     'ניהול לידים וסוכנים ללא הגבלה',
@@ -15,6 +18,9 @@ const PLAN_FEATURES = [
 export default function BillingLockScreen() {
     const navigate = useNavigate();
     const { trialEndsAt, billingStatus } = useSubscriptionGuard();
+    const { userData } = useAuth();
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleLogout = async () => {
         await signOut(auth);
@@ -89,14 +95,12 @@ export default function BillingLockScreen() {
                             ))}
                         </ul>
 
-                        <a
-                            href="https://wa.me/972507706024?text=%D7%94%D7%99%D7%99%2C%20%D7%90%D7%A9%D7%9E%D7%97%20%D7%9C%D7%A9%D7%9E%D7%95%D7%A2%20%D7%A2%D7%9C%20%D7%A9%D7%93%D7%A8%D7%95%D7%92%20%D7%9E%D7%A0%D7%95%D7%99%20hOMER"
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        <button
+                            onClick={() => setIsModalOpen(true)}
                             className="block w-full text-center bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black py-4 rounded-xl transition-all shadow-[0_0_25px_rgba(0,229,255,0.4)] hover:shadow-[0_0_35px_rgba(0,229,255,0.6)] text-base"
                         >
                             שדרג עכשיו והחזר גישה 🚀
-                        </a>
+                        </button>
                     </div>
                 </div>
 
@@ -111,6 +115,13 @@ export default function BillingLockScreen() {
                     </button>
                 </div>
             </div>
+
+            <SubscriptionRequestModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                planName="pro"
+                userData={userData}
+            />
         </div>
     );
 }
