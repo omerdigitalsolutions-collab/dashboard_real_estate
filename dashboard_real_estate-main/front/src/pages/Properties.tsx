@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake } from 'lucide-react';
-import { useProperties, useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
+import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
+import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
 
 import AddPropertyModal from '../components/modals/AddPropertyModal';
@@ -15,7 +16,7 @@ import { Property, AppUser, Lead, Deal, TimeRange } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
 export default function Properties() {
-    const { data: properties = [], loading: propertiesLoading } = useProperties();
+    const { properties = [], loading: propertiesLoading } = useLiveDashboardData();
     const { data: agents = [] } = useAgents();
     const { data: leads = [] } = useLeads();
     const { data: deals = [] } = useDeals();

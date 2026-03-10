@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCatalogWithQueries, getLiveCatalogProperties, saveCatalogLikes, SharedCatalog } from '../services/catalogService';
-import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Phone, Mail, X } from 'lucide-react';
+import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Phone, X, CheckCircle2, DollarSign, Zap, Car, Wind, Shield, Clock } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -11,6 +11,27 @@ function toStreetOnly(address: string): string {
     return address.replace(/\s+\d+[א-תA-Za-z]?\s*$/, '').trim();
 }
 
+// ─── Urgency label helper ─────────────────────────────────────────────────────
+function urgencyLabel(val?: string) {
+    const map: Record<string, string> = {
+        immediate: '⚡ מיידי',
+        '1-3_months': '1–3 חודשים',
+        '3-6_months': '3–6 חודשים',
+        flexible: 'גמיש',
+    };
+    return val ? (map[val] || val) : null;
+}
+
+function conditionLabel(val?: string) {
+    const map: Record<string, string> = {
+        new: '⭐ חדש מקבלן',
+        renovated: '✨ משופץ',
+        needs_renovation: '🔨 דורש שיפוץ',
+        any: 'לא משנה',
+    };
+    return val ? (map[val] || val) : null;
+}
+
 // ─── Image Carousel ───────────────────────────────────────────────────────────
 function ImageCarousel({ images, alt }: { images: string[]; alt: string }) {
     const [current, setCurrent] = useState(0);
@@ -18,8 +39,8 @@ function ImageCarousel({ images, alt }: { images: string[]; alt: string }) {
 
     if (imgs.length === 0) {
         return (
-            <div className="h-44 bg-slate-100 flex items-center justify-center text-slate-300 rounded-t-2xl">
-                <Home size={32} />
+            <div className="h-52 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-300 rounded-t-2xl">
+                <Home size={36} />
             </div>
         );
     }
@@ -28,36 +49,36 @@ function ImageCarousel({ images, alt }: { images: string[]; alt: string }) {
     const next = () => setCurrent(i => (i + 1) % imgs.length);
 
     return (
-        <div className="relative h-44 bg-slate-100 overflow-hidden select-none rounded-t-2xl">
+        <div className="relative h-52 bg-slate-100 overflow-hidden select-none rounded-t-2xl">
             {imgs.map((src, i) => (
                 <img
                     key={i}
                     src={src}
                     alt={alt}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${i === current ? 'opacity-100' : 'opacity-0'}`}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${i === current ? 'opacity-100' : 'opacity-0'}`}
                 />
             ))}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none z-10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none z-10" />
             {imgs.length > 1 && (
                 <>
                     <button
                         onClick={e => { e.stopPropagation(); prev(); }}
-                        className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-colors"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm"
                     >
-                        <ChevronLeft size={13} />
+                        <ChevronLeft size={14} />
                     </button>
                     <button
                         onClick={e => { e.stopPropagation(); next(); }}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-6 h-6 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm"
                     >
-                        <ChevronRight size={13} />
+                        <ChevronRight size={14} />
                     </button>
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex gap-1">
                         {imgs.map((_, i) => (
                             <button
                                 key={i}
                                 onClick={e => { e.stopPropagation(); setCurrent(i); }}
-                                className={`h-1 rounded-full transition-all ${i === current ? 'bg-white w-4' : 'bg-white/50 w-1.5'}`}
+                                className={`h-1 rounded-full transition-all ${i === current ? 'bg-white w-5' : 'bg-white/50 w-1.5'}`}
                             />
                         ))}
                     </div>
@@ -75,7 +96,7 @@ function LikeToast({ name, onClose }: { name: string; onClose: () => void }) {
     }, [onClose]);
 
     return (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-white border border-rose-200 shadow-xl rounded-2xl px-5 py-4 animate-in fade-in slide-in-from-top-4 max-w-xs w-full" dir="rtl">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-white border border-rose-200 shadow-xl rounded-2xl px-5 py-4 max-w-xs w-full" dir="rtl">
             <div className="w-9 h-9 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
                 <Heart size={16} className="text-rose-500 fill-rose-500" />
             </div>
@@ -86,6 +107,67 @@ function LikeToast({ name, onClose }: { name: string; onClose: () => void }) {
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors shrink-0">
                 <X size={15} />
             </button>
+        </div>
+    );
+}
+
+// ─── Lead Requirements Panel ──────────────────────────────────────────────────
+function LeadRequirementsPanel({ req, leadName }: { req: SharedCatalog['leadRequirements']; leadName?: string }) {
+    if (!req) return null;
+
+    const chips: { icon: React.ReactNode; label: string; highlight?: boolean }[] = [];
+
+    if (req.desiredCity && req.desiredCity.length > 0) {
+        chips.push({ icon: <MapPin size={12} />, label: req.desiredCity.join(', '), highlight: true });
+    }
+    if (req.maxBudget) {
+        chips.push({ icon: <DollarSign size={12} />, label: `עד ₪${req.maxBudget.toLocaleString()}`, highlight: true });
+    }
+    if (req.minRooms || req.maxRooms) {
+        const label = req.minRooms && req.maxRooms
+            ? `${req.minRooms}–${req.maxRooms} חדרים`
+            : req.minRooms ? `מ-${req.minRooms} חדרים`
+                : `עד ${req.maxRooms} חדרים`;
+        chips.push({ icon: <Bed size={12} />, label });
+    }
+    if (req.minSizeSqf) {
+        chips.push({ icon: <Maximize size={12} />, label: `מ-${req.minSizeSqf} מ"ר` });
+    }
+    if (req.floorMin !== undefined && req.floorMin !== null) {
+        const label = req.floorMax != null ? `קומה ${req.floorMin}–${req.floorMax}` : `מקומה ${req.floorMin}`;
+        chips.push({ icon: <Layers size={12} />, label });
+    }
+    if (req.mustHaveElevator) chips.push({ icon: <CheckCircle2 size={12} />, label: 'מעלית' });
+    if (req.mustHaveParking) chips.push({ icon: <Car size={12} />, label: 'חניה' });
+    if (req.mustHaveBalcony) chips.push({ icon: <Wind size={12} />, label: 'מרפסת' });
+    if (req.mustHaveSafeRoom) chips.push({ icon: <Shield size={12} />, label: 'ממ"ד' });
+    if (req.urgency && req.urgency !== 'flexible') chips.push({ icon: <Clock size={12} />, label: urgencyLabel(req.urgency) || '' });
+    if (req.condition && req.condition !== 'any') chips.push({ icon: <Zap size={12} />, label: conditionLabel(req.condition) || '' });
+
+    if (chips.length === 0) return null;
+
+    return (
+        <div className="max-w-5xl mx-auto px-4 mb-5">
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-sm p-4" dir="rtl">
+                <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <CheckCircle2 size={13} />
+                    הקריטריונים של {leadName || 'הלקוח'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                    {chips.map((chip, i) => (
+                        <div
+                            key={i}
+                            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${chip.highlight
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}
+                        >
+                            {chip.icon}
+                            {chip.label}
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
@@ -144,20 +226,17 @@ export default function SharedCatalogPage() {
     useEffect(() => {
         async function fetchCatalogAndProperties() {
             if (!token) return;
-            // Try anonymous sign-in so Firestore rules that require isAuthed() pass
             try {
                 if (!auth.currentUser) await signInAnonymously(auth);
             } catch (authErr) {
                 console.warn('[catalog] Anonymous auth failed, continuing anyway:', authErr);
             }
 
-            // Fetch the catalog document
             try {
                 const data = await getCatalogWithQueries(token);
                 if (!data) { setError('הקטלוג המבוקש לא נמצא או שפג תוקפו.'); setLoading(false); return; }
                 setCatalog(data);
 
-                // Fetch properties — in a separate try/catch so it never kills the page
                 if (data.propertyIds && data.propertyIds.length > 0) {
                     setLoadingProperties(true);
                     try {
@@ -182,19 +261,15 @@ export default function SharedCatalogPage() {
         fetchCatalogAndProperties();
     }, [token]);
 
-    // Send WhatsApp notification to property agent or agency owner
     const notifyAgentOfLike = useCallback(async (property: any) => {
         if (!catalog) return;
-
         const agentPhone: string | undefined = property.agentPhone || (catalog as any).agencyOwnerPhone;
         const recipientPhone = agentPhone || catalog.agencyPhone;
         if (!recipientPhone) return;
-
         const cleanPhone = recipientPhone.replace(/\D/g, '').replace(/^0/, '972');
         const leadName = catalog.leadName || 'לקוח';
         const addr = toStreetOnly(property.address || 'נכס ללא כתובת');
         const message = `🏠 *לייק מהקטלוג!*\nהלקוח ${leadName} לחץ על "אהבתי" על הנכס ב${addr}.\n\nכדאי ליצור קשר בקרוב 😊`;
-
         try {
             const fns = getFunctions(undefined, 'europe-west1');
             const cfSendWa = httpsCallable<{ phone: string; message: string }, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
@@ -212,7 +287,6 @@ export default function SharedCatalogPage() {
             if (token) persistLikes(next, token);
             return next;
         });
-
         if (isAdding) {
             setShowToast(true);
             notifyAgentOfLike(property);
@@ -221,9 +295,9 @@ export default function SharedCatalogPage() {
 
     if (loading || loadingProperties) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-white">
-                <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">טוען נכסים...</p>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+                <div className="w-14 h-14 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" />
+                <p className="text-slate-500 font-medium text-sm">טוען נכסים...</p>
             </div>
         );
     }
@@ -240,127 +314,111 @@ export default function SharedCatalogPage() {
         );
     }
 
-    const { leadName, agencyName, agencyLogoUrl } = catalog;
+    const { leadName, agencyName, agencyLogoUrl, leadRequirements } = catalog;
     const rawAgencyPhone = catalog.agencyPhone || '';
     const agencyPhone = rawAgencyPhone.replace(/\D/g, '').replace(/^0/, '972');
-    const agencyEmail = (catalog as any).agencyEmail || '';
     const waMessage = encodeURIComponent(`היי, עברתי על קטלוג הנכסים שנשלח אלי ואשמח לפרטים נוספים.`);
     const waLink = agencyPhone ? `https://wa.me/${agencyPhone}?text=${waMessage}` : '#';
     const likedCount = likedIds.size;
 
     return (
-        <div className="min-h-screen bg-[#f5f6fa] relative pb-32" dir="rtl">
-            {/* ── Like Toast ───────────────────────────────────────────────── */}
-            {showToast && (
-                <LikeToast name={leadName || ''} onClose={() => setShowToast(false)} />
-            )}
+        <div className="min-h-screen bg-[#f5f6fa] pb-36" dir="rtl">
+            {/* Like Toast */}
+            {showToast && <LikeToast name={leadName || ''} onClose={() => setShowToast(false)} />}
 
-            {/* ── Header ─────────────────────────────────────────────────────── */}
-            <header className="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white shadow-xl relative overflow-hidden">
+            {/* ── Header ──────────────────────────────────────────────────── */}
+            <header className="bg-gradient-to-br from-[#0f1729] via-[#0f2052] to-[#0f1729] text-white shadow-2xl relative overflow-hidden">
+                {/* Floating orbs */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute top-0 right-0 w-72 h-72 bg-blue-500/15 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-                    <div className="absolute bottom-0 left-0 w-52 h-52 bg-indigo-500/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+                    <div className="absolute bottom-0 left-0 w-56 h-56 bg-indigo-600/25 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4" />
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_60%_50%,rgba(59,130,246,0.08),transparent_70%)]" />
                 </div>
 
-                <div className="relative z-10 max-w-5xl mx-auto px-6 py-8 flex flex-col items-center text-center">
-                    {/* Agency logo */}
-                    {agencyLogoUrl ? (
-                        <img
-                            src={agencyLogoUrl}
-                            alt={agencyName || 'Agency'}
-                            className="h-16 w-auto object-contain mb-4 drop-shadow-md"
-                        />
-                    ) : (
-                        <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/20">
-                            <Home size={28} className="text-blue-300" />
-                        </div>
+                <div className="relative z-10 max-w-5xl mx-auto px-6 pt-10 pb-8 flex flex-col items-center text-center">
+                    {agencyName && (
+                        <p className="text-blue-300 text-xs font-bold tracking-[0.2em] uppercase mb-4 opacity-80 px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10">
+                            {agencyName}
+                        </p>
                     )}
 
-                    {agencyName && (
-                        <p className="text-blue-200 text-xs font-semibold tracking-widest uppercase mb-2 opacity-80">{agencyName}</p>
-                    )}
-                    <h1 className="text-2xl font-bold mb-1">
+                    <h1 className="text-3xl font-black mb-2 leading-tight">
                         {leadName ? `הנכסים שנבחרו עבור ${leadName}` : 'קטלוג נכסים אישי'}
                     </h1>
-                    <p className="text-blue-200 text-sm mb-3">
-                        מצאנו {sortedProperties.length} נכסים שיכולים להתאים לך
+                    <p className="text-blue-200/80 text-sm mb-5">
+                        מצאנו <span className="font-bold text-white">{sortedProperties.length}</span> נכסים שיכולים להתאים לך
                     </p>
+
                     {likedCount > 0 && (
-                        <div className="inline-flex items-center gap-2 bg-rose-500/20 text-rose-200 text-xs font-semibold px-3 py-1.5 rounded-full border border-rose-400/30">
-                            <Heart size={12} className="fill-rose-300 text-rose-300" />
+                        <div className="inline-flex items-center gap-2 bg-rose-500/20 text-rose-200 text-xs font-bold px-4 py-2 rounded-full border border-rose-400/30 backdrop-blur-sm shadow-rose-500/20 shadow-lg">
+                            <Heart size={13} className="fill-rose-300 text-rose-300" />
                             אהבת {likedCount} נכס{likedCount > 1 ? 'ים' : ''}
                         </div>
                     )}
-                </div>
 
-                {/* Agency contact bar */}
-                {(rawAgencyPhone || agencyEmail) && (
-                    <div className="relative z-10 bg-white/10 backdrop-blur-sm border-t border-white/10">
-                        <div className="max-w-5xl mx-auto px-6 py-3 flex flex-wrap items-center justify-center gap-4">
-                            {rawAgencyPhone && (
-                                <a
-                                    href={`tel:${rawAgencyPhone}`}
-                                    className="flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors"
-                                >
-                                    <Phone size={14} />
-                                    <span dir="ltr">{rawAgencyPhone}</span>
-                                </a>
-                            )}
-                            {agencyEmail && (
-                                <a
-                                    href={`mailto:${agencyEmail}`}
-                                    className="flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors"
-                                >
-                                    <Mail size={14} />
-                                    <span>{agencyEmail}</span>
-                                </a>
-                            )}
-                        </div>
-                    </div>
-                )}
+                    {/* Phone quick access */}
+                    {rawAgencyPhone && (
+                        <a
+                            href={`tel:${rawAgencyPhone}`}
+                            className="mt-5 flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white/90 text-sm font-medium px-5 py-2.5 rounded-xl border border-white/15 transition-all"
+                        >
+                            <Phone size={14} />
+                            <span dir="ltr">{rawAgencyPhone}</span>
+                        </a>
+                    )}
+                </div>
             </header>
 
-            {/* ── Property Grid ─────────────────────────────────────────────────── */}
-            <div className="max-w-5xl mx-auto px-4 py-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* ── Lead Criteria ───────────────────────────────────────────── */}
+            <div className="max-w-5xl mx-auto px-4 mt-6">
+                <LeadRequirementsPanel req={leadRequirements} leadName={leadName} />
+            </div>
+
+            {/* ── Property Grid ────────────────────────────────────────────── */}
+            <div className="max-w-5xl mx-auto px-4 pb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                     {sortedProperties.map((property, index) => {
                         const propId = property.id || String(index);
                         const isLiked = likedIds.has(propId);
                         const streetName = toStreetOnly(property.address || '');
                         const displayLocation = [streetName, property.city].filter(Boolean).join(', ');
                         const isNew = isPropertyNew(property.createdAt);
-                        // Hide external agency names — checked inline in property display
+                        const isExclusive = property.listingType === 'exclusive';
 
                         return (
                             <div
                                 key={propId}
-                                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 transition-all hover:shadow-md hover:-translate-y-0.5 duration-200 flex flex-col"
+                                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100/80 transition-all hover:shadow-lg hover:-translate-y-1 duration-300 flex flex-col"
                             >
-                                {/* Image Carousel */}
+                                {/* Image */}
                                 <div className="relative">
                                     <ImageCarousel images={property.images || []} alt={streetName} />
 
-                                    {/* Badges (top-right) */}
-                                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
+                                    {/* Top badges */}
+                                    <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
+                                        {isExclusive && (
+                                            <div className="bg-amber-400/95 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1">
+                                                <span className="text-[10px] font-black text-amber-900">👑 בלעדיות</span>
+                                            </div>
+                                        )}
                                         {isNew && (
-                                            <div className="bg-blue-100/95 backdrop-blur-sm px-2 py-0.5 rounded-lg shadow border border-blue-200/50 flex items-center gap-1">
-                                                <span className="text-sm leading-none">✨</span>
-                                                <span className="text-blue-700 text-[10px] font-bold whitespace-nowrap">חדש</span>
+                                            <div className="bg-blue-500/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1">
+                                                <span className="text-[10px] font-black text-white">✨ חדש</span>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Type badge (bottom-left) */}
-                                    <div className="absolute bottom-2 left-2 z-20">
-                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md shadow backdrop-blur-sm ${property.type === 'rent' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
+                                    {/* Type badge bottom-left */}
+                                    <div className="absolute bottom-2.5 left-2.5 z-20">
+                                        <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg shadow backdrop-blur-sm ${property.type === 'rent' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
                                             {property.type === 'rent' ? 'להשכרה' : 'למכירה'}
                                         </span>
                                     </div>
 
-                                    {/* Like button (top-left) */}
+                                    {/* Like button */}
                                     <button
                                         onClick={() => toggleLike(propId, property, !isLiked)}
-                                        className={`absolute top-2 left-2 z-20 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-all active:scale-90 ${isLiked ? 'bg-rose-500 text-white' : 'bg-white/85 backdrop-blur-sm text-slate-500 hover:text-rose-500'}`}
+                                        className={`absolute top-2.5 left-2.5 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-all active:scale-90 ${isLiked ? 'bg-rose-500 text-white shadow-rose-400/40' : 'bg-white/85 backdrop-blur-sm text-slate-500 hover:text-rose-500 hover:bg-white'}`}
                                         title={isLiked ? 'הסר לייק' : 'אהבתי'}
                                     >
                                         <Heart size={15} className={isLiked ? 'fill-white' : ''} />
@@ -368,48 +426,47 @@ export default function SharedCatalogPage() {
                                 </div>
 
                                 {/* Details */}
-                                <div className="p-3 flex flex-col flex-1 text-right">
+                                <div className="p-4 flex flex-col flex-1 text-right">
                                     {/* Location */}
-                                    <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5">
-                                        <MapPin size={11} className="text-slate-400 shrink-0" />
-                                        <span className="truncate">{displayLocation || 'מיקום לא צוין'}</span>
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
+                                        <MapPin size={11} className="text-slate-300 shrink-0" />
+                                        <span className="truncate font-medium">{displayLocation || 'מיקום לא צוין'}</span>
                                     </div>
 
                                     {/* Price */}
-                                    <div className="text-xl font-black text-slate-900 mb-2 tracking-tight">
+                                    <div className="text-2xl font-black text-slate-900 mb-3 tracking-tight">
                                         ₪{(property.price || 0).toLocaleString()}
+                                        {property.type === 'rent' && <span className="text-sm font-medium text-slate-400 mr-1">/חודש</span>}
                                     </div>
 
                                     {/* Specs */}
-                                    <div className="flex items-center flex-wrap gap-1.5 mb-2">
+                                    <div className="flex items-center flex-wrap gap-1.5 mb-3">
                                         {property.rooms && (
-                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-lg">
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
                                                 <Bed size={11} className="text-slate-400" />
                                                 {property.rooms} חד'
                                             </span>
                                         )}
                                         {property.sqm && (
-                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-lg">
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
                                                 <Maximize size={11} className="text-slate-400" />
                                                 {property.sqm} מ"ר
                                             </span>
                                         )}
                                         {property.floor !== undefined && property.floor !== null && (
-                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-lg">
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
                                                 <Layers size={11} className="text-slate-400" />
                                                 קומה {property.floor}
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Description (truncated to 2 lines) */}
+                                    {/* Description */}
                                     {property.description && (
-                                        <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-50 pt-2 mt-auto line-clamp-2">
+                                        <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-50 pt-3 mt-auto line-clamp-2">
                                             {property.description}
                                         </p>
                                     )}
-
-                                    {/* Never show external agency name */}
                                 </div>
                             </div>
                         );
@@ -417,54 +474,54 @@ export default function SharedCatalogPage() {
                 </div>
 
                 {sortedProperties.length === 0 && (
-                    <div className="text-center py-20 text-slate-400">
-                        <Home size={40} className="mx-auto mb-3 opacity-50" />
-                        <p className="font-medium">אין נכסים להצגה כרגע</p>
+                    <div className="text-center py-24 text-slate-400">
+                        <Home size={44} className="mx-auto mb-4 opacity-40" />
+                        <p className="font-semibold text-slate-500">אין נכסים להצגה כרגע</p>
+                        <p className="text-sm mt-1">הסוכן שלך יעדכן בקרוב</p>
                     </div>
                 )}
             </div>
 
-            {/* ── Agency Contact Section ────────────────────────────────────── */}
-            {(rawAgencyPhone || agencyEmail || agencyName) && (
-                <div className="max-w-5xl mx-auto px-4 mb-8">
-                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-right" dir="rtl">
+            {/* ── Agency Branding Footer ────────────────────────────────────── */}
+            <footer className="max-w-5xl mx-auto px-4 pt-4 pb-6">
+                {/* Agency card */}
+                {(rawAgencyPhone || agencyName) && (
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col sm:flex-row items-center gap-5 text-center sm:text-right mb-5">
                         {agencyLogoUrl && (
-                            <img src={agencyLogoUrl} alt={agencyName || ''} className="h-12 w-auto object-contain shrink-0" />
+                            <img
+                                src={agencyLogoUrl}
+                                alt={agencyName || ''}
+                                className="h-20 w-auto object-contain shrink-0 drop-shadow-sm"
+                            />
                         )}
                         <div className="flex-1">
-                            {agencyName && <p className="font-bold text-slate-900 mb-0.5">{agencyName}</p>}
+                            {agencyName && <p className="font-black text-slate-900 text-lg mb-0.5">{agencyName}</p>}
                             <p className="text-sm text-slate-500">רוצה לשמוע עוד? צוות הסוכנים שלנו זמין לך</p>
                         </div>
-                        <div className="flex gap-2 flex-wrap justify-center shrink-0">
-                            {rawAgencyPhone && (
-                                <a
-                                    href={`tel:${rawAgencyPhone}`}
-                                    className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-sm px-4 py-2 rounded-xl transition-colors"
-                                >
-                                    <Phone size={15} />
-                                    {rawAgencyPhone}
-                                </a>
-                            )}
-                        </div>
+                        {rawAgencyPhone && (
+                            <a
+                                href={`tel:${rawAgencyPhone}`}
+                                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors shrink-0 shadow-sm"
+                            >
+                                <Phone size={15} />
+                                {rawAgencyPhone}
+                            </a>
+                        )}
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* ── Footer ──────────────────────────────────────────────────────── */}
-            <footer className="max-w-5xl mx-auto px-4 pb-32 pt-6 flex flex-col items-center text-center">
-                <div className="bg-white/60 backdrop-blur-sm rounded-3xl border border-slate-200/60 shadow-sm px-8 py-6 flex flex-col items-center gap-3 transition-all hover:bg-white hover:shadow-md w-full sm:w-auto">
-                    <p className="text-slate-500 text-sm font-medium">
+                {/* Homer branding */}
+                <div className="flex flex-col items-center text-center gap-3 py-4">
+                    <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="block hover:scale-105 active:scale-95 transition-transform">
+                        <img src="/homer-logo.png" alt="Homer CRM" className="h-14 w-auto object-contain drop-shadow-sm" />
+                    </a>
+                    <p className="text-slate-500 text-xs font-medium">
                         נוצר ע״י{' '}
                         <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-800 hover:text-blue-600 transition-colors">
                             homer הבית של המתווכים
                         </a>
                     </p>
-
-                    <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="block my-1 hover:scale-105 active:scale-95 transition-transform">
-                        <img src="/homer-logo.png" alt="Homer CRM" className="h-10 w-auto object-contain drop-shadow-sm" />
-                    </a>
-
-                    <p className="text-slate-400 text-xs font-medium">
+                    <p className="text-slate-400 text-xs">
                         מבית{' '}
                         <a href="https://www.instagram.com/omer.digital.solutions" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-600 hover:text-blue-600 transition-colors">
                             עומר פתרונות דיגיטלים
@@ -473,13 +530,13 @@ export default function SharedCatalogPage() {
                 </div>
             </footer>
 
-            {/* ── Floating WhatsApp CTA ──────────────────────────────────────── */}
-            <div className="fixed bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-6 pt-8 bg-gradient-to-t from-[#f5f6fa] via-[#f5f6fa]/90 to-transparent z-50 pointer-events-none">
+            {/* ── Floating WhatsApp CTA ─────────────────────────────────────── */}
+            <div className="fixed bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-6 pt-10 bg-gradient-to-t from-[#f5f6fa] via-[#f5f6fa]/90 to-transparent z-50 pointer-events-none">
                 <a
                     href={waLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full bg-[#25D366] hover:bg-[#1fbc5a] text-white flex items-center justify-center gap-3 py-4 rounded-2xl font-bold text-base shadow-lg shadow-[#25D366]/30 transition-all active:scale-95 pointer-events-auto"
+                    className="w-full bg-[#25D366] hover:bg-[#1fbc5a] text-white flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-base shadow-xl shadow-[#25D366]/30 transition-all active:scale-95 pointer-events-auto"
                 >
                     <MessageCircle size={22} />
                     <span>דבר איתנו בוואטסאפ</span>

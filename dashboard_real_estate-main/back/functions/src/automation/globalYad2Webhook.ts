@@ -10,9 +10,11 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 export const webhookProcessGlobalYad2Email = onRequest({
     region: 'europe-west1',
-    secrets: [geminiApiKey]
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+    memory: '512MiB',
 }, async (req, res) => {
-    // 1. Accept POST request, extract htmlBody
+
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
         return;
@@ -24,17 +26,18 @@ export const webhookProcessGlobalYad2Email = onRequest({
         return;
     }
 
+    // מחזיר 200 מיידית — Apps Script לא יחכה
+    res.status(200).json({ success: true, message: 'Processing started' });
+
     try {
         const apiKey = geminiApiKey.value();
         if (!apiKey) {
             throw new Error('GEMINI_API_KEY is not configured');
         }
 
-        // 2. Instantiate Gemini using the proven 2.5 flash model
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-        // 3. System Prompt
         const prompt = `You are an expert real estate data parser. Extract ALL property listings from the provided Yad2 email HTML into a strict JSON ARRAY of objects.
   Rules for each object:
   - \`price\`: Number (remove ₪ and commas. e.g., 2290000).
@@ -54,24 +57,20 @@ export const webhookProcessGlobalYad2Email = onRequest({
         const result = await model.generateContent(prompt);
         let responseText = result.response.text().trim();
 
-        // Clean markdown blocks if Gemini ignored the instruction
         responseText = responseText.replace(/```json|```/g, '').trim();
 
-        // 4. Parse the cleaned JSON text
         const properties = JSON.parse(responseText);
 
         if (!Array.isArray(properties)) {
-            throw new Error("Gemini did not return a JSON array");
+            throw new Error('Gemini did not return a JSON array');
         }
 
-        // 5. Initialize db.batch()
         const batch = db.batch();
         let count = 0;
 
-        // 6. Loop over parsed properties
         for (const prop of properties) {
             if (!prop.city || !prop.street || !prop.price || typeof prop.rooms !== 'number') {
-                console.warn("Skipping invalid property:", prop);
+                console.warn('Skipping invalid property:', prop);
                 continue;
             }
 
@@ -80,36 +79,36 @@ export const webhookProcessGlobalYad2Email = onRequest({
             const priceNum = prop.price;
             const roomsNum = prop.rooms;
 
-            // Generate deterministic ID
             const hashInput = `${streetStr}_${priceNum}_${roomsNum}`;
             const hashId = crypto.createHash('sha256').update(hashInput).digest('hex');
 
-            const propRef = db.collection('cities').doc(normalizedCityName).collection('properties').doc(hashId);
+            const propRef = db
+                .collection('cities')
+                .doc(normalizedCityName)
+                .collection('properties')
+                .doc(hashId);
 
             batch.set(propRef, {
                 ...prop,
                 city: normalizedCityName,
                 street: streetStr,
-                source: "yad2_alert",
+                source: 'yad2_alert',
                 isPublic: true,
-                createdAt: new Date(), // Using native Date for batch serialization simplicity
+                createdAt: new Date(),
                 ingestedAt: new Date(),
-                listingType: prop.listingType === 'cooperation' ? 'external' : 'private'
-            }, { merge: true }); // Use merge to avoid overwriting if it exists but update ingestedAt
+                listingType: prop.listingType === 'cooperation' ? 'external' : 'private',
+            }, { merge: true });
 
             count++;
         }
 
-        // 7. Commit batch
         if (count > 0) {
             await batch.commit();
         }
 
-        // 8. Return 200 OK
-        res.status(200).json({ success: true, inserted: count });
+        console.log(`Successfully inserted ${count} properties`);
 
     } catch (error: any) {
-        console.error("Error processing Yad2 Webhook:", error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('Error processing Yad2 Webhook:', error);
     }
 });

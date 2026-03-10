@@ -34,6 +34,17 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
     const agencyLogoUrl: string = agencyData.settings?.logoUrl || '';
     const agencyPhone: string = agencyData.officePhone || agencyData.whatsappIntegration?.phoneNumber || '';
 
+    // ── Fetch Lead requirements ──────────────────────────────────────────────────
+    let leadRequirements: Record<string, any> | null = null;
+    if (leadId) {
+        try {
+            const leadDoc = await db.doc(`leads/${leadId}`).get();
+            if (leadDoc.exists) {
+                leadRequirements = leadDoc.data()?.requirements || null;
+            }
+        } catch { /* non-critical */ }
+    }
+
     const catalogRef = db.collection('shared_catalogs').doc();
 
     const now = new Date();
@@ -49,6 +60,7 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
         leadId,
         leadName: leadName || '',
         propertyIds: propertyIds, // Storing only the references for live fetching
+        leadRequirements: leadRequirements || null,
         viewCount: 0,
         createdAt: FieldValue.serverTimestamp(),
         expiresAt: expiresAt,

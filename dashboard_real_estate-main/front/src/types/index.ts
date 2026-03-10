@@ -240,6 +240,22 @@ export interface SharedCatalog {
     propertyIds: string[];
     viewCount: number;
     likedPropertyIds?: string[];
+    leadRequirements?: {
+        desiredCity?: string[];
+        maxBudget?: number | null;
+        minRooms?: number | null;
+        maxRooms?: number | null;
+        minSizeSqf?: number | null;
+        floorMin?: number | null;
+        floorMax?: number | null;
+        propertyType?: string[];
+        mustHaveElevator?: boolean;
+        mustHaveParking?: boolean;
+        mustHaveBalcony?: boolean;
+        mustHaveSafeRoom?: boolean;
+        condition?: string;
+        urgency?: string;
+    } | null;
     createdAt: Timestamp;
     expiresAt: Timestamp;
 }

@@ -5,7 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const db = (0, firestore_1.getFirestore)();
 exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -28,6 +28,17 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
     const agencyName = agencyData.agencyName || agencyData.name || '';
     const agencyLogoUrl = ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.logoUrl) || '';
     const agencyPhone = agencyData.officePhone || ((_d = agencyData.whatsappIntegration) === null || _d === void 0 ? void 0 : _d.phoneNumber) || '';
+    // ── Fetch Lead requirements ──────────────────────────────────────────────────
+    let leadRequirements = null;
+    if (leadId) {
+        try {
+            const leadDoc = await db.doc(`leads/${leadId}`).get();
+            if (leadDoc.exists) {
+                leadRequirements = ((_e = leadDoc.data()) === null || _e === void 0 ? void 0 : _e.requirements) || null;
+            }
+        }
+        catch ( /* non-critical */_f) { /* non-critical */ }
+    }
     const catalogRef = db.collection('shared_catalogs').doc();
     const now = new Date();
     const expiresAt = new Date();
@@ -41,6 +52,7 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
         leadId,
         leadName: leadName || '',
         propertyIds: propertyIds, // Storing only the references for live fetching
+        leadRequirements: leadRequirements || null,
         viewCount: 0,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         expiresAt: expiresAt,
