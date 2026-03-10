@@ -43,19 +43,8 @@ const SubscriptionRequestModal: React.FC<SubscriptionRequestModalProps> = ({ isO
                 createdAt: serverTimestamp()
             });
 
-            // Send WhatsApp Alert directly to Omer 
-            const adminPhone = '972507706024';
-            const message = `✨ ליד חדש למנוי מתוך המערכת!\n\n*שם:* ${name}\n*טלפון:* ${phone}\n*מסלול מבוקש:* ${PLAN_LABELS[planName] || planName}\n*אימייל:* ${userData?.email || 'לא סופק'}\n\nנא לחזור אליו בהקדם לסגירת תשלום!`;
-
-            // Note: In production you would hit a Cloud Function to securely send the message via Green API.
-            // For now, we simulate a successful DB save and open WhatsApp for the user himself to send if we don't have an automated sender active.
-            // Since we want this completely white-glove behind the scenes, we just save to DB.
-
+            // Cloud Functions will listen for this document creation and send SMS & Email to the Admin.
             setStatus('success');
-
-            // Automatically launch OMERS's WhatsApp for the USER so you receive the message immediately without them even thinking
-            const waLink = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
-            window.open(waLink, '_blank');
 
         } catch (error) {
             console.error('Error saving subscription request:', error);

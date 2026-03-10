@@ -28,6 +28,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [phone, setPhone] = useState('');
     const [source, setSource] = useState('אחר');
     const [leadType, setLeadType] = useState<'buyer' | 'seller'>('buyer');
+    const [assignedTo, setAssignedTo] = useState('');
 
     // Internal Tabs
     const [activeFormTab, setActiveFormTab] = useState<'personal' | 'property'>('personal');

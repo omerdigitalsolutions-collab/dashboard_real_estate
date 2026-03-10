@@ -6,20 +6,20 @@ import {
     onSnapshot,
     doc,
     updateDoc,
-    addDoc,
-    deleteDoc,
-    serverTimestamp
+    deleteDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead, Property } from '../types';
 
-export const addLead = async (agencyId: string, data: Partial<Lead>) => {
-    return addDoc(collection(db, 'leads'), {
-        ...data,
-        agencyId,
-        status: 'new',
-        createdAt: serverTimestamp()
+export const addLead = async (_agencyId: string, data: Partial<Lead>) => {
+    const functions = getFunctions(undefined, 'europe-west1');
+    const addLeadCallable = httpsCallable(functions, 'leads-addLead');
+    const result = await addLeadCallable({
+        // Passing data down. The backend function adds agencyId and timestamps inside
+        ...data
     });
+    return result.data;
 };
 
 export const getLiveLeads = (agencyId: string, callback: (leads: Lead[]) => void) => {

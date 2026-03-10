@@ -1,21 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Shield, Globe, Palette, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4 } from 'lucide-react';
+import { Bell, Shield, Globe, Palette, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings } from '../services/agencyService';
 import { isValidPhone } from '../utils/validation';
+import { ISRAEL_CITIES } from '../utils/constants';
 
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
-  { id: 'goals', label: 'יעדי משרד', icon: Target },
+  { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
   { id: 'security', label: 'אבטחה', icon: Shield },
-  { id: 'appearance', label: 'מראה', icon: Palette },
   { id: 'integrations', label: 'אינטגרציות', icon: Globe },
   { id: 'billing', label: 'חיובים', icon: CreditCard },
 ];
@@ -38,13 +38,14 @@ function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState('profile');
-  const { userData } = useAuth();
+  const { userData, refreshUserData } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [agencyGoalsSaving, setAgencyGoalsSaving] = useState(false);
   const [agencyLogoUploading, setAgencyLogoUploading] = useState(false);
   const agencyLogoInputRef = useRef<HTMLInputElement>(null);
   const [agencyLogoUrl, setAgencyLogoUrl] = useState<string>('');
+  const [currentAgencySettings, setCurrentAgencySettings] = useState<any>(null); // To keep old settings intact
 
   // Form states for goals
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
@@ -56,6 +57,10 @@ export default function Settings() {
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+
+  // Global settings
+  const [activeGlobalCities, setActiveGlobalCities] = useState<string[]>([]);
+  const [newCityInput, setNewCityInput] = useState('');
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'success') toast.success(message);
@@ -74,6 +79,10 @@ export default function Settings() {
       setYearlyRevenue(agency.yearlyGoals?.commissions || 0);
       setYearlyDeals(agency.yearlyGoals?.deals || 0);
       setAgencyLogoUrl(agency.settings?.logoUrl || agency.logoUrl || '');
+      setCurrentAgencySettings(agency.settings || {});
+
+      const loadedCities = agency.settings?.activeGlobalCities || (agency.mainServiceArea ? [agency.mainServiceArea] : []);
+      setActiveGlobalCities(loadedCities);
     });
     return () => unsub();
   }, [userData?.agencyId]);
@@ -87,10 +96,14 @@ export default function Settings() {
         { commissions: monthlyRevenue, deals: monthlyDeals, leads: 0 },
         { commissions: yearlyRevenue, deals: yearlyDeals, leads: 0 }
       );
-      showToast('יעדי המשרד עודכנו בהצלחה! 🎯');
+      await updateAgencySettings(
+        userData.agencyId,
+        { ...currentAgencySettings, activeGlobalCities }
+      );
+      showToast('הגדרות המשרד עודכנו בהצלחה! 🎯');
     } catch (err) {
       console.error('Failed to update agency goals', err);
-      showToast('שגיאה בשמירת יעדי המשרד.', 'error');
+      showToast('שגיאה בשמירת הגדרות המשרד.', 'error');
     } finally {
       setAgencyGoalsSaving(false);
     }
@@ -113,6 +126,7 @@ export default function Settings() {
       // Update the Firestore doc using the actual document ID
       await updateUserProfile(docId!, { photoURL });
       // The auth context listener should automatically pick up the new photoURL and update the UI
+      await refreshUserData(); // Force instant refresh 
       showToast('תמונת הפרופיל עודכנה בהצלחה 🎉');
     } catch (err) {
       console.error('Failed to upload profile picture:', err);
@@ -265,7 +279,7 @@ export default function Settings() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end">
+              <div className="flex justify-end pt-4 border-t border-slate-100">
                 <button
                   onClick={handleSaveProfile}
                   disabled={profileSaving}
@@ -274,6 +288,45 @@ export default function Settings() {
                   {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור שינויים'}
                 </button>
               </div>
+
+              {/* Agency Logo Upload */}
+              {userData?.role === 'admin' && (
+                <div className="pt-8 border-t border-slate-100 mt-8">
+                  <h3 className="font-semibold text-slate-800 text-sm mb-4">לוגו סוכנות ראשי</h3>
+                  <div className="flex items-center gap-6">
+                    {/* Logo Preview */}
+                    <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                      {agencyLogoUploading ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                      ) : agencyLogoUrl ? (
+                        <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
+                      ) : (
+                        <Palette className="w-8 h-8 text-slate-300" />
+                      )}
+                    </div>
+
+                    {/* Upload Controls */}
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/jpeg, image/png, image/webp"
+                        className="hidden"
+                        ref={agencyLogoInputRef}
+                        onChange={handleAgencyLogoUpload}
+                      />
+                      <button
+                        onClick={() => agencyLogoInputRef.current?.click()}
+                        disabled={agencyLogoUploading}
+                        className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        <Camera size={16} className="text-slate-500" />
+                        {agencyLogoUploading ? 'מעלה לוגו...' : 'העלה לוגו חדש'}
+                      </button>
+                      <p className="text-xs text-slate-400">מומלץ תמונת PNG שקופה (עד 2MB)</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -383,6 +436,107 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* Global Service Areas Section */}
+              <div className="pt-8 border-t border-slate-100">
+                <div className="flex items-center gap-2 pb-2 mb-4 border-b border-slate-100">
+                  <Globe size={18} className="text-blue-500" />
+                  <h3 className="font-bold text-slate-800 text-sm">אזורי שירות (מאגר ארצי)</h3>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  בחר את הערים שבהן תרצה לראות נכסים מהמאגר הארצי המשותף. נכסים אלו יופיעו תחת לשונית "נכסים" ויסומנו כ"מאגר ארצי".
+                </p>
+
+                <div className="space-y-3">
+                  {/* Selected Cities Pills */}
+                  <div className="flex flex-wrap gap-2">
+                    {activeGlobalCities.map((city) => (
+                      <div key={city} className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-blue-100">
+                        {city}
+                        <button
+                          onClick={() => setActiveGlobalCities(prev => prev.filter(c => c !== city))}
+                          className="text-blue-400 hover:text-blue-600 focus:outline-none transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {activeGlobalCities.length === 0 && (
+                      <span className="text-sm text-slate-400 py-1.5">לא נבחרו ערים אזוריות. נכסים ארציים לא יוצגו.</span>
+                    )}
+                  </div>
+
+                  {/* Add New City Input */}
+                  <div className="flex items-center gap-2 relative max-w-sm">
+                    <input
+                      type="text"
+                      value={newCityInput}
+                      onChange={(e) => setNewCityInput(e.target.value)}
+                      placeholder="הקלד שם עיר או ישוב..."
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCityInput.trim()) {
+                          e.preventDefault();
+                          const city = newCityInput.trim();
+                          if (!activeGlobalCities.includes(city)) {
+                            setActiveGlobalCities(prev => [...prev, city]);
+                          }
+                          setNewCityInput('');
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const city = newCityInput.trim();
+                        if (city && !activeGlobalCities.includes(city)) {
+                          setActiveGlobalCities(prev => [...prev, city]);
+                          setNewCityInput('');
+                        }
+                      }}
+                      disabled={!newCityInput.trim()}
+                      className="bg-slate-800 hover:bg-slate-900 text-white p-2.5 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      <Plus size={18} />
+                    </button>
+
+                    {/* Autocomplete Dropdown - searches across all Israeli cities and settlements */}
+                    {newCityInput.trim().length > 0 && (
+                      <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                        {ISRAEL_CITIES
+                          .filter(city => city.includes(newCityInput.trim()) && !activeGlobalCities.includes(city))
+                          .slice(0, 12)
+                          .map((city) => (
+                            <li
+                              key={city}
+                              onClick={() => {
+                                setActiveGlobalCities(prev => [...prev, city]);
+                                setNewCityInput('');
+                              }}
+                              className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                            >
+                              {city}
+                            </li>
+                          ))}
+                        {/* Always show "add custom" option if no exact match found */}
+                        {!ISRAEL_CITIES.includes(newCityInput.trim()) && newCityInput.trim().length >= 2 && (
+                          <li
+                            onClick={() => {
+                              const city = newCityInput.trim();
+                              if (!activeGlobalCities.includes(city)) {
+                                setActiveGlobalCities(prev => [...prev, city]);
+                              }
+                              setNewCityInput('');
+                            }}
+                            className="px-4 py-2 text-sm text-blue-600 font-semibold hover:bg-blue-50 cursor-pointer border-t border-slate-100"
+                          >
+                            + הוסף &quot;{newCityInput.trim()}&quot; כישוב מותאם
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end pt-4 border-t border-slate-100">
                 <button onClick={handleSaveAgencyGoals} disabled={agencyGoalsSaving} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
                   {agencyGoalsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור יעדים'}
@@ -393,52 +547,6 @@ export default function Settings() {
 
           {activeSection === 'integrations' && (
             <WhatsAppSettings />
-          )}
-
-          {activeSection === 'appearance' && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-8 animate-in fade-in duration-300">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">מראה ומיתוג</h2>
-                <p className="text-sm text-slate-500 mt-0.5">התאם את המראה והלוגו של הסוכנות שיופיע במערכת</p>
-              </div>
-
-              {/* Agency Logo Upload */}
-              <div className="pt-4 border-t border-slate-100">
-                <h3 className="font-semibold text-slate-800 text-sm mb-4">לוגו סוכנות ראשי</h3>
-                <div className="flex items-center gap-6">
-                  {/* Logo Preview */}
-                  <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
-                    {agencyLogoUploading ? (
-                      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-                    ) : agencyLogoUrl ? (
-                      <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
-                    ) : (
-                      <Palette className="w-8 h-8 text-slate-300" />
-                    )}
-                  </div>
-
-                  {/* Upload Controls */}
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      accept="image/jpeg, image/png, image/webp"
-                      className="hidden"
-                      ref={agencyLogoInputRef}
-                      onChange={handleAgencyLogoUpload}
-                    />
-                    <button
-                      onClick={() => agencyLogoInputRef.current?.click()}
-                      disabled={agencyLogoUploading}
-                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <Camera size={16} className="text-slate-500" />
-                      {agencyLogoUploading ? 'מעלה לוגו...' : 'העלה לוגו חדש'}
-                    </button>
-                    <p className="text-xs text-slate-400">מומלץ תמונת PNG שקופה (עד 2MB)</p>
-                  </div>
-                </div>
-              </div>
-            </div>
           )}
 
           {(activeSection === 'billing') && (

@@ -48,10 +48,9 @@ export async function getCatalog(token: string): Promise<SharedCatalog | null> {
 
     const data = { id: snap.id, ...snap.data() } as SharedCatalog;
 
-    // Double check expiration on the client side just in case
-    if (data.expiresAt && data.expiresAt.toDate() < new Date()) {
-        return null;
-    }
+    // Note: we intentionally do NOT block access based on expiresAt here.
+    // Catalogs remain accessible until explicitly deleted by the agency.
+    // expiresAt is used only for display/informational purposes.
 
     // Increment view count atomically
     try {

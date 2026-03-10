@@ -40,19 +40,36 @@ service firebase.storage {
     //            the leading slash on every child segment).
     // ══════════════════════════════════════════════════════════════════════════
 
-    // 1. Agency Logo — Admin only
-    match /agencies/{agencyId}/logo/{fileName} {
+    // 1. Agency Logo — Admin / Owner only
+    // Allows both agencies/{agencyId}/logo.{ext} AND agencies/{agencyId}/logo/{fileName}
+    match /agencies/{agencyId}/{fileName} {
       allow read: if true; // Public — needed for catalogs/website widgets
 
       allow create, update: if request.auth != null
                             && request.auth.token.agencyId == agencyId
-                            && request.auth.token.role == 'admin'
+                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+                            && fileName.matches('logo\\..*')
                             && request.resource.size < 5 * 1024 * 1024
                             && request.resource.contentType.matches('image/.*');
 
       allow delete: if request.auth != null
                     && request.auth.token.agencyId == agencyId
-                    && request.auth.token.role == 'admin';
+                    && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+                    && fileName.matches('logo\\..*');
+    }
+
+    match /agencies/{agencyId}/logo/{fileName} {
+      allow read: if true; // Public — needed for catalogs/website widgets
+
+      allow create, update: if request.auth != null
+                            && request.auth.token.agencyId == agencyId
+                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+                            && request.resource.size < 5 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner');
     }
 
 
@@ -71,10 +88,10 @@ service firebase.storage {
                          /databases/(default)/documents/properties/$(propertyId)
                        ).data.agencyId == agencyId;
 
-      // Only admins can overwrite or delete property images
+      // Only admins or owners can overwrite or delete property images
       allow update, delete: if request.auth != null
                             && request.auth.token.agencyId == agencyId
-                            && request.auth.token.role == 'admin';
+                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner');
     }
 
 
@@ -103,7 +120,7 @@ service firebase.storage {
                     // Require uploader to stamp their UID in custom metadata
                     && request.resource.metadata.uploadedBy == request.auth.uid;
 
-      // ✅ FIX #4: Only the original uploader OR an admin can update/delete a
+      // ✅ FIX #4: Only the original uploader, an admin, or an owner can update/delete a
       //            document. Previously any agent in the agency could overwrite
       //            or delete a colleague's files.
       allow update, delete: if request.auth != null
@@ -111,6 +128,7 @@ service firebase.storage {
                             && (
                               resource.metadata.uploadedBy == request.auth.uid
                               || request.auth.token.role == 'admin'
+                              || request.auth.token.role == 'owner'
                             );
     }
   }

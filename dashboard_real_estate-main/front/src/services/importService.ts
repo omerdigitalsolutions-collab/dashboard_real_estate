@@ -70,6 +70,101 @@ export async function parseFile(file: File): Promise<{ headers: string[]; rows: 
     });
 }
 
+// ─── Generic Value Helpers ────────────────────────────────────────────────────
+
+/**
+ * Normalizes Israeli phone numbers from any common format.
+ * Handles: +972, 00972, 0972, international formatting, dashes, spaces.
+ * Output: 10-digit Israeli format (e.g. 0501234567)
+ */
+export function normalizePhone(raw: string | number): string {
+    let s = String(raw ?? '').trim();
+    // Strip all non-digit chars first
+    const digits = s.replace(/\D/g, '');
+
+    // Handle country code prefixes: +972, 00972, 972 (without leading 0)
+    if (digits.startsWith('972') && digits.length >= 12) {
+        // International format: 972501234567 → 0501234567
+        return '0' + digits.slice(3);
+    }
+    if (digits.startsWith('00972')) {
+        return '0' + digits.slice(5);
+    }
+
+    // Remove any leading 0 prefix and re-add single leading 0
+    // e.g. "00501234567" → "0501234567"
+    const normalized = digits.replace(/^0+/, '0');
+    return normalized.length >= 9 ? normalized : digits; // fallback to original digits if too short
+}
+
+/**
+ * Parses a monetary value string into a number.
+ * Handles: ₪, $, €, K/M suffixes, European decimal formats (1.500.000 or 1,500,000)
+ */
+export function parseMoney(raw: string | number | undefined): number | null {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (typeof raw === 'number') return isNaN(raw) ? null : raw;
+
+    let s = String(raw).trim();
+
+    // Handle shorthand: 1.5M, 2.3K
+    const shorthand = s.match(/^[\d.,]+\s*([KkMm])$/);
+    if (shorthand) {
+        const num = parseFloat(s.replace(/[KkMm]/g, '').replace(/,/g, '.'));
+        const mult = shorthand[1].toLowerCase() === 'm' ? 1_000_000 : 1_000;
+        return isNaN(num) ? null : Math.round(num * mult);
+    }
+
+    // Strip currency symbols, whitespace, RTL marks
+    s = s.replace(/[₪$€£\u200E\u200F\u202A-\u202E]/g, '').trim();
+
+    // Determine if using European format (1.500.000 or 1.500,00 style)
+    const dotCount = (s.match(/\./g) || []).length;
+    const commaCount = (s.match(/,/g) || []).length;
+
+    if (dotCount > 1) {
+        // e.g. 1.500.000 — dots are thousands separators
+        s = s.replace(/\./g, '');
+    } else if (commaCount > 1) {
+        // e.g. 1,500,000 — commas are thousands separators
+        s = s.replace(/,/g, '');
+    } else if (dotCount === 1 && commaCount === 1) {
+        // e.g. 1.500,00 (EU) or 1,500.00 (US)
+        const dotPos = s.indexOf('.');
+        const commaPos = s.indexOf(',');
+        if (dotPos < commaPos) {
+            // EU: dot is thousands sep, comma is decimal
+            s = s.replace(/\./g, '').replace(',', '.');
+        } else {
+            // US: comma is thousands sep, dot is decimal
+            s = s.replace(/,/g, '');
+        }
+    } else {
+        // Single separator — just strip commas (likely thousands)
+        s = s.replace(/,/g, '');
+    }
+
+    const num = parseFloat(s);
+    return isNaN(num) ? null : num;
+}
+
+/**
+ * Parses boolean-ish string/number values.
+ * "כן", "yes", "true", "1", 1 → true
+ * "לא", "no", "false", "0", 0 → false
+ * Returns undefined for unrecognized values (caller decides default).
+ */
+export function parseBooleanish(raw: string | number | boolean | undefined): boolean | undefined {
+    if (raw === undefined || raw === null || raw === '') return undefined;
+    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'number') return raw !== 0;
+    const s = String(raw).trim().toLowerCase();
+    if (['כן', 'yes', 'true', '1', 'v', '✓', 'כן ✓'].includes(s)) return true;
+    if (['לא', 'no', 'false', '0', 'x', '✗'].includes(s)) return false;
+    return undefined;
+}
+
+
 // ─── Validate & Transform ─────────────────────────────────────────────────────
 
 const REQUIRED_FIELDS: Record<EntityType, string[]> = {
@@ -80,10 +175,46 @@ const REQUIRED_FIELDS: Record<EntityType, string[]> = {
     deal: ['propertyName', 'price', 'stage', 'projectedCommission'],
 };
 
-const VALID_PROPERTY_TYPES = ['sale', 'rent', 'למכירה', 'להשכרה', 'מכירה', 'השכרה', 'for sale', 'rental'];
-const PROPERTY_TYPE_MAP: Record<string, 'sale' | 'rent'> = {
+const VALID_PROPERTY_TYPES = ['sale', 'rent', 'commercial', 'למכירה', 'להשכרה', 'מכירה', 'השכרה', 'מסחרי', 'מסחר', 'for sale', 'rental'];
+const PROPERTY_TYPE_MAP: Record<string, 'sale' | 'rent' | 'commercial'> = {
     'למכירה': 'sale', 'מכירה': 'sale', 'for sale': 'sale', sale: 'sale',
     'להשכרה': 'rent', 'השכרה': 'rent', rental: 'rent', rent: 'rent',
+    'מסחרי': 'commercial', 'commercial': 'commercial', 'מסחר': 'commercial'
+};
+
+// Comprehensive Hebrew + English stage name mapping
+const STAGE_MAP: Record<string, string> = {
+    // English keys
+    'qualification': 'qualification', 'lead': 'qualification', 'new': 'qualification',
+    'viewing': 'viewing', 'visit': 'viewing', 'tour': 'viewing', 'showing': 'viewing',
+    'offer': 'offer', 'proposal': 'offer', 'bid': 'offer',
+    'negotiation': 'negotiation', 'negotiating': 'negotiation', 'counter': 'negotiation',
+    'contract': 'contract', 'signing': 'contract', 'closing': 'contract', 'due diligence': 'contract',
+    'won': 'won', 'closed': 'won', 'sold': 'won', 'complete': 'won', 'completed': 'won',
+    'lost': 'lost', 'failed': 'lost', 'cancelled': 'lost', 'canceled': 'lost',
+    // Hebrew keys – general
+    'הכשרה ראשונית': 'qualification', 'ראשוני': 'qualification', 'בירור צרכים': 'qualification', 'כישורים': 'qualification',
+    'טיפול ראשוני': 'qualification', 'ליד חדש': 'qualification', 'חדש': 'qualification',
+    'ביקור': 'viewing', 'סיור': 'viewing', 'תצפית': 'viewing', 'הצגת הנכס': 'viewing',
+    'הגשת הצעה': 'offer', 'הצעה': 'offer', 'הצעת מחיר': 'offer',
+    'משא ומתן': 'negotiation', 'ניגוציאציה': 'negotiation', 'מו"מ': 'negotiation', 'ניהול מו"מ': 'negotiation', 'ניהול מו׳׳מ': 'negotiation',
+    'חוזה': 'contract', 'חתימה': 'contract', 'סגירה': 'contract', 'טיפול בחוזה': 'contract', 'בדיקת נאותות': 'contract',
+    'נסגר': 'won', 'הושלם': 'won', 'זכייה': 'won', 'עסקה נסגרה': 'won', 'נחתם': 'won',
+    'אבוד': 'lost', 'נכשל': 'lost', 'ביטול': 'lost', 'בוטל': 'lost', 'לא רלוונטי': 'lost',
+};
+
+// Source value normalizations
+const SOURCE_MAP: Record<string, string> = {
+    'יד2': 'yad2', 'יד 2': 'yad2', 'yad2': 'yad2',
+    'מדלן': 'madlan', 'madlan': 'madlan',
+    'הומלי': 'homely', 'homely': 'homely',
+    'ווינ': 'waze', 'גוגל': 'google', 'google': 'google',
+    'פייסבוק': 'facebook', 'facebook': 'facebook',
+    'אינסטגרם': 'instagram', 'instagram': 'instagram',
+    'פה לפה': 'referral', 'המלצה': 'referral', 'referral': 'referral',
+    'ייבוא': 'import', 'import': 'import', 'excel': 'import',
+    'ידני': 'manual', 'manual': 'manual',
+    'טלפון': 'phone_call', 'שיחה': 'phone_call',
 };
 
 /**
@@ -139,17 +270,17 @@ export function validateAndTransform(
         // Entity-specific validation
         if (entityType === 'property' || entityType === 'combined') {
             const rawPrice = transformed['price'];
-            const price = parseFloat(String(rawPrice).replace(/[,\s₪]/g, ''));
-            if (isNaN(price) || price <= 0) {
+            const price = parseMoney(rawPrice);
+            if (price === null || price <= 0) {
                 invalid.push({ row: rawRow, reason: `שורה ${idx + 2}: מחיר לא תקין — "${rawPrice}"` });
                 return;
             }
             transformed['price'] = price;
 
             // type (sale/rent) — optional, defaults to 'sale'
-            const rawType = String(transformed['type'] || '').trim();
+            const rawType = String(transformed['type'] || '').trim().toLowerCase();
             if (rawType && VALID_PROPERTY_TYPES.includes(rawType)) {
-                transformed['type'] = PROPERTY_TYPE_MAP[rawType] ?? rawType;
+                transformed['type'] = PROPERTY_TYPE_MAP[rawType] ?? PROPERTY_TYPE_MAP[rawType.toLowerCase()] ?? 'sale';
             } else {
                 // If type field has a building name (e.g. "דירה") or is empty, move it to kind
                 if (rawType && !transformed['kind']) {
@@ -159,39 +290,43 @@ export function validateAndTransform(
             }
 
             // kind — free-text (e.g. דירה, פנטהאוז, דירת גן)
-            if (transformed['kind']) {
-                transformed['kind'] = String(transformed['kind']).trim();
-            } else {
-                transformed['kind'] = 'דירה';
-            }
+            transformed['kind'] = transformed['kind'] ? String(transformed['kind']).trim() : 'דירה';
 
             if (transformed['rooms']) {
                 const rooms = parseFloat(String(transformed['rooms']));
                 transformed['rooms'] = isNaN(rooms) ? undefined : rooms;
             }
             if (transformed['floor']) {
-                const floor = parseFloat(String(transformed['floor']));
+                const floor = parseFloat(String(transformed['floor']).replace(/[^\d.-]/g, ''));
                 transformed['floor'] = isNaN(floor) ? undefined : floor;
             }
+            if (transformed['sqm']) {
+                const sqm = parseMoney(transformed['sqm']);
+                transformed['sqm'] = sqm ?? undefined;
+            }
             // Cast notes to string — Excel might parse free-text as a date or number
-            if (transformed['notes'] !== undefined && transformed['notes'] !== '') {
-                transformed['notes'] = String(transformed['notes']).trim();
+            transformed['notes'] = transformed['notes'] !== undefined && transformed['notes'] !== ''
+                ? String(transformed['notes']).trim()
+                : null;
+
+            // isExclusive — parse boolean-ish values
+            const rawExclusive = transformed['isExclusive'];
+            if (rawExclusive !== undefined && rawExclusive !== '') {
+                const parsed = parseBooleanish(rawExclusive);
+                transformed['isExclusive'] = parsed !== undefined ? parsed : true; // default exclusive
             } else {
-                transformed['notes'] = null;
+                transformed['isExclusive'] = true;
             }
         }
 
         if (entityType === 'lead' || entityType === 'combined') {
-            // Normalize phone number — remove spaces/dashes
-            transformed['phone'] = String(transformed['phone'] || '').replace(/[\s\-]/g, '');
+            // Normalize phone number
+            transformed['phone'] = normalizePhone(transformed['phone'] || '');
 
-            // Cast notes to string safely (if combined, property validation handled it)
             if (entityType !== 'combined') {
-                if (transformed['notes'] !== undefined && transformed['notes'] !== '') {
-                    transformed['notes'] = String(transformed['notes']).trim();
-                } else {
-                    transformed['notes'] = null;
-                }
+                transformed['notes'] = transformed['notes'] !== undefined && transformed['notes'] !== ''
+                    ? String(transformed['notes']).trim()
+                    : null;
             }
 
             // Normalize lead type (buyer/seller) from Hebrew or English
@@ -208,8 +343,28 @@ export function validateAndTransform(
             } else {
                 transformed['type'] = LEAD_TYPE_MAP[rawLeadType] ?? fallbackType;
             }
-        }
 
+            // Parse budget — stored in requirements.maxBudget
+            if (transformed['budget']) {
+                const budget = parseMoney(transformed['budget']);
+                transformed['budget'] = budget ?? undefined;
+            }
+            // Parse minRooms / maxRooms
+            if (transformed['minRooms']) {
+                const r = parseFloat(String(transformed['minRooms']));
+                transformed['minRooms'] = isNaN(r) ? undefined : r;
+            }
+            if (transformed['maxRooms']) {
+                const r = parseFloat(String(transformed['maxRooms']));
+                transformed['maxRooms'] = isNaN(r) ? undefined : r;
+            }
+
+            // Normalize source
+            if (transformed['source']) {
+                const rawSource = String(transformed['source']).trim().toLowerCase();
+                transformed['source'] = SOURCE_MAP[rawSource] ?? SOURCE_MAP[String(transformed['source']).trim()] ?? rawSource;
+            }
+        }
 
         if (entityType === 'agent') {
             const email = String(transformed['email']).trim().toLowerCase();
@@ -226,19 +381,23 @@ export function validateAndTransform(
         if (entityType === 'deal') {
             // price — must be positive number
             const rawPrice = transformed['price'];
-            const price = parseFloat(String(rawPrice).replace(/[,\s₪]/g, ''));
-            if (isNaN(price) || price <= 0) {
+            const price = parseMoney(rawPrice);
+            if (price === null || price <= 0) {
                 invalid.push({ row: rawRow, reason: `שורה ${idx + 2}: מחיר לא תקין — "${rawPrice}"` });
                 return;
             }
             transformed['price'] = price;
 
-            // projectedCommission — must be positive number
+            // projectedCommission — can be either an absolute value or a percentage (auto-detect)
             const rawComm = transformed['projectedCommission'];
-            const commission = parseFloat(String(rawComm).replace(/[,\s₪%]/g, ''));
-            if (isNaN(commission) || commission < 0) {
+            let commission = parseMoney(rawComm);
+            if (commission === null || commission < 0) {
                 invalid.push({ row: rawRow, reason: `שורה ${idx + 2}: עמלה לא תקינה — "${rawComm}"` });
                 return;
+            }
+            // If commission value looks like a percentage (≤100), compute the actual amount
+            if (commission <= 100 && price > 0) {
+                commission = (price * commission) / 100;
             }
             transformed['projectedCommission'] = commission;
 
@@ -248,15 +407,6 @@ export function validateAndTransform(
                 invalid.push({ row: rawRow, reason: `שורה ${idx + 2}: שלב עסקה חסר` });
                 return;
             }
-            const STAGE_MAP: Record<string, string> = {
-                'qualification': 'qualification', 'כישורים': 'qualification', 'בירור צרכים': 'qualification',
-                'viewing': 'viewing', 'סיור': 'viewing', 'תצפית': 'viewing', 'ביקור': 'viewing',
-                'offer': 'offer', 'הצעה': 'offer', 'הגשת הצעה': 'offer',
-                'negotiation': 'negotiation', 'משא ומתן': 'negotiation', 'ניגוציאציה': 'negotiation',
-                'contract': 'contract', 'חוזה': 'contract', 'חתימה': 'contract', 'סגירה': 'contract',
-                'won': 'won', 'נסגר': 'won', 'הושלם': 'won', 'זכייה': 'won',
-                'lost': 'lost', 'אבוד': 'lost', 'נכשל': 'lost',
-            };
             transformed['stage'] = STAGE_MAP[rawStage.toLowerCase()] ?? STAGE_MAP[rawStage] ?? 'qualification';
 
             // probability — optional 0-100
@@ -265,9 +415,17 @@ export function validateAndTransform(
                 transformed['probability'] = isNaN(prob) ? undefined : Math.min(100, Math.max(0, prob));
             }
 
-            // Normalization for leadPhone
+            // Deal type (sale/rent/commercial) for the generated property
+            const rawType = String(transformed['type'] || '').trim().toLowerCase();
+            if (rawType && VALID_PROPERTY_TYPES.includes(rawType)) {
+                transformed['type'] = PROPERTY_TYPE_MAP[rawType] ?? PROPERTY_TYPE_MAP[rawType.toLowerCase()] ?? 'sale';
+            } else {
+                transformed['type'] = 'sale';
+            }
+
+            // Normalize leadPhone
             if (transformed['leadPhone']) {
-                transformed['leadPhone'] = String(transformed['leadPhone']).replace(/[\s\-]/g, '');
+                transformed['leadPhone'] = normalizePhone(transformed['leadPhone']);
             }
         }
 
@@ -289,6 +447,75 @@ async function getBatchChunks<T>(items: T[]): Promise<T[][]> {
     return chunks;
 }
 
+// ─── Shared: Agent lookup map ─────────────────────────────────────────────────
+
+async function buildAgentMap(agencyId: string): Promise<Map<string, string>> {
+    const snap = await getDocs(query(collection(db, 'users'), where('agencyId', '==', agencyId)));
+    const agentMap = new Map<string, string>();
+    snap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
+        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
+    });
+    return agentMap;
+}
+
+function resolveAgent(row: TransformedRow, agentMap: Map<string, string>, fallback: string): string {
+    if (row.agentName) {
+        const key = String(row.agentName).trim().toLowerCase();
+        if (agentMap.has(key)) return agentMap.get(key)!;
+    }
+    return fallback;
+}
+
+// ─── Shared: Property defaults builder ───────────────────────────────────────
+
+function buildPropertyDefaults(
+    row: TransformedRow,
+    agencyId: string,
+    agentId: string,
+    createdBy: string,
+    extra?: Partial<Record<string, any>>
+): Record<string, any> {
+    return {
+        address: row.address || row.propertyName || 'לא צויין רחוב',
+        city: row.city || 'לא צויינה עיר',
+        type: row.type || 'sale',
+        kind: row.kind || 'דירה',
+        price: row.price || 1,
+        rooms: row.rooms ?? null,
+        floor: row.floor ?? null,
+        sqm: row.sqm ?? null,
+        description: row.description ? String(row.description).trim() : null,
+        notes: row.notes ? String(row.notes).trim() : null,
+        isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
+        listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
+        exclusivityEndDate: row.exclusivityEndDate
+            ? (typeof row.exclusivityEndDate === 'string'
+                ? Timestamp.fromDate(new Date(row.exclusivityEndDate))
+                : row.exclusivityEndDate)
+            : null,
+        agencyId,
+        agentId,
+        createdBy,
+        status: 'active',
+        daysOnMarket: 0,
+        lat: 31.5,
+        lng: 34.75,
+        location: { lat: 31.5, lng: 34.75 },
+        geocode: {
+            lat: 31.5,
+            lng: 34.75,
+            formattedAddress: `${row.address ?? row.propertyName ?? ''}, ${row.city ?? ''}`,
+            placeId: '',
+            lastUpdated: serverTimestamp(),
+        },
+        ...(row.customData ? { customData: row.customData } : {}),
+        createdAt: serverTimestamp(),
+        ...extra,
+    };
+}
+
 // ─── Import Leads ─────────────────────────────────────────────────────────────
 
 export async function importLeads(
@@ -305,9 +532,7 @@ export async function importLeads(
     const existingDocsMap = new Map<string, string>(); // phone → docId
 
     if (strategy !== 'always_create') {
-        const snap = await getDocs(
-            query(collection(db, 'leads'), where('agencyId', '==', agencyId))
-        );
+        const snap = await getDocs(query(collection(db, 'leads'), where('agencyId', '==', agencyId)));
         snap.docs.forEach((d) => {
             const phone = d.data().phone as string;
             if (phone) {
@@ -317,17 +542,7 @@ export async function importLeads(
         });
     }
 
-    // Fetch agents in the agency to map agent names
-    const agentsSnap = await getDocs(
-        query(collection(db, 'users'), where('agencyId', '==', agencyId))
-    );
-    const agentMap = new Map<string, string>(); // lowercased name/email -> uid
-    agentsSnap.docs.forEach((d) => {
-        const data = d.data();
-        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
-        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
-    });
-
+    const agentMap = await buildAgentMap(agencyId);
     const chunks = await getBatchChunks(rows);
 
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -335,24 +550,17 @@ export async function importLeads(
         const batch = writeBatch(db);
 
         for (const row of chunk) {
-            const phone = String(row['phone']).trim();
+            const phone = normalizePhone(String(row['phone']));
 
             if (strategy === 'skip' && existingPhones.has(phone)) continue;
 
-            // Resolve Agent ID
-            let assignedAgentId = row.assignedAgentId || null;
-            if (row.agentName) {
-                const qName = String(row.agentName).trim().toLowerCase();
-                if (agentMap.has(qName)) {
-                    assignedAgentId = agentMap.get(qName)!;
-                }
-            }
+            const assignedAgentId = resolveAgent(row, agentMap, null as any) || null;
 
             if (strategy === 'update' && existingPhones.has(phone)) {
                 const existingId = existingDocsMap.get(phone)!;
                 const ref = doc(db, 'leads', existingId);
-                const updateData = { ...row, updatedAt: serverTimestamp() };
-                if (assignedAgentId) (updateData as any).assignedAgentId = assignedAgentId;
+                const updateData: any = { ...row, updatedAt: serverTimestamp() };
+                if (assignedAgentId) updateData.assignedAgentId = assignedAgentId;
                 batch.update(ref, updateData);
             } else {
                 const ref = doc(collection(db, 'leads'));
@@ -361,7 +569,7 @@ export async function importLeads(
                     assignedAgentId,
                     agencyId,
                     createdBy,
-                    source: 'import',
+                    source: row.source || 'import',
                     status: 'new',
                     createdAt: serverTimestamp(),
                 });
@@ -377,34 +585,32 @@ export async function importLeads(
 }
 
 function buildLeadDefaults(row: TransformedRow): TransformedRow {
-    const defaults: TransformedRow = {
+    return {
         name: row.name ?? '',
-        phone: row.phone ?? '',
-        email: row.email ?? null,
+        phone: normalizePhone(String(row.phone ?? '')),
+        email: row.email ? String(row.email).trim().toLowerCase() : null,
         type: row.type ?? 'buyer',
-        notes: row.notes ?? null,
+        notes: row.notes ? String(row.notes).trim() : null,
+        description: row.description ? String(row.description).trim() : null,
         assignedAgentId: null,
         requirements: {
-            desiredCity: row.city ? [row.city] : [],
-            maxBudget: row.budget ? parseFloat(String(row.budget).replace(/[,\s₪]/g, '')) : null,
-            minRooms: null,
-            maxRooms: null,
-            minSizeSqf: null,
-            floorMin: null,
-            floorMax: null,
-            propertyType: [],
-            mustHaveElevator: false,
-            mustHaveParking: false,
-            mustHaveBalcony: false,
-            mustHaveSafeRoom: false,
-            condition: 'any',
-            urgency: 'flexible',
+            desiredCity: row.city ? [row.city] : (row.desiredCity ? [row.desiredCity] : []),
+            maxBudget: parseMoney(row.budget),
+            minRooms: row.minRooms ?? null,
+            maxRooms: row.maxRooms ?? null,
+            minSizeSqf: row.minSqm ?? null,
+            floorMin: row.floorMin ?? null,
+            floorMax: row.floorMax ?? null,
+            propertyType: row.propertyType ? [row.propertyType] : [],
+            mustHaveElevator: parseBooleanish(row.elevator) ?? false,
+            mustHaveParking: parseBooleanish(row.parking) ?? false,
+            mustHaveBalcony: parseBooleanish(row.balcony) ?? false,
+            mustHaveSafeRoom: parseBooleanish(row.safeRoom) ?? false,
+            condition: row.condition || 'any',
+            urgency: row.urgency || 'flexible',
         },
+        ...(row.customData ? { customData: row.customData } : {}),
     };
-    if (row.customData) {
-        defaults.customData = row.customData;
-    }
-    return defaults;
 }
 
 // ─── Import Properties ────────────────────────────────────────────────────────
@@ -418,14 +624,11 @@ export async function importProperties(
 ): Promise<number> {
     let imported = 0;
 
-    // Fetch existing address+city combos
     const existingKeys = new Set<string>();
-    const existingDocsMap = new Map<string, string>(); // key → docId
+    const existingDocsMap = new Map<string, string>();
 
     if (strategy !== 'always_create') {
-        const snap = await getDocs(
-            query(collection(db, 'properties'), where('agencyId', '==', agencyId))
-        );
+        const snap = await getDocs(query(collection(db, 'properties'), where('agencyId', '==', agencyId)));
         snap.docs.forEach((d) => {
             const data = d.data();
             const key = `${String(data.address ?? '').trim().toLowerCase()}|${String(data.city ?? '').trim().toLowerCase()}`;
@@ -434,17 +637,7 @@ export async function importProperties(
         });
     }
 
-    // Fetch agents in the agency to map agent names
-    const agentsSnap = await getDocs(
-        query(collection(db, 'users'), where('agencyId', '==', agencyId))
-    );
-    const agentMap = new Map<string, string>(); // lowercased name/email -> uid
-    agentsSnap.docs.forEach((d) => {
-        const data = d.data();
-        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
-        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
-    });
-
+    const agentMap = await buildAgentMap(agencyId);
     const chunks = await getBatchChunks(rows);
 
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -456,57 +649,16 @@ export async function importProperties(
 
             if (strategy === 'skip' && existingKeys.has(key)) continue;
 
-            // Resolve Agent ID
-            let resolvedAgentId = createdBy; // fallback to the user doing the import
-            if (row.agentName) {
-                const qName = String(row.agentName).trim().toLowerCase();
-                if (agentMap.has(qName)) {
-                    resolvedAgentId = agentMap.get(qName)!;
-                }
-            }
+            const resolvedAgentId = resolveAgent(row, agentMap, createdBy);
 
             if (strategy === 'update' && existingKeys.has(key)) {
                 const existingId = existingDocsMap.get(key)!;
                 const ref = doc(db, 'properties', existingId);
-                const updateData = { ...row, updatedAt: serverTimestamp() };
-                if (row.agentName && resolvedAgentId) {
-                    (updateData as any).agentId = resolvedAgentId;
-                }
+                const updateData: any = { ...row, agentId: resolvedAgentId, updatedAt: serverTimestamp() };
                 batch.update(ref, updateData);
             } else {
                 const ref = doc(collection(db, 'properties'));
-                batch.set(ref, {
-                    address: row.address || 'לא צויין רחוב',
-                    city: row.city || 'לא צויינה עיר',
-                    type: row.type || 'sale',
-                    kind: row.kind || 'דירה',
-                    price: row.price || 1, // Fallback to 1 since rules require > 0
-                    rooms: row.rooms ?? null,
-                    floor: row.floor ?? null,
-                    sqm: row.sqm ?? null,
-                    description: row.description ?? null,
-                    notes: row.notes ?? null,
-                    isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
-                    listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
-                    exclusivityEndDate: row.exclusivityEndDate ? (typeof row.exclusivityEndDate === 'string' ? Timestamp.fromDate(new Date(row.exclusivityEndDate)) : row.exclusivityEndDate) : null,
-                    agencyId,
-                    agentId: resolvedAgentId,
-                    createdBy,
-                    status: 'active',
-                    daysOnMarket: 0,
-                    lat: 31.5,
-                    lng: 34.75,
-                    location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
-                    geocode: {
-                        lat: 31.5,
-                        lng: 34.75,
-                        formattedAddress: `${row.address ?? ''}, ${row.city ?? ''}`,
-                        placeId: '',
-                        lastUpdated: serverTimestamp()
-                    },
-                    ...(row.customData ? { customData: row.customData } : {}),
-                    createdAt: serverTimestamp(),
-                });
+                batch.set(ref, buildPropertyDefaults(row, agencyId, resolvedAgentId, createdBy));
             }
             imported++;
         }
@@ -530,8 +682,7 @@ export async function importMixed(
 ): Promise<number> {
     let imported = 0;
 
-    // Batch size is half of BATCH_SIZE because each row creates 2 documents (Lead + Property)
-    // 200 rows = 400 writes. Firestore limit is 500 writes per batch.
+    // 200 rows = 400 writes max (each row = Lead + Property = 2 writes)
     const CHUNK_SIZE = 200;
     const chunks: TransformedRow[][] = [];
     for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
@@ -543,11 +694,8 @@ export async function importMixed(
         const batch = writeBatch(db);
 
         for (const row of chunk) {
-            // 1. Create Lead Reference
+            // 1. Lead
             const leadRef = doc(collection(db, 'leads'));
-
-            // Note: row.type is the Property transaction type (sale/rent). 
-            // The lead type is stored in 'leadTypeOverride' from validation, or defaults to defaultSeller logic
             const leadData = buildLeadDefaults({
                 ...row,
                 type: row.leadTypeOverride || 'seller',
@@ -557,48 +705,16 @@ export async function importMixed(
                 ...leadData,
                 agencyId,
                 createdBy,
-                source: 'import',
+                source: row.source || 'import',
                 status: 'new',
                 createdAt: serverTimestamp(),
             });
 
-            // 2. Create Property Reference
+            // 2. Property — link to owner lead
             const propertyRef = doc(collection(db, 'properties'));
-
-            // Build property manually (since we don't have buildPropertyDefaults)
-            batch.set(propertyRef, {
-                address: row.address || 'לא צויין רחוב',
-                city: row.city || 'לא צויינה עיר',
-                type: row.type || 'sale',
-                kind: row.kind || 'דירה',
-                price: row.price || 1, // Fallback to 1 since rules require > 0
-                rooms: row.rooms ?? null,
-                floor: row.floor ?? null,
-                sqm: row.sqm ?? null,
-                description: row.description ?? null,
-                notes: row.notes ?? null,
-                isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
-                listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
-                exclusivityEndDate: row.exclusivityEndDate ? (typeof row.exclusivityEndDate === 'string' ? Timestamp.fromDate(new Date(row.exclusivityEndDate)) : row.exclusivityEndDate) : null,
-                agencyId,
-                agentId: createdBy,
-                createdBy,
+            batch.set(propertyRef, buildPropertyDefaults(row, agencyId, createdBy, createdBy, {
                 ownerId: leadRef.id,
-                status: 'active',
-                daysOnMarket: 0,
-                lat: 31.5,
-                lng: 34.75,
-                location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
-                geocode: {
-                    lat: 31.5,
-                    lng: 34.75,
-                    formattedAddress: `${row.address ?? ''}, ${row.city ?? ''}`,
-                    placeId: '',
-                    lastUpdated: serverTimestamp()
-                },
-                ...(row.customData ? { customData: row.customData } : {}),
-                createdAt: serverTimestamp(),
-            });
+            }));
 
             imported++;
         }
@@ -617,21 +733,28 @@ export async function importDeals(
     createdBy: string,
     rows: TransformedRow[],
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _strategy: DuplicateStrategy, // deals always create new docs (no natural duplicate key)
+    _strategy: DuplicateStrategy,
     onProgress: ProgressCallback
 ): Promise<number> {
     let imported = 0;
     const chunks = await getBatchChunks(rows);
+    const agentMap = await buildAgentMap(agencyId);
 
-    // Fetch agents in the agency to map agent names
-    const agentsSnap = await getDocs(
-        query(collection(db, 'users'), where('agencyId', '==', agencyId))
-    );
-    const agentMap = new Map<string, string>(); // lowercased name/email -> uid
-    agentsSnap.docs.forEach((d) => {
+    // Pre-load existing properties (address|city → id) for deduplication
+    const existingPropertiesMap = new Map<string, string>();
+    const propSnap = await getDocs(query(collection(db, 'properties'), where('agencyId', '==', agencyId)));
+    propSnap.docs.forEach((d) => {
         const data = d.data();
-        if (data.name) agentMap.set(String(data.name).trim().toLowerCase(), d.id);
-        if (data.email) agentMap.set(String(data.email).trim().toLowerCase(), d.id);
+        const key = `${String(data.address ?? '').trim().toLowerCase()}|${String(data.city ?? '').trim().toLowerCase()}`;
+        existingPropertiesMap.set(key, d.id);
+    });
+
+    // Pre-load existing leads (phone → id) for deduplication
+    const existingLeadsMap = new Map<string, string>();
+    const leadSnap = await getDocs(query(collection(db, 'leads'), where('agencyId', '==', agencyId)));
+    leadSnap.docs.forEach((d) => {
+        const phone = d.data().phone as string;
+        if (phone) existingLeadsMap.set(phone, d.id);
     });
 
     for (let ci = 0; ci < chunks.length; ci++) {
@@ -639,87 +762,64 @@ export async function importDeals(
         const batch = writeBatch(db);
 
         for (const row of chunk) {
-            // Find agent if provided
-            let assignedAgentId = createdBy;
-            if (row.agentName) {
-                const qName = String(row.agentName).trim().toLowerCase();
-                if (agentMap.has(qName)) {
-                    assignedAgentId = agentMap.get(qName)!;
-                }
+            const assignedAgentId = resolveAgent(row, agentMap, createdBy);
+
+            // 1. Property — reuse existing if address+city match
+            const propKey = `${String(row.propertyName ?? '').trim().toLowerCase()}|${String(row.city ?? '').trim().toLowerCase()}`;
+            let propertyId = existingPropertiesMap.get(propKey);
+            if (!propertyId) {
+                const propertyRef = doc(collection(db, 'properties'));
+                propertyId = propertyRef.id;
+                batch.set(propertyRef, buildPropertyDefaults(
+                    { ...row, address: row.propertyName },
+                    agencyId,
+                    assignedAgentId,
+                    createdBy,
+                    { status: 'pending' }
+                ));
+                existingPropertiesMap.set(propKey, propertyId);
             }
 
-            // 1. Create Property
-            const propertyRef = doc(collection(db, 'properties'));
-            batch.set(propertyRef, {
-                address: row.propertyName || 'לא צויין רחוב',
-                city: row.city || 'לא צויינה עיר',
-                type: 'sale',
-                kind: 'דירה',
-                price: row.price || 1,
-                rooms: null,
-                floor: null,
-                description: null,
-                notes: null,
-                agencyId,
-                agentId: assignedAgentId,
-                createdBy,
-                status: 'pending', // Deals usually map to active/pending properties
-                daysOnMarket: 0,
-                isExclusive: false,
-                lat: 31.5,
-                lng: 34.75,
-                location: { lat: 31.5, lng: 34.75 }, // Default Israel center until updated
-                geocode: {
-                    lat: 31.5,
-                    lng: 34.75,
-                    formattedAddress: `${row.propertyName ?? ''}, ${row.city ?? ''}`,
-                    placeId: '',
-                    lastUpdated: serverTimestamp()
-                },
-                createdAt: serverTimestamp(),
-            });
+            // 2. Lead — reuse existing if phone matches
+            const normalizedPhone = normalizePhone(String(row.leadPhone ?? ''));
+            let leadId = normalizedPhone ? existingLeadsMap.get(normalizedPhone) : undefined;
+            if (!leadId && (row.leadName || row.leadPhone)) {
+                const leadRef = doc(collection(db, 'leads'));
+                leadId = leadRef.id;
+                batch.set(leadRef, {
+                    name: row.leadName ?? '',
+                    phone: normalizedPhone,
+                    email: row.leadEmail ? String(row.leadEmail).trim().toLowerCase() : null,
+                    source: row.source || 'excel_import',
+                    type: 'buyer',
+                    agencyId,
+                    assignedAgentId,
+                    status: 'new',
+                    notes: null,
+                    requirements: {
+                        desiredCity: row.city ? [row.city] : [],
+                        maxBudget: parseMoney(row.budget),
+                        minRooms: null, maxRooms: null, minSizeSqf: null,
+                        floorMin: null, floorMax: null, propertyType: [],
+                        mustHaveElevator: false, mustHaveParking: false,
+                        mustHaveBalcony: false, mustHaveSafeRoom: false,
+                        condition: 'any', urgency: 'flexible',
+                    },
+                    createdAt: serverTimestamp(),
+                });
+                if (normalizedPhone) existingLeadsMap.set(normalizedPhone, leadId);
+            }
 
-            // 2. Create Lead
-            const leadRef = doc(collection(db, 'leads'));
-            batch.set(leadRef, {
-                name: row.leadName ?? '',
-                phone: row.leadPhone ?? '',
-                email: null,
-                source: 'excel_import',
-                type: 'buyer', // default
-                agencyId,
-                assignedAgentId,
-                status: 'new', // or based on stage
-                notes: null,
-                requirements: {
-                    desiredCity: row.city ? [row.city] : [],
-                    maxBudget: null,
-                    minRooms: null,
-                    maxRooms: null,
-                    minSizeSqf: null,
-                    floorMin: null,
-                    floorMax: null,
-                    propertyType: [],
-                    mustHaveElevator: false,
-                    mustHaveParking: false,
-                    mustHaveBalcony: false,
-                    mustHaveSafeRoom: false,
-                    condition: 'any',
-                    urgency: 'flexible',
-                },
-                createdAt: serverTimestamp(),
-            });
-
-            // 3. Create Deal
-            const ref = doc(collection(db, 'deals'));
-            batch.set(ref, {
-                propertyId: propertyRef.id,
-                leadId: leadRef.id,
+            // 3. Deal
+            const dealRef = doc(collection(db, 'deals'));
+            batch.set(dealRef, {
+                propertyId,
+                ...(leadId ? { buyerId: leadId } : {}),
                 stage: row.stage ?? 'qualification',
                 price: row.price ?? 0,
                 projectedCommission: row.projectedCommission ?? 0,
-                probability: row.probability ?? null,
-                notes: row.notes ?? null,
+                ...(row.probability !== undefined ? { probability: row.probability } : {}),
+                notes: row.notes ? String(row.notes).trim() : null,
                 agencyId,
                 createdBy,
                 agentId: assignedAgentId,

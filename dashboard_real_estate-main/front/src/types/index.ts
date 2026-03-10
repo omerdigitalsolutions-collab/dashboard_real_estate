@@ -38,6 +38,7 @@ export interface Agency {
         logoUrl?: string;
         themeColor?: string;
         customDealStages?: CustomDealStage[];
+        activeGlobalCities?: string[]; // Multiple service regions to pull global properties from
     };
     whatsappIntegration?: {
         status?: string;
@@ -130,7 +131,7 @@ export interface Lead {
 }
 
 // ─── Properties ───────────────────────────────────────────────────────────────
-export type PropertyType = 'sale' | 'rent';
+export type PropertyType = 'sale' | 'rent' | 'commercial';
 
 export type PropertyStatus =
     | 'active'

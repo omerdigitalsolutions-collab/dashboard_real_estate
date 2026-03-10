@@ -28,7 +28,7 @@ import {
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { BotMessageSquare, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
@@ -126,20 +126,7 @@ function KpiCard({ label, value, icon: Icon, glowColor, loading, subtitle }: Kpi
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status?: string }) {
-    if (status === 'suspended') {
-        return (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-900/40 text-red-400 border border-red-500/30">
-                <ShieldAlert className="w-3 h-3" /> מושעה
-            </span>
-        );
-    }
-    return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">
-            <ShieldCheck className="w-3 h-3" /> פעיל
-        </span>
-    );
-}
+
 
 // ─── Tier badge ──────────────────────────────────────────────────────────────
 const TIER_STYLES: Record<string, string> = {
@@ -522,10 +509,10 @@ export default function SuperAdminDashboard() {
                     <table className="w-full text-sm text-right">
                         <thead>
                             <tr className="border-b border-slate-800">
-                                {['שם הסוכנות', 'מייל אדמין', 'תאריך הצטרפות', 'מנוי', 'בוט ציבורי', 'סטטוס', ''].map((h) => (
+                                {['סוכנות', 'מנהל', 'תחילת ניסיון', 'סיום ניסיון', 'סטטוס חידוש', 'מנוי נוכחי', ''].map((h) => (
                                     <th
                                         key={h}
-                                        className="px-6 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-600"
+                                        className="px-6 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-600 whitespace-nowrap"
                                     >
                                         {h}
                                     </th>
@@ -577,10 +564,34 @@ export default function SuperAdminDashboard() {
                                         <td className="px-6 py-4 text-slate-500 font-mono text-xs">
                                             {ag.adminEmail ?? '—'}
                                         </td>
-                                        <td className="px-6 py-4 text-slate-500 text-xs">
+                                        <td className="px-6 py-4 text-slate-500 text-xs font-medium">
                                             {ag.createdAt?.toDate
                                                 ? ag.createdAt.toDate().toLocaleDateString('he-IL')
                                                 : '—'}
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-500 text-xs font-medium">
+                                            {ag.billing?.trialEndsAt?.toDate
+                                                ? ag.billing.trialEndsAt.toDate().toLocaleDateString('he-IL')
+                                                : '—'}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {ag.billing?.status === 'trialing' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-900/30 text-blue-400 border border-blue-500/20">
+                                                    בניסיון
+                                                </span>
+                                            ) : ag.billing?.status === 'past_due' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-900/40 text-red-500 border border-red-500/30">
+                                                    <ShieldAlert className="w-3.5 h-3.5" /> לא חידש
+                                                </span>
+                                            ) : ag.billing?.status === 'active' || ag.planId && ag.planId !== 'free' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                                                    <ShieldCheck className="w-3.5 h-3.5" /> פעיל
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                                                    לא ידוע
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-2">
@@ -598,15 +609,7 @@ export default function SuperAdminDashboard() {
                                                 </select>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <BotMessageSquare className={`w-4 h-4 ${ag.isWhatsappConnected ? 'text-cyan-400' : 'text-slate-600'}`} />
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <StatusBadge status={ag.status} />
-                                        </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 text-left">
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();

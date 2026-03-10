@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -53,6 +53,9 @@ const superadmin_1 = require("./superadmin");
 const globalImport_1 = require("./admin/globalImport");
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 const checkTrialExpiry_1 = require("./scheduled/checkTrialExpiry");
+const checkTrialExpiryAlerts_1 = require("./scheduled/checkTrialExpiryAlerts");
+// ── Billing / Subscriptions ────────────────────────────────────────────────────
+const manual_requests_1 = require("./billing/manual_requests");
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
 //   agencies-createAgencyAccount
@@ -71,7 +74,7 @@ exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, a
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
-exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot };
+exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights };
 exports.automation = { webhookProcessGlobalYad2Email: globalYad2Webhook_1.webhookProcessGlobalYad2Email };
 exports.superadmin = {
     superAdminUpdateExpenses: superadmin_1.superAdminUpdateExpenses,
@@ -82,7 +85,8 @@ exports.superadmin = {
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan: superadmin_1.superAdminUpdateAgencyPlan
 };
-exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry };
+exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
+exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");

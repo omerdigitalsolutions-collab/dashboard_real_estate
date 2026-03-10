@@ -22,15 +22,28 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'name', label: 'שם מלא', required: true },
         { key: 'phone', label: 'טלפון', required: true },
         { key: 'email', label: 'אימייל' },
+        { key: 'leadType', label: 'סוג ליד (קונה/מוכר)' },
+        { key: 'source', label: 'מקור הליד' },
         { key: 'budget', label: 'תקציב מקסימלי' },
         { key: 'city', label: 'עיר מבוקשת' },
+        { key: 'minRooms', label: 'מינ׳ חדרים' },
+        { key: 'maxRooms', label: 'מקס׳ חדרים' },
+        { key: 'minSqm', label: 'מינ׳ שטח (מ"ר)' },
+        { key: 'floorMin', label: 'קומה מינ׳' },
+        { key: 'floorMax', label: 'קומה מקס׳' },
+        { key: 'parking', label: 'חניה (כן/לא)' },
+        { key: 'balcony', label: 'מרפסת (כן/לא)' },
+        { key: 'safeRoom', label: 'ממ"ד (כן/לא)' },
+        { key: 'elevator', label: 'מעלית (כן/לא)' },
+        { key: 'urgency', label: 'דחיפות (urgent/flexible)' },
         { key: 'agentName', label: 'שם סוכן מטפל' },
+        { key: 'description', label: 'תיאור / פרטים' },
         { key: 'notes', label: 'הערות' },
     ],
     property: [
         { key: 'address', label: 'כתובת רחוב', required: true },
         { key: 'city', label: 'עיר' },
-        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה)' },
+        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה/מסחרי)' },
         { key: 'price', label: 'מחיר', required: true },
         { key: 'rooms', label: 'מספר חדרים' },
         { key: 'kind', label: 'סוג נכס (דירת גן, פנטהוז...)' },
@@ -39,7 +52,9 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'description', label: 'תיאור נכס' },
         { key: 'agentName', label: 'שם סוכן מטפל' },
         { key: 'isExclusive', label: 'בלעדיות (כן/לא)' },
+        { key: 'listingType', label: 'סוג שיווק (exclusive/private)' },
         { key: 'exclusivityEndDate', label: 'סיום בלעדיות' },
+        { key: 'status', label: 'סטטוס הנכס' },
         { key: 'notes', label: 'הערות / היסטוריית טיפול' },
     ],
     agent: [
@@ -50,13 +65,16 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
     deal: [
         { key: 'propertyName', label: 'כתובת נכס', required: true },
         { key: 'city', label: 'עיר הנכס', required: true },
-        { key: 'leadName', label: 'שם לקוח', required: true },
-        { key: 'leadPhone', label: 'טלפון לקוח', required: true },
+        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה/מסחרי)' },
+        { key: 'leadName', label: 'שם לקוח' },
+        { key: 'leadPhone', label: 'טלפון לקוח' },
+        { key: 'leadEmail', label: 'אימייל לקוח' },
         { key: 'price', label: 'מחיר עסקה', required: true },
         { key: 'stage', label: 'שלב במכירה', required: true },
-        { key: 'projectedCommission', label: 'עמלה צפויה', required: true },
+        { key: 'projectedCommission', label: 'עמלה צפויה (₪ או %)', required: true },
         { key: 'probability', label: 'הסתברות (%)' },
         { key: 'agentName', label: 'שם סוכן' },
+        { key: 'source', label: 'מקור' },
         { key: 'notes', label: 'הערות' },
     ],
     // Each row = 1 Lead + 1 Property; fields are split on import
@@ -65,14 +83,18 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'name', label: 'שם בעל הנכס (ליד)', required: true },
         { key: 'phone', label: 'טלפון (ליד)', required: true },
         { key: 'email', label: 'אימייל (ליד)' },
+        { key: 'leadType', label: 'סוג ליד (קונה/מוכר)' },
         { key: 'notes', label: 'הערות (ליד)' },
         // Property fields
         { key: 'address', label: 'כתובת הנכס', required: true },
         { key: 'city', label: 'עיר הנכס', required: true },
         { key: 'price', label: 'מחיר', required: true },
-        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה)' },
+        { key: 'type', label: 'סוג עסקה (למכירה/להשכרה/מסחרי)' },
         { key: 'rooms', label: 'מספר חדרים' },
         { key: 'kind', label: 'סוג נכס' },
+        { key: 'sqm', label: 'שטח (מ"ר)' },
+        { key: 'floor', label: 'קומה' },
+        { key: 'isExclusive', label: 'בלעדיות (כן/לא)' },
         { key: 'description', label: 'תיאור' },
         { key: 'agentName', label: 'סוכן מטפל' },
     ],
@@ -87,81 +109,132 @@ const ENTITY_LABELS: Record<ModalEntityType, string> = {
     combined: 'ליד + נכס (שורה אחת)',
 };
 
-// Hebrew → field key auto-detection (extended dictionary)
+// Hebrew → field key auto-detection — comprehensive dictionary
+// Covers: Israeli broker spreadsheets, yad2/madlan exports, manual CRM exports, English variants
 const HEBREW_MAP: Record<string, string> = {
-    // Name / Lead
+    // ── Name / Person ───────────────────────────────────────────────────────────
     'שם': 'name', 'שם מלא': 'name', 'שם הלקוח': 'name', 'לקוח': 'name',
-    'fullname': 'name', 'full name': 'name', 'client name': 'name', 'contact': 'name',
+    'fullname': 'name', 'full name': 'name', 'client name': 'name', 'contact': 'name', 'name': 'name',
     'שם_ליד': 'name', 'שם ליד': 'name', 'שם בעל הנכס': 'name', 'בעלים': 'name',
-    // Phone
+    'שם הבעלים': 'name', 'שם פרטי ושם משפחה': 'name', 'שם בעל': 'name',
+    // ── Phone ────────────────────────────────────────────────────────────────────
     'טלפון': 'phone', 'נייד': 'phone', 'פלאפון': 'phone', 'נייד לקוח': 'phone',
-    'phone': 'phone', 'mobile': 'phone', 'cell': 'phone', 'tel': 'phone',
-    'טל': 'phone', 'טל\'': 'phone', 'מספר טלפון': 'phone',
-    // Email
+    'phone': 'phone', 'mobile': 'phone', 'cell': 'phone', 'tel': 'phone', 'telephone': 'phone',
+    'טל': 'phone', "טל'": 'phone', 'מספר טלפון': 'phone', 'מס טלפון': 'phone',
+    'טלפון סלולרי': 'phone', 'סלולרי': 'phone', 'מספר נייד': 'phone',
+    'phone number': 'phone', 'cell phone': 'phone', 'mobile number': 'phone',
+    // ── Email ─────────────────────────────────────────────────────────────────────
     'אימייל': 'email', 'מייל': 'email', 'דואל': 'email', 'דוא"ל': 'email',
-    'email': 'email', 'mail': 'email', 'e-mail': 'email',
-    // City
+    'email': 'email', 'mail': 'email', 'e-mail': 'email', 'e mail': 'email',
+    'כתובת מייל': 'email', 'כתובת דוא"ל': 'email',
+    // ── City / Location ──────────────────────────────────────────────────────────
     'עיר': 'city', 'יישוב': 'city', 'שכונה': 'city', 'מיקום': 'city',
-    'city': 'city', 'location': 'city', 'area': 'city', 'אזור': 'city',
-    'עיר מבוקשת': 'city', 'עיר הנכס': 'city',
-    // Address
+    'city': 'city', 'location': 'city', 'area': 'city', 'אזור': 'city', 'ישוב': 'city',
+    'עיר מבוקשת': 'city', 'עיר הנכס': 'city', 'מיקום הנכס': 'city', 'עיר / ישוב': 'city',
+    'neighborhood': 'city', 'area code': 'city', 'עד עיר': 'city',
+    // ── Address ──────────────────────────────────────────────────────────────────
     'כתובת': 'address', 'רחוב': 'address', 'כתובת הנכס': 'address', 'כתובת מלאה': 'address',
-    'address': 'address', 'street': 'address', 'רח\'': 'address',
-    // Price
+    'address': 'address', 'street': 'address', "רח'": 'address', 'כתובת רחוב': 'address',
+    'רחוב ומספר': 'address', 'כתובת ומספר': 'address', 'מספר בית': 'address',
+    'house number': 'address', 'street address': 'address',
+    // ── Price ────────────────────────────────────────────────────────────────────
     'מחיר': 'price', 'סכום': 'price', 'מחיר מבוקש': 'price', 'מחיר שיווק': 'price',
     'price': 'price', 'value': 'price', 'ערך': 'price', 'סכום מבוקש': 'price',
-    'מחיר אסקינג': 'price', 'עלות': 'price',
-    // Transaction type
+    'מחיר אסקינג': 'price', 'עלות': 'price', 'asking price': 'price', 'sale price': 'price',
+    'מחיר דורשים': 'price', 'מחיר מכירה': 'price', 'שווי': 'price', 'שווי הנכס': 'price',
+    'מחיר להשכרה': 'price', 'שכר דירה': 'price', 'שכ"ד': 'price',
+    // ── Transaction type ─────────────────────────────────────────────────────────
     'סוג עסקה': 'type', 'סוג מכירה': 'type', 'עסקה': 'type',
-    'מכירה/השכרה': 'type', 'סוג העסקה': 'type',
-    'type': 'type', 'deal type': 'type', 'transaction': 'type',
-    // Property kind
+    'מכירה/השכרה': 'type', 'סוג העסקה': 'type', 'מכירה / השכרה': 'type',
+    'type': 'type', 'deal type': 'type', 'transaction': 'type', 'transaction type': 'type',
+    'listing type': 'type', 'property for': 'type',
+    // ── Property kind ────────────────────────────────────────────────────────────
     'סוג נכס': 'kind', 'סוג': 'kind', 'סוג הנכס': 'kind', 'קטגוריה': 'kind',
     'kind': 'kind', 'property type': 'kind', 'נכס סוג': 'kind', 'בניין סוג': 'kind',
-    // Rooms
+    'property kind': 'kind', 'asset type': 'kind', 'סוג בניין': 'kind', 'סוג המבנה': 'kind',
+    // ── Rooms ────────────────────────────────────────────────────────────────────
     'חדרים': 'rooms', 'מספר חדרים': 'rooms', 'כמות חדרים': 'rooms',
     'rooms': 'rooms', 'bedrooms': 'rooms', 'br': 'rooms',
-    // Floor
+    'num rooms': 'rooms', 'number of rooms': 'rooms', 'חד׳': 'rooms',
+    // ── Min/Max Rooms (lead requirements) ────────────────────────────────────────
+    'חדרים מינ': 'minRooms', 'מינ חדרים': 'minRooms', 'חדרים מינימום': 'minRooms',
+    'min rooms': 'minRooms', 'minimum rooms': 'minRooms', 'חדרים לפחות': 'minRooms',
+    'חדרים מקס': 'maxRooms', 'מקס חדרים': 'maxRooms', 'חדרים מקסימום': 'maxRooms',
+    'max rooms': 'maxRooms', 'maximum rooms': 'maxRooms', 'עד חדרים': 'maxRooms',
+    // ── Floor ────────────────────────────────────────────────────────────────────
     'קומה': 'floor', 'מספר קומה': 'floor', 'קומת הנכס': 'floor',
-    'floor': 'floor', 'storey': 'floor',
-    // Sqm
+    'floor': 'floor', 'storey': 'floor', 'level': 'floor', 'קומה מ': 'floorMin', 'קומה עד': 'floorMax',
+    'floor min': 'floorMin', 'floor max': 'floorMax',
+    // ── Sqm ──────────────────────────────────────────────────────────────────────
     'שטח': 'sqm', 'מ"ר': 'sqm', 'גודל': 'sqm', 'שטח מ"ר': 'sqm',
     'שטח בנוי': 'sqm', 'שטח נטו': 'sqm', 'מ"ר בנוי': 'sqm',
     'sqm': 'sqm', 'size': 'sqm', 'area sqm': 'sqm', 'meters': 'sqm',
-    // Exclusivity
+    'square meters': 'sqm', 'sq m': 'sqm', 'מ׳׳ר': 'sqm', 'מטר רבוע': 'sqm',
+    'שטח מינ': 'minSqm', 'min sqm': 'minSqm', 'שטח מינימום': 'minSqm',
+    // ── Exclusivity ──────────────────────────────────────────────────────────────
     'בלעדיות': 'isExclusive', 'בלעדי': 'isExclusive', 'exclusive': 'isExclusive',
+    'האם בלעדיות': 'isExclusive', 'יש בלעדיות': 'isExclusive', 'is exclusive': 'isExclusive',
     'סיום בלעדיות': 'exclusivityEndDate', 'תאריך סיום בלעדיות': 'exclusivityEndDate',
     'תוקף בלעדיות': 'exclusivityEndDate', 'תאריך תם בלעדיות': 'exclusivityEndDate',
-    // Notes
+    'exclusivity end': 'exclusivityEndDate', 'exclusive until': 'exclusivityEndDate',
+    // ── Listing type ─────────────────────────────────────────────────────────────
+    'סוג שיווק': 'listingType', 'שיווק': 'listingType', 'שיווק בלעדי/פרטי': 'listingType',
+    'פרטי/בלעדי': 'listingType', 'exclusive/private': 'listingType',
+    // ── Notes ────────────────────────────────────────────────────────────────────
     'הערות': 'notes', 'הערה': 'notes', 'היסטוריה': 'notes', 'פירוט': 'notes',
     'היסטוריית טיפול': 'notes', 'הערות טיפול': 'notes', 'notes': 'notes', 'remarks': 'notes',
-    'תגובות': 'notes', 'פרטים נוספים': 'notes',
-    // Budget
+    'תגובות': 'notes', 'פרטים נוספים': 'notes', 'comments': 'notes', 'memo': 'notes',
+    'info': 'notes', 'היסטוריית סוכן': 'notes', 'פירוט טיפול': 'notes',
+    // ── Budget ───────────────────────────────────────────────────────────────────
     'תקציב': 'budget', 'תקציב מקסימלי': 'budget', 'budget': 'budget', 'max budget': 'budget',
-    // Role
-    'תפקיד': 'role', 'הרשאה': 'role', 'role': 'role', 'permission': 'role',
-    // Description
+    'תקציב לקוח': 'budget', 'סכום מקסימלי': 'budget', 'עד כמה': 'budget', 'יכולת כלכלית': 'budget',
+    // ── Role ─────────────────────────────────────────────────────────────────────
+    'תפקיד': 'role', 'הרשאה': 'role', 'role': 'role', 'permission': 'role', 'access': 'role',
+    // ── Description ──────────────────────────────────────────────────────────────
     'תיאור': 'description', 'תיאור נכס': 'description', 'תאור': 'description',
     'description': 'description', 'details': 'description', 'אודות': 'description',
-    // Property name (for deals)
+    'תיאור חופשי': 'description', 'פרטי הנכס': 'description',
+    // ── Property name (for deals) ─────────────────────────────────────────────
     'נכס': 'propertyName', 'שם הנכס': 'propertyName', 'שם נכס': 'propertyName',
-    'property name': 'propertyName', 'property': 'propertyName',
-    // Commission
+    'property name': 'propertyName', 'property': 'propertyName', 'כתובת נכס': 'propertyName',
+    // ── Commission ───────────────────────────────────────────────────────────────
     'עמלה': 'projectedCommission', 'עמלה צפויה': 'projectedCommission',
     'commission': 'projectedCommission', 'projected commission': 'projectedCommission',
-    // Stage
-    'שלב': 'stage', 'שלב בעסקה': 'stage', 'stage': 'stage', 'status': 'stage',
-    'סטטוס עסקה': 'stage',
-    // Probability
+    'אחוז עמלה': 'projectedCommission', 'עמלה %': 'projectedCommission',
+    'commission %': 'projectedCommission', 'fee': 'projectedCommission',
+    // ── Stage ────────────────────────────────────────────────────────────────────
+    'שלב': 'stage', 'שלב בעסקה': 'stage', 'stage': 'stage', 'סטטוס': 'stage',
+    'סטטוס עסקה': 'stage', 'שלב העסקה': 'stage', 'מצב עסקה': 'stage', 'deal stage': 'stage',
+    // ── Property status ──────────────────────────────────────────────────────────
+    'סטטוס נכס': 'status', 'מצב נכס': 'status', 'property status': 'status',
+    'active': 'status', 'pending': 'status', 'sold': 'status', 'זמין': 'status', 'נמכר': 'status',
+    // ── Probability ──────────────────────────────────────────────────────────────
     'סבירות': 'probability', 'אחוז סבירות': 'probability', 'probability': 'probability',
-    'chance': 'probability', 'אחוז': 'probability',
-    // Agent
+    'chance': 'probability', 'אחוז': 'probability', 'הסתברות': 'probability',
+    // ── Agent ────────────────────────────────────────────────────────────────────
     'שם סוכן': 'agentName', 'סוכן': 'agentName', 'agent': 'agentName',
     'agent name': 'agentName', 'אחראי': 'agentName', 'מטפל': 'agentName',
-    'שם הסוכן': 'agentName', 'איש קשר': 'agentName',
-    // Lead name/phone (for deal imports)
-    'שם לקוח': 'leadName', 'טלפון לקוח': 'leadPhone',
+    'שם הסוכן': 'agentName', 'איש קשר': 'agentName', 'responsible agent': 'agentName',
+    'broker': 'agentName', 'sales agent': 'agentName', 'assigned agent': 'agentName',
+    // ── Lead name/phone (for deal imports) ───────────────────────────────────────
+    'שם לקוח': 'leadName', 'טלפון לקוח': 'leadPhone', 'מייל לקוח': 'leadEmail',
     'lead name': 'leadName', 'buyer name': 'leadName', 'client': 'leadName',
+    'buyer phone': 'leadPhone', 'client phone': 'leadPhone',
+    'lead email': 'leadEmail', 'buyer email': 'leadEmail', 'client email': 'leadEmail',
+    // ── Lead type (buyer/seller) ─────────────────────────────────────────────────
+    'סוג ליד': 'leadType', 'סוג לקוח': 'leadType', 'קונה/מוכר': 'leadType',
+    'lead type': 'leadType', 'client type': 'leadType', 'buyer or seller': 'leadType',
+    // ── Source ───────────────────────────────────────────────────────────────────
+    'מקור': 'source', 'מקור ליד': 'source', 'מקור לקוח': 'source',
+    'source': 'source', 'lead source': 'source', 'referral source': 'source',
+    'ממה': 'source', 'ממי': 'source', 'איך הגיע': 'source',
+    // ── Amenities (lead requirements) ────────────────────────────────────────────
+    'חניה': 'parking', 'parking': 'parking', 'מקום חנייה': 'parking',
+    'מרפסת': 'balcony', 'balcony': 'balcony', 'מרפסת שמש': 'balcony',
+    'ממ"ד': 'safeRoom', 'safe room': 'safeRoom', 'mamad': 'safeRoom', 'ממד': 'safeRoom',
+    'מעלית': 'elevator', 'elevator': 'elevator', 'lift': 'elevator',
+    'דחיפות': 'urgency', 'urgency': 'urgency', 'עד מתי': 'urgency',
+    'תנאי': 'condition', 'מצב נכס מבוקש': 'condition', 'condition': 'condition',
 };
 
 // ─── Smart column mapping utilities ─────────────────────────────────────────

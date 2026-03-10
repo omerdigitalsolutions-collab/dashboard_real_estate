@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
@@ -24,6 +24,21 @@ import SubscriptionRequestModal from '../components/billing/SubscriptionRequestM
 
 export default function LandingPage() {
     const { userData } = useAuth();
+    const navigate = useNavigate();
+
+    const handleLoginClick = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        // If a user is stuck in a half-registered state (auth exists, but no Firestore document),
+        // we sign them out so they can see the Google/Email login screen instead of being forced to /onboarding
+        if (userData === null) {
+            try {
+                const { auth } = await import('../config/firebase');
+                const { signOut } = await import('firebase/auth');
+                await signOut(auth);
+            } catch (err) { }
+        }
+        navigate('/login');
+    };
 
     // Contact Form State
     const [contactName, setContactName] = useState('');
@@ -97,9 +112,9 @@ export default function LandingPage() {
                         </Link>
                     ) : (
                         <>
-                            <Link to="/login" className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors">
+                            <a href="/login" onClick={handleLoginClick} className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors cursor-pointer">
                                 התחברות
-                            </Link>
+                            </a>
                             <a href="#pricing" onClick={scrollToPricing} className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 cursor-pointer">
                                 הירשם עכשיו
                             </a>
@@ -261,10 +276,17 @@ export default function LandingPage() {
                     </div>
 
                     <div className="mt-16 flex flex-col items-center justify-center gap-3">
-                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
-                            <ArrowLeft size={28} strokeWidth={2.5} />
-                        </Link>
+                        {userData ? (
+                            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                                כניסה למערכת
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </Link>
+                        ) : (
+                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                                הירשם עכשיו
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </button>
+                        )}
                         {!userData && (
                             <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
                                 🎁 7 ימי ניסיון ללא עלות!
@@ -399,10 +421,17 @@ export default function LandingPage() {
                     </div>
 
                     <div className="mt-20 flex flex-col items-center justify-center gap-3">
-                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
-                            <ArrowLeft size={28} strokeWidth={2.5} />
-                        </Link>
+                        {userData ? (
+                            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                                כניסה למערכת
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </Link>
+                        ) : (
+                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                                הירשם עכשיו
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </button>
+                        )}
                         {!userData && (
                             <span className="text-[#00e5ff] font-bold text-lg bg-[#00e5ff]/10 px-5 py-2 rounded-full shadow-[0_0_15px_rgba(0,229,255,0.2)] border border-[#00e5ff]/20">
                                 🎁 7 ימי ניסיון ללא עלות!
@@ -600,10 +629,17 @@ export default function LandingPage() {
                         <h4 className="text-xl md:text-2xl font-black text-blue-900 mb-4 text-center">
                             הגעת עד לכאן ועוד לא נרשמת? הגיע הזמן!
                         </h4>
-                        <Link to={userData ? "/dashboard" : "/register"} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                            {userData ? "כניסה למערכת" : "הירשם עכשיו"}
-                            <ArrowLeft size={28} strokeWidth={2.5} />
-                        </Link>
+                        {userData ? (
+                            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                                כניסה למערכת
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </Link>
+                        ) : (
+                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                                הירשם עכשיו
+                                <ArrowLeft size={28} strokeWidth={2.5} />
+                            </button>
+                        )}
                         {!userData && (
                             <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
                                 🎁 7 ימי ניסיון ללא עלות!

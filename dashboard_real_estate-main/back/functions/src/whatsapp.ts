@@ -466,6 +466,42 @@ export const sendWhatsappMessage = onCall({
 });
 
 /**
+ * Raw helper for sending system alerts (from cron jobs, webhooks, etc) 
+ * using the Super Admin's GreenAPI credentials directly.
+ */
+export async function sendSystemWhatsappMessage(phone: string, message: string, masterSecret: string) {
+  try {
+    // 1. Find the Super Admin agency to use its WhatsApp connection
+    const usersSnap = await db.collection('users').where('email', '==', 'omerdigitalsolutions@gmail.com').limit(1).get();
+    if (usersSnap.empty) {
+      console.error('[System WhatsApp] Could not find Super Admin user.');
+      return false;
+    }
+    const superAdminAgencyId = usersSnap.docs[0].data().agencyId;
+    if (!superAdminAgencyId) return false;
+
+    // 2. Fetch the Green API credentials for the Super Admin agency
+    const keys = await getGreenApiCredentials(superAdminAgencyId, masterSecret);
+    if (!keys?.idInstance || !keys?.apiTokenInstance) {
+      console.error('[System WhatsApp] Super Admin WhatsApp is not connected.');
+      return false;
+    }
+
+    // 3. Send the message
+    const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+    await axios.post(sendUrl, {
+      chatId: toWaId(phone),
+      message: message
+    }, { timeout: 10_000 });
+
+    return true;
+  } catch (err: any) {
+    console.error('[System WhatsApp] Error sending message:', err.message);
+    return false;
+  }
+}
+
+/**
  * 5. getGroups:
  * Fetches the list of all contacts (including groups) and filters for groups.
  */

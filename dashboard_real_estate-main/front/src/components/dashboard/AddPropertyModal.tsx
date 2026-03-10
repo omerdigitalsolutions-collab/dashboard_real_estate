@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Building2, MapPin, Home, DollarSign, Users } from 'lucide-react';
 import { Property, PropertyType } from '../../types';
-import { cityCoordinates } from '../../utils/constants';
+import { cityCoordinates, ISRAEL_CITIES } from '../../utils/constants';
 import { useAgents } from '../../hooks/useFirestoreData';
 
 interface AddPropertyModalProps {
@@ -10,7 +10,6 @@ interface AddPropertyModalProps {
 }
 
 const propertyCategories = ['דירה', 'פנטהאוז', 'וילה', 'קרקע', 'מסחרי'];
-const cities = Object.keys(cityCoordinates);
 
 export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalProps) {
     const { data: agentOptions } = useAgents();
@@ -62,7 +61,7 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
             agentId: form.agentId || (agentOptions[0]?.uid ?? 'unassigned'),
             lat: coords.x + jitter(), // Will map to mapX in DealsPipeline unfortunately, need to reconcile later
             lng: coords.y + jitter(), // Will map to mapY in DealsPipeline 
-            category: form.category, // Added temporarily
+            category: form.category || undefined, // Added temporarily
         };
 
         onAdd(newProperty);
@@ -142,11 +141,39 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                             />
                             {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
                         </div>
-                        <div>
+                        <div className="relative">
                             <label className="block text-xs font-semibold text-slate-500 mb-1.5">עיר</label>
-                            <select value={form.city} onChange={e => set('city', e.target.value)} className={inputClass('city')}>
-                                {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                            <input
+                                type="text"
+                                value={form.city}
+                                onChange={e => set('city', e.target.value)}
+                                placeholder="הקלד שם עיר או ישוב..."
+                                className={inputClass('city')}
+                                onFocus={() => setErrors(prev => ({ ...prev, cityFocus: 'true' }))}
+                                onBlur={() => setTimeout(() => setErrors(prev => ({ ...prev, cityFocus: '' })), 200)}
+                            />
+                            {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
+
+                            {/* Autocomplete Dropdown */}
+                            {errors.cityFocus === 'true' && form.city.trim() && (
+                                <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                                    {ISRAEL_CITIES
+                                        .filter(city => city.includes(form.city.trim()))
+                                        .slice(0, 10)
+                                        .map((city) => (
+                                            <li
+                                                key={city}
+                                                onMouseDown={() => {
+                                                    set('city', city);
+                                                    setErrors(prev => ({ ...prev, cityFocus: '' }));
+                                                }}
+                                                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                            >
+                                                {city}
+                                            </li>
+                                        ))}
+                                </ul>
+                            )}
                         </div>
                     </div>
 
@@ -208,7 +235,7 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                             <Users size={11} className="inline ml-1" />סוכן מטפל
                         </label>
                         <select value={form.agentId} onChange={e => set('agentId', e.target.value)} className={inputClass('agentId')}>
-                            {agentOptions.map(a => <option key={a.uid} value={a.uid}>{a.name}</option>)}
+                            {agentOptions.map(a => <option key={a.uid || 'unassigned'} value={a.uid || undefined}>{a.name}</option>)}
                         </select>
                     </div>
 

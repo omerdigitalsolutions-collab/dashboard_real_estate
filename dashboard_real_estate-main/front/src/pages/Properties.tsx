@@ -409,24 +409,25 @@ export default function Properties() {
                                         </div>
 
                                         {/* Card Footer Actions */}
-                                        <div className="px-4 pb-4 pt-2 flex items-center gap-2 border-t border-slate-100 mt-3">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
-                                                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
-                                                title="צור עסקה לנכס זה"
-                                            >
-                                                <Handshake size={13} />
-                                                צור עסקה
-                                            </button>
-                                            {prop.isGlobalCityProperty && (
-                                                <div className="p-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg text-[10px] font-bold" title="מאגר כללי">
-                                                    מאגר
+                                        <div className="px-4 pb-4 pt-2 flex items-center gap-2 border-t border-slate-100 mt-3 flex-wrap">
+                                            {prop.isGlobalCityProperty ? (
+                                                <div className="flex-1 w-full text-center py-1.5 px-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold" title="מאגר ציבורי אותר אוטומטית">
+                                                    המערכת איתרה נכס זה
                                                 </div>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                                                    title="צור עסקה לנכס זה"
+                                                >
+                                                    <Handshake size={13} />
+                                                    צור עסקה
+                                                </button>
                                             )}
-                                            {!prop.readonly && (
+                                            {!prop.readonly && !prop.isGlobalCityProperty && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
-                                                    className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors"
+                                                    className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shrink-0"
                                                     title="ערוך נכס"
                                                 >
                                                     <Pencil size={14} />
@@ -437,7 +438,7 @@ export default function Properties() {
                                                     href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
                                                     target="_blank" rel="noreferrer"
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200 rounded-lg transition-colors"
+                                                    className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200 rounded-lg transition-colors shrink-0"
                                                     title="ווטסאפ סוכן"
                                                 >
                                                     <MessageCircle size={14} />
@@ -530,11 +531,15 @@ export default function Properties() {
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
                                                     {prop.listingType === 'exclusive' || (prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date()) ? (
-                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">
+                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 mb-1">
                                                             👑 בלעדיות
                                                         </span>
+                                                    ) : prop.isGlobalCityProperty ? (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 mb-1">
+                                                            המערכת איתרה נכס זה
+                                                        </span>
                                                     ) : (
-                                                        <span className="text-xs text-slate-400">-</span>
+                                                        <span className="text-xs text-slate-400 block">-</span>
                                                     )}
                                                     {isAdmin && prop.yad2Link && (
                                                         <a href={prop.yad2Link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="block mt-2 text-[10px] text-orange-500 hover:text-orange-600 font-semibold underline">
@@ -561,12 +566,7 @@ export default function Properties() {
                                                                 <MessageCircle size={14} /> שת״פ
                                                             </a>
                                                         )}
-                                                        {prop.isGlobalCityProperty && (
-                                                            <div className="bg-blue-50 text-blue-600 px-2 rounded-lg text-xs font-bold leading-[28px] shrink-0" title="מאגר כללי">
-                                                                מאגר ציבורי
-                                                            </div>
-                                                        )}
-                                                        {!prop.readonly && (
+                                                        {!prop.readonly && !prop.isGlobalCityProperty && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
                                                                 className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
@@ -575,14 +575,16 @@ export default function Properties() {
                                                                 <Pencil size={16} />
                                                             </button>
                                                         )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
-                                                            className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors shrink-0"
-                                                            title="צור עסקה"
-                                                        >
-                                                            <Handshake size={16} />
-                                                        </button>
-                                                        {!prop.readonly && (
+                                                        {!prop.isGlobalCityProperty && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors shrink-0"
+                                                                title="צור עסקה"
+                                                            >
+                                                                <Handshake size={16} />
+                                                            </button>
+                                                        )}
+                                                        {!prop.readonly && !prop.isGlobalCityProperty && (
                                                             <button
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();

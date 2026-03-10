@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.whatsappWebhook = exports.disconnectWhatsApp = exports.getGroups = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
+exports.sendSystemWhatsappMessage = sendSystemWhatsappMessage;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
@@ -464,6 +465,40 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     }
     throw new https_1.HttpsError('failed-precondition', 'Session not found.');
 });
+/**
+ * Raw helper for sending system alerts (from cron jobs, webhooks, etc)
+ * using the Super Admin's GreenAPI credentials directly.
+ */
+async function sendSystemWhatsappMessage(phone, message, masterSecret) {
+    try {
+        // 1. Find the Super Admin agency to use its WhatsApp connection
+        const usersSnap = await db.collection('users').where('email', '==', 'omerdigitalsolutions@gmail.com').limit(1).get();
+        if (usersSnap.empty) {
+            console.error('[System WhatsApp] Could not find Super Admin user.');
+            return false;
+        }
+        const superAdminAgencyId = usersSnap.docs[0].data().agencyId;
+        if (!superAdminAgencyId)
+            return false;
+        // 2. Fetch the Green API credentials for the Super Admin agency
+        const keys = await getGreenApiCredentials(superAdminAgencyId, masterSecret);
+        if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+            console.error('[System WhatsApp] Super Admin WhatsApp is not connected.');
+            return false;
+        }
+        // 3. Send the message
+        const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+        await axios_1.default.post(sendUrl, {
+            chatId: toWaId(phone),
+            message: message
+        }, { timeout: 10000 });
+        return true;
+    }
+    catch (err) {
+        console.error('[System WhatsApp] Error sending message:', err.message);
+        return false;
+    }
+}
 /**
  * 5. getGroups:
  * Fetches the list of all contacts (including groups) and filters for groups.

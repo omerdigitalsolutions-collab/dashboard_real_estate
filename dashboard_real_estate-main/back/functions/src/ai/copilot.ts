@@ -283,3 +283,118 @@ export const askCopilot = onCall(
         }
     }
 );
+
+// ── Smart Insights Endpoint ──────────────────────────────────────────────────
+export const getSmartInsights = onCall(
+    { secrets: [geminiApiKey], region: 'europe-west1', cors: true },
+    async (request) => {
+        // Enforce explicit CORS headers for local dev and production
+        if (request.rawRequest) {
+            const origin = request.rawRequest.headers.origin;
+            if (origin === 'http://localhost:5173' || origin?.includes('homer')) {
+                request.rawRequest.res?.set('Access-Control-Allow-Origin', origin);
+                request.rawRequest.res?.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+                request.rawRequest.res?.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+                request.rawRequest.res?.set('Access-Control-Allow-Credentials', 'true');
+            }
+        }
+
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'You must be logged in.');
+        }
+
+        const agencyId = request.auth.token.agencyId as string | undefined;
+        if (!agencyId) {
+            throw new HttpsError('failed-precondition', 'User is not associated with any agency.');
+        }
+
+        const db = admin.firestore();
+        const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-1.5-flash',
+            generationConfig: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: SchemaType.ARRAY,
+                    description: 'List of 3 to 5 actionable insights for the agency manager.',
+                    items: {
+                        type: SchemaType.OBJECT,
+                        properties: {
+                            badge: { type: SchemaType.STRING, description: 'Short badge text in Hebrew (e.g. מחיר, יעד, קמפיין, לידים, עסקאות).' },
+                            category: { type: SchemaType.STRING, description: 'Enum: price, goal, campaign, lead, deal', format: 'enum', enum: ['price', 'goal', 'campaign', 'lead', 'deal'] },
+                            title: { type: SchemaType.STRING, description: 'The main insight title in Hebrew.' },
+                            text: { type: SchemaType.STRING, description: 'Detailed explanation and recommendation in Hebrew.' },
+                        },
+                        required: ['badge', 'category', 'title', 'text'],
+                    },
+                },
+            },
+        });
+
+        try {
+            // 1. Fetch data snapshots
+            const now = new Date();
+            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+            const [propertiesSnap, leadsSnap, dealsSnap, agentsSnap] = await Promise.all([
+                db.collection('properties').where('agencyId', '==', agencyId).where('status', '==', 'active').get(),
+                db.collection('leads').where('agencyId', '==', agencyId).get(),
+                db.collection('deals').where('agencyId', '==', agencyId).where('stage', '==', 'Won').get(),
+                db.collection('agencies').doc(agencyId).collection('agents').get()
+            ]);
+
+            // Transform into compact representation
+            const properties = propertiesSnap.docs.map(d => {
+                const data = d.data();
+                return { id: d.id, address: `${data.street}, ${data.city}`, price: data.price, createdAt: data.createdAt?.toDate() };
+            });
+
+            const leadsStatusCount: Record<string, number> = {};
+            const leadsSourceCount: Record<string, number> = {};
+            leadsSnap.docs.forEach(d => {
+                const st = d.data().status || 'new';
+                const src = d.data().source || 'unknown';
+                leadsStatusCount[st] = (leadsStatusCount[st] || 0) + 1;
+                leadsSourceCount[src] = (leadsSourceCount[src] || 0) + 1;
+            });
+
+            const currentMonthDeals = dealsSnap.docs.map(d => d.data()).filter(d => {
+                const date = d.updatedAt?.toDate() || new Date(0);
+                return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            });
+
+            const agents = agentsSnap.docs.map(d => ({ name: d.data().firstName + ' ' + (d.data().lastName || ''), role: d.data().role }));
+
+            // 2. Build the context prompt
+            const contextPrompt = `
+You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate 3 highly actionable, specific insights for the manager.
+Write the insights in Hebrew.
+
+DATA SNAPSHOT:
+- Active Properties: ${properties.length} (Oldest ones: ${properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length} older than 30 days)
+- Leads by Status: ${JSON.stringify(leadsStatusCount)}
+- Leads by Source: ${JSON.stringify(leadsSourceCount)}
+- Deals Won This Month: ${currentMonthDeals.length}
+- Agents on Team: ${agents.length}
+
+RULES:
+1. Provide exactly 3 insights.
+2. If there are old properties (>30 days), suggest a price reduction or fresh marketing.
+3. If there are many "new" leads untouched, warn about conversion rates.
+4. If a specific lead source performs well (or poorly), point it out.
+5. Be specific but keep it concise and punchy.
+6. The output must perfectly match the JSON schema.
+            `;
+
+            // 3. Call Gemini
+            const response = await model.generateContent(contextPrompt);
+            const textResponse = response.response.text();
+
+            return { insights: JSON.parse(textResponse) };
+
+        } catch (error: any) {
+            console.error('[getSmartInsights] Error:', error);
+            throw new HttpsError('internal', 'An error occurred while generating smart insights.');
+        }
+    }
+);

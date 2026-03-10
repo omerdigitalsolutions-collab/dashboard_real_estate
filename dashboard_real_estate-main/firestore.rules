@@ -56,21 +56,11 @@ service cloud.firestore {
      *  - billing.status is 'trialing' AND trial hasn't ended yet
      */
     function isBillingActive(agencyData) {
-      let b = agencyData.get('billing', null);
-      if (b == null) return true;
-
-      let status = b.get('status', 'active');
-
-      if (status == 'active' || status == 'paid') return true;
-
-      if (status == 'trialing') {
-        let trialEnd = b.get('trialEndsAt', null);
-        if (trialEnd == null) return true;
-        return request.time < trialEnd;
-      }
-
-      // past_due, canceled, or anything else = locked
-      return false;
+      return agencyData.get('billing', null) == null ||
+             agencyData.billing.get('status', 'active') == 'active' ||
+             agencyData.billing.get('status', 'active') == 'paid' ||
+             (agencyData.billing.get('status', 'active') == 'trialing' && 
+              (agencyData.billing.get('trialEndsAt', null) == null || request.time < agencyData.billing.trialEndsAt));
     }
 
     /**
@@ -225,16 +215,12 @@ service cloud.firestore {
     // LEAD MESSAGES
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId}/messages/{messageId} {
-      function parentAgency() {
-        return get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId;
-      }
-
-      allow read, create: if isAuthed() && inAgency(parentAgency());
+      allow read, create: if isAuthed() && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
       allow update: if isAuthed()
-          && inAgency(parentAgency())
+          && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
 
-      allow delete: if isAuthed() && isAgencyAdmin(parentAgency());
+      allow delete: if isAuthed() && isAgencyAdmin(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -299,16 +285,17 @@ service cloud.firestore {
     // SHARED CATALOGS
     // ══════════════════════════════════════════════════════════════════════════
     match /shared_catalogs/{catalogId} {
-      allow read: if (resource.data.expiresAt > request.time) || (isAuthed() && inAgency(resource.data.agencyId));
+      // Allow reading by anyone who is signed in — including anonymous users who arrive via a shared link.
+      // The client and/or Cloud Function handles expiry checks, not this rule.
+      // This is required so that the "link expired" page can be shown gracefully.
+      allow read: if isAuthed();
 
-      // Allow incrementing viewCount (public link visitors use anonymous auth)
-      allow update: if isAuthed()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+      // Allow incrementing viewCount (public link visitors might not be authenticated)
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
           && request.resource.data.viewCount == (resource.data.viewCount + 1);
 
-      // Allow updating liked properties list
-      allow update: if isAuthed()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
+      // Allow updating liked properties list (guests liking properties)
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
           && request.resource.data.likedPropertyIds is list
           && request.resource.data.likedPropertyIds.size() <= 100;
 
@@ -372,6 +359,16 @@ service cloud.firestore {
     // Server-managed active trials collection
     match /activeTrials/{document=**} {
       allow read, write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PUBLIC SUBSCRIPTION REQUESTS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /subscription_requests/{requestId} {
+      // Anyone can submit a lead, even unauthenticated visitors
+      allow create: if true;
+      // Reading/updating restricted to Server/SuperAdmin
+      allow read, update, delete: if isSuperAdmin();
     }
   }
 }

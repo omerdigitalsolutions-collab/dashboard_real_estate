@@ -4,6 +4,7 @@ import { updateProperty } from '../../services/propertyService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Property } from '../../types';
 import toast from 'react-hot-toast';
+import { ISRAEL_CITIES } from '../../utils/constants';
 
 interface EditPropertyModalProps {
     property: Property;
@@ -43,6 +44,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [cityFocus, setCityFocus] = useState(false);
 
     if (!isOpen) return null;
 
@@ -98,7 +100,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                             <p className="text-xs text-slate-400">{property.address}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
+                    <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
                         <X size={18} />
                     </button>
                 </div>
@@ -123,9 +125,37 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                             <label className={labelCls}>כתובת <span className="text-red-500">*</span></label>
                             <input value={address} onChange={e => setAddress(e.target.value)} required placeholder="הרצל 15" className={inputCls} />
                         </div>
-                        <div>
+                        <div className="relative">
                             <label className={labelCls}>עיר</label>
-                            <input value={city} onChange={e => setCity(e.target.value)} placeholder="תל אביב" className={inputCls} />
+                            <input
+                                type="text"
+                                value={city}
+                                onChange={e => setCity(e.target.value)}
+                                placeholder="הקלד שם עיר או ישוב..."
+                                className={inputCls}
+                                onFocus={() => setCityFocus(true)}
+                                onBlur={() => setTimeout(() => setCityFocus(false), 200)}
+                            />
+                            {/* Autocomplete Dropdown */}
+                            {cityFocus && city.trim() && (
+                                <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                                    {ISRAEL_CITIES
+                                        .filter(c => c.includes(city.trim()))
+                                        .slice(0, 10)
+                                        .map((c) => (
+                                            <li
+                                                key={c}
+                                                onMouseDown={() => {
+                                                    setCity(c);
+                                                    setCityFocus(false);
+                                                }}
+                                                className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                            >
+                                                {c}
+                                            </li>
+                                        ))}
+                                </ul>
+                            )}
                         </div>
 
                         {/* Price + Rooms + Sqm */}

@@ -16,6 +16,12 @@ export interface AgencyRow {
     status?: 'active' | 'suspended';
     isWhatsappConnected?: boolean;
     createdAt?: Timestamp;
+    billing?: {
+        planId?: string;
+        status?: string;
+        trialEndsAt?: Timestamp;
+        ownerPhone?: string;
+    };
 }
 
 export interface MonthlyDataPoint {

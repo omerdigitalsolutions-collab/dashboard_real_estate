@@ -228,8 +228,8 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         // 6. Agency Settings Query
         const agencyRef = doc(db, 'agencies', agencyId);
         let unsubAgency = () => { };
-        let unsubCityProperties = () => { };
-        let activeCity = '';
+        let globalCityUnsubs: (() => void)[] = [];
+        let activeCities: string[] = [];
 
         try {
             unsubAgency = onSnapshot(agencyRef, (snap) => {
@@ -256,21 +256,36 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     }
 
                     // Dynamically subscribe to global city's properties if set
-                    const newCity = data?.mainServiceArea;
-                    if (newCity && newCity !== activeCity) {
-                        activeCity = newCity;
-                        unsubCityProperties();
+                    const loadedCities = settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []);
+                    const citiesChanged = loadedCities.length !== activeCities.length || !loadedCities.every((c: string) => activeCities.includes(c));
 
-                        const qCityProps = collection(db, 'cities', newCity, 'properties');
-                        unsubCityProperties = onSnapshot(qCityProps, (citySnap) => {
-                            currentCityProperties = citySnap.docs.map(doc => ({
-                                id: doc.id,
-                                ...doc.data(),
-                                isGlobalCityProperty: true,
-                                readonly: true
-                            } as Property));
+                    if (citiesChanged) {
+                        activeCities = loadedCities;
+                        globalCityUnsubs.forEach(unsub => unsub());
+                        globalCityUnsubs = [];
+                        currentCityProperties = [];
+
+                        if (loadedCities.length === 0) {
                             updatePropertiesState();
-                        }, (err) => console.error("[useLiveDashboardData] City properties error:", err));
+                        } else {
+                            const cityPropsMap: Record<string, Property[]> = {};
+
+                            loadedCities.forEach((city: string) => {
+                                const qCityProps = collection(db, 'cities', city, 'properties');
+                                const unsub = onSnapshot(qCityProps, (citySnap) => {
+                                    cityPropsMap[city] = citySnap.docs.map(doc => ({
+                                        id: doc.id,
+                                        ...doc.data(),
+                                        isGlobalCityProperty: true,
+                                        readonly: true
+                                    } as Property));
+
+                                    currentCityProperties = Object.values(cityPropsMap).flat();
+                                    updatePropertiesState();
+                                }, (err) => console.error(`[useLiveDashboardData] City properties error for ${city}:`, err));
+                                globalCityUnsubs.push(unsub);
+                            });
+                        }
                     }
                 }
                 loadedFlags.agency = true; checkLoaded();
@@ -295,7 +310,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubAlertsPersonal();
             unsubAlertsBroadcast();
             unsubAgency();
-            unsubCityProperties();
+            globalCityUnsubs.forEach(unsub => unsub());
         };
     }, [userData?.agencyId, userData?.uid]);
 

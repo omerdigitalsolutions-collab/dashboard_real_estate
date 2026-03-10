@@ -71,7 +71,14 @@ function MapAutoCenter({ center, zoom }: { center: [number, number]; zoom: numbe
             prevCenter.current = center;
         }
         // Re-render tiles when container size changes
-        setTimeout(() => map.invalidateSize(), 100);
+        const t = setTimeout(() => {
+            if (map && map.invalidateSize) {
+                try {
+                    map.invalidateSize();
+                } catch (e) { }
+            }
+        }, 100);
+        return () => clearTimeout(t);
     }, [map, center, zoom]);
     return null;
 }
@@ -269,7 +276,9 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
 
     return (
         <>
-            {mapContent(false)}
+            <div style={{ display: isFullscreen ? 'none' : 'block', height: '100%' }}>
+                {mapContent(false)}
+            </div>
 
             {isFullscreen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" dir="rtl">

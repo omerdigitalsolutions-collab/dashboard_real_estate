@@ -38,7 +38,7 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
 
     const now = new Date();
     const expiresAt = new Date();
-    expiresAt.setDate(now.getDate() + 7); // Exactly 7 days from now
+    expiresAt.setDate(now.getDate() + 365); // 1 year from now
 
     await catalogRef.set({
         agencyId,

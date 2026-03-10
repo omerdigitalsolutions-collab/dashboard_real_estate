@@ -52,7 +52,7 @@ import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, ch
 // ── AI Module ──────────────────────────────────────────────────────────────────
 import { askAgencyAgent } from './ai/agent';
 import { extractAiData } from './ai/extractAiData';
-import { askCopilot } from './ai/copilot';
+import { askCopilot, getSmartInsights } from './ai/copilot';
 
 // ── Automation Module ──────────────────────────────────────────────────────────
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
@@ -63,6 +63,10 @@ import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from
 
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
+import { checkTrialExpiryAlerts } from './scheduled/checkTrialExpiryAlerts';
+
+// ── Billing / Subscriptions ────────────────────────────────────────────────────
+import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/manual_requests';
 
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
 // Clean function names produced:
@@ -82,7 +86,7 @@ export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, ma
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
-export const ai = { askAgencyAgent, extractAiData, askCopilot };
+export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights };
 export const automation = { webhookProcessGlobalYad2Email };
 export const superadmin = {
     superAdminUpdateExpenses,
@@ -94,7 +98,9 @@ export const superadmin = {
     superAdminUpdateAgencyPlan
 };
 
-export const scheduled = { checkTrialExpiry };
+export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
+
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';
