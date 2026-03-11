@@ -61,6 +61,8 @@ export interface CustomDealStage {
 // ─── Users ────────────────────────────────────────────────────────────────────
 export type UserRole = 'admin' | 'agent';
 
+export type AgentSpecialization = 'sale' | 'rent' | 'commercial';
+
 export interface AppUser {
     id: string;          // Firestore document ID (stub docId — NOT always the Firebase UID)
     uid: string | null;  // Firebase Auth UID — null for stubs not yet linked
@@ -71,6 +73,10 @@ export interface AppUser {
     phone?: string;
     photoURL?: string;   // Profile picture URL
     isActive?: boolean;  // false = suspended; defaults to true
+    /** Which deal types this agent handles (sale, rent, commercial) */
+    specializations?: AgentSpecialization[];
+    /** Cities or neighborhoods this agent covers */
+    serviceAreas?: string[];
     goals?: {
         monthly: {
             revenue: number;
@@ -175,6 +181,20 @@ export interface Property {
     yad2Link?: string;
     isGlobalCityProperty?: boolean;
     readonly?: boolean;
+
+    // Amenities and detailed metadata
+    condition?: string;
+    floorsTotal?: number;
+    hasElevator?: boolean;
+    hasParking?: boolean;
+    hasBalcony?: boolean;
+    hasSafeRoom?: boolean;
+    hasBars?: boolean;
+    hasAirCondition?: boolean;
+
+    // External agency details
+    externalAgencyName?: string;
+    externalContactName?: string;
 }
 
 export interface PendingLead {

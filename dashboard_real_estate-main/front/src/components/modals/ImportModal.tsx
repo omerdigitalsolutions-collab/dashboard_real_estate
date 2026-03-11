@@ -55,6 +55,14 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'listingType', label: 'סוג שיווק (exclusive/private)' },
         { key: 'exclusivityEndDate', label: 'סיום בלעדיות' },
         { key: 'status', label: 'סטטוס הנכס' },
+        { key: 'condition', label: 'מצב נכס' },
+        { key: 'floorsTotal', label: 'מספר קומות בבנין' },
+        { key: 'hasElevator', label: 'מעלית (כן/לא)' },
+        { key: 'hasParking', label: 'חניה (כן/לא)' },
+        { key: 'hasBalcony', label: 'מרפסת (כן/לא)' },
+        { key: 'hasSafeRoom', label: 'ממ"ד (כן/לא)' },
+        { key: 'hasBars', label: 'סורגים (כן/לא)' },
+        { key: 'hasAirCondition', label: 'מיזוג (כן/לא)' },
         { key: 'notes', label: 'הערות / היסטוריית טיפול' },
     ],
     agent: [
@@ -206,16 +214,17 @@ const HEBREW_MAP: Record<string, string> = {
     'שלב': 'stage', 'שלב בעסקה': 'stage', 'stage': 'stage', 'סטטוס': 'stage',
     'סטטוס עסקה': 'stage', 'שלב העסקה': 'stage', 'מצב עסקה': 'stage', 'deal stage': 'stage',
     // ── Property status ──────────────────────────────────────────────────────────
-    'סטטוס נכס': 'status', 'מצב נכס': 'status', 'property status': 'status',
+    'סטטוס נכס': 'status', 'property status': 'status',
     'active': 'status', 'pending': 'status', 'sold': 'status', 'זמין': 'status', 'נמכר': 'status',
     // ── Probability ──────────────────────────────────────────────────────────────
     'סבירות': 'probability', 'אחוז סבירות': 'probability', 'probability': 'probability',
     'chance': 'probability', 'אחוז': 'probability', 'הסתברות': 'probability',
     // ── Agent ────────────────────────────────────────────────────────────────────
-    'שם סוכן': 'agentName', 'סוכן': 'agentName', 'agent': 'agentName',
-    'agent name': 'agentName', 'אחראי': 'agentName', 'מטפל': 'agentName',
-    'שם הסוכן': 'agentName', 'איש קשר': 'agentName', 'responsible agent': 'agentName',
-    'broker': 'agentName', 'sales agent': 'agentName', 'assigned agent': 'agentName',
+    'סוכן 1': 'agentName', 'שם סוכן': 'agentName', 'סוכן מטפל': 'agentName',
+    'סוכן': 'agentName', 'agent': 'agentName', 'agent name': 'agentName',
+    'אחראי': 'agentName', 'מטפל': 'agentName', 'שם הסוכן': 'agentName',
+    'איש קשר': 'agentName', 'responsible agent': 'agentName', 'broker': 'agentName',
+    'sales agent': 'agentName', 'assigned agent': 'agentName',
     // ── Lead name/phone (for deal imports) ───────────────────────────────────────
     'שם לקוח': 'leadName', 'טלפון לקוח': 'leadPhone', 'מייל לקוח': 'leadEmail',
     'lead name': 'leadName', 'buyer name': 'leadName', 'client': 'leadName',
@@ -235,6 +244,10 @@ const HEBREW_MAP: Record<string, string> = {
     'מעלית': 'elevator', 'elevator': 'elevator', 'lift': 'elevator',
     'דחיפות': 'urgency', 'urgency': 'urgency', 'עד מתי': 'urgency',
     'תנאי': 'condition', 'מצב נכס מבוקש': 'condition', 'condition': 'condition',
+    'מצב נכס': 'condition', 'מצב': 'condition',
+    'מספר קומות': 'floorsTotal', 'קומות בבנין': 'floorsTotal', 'סה"כ קומות': 'floorsTotal',
+    'סורגים': 'hasBars', 'bars': 'hasBars',
+    'מיזוג': 'hasAirCondition', 'מזגן': 'hasAirCondition', 'air condition': 'hasAirCondition', 'ac': 'hasAirCondition',
 };
 
 // ─── Smart column mapping utilities ─────────────────────────────────────────
@@ -308,7 +321,7 @@ function buildSmartAutoMapping(headers: string[], type: EntityType): Record<stri
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
-const STEPS = ['העלאה', 'מיפוי', 'אימות', 'סיום'];
+const STEPS = ['העלאה', 'מיפוי', 'אימות', 'טיוב', 'סיום'];
 
 function StepIndicator({ current }: { current: number }) {
     return (
@@ -356,7 +369,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     defaultEntityType = 'lead',
 }) => {
     const { userData } = useAuth();
-    const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+    const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
     const [entityType, setEntityType] = useState<ModalEntityType>(defaultEntityType);
     const [leadSubType, setLeadSubType] = useState<'buyer' | 'seller' | 'mixed'>('mixed');
 
@@ -380,6 +393,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
     // shared state
     const [validation, setValidation] = useState<ValidationResult>({ valid: [], invalid: [] });
+    const [resolvedRows, setResolvedRows] = useState<TransformedRow[]>([]);
     const [strategy, setStrategy] = useState<DuplicateStrategy>('skip');
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -639,6 +653,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         }
         const result = validateAndTransform(rawRows, mapping, et);
         setValidation(result);
+        setResolvedRows(result.valid);
         setStep(3);
     };
 
@@ -655,67 +670,71 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setProgress({ current: Math.min(current, total), total });
 
         try {
+            const dataToImport = resolvedRows.length > 0 ? resolvedRows : validation.valid;
+
             if (entityType === 'mixed') {
-                const total = validLeadRows.length + validPropertyRows.length + validAgentRows.length;
+                const leads = dataToImport.filter(r => r.rowType === 'lead');
+                const properties = dataToImport.filter(r => r.rowType === 'property');
+                const agents = dataToImport.filter(r => r.rowType === 'agent');
+
+                const total = leads.length + properties.length + agents.length;
                 setProgress({ current: 0, total });
                 let base = 0;
 
-                // Agents first so they can be referenced by properties/leads
+                // Agents first
                 let agentCount = 0;
-                if (validAgentRows.length > 0) {
-                    const hasAdmin = validAgentRows.some(r => r.role === 'admin');
+                if (agents.length > 0) {
+                    const hasAdmin = agents.some(r => r.role === 'admin');
                     let proceed = true;
                     if (hasAdmin) {
                         proceed = window.confirm("שימו לב: בקובץ (מעורב) קיימים מנהלים ('admin'). למנהל יש הרשאה מלאה לכל נתוני המשרד. האם להמשיך בייבוא מנהלים?");
                     }
                     if (proceed) {
                         const agentRes = await importAgents(
-                            userData.agencyId, validAgentRows,
+                            userData.agencyId, agents,
                             (c, _t) => setProgress({ current: base + c, total })
                         );
                         agentCount = agentRes.importedCount;
                     }
-                    base += validAgentRows.length;
+                    base += agents.length;
                 }
 
                 const leadCount = await importLeads(
-                    userData.agencyId, userData.uid, validLeadRows, strategy,
+                    userData.agencyId, userData.uid, leads, strategy,
                     (c, _t) => setProgress({ current: base + c, total })
                 );
-                base += validLeadRows.length;
+                base += leads.length;
 
                 const propCount = await importProperties(
-                    userData.agencyId, userData.uid, validPropertyRows, strategy,
+                    userData.agencyId, userData.uid, properties, strategy,
                     (c, _t) => setProgress({ current: base + c, total })
                 );
 
-                // Add agents count to the success/failure totals. The summary UI might need a tweak to show agents, but total success is key.
                 setSummary({ success: leadCount + propCount + agentCount, failed: validation.invalid.length, leads: leadCount, properties: propCount });
             } else if (entityType === 'lead') {
-                // Apply lead sub-type override if not mixed
                 const leadRows = leadSubType === 'mixed'
-                    ? validation.valid
-                    : validation.valid.map(r => ({ ...r, type: leadSubType }));
+                    ? dataToImport
+                    : dataToImport.map(r => ({ ...r, type: leadSubType }));
                 const count = await importLeads(userData.agencyId, userData.uid, leadRows, strategy, onProgress);
                 setSummary({ success: count, failed: validation.invalid.length, leads: count, properties: 0 });
             } else if (entityType === 'property') {
-                const count = await importProperties(userData.agencyId, userData.uid, validation.valid, strategy, onProgress);
+                const count = await importProperties(userData.agencyId, userData.uid, dataToImport, strategy, onProgress);
                 setSummary({ success: count, failed: validation.invalid.length, leads: 0, properties: count });
             } else if (entityType === 'combined') {
-                const count = await importMixed(userData.agencyId, userData.uid, validation.valid, strategy, onProgress);
+                const count = await importMixed(userData.agencyId, userData.uid, dataToImport, strategy, onProgress);
                 setSummary({ success: count, failed: validation.invalid.length, leads: count, properties: count });
             } else if (entityType === 'deal') {
-                const count = await importDeals(userData.agencyId, userData.uid, validation.valid, strategy, onProgress);
+                const count = await importDeals(userData.agencyId, userData.uid, dataToImport, strategy, onProgress);
                 setSummary({ success: count, failed: validation.invalid.length, leads: count, properties: count });
             } else {
-                const hasAdmin = validation.valid.some(r => r.role === 'admin');
+                const hasAdmin = dataToImport.some(r => r.role === 'admin');
                 if (hasAdmin && !window.confirm("שימו לב: בקובץ קיימים מנהלים ('admin'). למנהל יש הרשאה מלאה לכל נתוני המשרד. האם להמשיך בייבוא מנהלים?")) {
                     return;
                 }
-                const res = await importAgents(userData.agencyId, validation.valid, onProgress);
+                const res = await importAgents(userData.agencyId, dataToImport, onProgress);
                 setSummary({ success: res.importedCount, failed: res.failedCount + validation.invalid.length, leads: 0, properties: 0 });
             }
-            setStep(4);
+            setStep(5);
         } catch (err: any) {
             if (err?.code === 'permission-denied') {
                 setErrorMsg('אין לך הרשאה לייבא נתונים. פנה למנהל המשרד.');
@@ -1104,8 +1123,29 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                         </div>
                     )}
 
-                    {/* ─ STEP 4: Done */}
+                    {/* ─ STEP 4: Resolution */}
                     {step === 4 && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                                <Sparkles size={18} className="text-blue-600 flex-shrink-0" />
+                                <p className="text-xs text-blue-800 leading-relaxed font-medium">
+                                    המערכת זיהתה נכסים. תוכל לשייך כל אחד מהם למשרד שלך (בלעדיות), למשרד אחר (שת"פ) או להגדיר כפרטי.
+                                </p>
+                            </div>
+
+                            <ResolutionTable
+                                rows={resolvedRows}
+                                onChange={(idx, updates) => {
+                                    const newRows = [...resolvedRows];
+                                    newRows[idx] = { ...newRows[idx], ...updates };
+                                    setResolvedRows(newRows);
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    {/* ─ STEP 5: Done */}
+                    {step === 5 && (
                         <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
                             <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center">
                                 <CheckCircle size={40} className="text-emerald-500" />
@@ -1146,7 +1186,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     )}
 
                     <div className="flex items-center justify-between gap-3">
-                        {step === 4 ? (
+                        {step === 5 ? (
                             <button onClick={handleClose} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-xl transition-colors">
                                 סגור
                             </button>
@@ -1170,8 +1210,26 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
                                 {step === 3 && (
                                     <button
-                                        onClick={executeImport}
+                                        onClick={() => {
+                                            const hasProperties = entityType === 'property' || entityType === 'combined' || entityType === 'mixed' || entityType === 'deal';
+                                            if (hasProperties) {
+                                                setStep(4);
+                                            } else {
+                                                executeImport();
+                                            }
+                                        }}
                                         disabled={validation.valid.length === 0 || isProcessing}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl text-sm shadow-sm transition-colors min-w-[150px] justify-center"
+                                    >
+                                        המשך לשלב הטיוב
+                                        <ChevronLeft size={16} />
+                                    </button>
+                                )}
+
+                                {step === 4 && (
+                                    <button
+                                        onClick={executeImport}
+                                        disabled={resolvedRows.length === 0 || isProcessing}
                                         className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-semibold rounded-xl text-sm shadow-sm transition-colors min-w-[150px] justify-center"
                                     >
                                         {isProcessing ? (
@@ -1195,6 +1253,80 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     </div>
                 </div>
             </div>
+        </div>
+    );
+};
+
+// ─── Resolution Table (Refining property sources) ───────────────────────────
+
+interface ResolutionTableProps {
+    rows: TransformedRow[];
+    onChange: (idx: number, updates: Partial<TransformedRow>) => void;
+}
+
+const ResolutionTable: React.FC<ResolutionTableProps> = ({ rows, onChange }) => {
+    return (
+        <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs text-right border-collapse">
+                <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-3 py-2 text-slate-500 font-semibold w-2/5">נכס</th>
+                        <th className="px-3 py-2 text-slate-500 font-semibold">סוג שיווק</th>
+                        <th className="px-3 py-2 text-slate-500 font-semibold">פרטי משרד אחר</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {rows.map((row, idx) => {
+                        // For combined/mixed, only show properties
+                        if (row.rowType && row.rowType !== 'property') return null;
+
+                        return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-3 py-3 font-medium text-slate-700">
+                                    <div className="flex flex-col">
+                                        <span>{row.address || row.propertyName || 'ללא כתובת'}</span>
+                                        <span className="text-[10px] text-slate-400">{row.city || ''}</span>
+                                    </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                    <select
+                                        value={row.listingType || 'exclusive'}
+                                        onChange={(e) => onChange(idx, {
+                                            listingType: e.target.value as any,
+                                            isExclusive: e.target.value === 'exclusive'
+                                        })}
+                                        className="w-full border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    >
+                                        <option value="exclusive">בלעדיות המשרד</option>
+                                        <option value="external">שת"פ (משרד אחר)</option>
+                                        <option value="private">פרטי</option>
+                                    </select>
+                                </td>
+                                <td className="px-3 py-3">
+                                    {row.listingType === 'external' ? (
+                                        <div className="flex flex-col gap-1.5">
+                                            <input
+                                                placeholder="שם משרד"
+                                                value={row.externalAgencyName || ''}
+                                                onChange={(e) => onChange(idx, { externalAgencyName: e.target.value })}
+                                                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            />
+                                            <input
+                                                placeholder="שם איש קשר"
+                                                value={row.externalContactName || ''}
+                                                onChange={(e) => onChange(idx, { externalContactName: e.target.value })}
+                                                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <span className="text-slate-300 italic">—</span>
+                                    )}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
         </div>
     );
 };

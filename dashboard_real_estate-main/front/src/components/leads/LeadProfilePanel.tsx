@@ -374,21 +374,53 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                         >
                                             ללא שיוך
                                         </button>
-                                        {agents.map(agent => (
-                                            <button
-                                                key={agent.id}
-                                                onClick={() => handleAssignAgent(agent.uid ?? agent.id)}
-                                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                                            >
-                                                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">
-                                                    {agent.name.charAt(0)}
-                                                </div>
-                                                <div className="text-right">
-                                                    <p>{agent.name}</p>
-                                                    <p className="text-xs text-slate-400">{agent.role === 'admin' ? 'מנהל' : 'סוכן'}</p>
-                                                </div>
-                                            </button>
-                                        ))}
+                                        {(() => {
+                                            const scoredAgents = agents.map(agent => {
+                                                let score = 0;
+                                                const leadCities = lead.requirements?.desiredCity || [];
+                                                const transactionType = lead.requirements?.propertyType?.includes('rent') ? 'rent' : 'sale';
+
+                                                // 1. Transaction Type Match
+                                                if (agent.specializations?.includes(transactionType)) score += 2;
+
+                                                // 2. City/Area Match
+                                                const agentAreas = (agent.serviceAreas ?? []).map(a => a.toLowerCase());
+                                                const areaMatch = leadCities.some(city => agentAreas.includes(city.toLowerCase()));
+                                                if (areaMatch) score += 3;
+
+                                                return { agent, score };
+                                            }).sort((a, b) => b.score - a.score);
+
+                                            return scoredAgents.map(({ agent, score }) => {
+                                                const isRecommended = score >= 2;
+                                                return (
+                                                    <button
+                                                        key={agent.id}
+                                                        onClick={() => handleAssignAgent(agent.uid ?? agent.id)}
+                                                        className={`w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium transition-colors ${isRecommended ? 'bg-blue-50/50 hover:bg-blue-50 text-slate-700 hover:text-blue-700' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isRecommended ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700'
+                                                                }`}>
+                                                                {agent.name.charAt(0)}
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="flex items-center gap-1.5">
+                                                                    {agent.name}
+                                                                    {isRecommended && <Sparkles size={12} className="text-blue-500" />}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-400 font-normal">
+                                                                    {agent.role === 'admin' ? 'מנהל' : 'סוכן'}
+                                                                    {isRecommended && <span className="text-blue-500 mr-1.5">— מומלץ</span>}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {isRecommended && <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md font-bold">✨</span>}
+                                                    </button>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 </>
                             )}

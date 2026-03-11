@@ -182,6 +182,12 @@ const PROPERTY_TYPE_MAP: Record<string, 'sale' | 'rent' | 'commercial'> = {
     'מסחרי': 'commercial', 'commercial': 'commercial', 'מסחר': 'commercial'
 };
 
+const LISTING_TYPE_MAP: Record<string, 'exclusive' | 'external' | 'private'> = {
+    'exclusive': 'exclusive', 'בלעדיות': 'exclusive', 'בלעדי': 'exclusive', 'בלעדי המשרד': 'exclusive',
+    'external': 'external', 'שת"פ': 'external', 'משרד אחר': 'external', 'שיתוף פעולה': 'external', 'שיתוף': 'external',
+    'private': 'private', 'פרטי': 'private', 'רגיל': 'private'
+};
+
 // Comprehensive Hebrew + English stage name mapping
 const STAGE_MAP: Record<string, string> = {
     // English keys
@@ -309,13 +315,43 @@ export function validateAndTransform(
                 ? String(transformed['notes']).trim()
                 : null;
 
-            // isExclusive — parse boolean-ish values
+            // isExclusive — parse booleanish values
             const rawExclusive = transformed['isExclusive'];
             if (rawExclusive !== undefined && rawExclusive !== '') {
                 const parsed = parseBooleanish(rawExclusive);
                 transformed['isExclusive'] = parsed !== undefined ? parsed : true; // default exclusive
             } else {
                 transformed['isExclusive'] = true;
+            }
+
+            // Parse new amenity and metadata fields
+            const parseBool = (key: string) => {
+                if (transformed[key] !== undefined && transformed[key] !== '') {
+                    transformed[key] = !!parseBooleanish(transformed[key]);
+                }
+            };
+            parseBool('hasElevator');
+            parseBool('hasParking');
+            parseBool('hasBalcony');
+            parseBool('hasSafeRoom');
+            parseBool('hasBars');
+            parseBool('hasAirCondition');
+
+            if (transformed['condition']) {
+                transformed['condition'] = String(transformed['condition']).trim();
+            }
+            if (transformed['floorsTotal']) {
+                const floors = parseInt(String(transformed['floorsTotal']).replace(/[^\d]/g, ''), 10);
+                transformed['floorsTotal'] = isNaN(floors) ? undefined : floors;
+            }
+
+            // Normalize listingType
+            const rawListing = String(transformed['listingType'] || '').trim().toLowerCase();
+            if (rawListing && LISTING_TYPE_MAP[rawListing]) {
+                transformed['listingType'] = LISTING_TYPE_MAP[rawListing];
+            }
+            if (transformed['listingType'] === 'private' || transformed['listingType'] === 'external') {
+                transformed['isExclusive'] = false;
             }
         }
 
@@ -511,6 +547,16 @@ function buildPropertyDefaults(
             lastUpdated: serverTimestamp(),
         },
         ...(row.customData ? { customData: row.customData } : {}),
+        condition: row.condition || null,
+        floorsTotal: row.floorsTotal ?? null,
+        hasElevator: row.hasElevator ?? null,
+        hasParking: row.hasParking ?? null,
+        hasBalcony: row.hasBalcony ?? null,
+        hasSafeRoom: row.hasSafeRoom ?? null,
+        hasBars: row.hasBars ?? null,
+        hasAirCondition: row.hasAirCondition ?? null,
+        externalAgencyName: row.externalAgencyName || null,
+        externalContactName: row.externalContactName || null,
         createdAt: serverTimestamp(),
         ...extra,
     };

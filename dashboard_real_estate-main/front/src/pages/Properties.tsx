@@ -33,7 +33,7 @@ export default function Properties() {
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
-    const [propertyToCreateDeal, setPropertyToCreateDeal] = useState<Property | null>(null);
+    const [propertiesToCreateDeal, setPropertiesToCreateDeal] = useState<Property[]>([]);
     const [toast, setToast] = useState('');
 
     const location = useLocation();
@@ -190,13 +190,25 @@ export default function Properties() {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
                     {selectedPropertyIds.size > 0 && (
-                        <button
-                            onClick={handleBulkDelete}
-                            className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm animate-in fade-in zoom-in duration-200"
-                        >
-                            <Trash2 size={16} />
-                            מחק ({selectedPropertyIds.size})
-                        </button>
+                        <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                            <button
+                                onClick={() => {
+                                    const selected = properties.filter(p => selectedPropertyIds.has(p.id));
+                                    setPropertiesToCreateDeal(selected);
+                                }}
+                                className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                            >
+                                <Handshake size={16} />
+                                צור עסקה ({selectedPropertyIds.size})
+                            </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                            >
+                                <Trash2 size={16} />
+                                מחק ({selectedPropertyIds.size})
+                            </button>
+                        </div>
                     )}
                     <button
                         onClick={() => setShowImportModal(true)}
@@ -437,7 +449,7 @@ export default function Properties() {
                                                 </div>
                                             ) : (
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                    onClick={(e) => { e.stopPropagation(); setPropertiesToCreateDeal([prop]); }}
                                                     className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
                                                     title="צור עסקה לנכס זה"
                                                 >
@@ -598,7 +610,7 @@ export default function Properties() {
                                                         )}
                                                         {!prop.isGlobalCityProperty && (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); setPropertyToCreateDeal(prop); }}
+                                                                onClick={(e) => { e.stopPropagation(); setPropertiesToCreateDeal([prop]); }}
                                                                 className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors shrink-0"
                                                                 title="צור עסקה"
                                                             >
@@ -675,7 +687,7 @@ export default function Properties() {
                     onClose={() => setSelectedProperty(null)}
                     onCreateDeal={(prop) => {
                         setSelectedProperty(null); // Close details modal
-                        setPropertyToCreateDeal(prop); // Open create deal modal
+                        setPropertiesToCreateDeal([prop]); // Open create deal modal
                     }}
                 />
             )}
@@ -690,17 +702,18 @@ export default function Properties() {
                 }}
             />
 
-            {propertyToCreateDeal && (
+            {propertiesToCreateDeal.length > 0 && (
                 <CreateDealFromPropertyModal
-                    property={propertyToCreateDeal}
+                    properties={propertiesToCreateDeal}
                     agents={agents}
                     leads={leads}
                     agencySettings={agency?.settings}
                     isOpen={true}
-                    onClose={() => setPropertyToCreateDeal(null)}
+                    onClose={() => setPropertiesToCreateDeal([])}
                     onSuccess={(msg) => {
                         setToast(msg);
                         setTimeout(() => setToast(''), 3500);
+                        setSelectedPropertyIds(new Set()); // Clear selection after bulk creation
                     }}
                 />
             )}

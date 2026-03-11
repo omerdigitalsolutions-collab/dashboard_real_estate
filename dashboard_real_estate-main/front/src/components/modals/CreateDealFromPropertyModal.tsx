@@ -14,7 +14,7 @@ const DEFAULT_STAGES = [
 ];
 
 interface CreateDealFromPropertyModalProps {
-    property: Property;
+    properties: Property[];
     leads: Lead[];
     agents: AppUser[];
     agencySettings?: Agency['settings'];
@@ -26,7 +26,7 @@ interface CreateDealFromPropertyModalProps {
 const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50 focus:bg-white';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
-export default function CreateDealFromPropertyModal({ property, leads, agents, agencySettings, isOpen, onClose, onSuccess }: CreateDealFromPropertyModalProps) {
+export default function CreateDealFromPropertyModal({ properties, leads, agents, agencySettings, isOpen, onClose, onSuccess }: CreateDealFromPropertyModalProps) {
     const { userData } = useAuth();
 
     // Exactly the same logic as DealsKanban's activeStages
@@ -40,7 +40,7 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
     const [selectedBuyerId, setSelectedBuyerId] = useState<string>('');
     const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
-    const [assignedAgentId, setAssignedAgentId] = useState<string>(property.agentId || '');
+    const [assignedAgentId, setAssignedAgentId] = useState<string>(properties[0]?.agentId || '');
 
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
@@ -51,10 +51,10 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
             setSelectedBuyerId('');
             setSelectedSellerId('');
             setCommissionPercentage('2');
-            setAssignedAgentId(property.agentId || '');
+            setAssignedAgentId(properties[0]?.agentId || '');
             setErrorMsg('');
         }
-    }, [isOpen, property, activeStages]);
+    }, [isOpen, properties, activeStages]);
 
     if (!isOpen) return null;
 
@@ -68,30 +68,35 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
             return;
         }
 
-        const displayPrice = property.price || 0;
-        const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
-
         try {
             setLoading(true);
 
-            const dealPayload: any = {
-                propertyId: property.id,
-                ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
-                stage: selectedStage,
-                projectedCommission: calculatedCommission,
-                createdBy: userData.name || userData.email || 'Agent',
-            };
+            // Create a deal for each property
+            const creations = properties.map(property => {
+                const displayPrice = property.price || 0;
+                const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
 
-            if (selectedBuyerId) dealPayload.buyerId = selectedBuyerId;
-            if (selectedSellerId) dealPayload.sellerId = selectedSellerId;
+                const dealPayload: any = {
+                    propertyId: property.id,
+                    ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
+                    stage: selectedStage,
+                    projectedCommission: calculatedCommission,
+                    createdBy: userData.name || userData.email || 'Agent',
+                };
 
-            await addDeal(userData.agencyId, dealPayload);
+                if (selectedBuyerId) dealPayload.buyerId = selectedBuyerId;
+                if (selectedSellerId) dealPayload.sellerId = selectedSellerId;
 
-            onSuccess('העסקה נוצרה בהצלחה!');
+                return addDeal(userData.agencyId!, dealPayload);
+            });
+
+            await Promise.all(creations);
+
+            onSuccess(properties.length > 1 ? `${properties.length} עסקאות נוצרו בהצלחה!` : 'העסקה נוצרה בהצלחה!');
             onClose();
         } catch (err: any) {
-            console.error("Error creating deal: ", err);
-            setErrorMsg('אירעה שגיאה ביצירת העסקה. נסה שנית.');
+            console.error("Error creating deals: ", err);
+            setErrorMsg('אירעה שגיאה ביצירת העסקאות. נסה שנית.');
         } finally {
             setLoading(false);
         }
@@ -109,8 +114,12 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
                             <Handshake size={18} className="text-blue-600" />
                         </div>
                         <div>
-                            <h2 className="text-base font-bold text-slate-900">יצירת עסקה לנכס</h2>
-                            <p className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-xs">{property.address || 'נכס'}</p>
+                            <h2 className="text-base font-bold text-slate-900">
+                                {properties.length > 1 ? `יצירת ${properties.length} עסקאות` : 'יצירת עסקה לנכס'}
+                            </h2>
+                            <p className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-xs">
+                                {properties.length > 1 ? `עבור ${properties.length} נכסים נבחרים` : (properties[0]?.address || 'נכס')}
+                            </p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
@@ -214,7 +223,7 @@ export default function CreateDealFromPropertyModal({ property, leads, agents, a
                             disabled={loading || !commissionPercentage}
                             className="w-2/3 flex justify-center py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                         >
-                            {loading ? 'יוצר עסקה...' : 'צור עסקה'}
+                            {loading ? 'יוצר עסקאות...' : (properties.length > 1 ? 'צור עסקאות' : 'צור עסקה')}
                         </button>
                     </div>
                 </form>

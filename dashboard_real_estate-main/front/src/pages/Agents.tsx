@@ -95,6 +95,35 @@ export default function Agents() {
                 ))}
               </div>
 
+              {/* Specialization & Area badges */}
+              {((agent.agentDoc?.specializations?.length ?? 0) > 0 || (agent.agentDoc?.serviceAreas?.length ?? 0) > 0) && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {(agent.agentDoc?.specializations ?? []).map((s: string) => {
+                    const map: Record<string, { label: string; cls: string }> = {
+                      sale: { label: '🏡 מכירה', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                      rent: { label: '🔑 השכרה', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                      commercial: { label: '🏢 מסחרי', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                    };
+                    const info = map[s] ?? { label: s, cls: 'bg-slate-50 text-slate-600 border-slate-200' };
+                    return (
+                      <span key={s} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${info.cls}`}>
+                        {info.label}
+                      </span>
+                    );
+                  })}
+                  {(agent.agentDoc?.serviceAreas ?? []).slice(0, 3).map((area: string) => (
+                    <span key={area} className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
+                      📍 {area}
+                    </span>
+                  ))}
+                  {(agent.agentDoc?.serviceAreas?.length ?? 0) > 3 && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-slate-50 text-slate-500 border-slate-200">
+                      +{(agent.agentDoc?.serviceAreas?.length ?? 0) - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-50">
                 {agent.isStub ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100">

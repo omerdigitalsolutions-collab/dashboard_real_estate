@@ -242,11 +242,32 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                     <label className={labelCls}>שיוך לסוכן</label>
                                     <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className={inputCls}>
                                         <option value="">ללא שיוך (כללי)</option>
-                                        {agents.map(agent => (
-                                            <option key={agent.uid || agent.id} value={agent.uid || ''}>
-                                                {agent.name || agent.email}
-                                            </option>
-                                        ))}
+                                        {(() => {
+                                            const scoredAgents = agents.map(agent => {
+                                                let score = 0;
+                                                const leadCityArr = desiredCity.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+
+                                                // 1. Transaction Type Match
+                                                if (agent.specializations?.includes(transactionType)) score += 2;
+
+                                                // 2. City/Area Match
+                                                const agentAreas = (agent.serviceAreas ?? []).map(a => a.toLowerCase());
+                                                const areaMatch = leadCityArr.some(city => agentAreas.includes(city));
+                                                if (areaMatch) score += 3;
+
+                                                return { agent, score };
+                                            }).sort((a, b) => b.score - a.score);
+
+                                            return scoredAgents.map(({ agent, score }) => {
+                                                const isRecommended = score >= 2;
+                                                return (
+                                                    <option key={agent.uid || agent.id} value={agent.uid || ''}>
+                                                        {agent.name || agent.email}
+                                                        {isRecommended ? ' ✨ (מומלץ)' : ''}
+                                                    </option>
+                                                );
+                                            });
+                                        })()}
                                     </select>
                                 </div>
                                 <div>
