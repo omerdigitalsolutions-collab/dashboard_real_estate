@@ -158,8 +158,8 @@ function LeadRequirementsPanel({ req, leadName }: { req: SharedCatalog['leadRequ
                         <div
                             key={i}
                             className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${chip.highlight
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-slate-50 text-slate-600 border-slate-200'
                                 }`}
                         >
                             {chip.icon}
@@ -511,22 +511,29 @@ export default function SharedCatalogPage() {
                 )}
 
                 {/* Homer branding */}
-                <div className="flex flex-col items-center text-center gap-3 py-4">
-                    <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="block hover:scale-105 active:scale-95 transition-transform">
-                        <img src="/homer-logo.png" alt="Homer CRM" className="h-14 w-auto object-contain drop-shadow-sm" />
+                <div className="flex flex-col items-center text-center gap-6 py-12 border-t border-slate-200/60 mt-8">
+                    <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="block hover:scale-110 active:scale-95 transition-all duration-300 transform drop-shadow-xl">
+                        <img src="/homer-logo-dark.png" alt="Homer CRM" className="h-24 w-auto object-contain" />
                     </a>
-                    <p className="text-slate-500 text-xs font-medium">
-                        נוצר ע״י{' '}
-                        <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-800 hover:text-blue-600 transition-colors">
-                            homer הבית של המתווכים
-                        </a>
-                    </p>
-                    <p className="text-slate-400 text-xs">
-                        מבית{' '}
-                        <a href="https://www.instagram.com/omer.digital.solutions" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-600 hover:text-blue-600 transition-colors">
-                            עומר פתרונות דיגיטלים
-                        </a>
-                    </p>
+
+                    <div className="space-y-4">
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black tracking-[0.2em] text-blue-500 uppercase mb-1">Powered by</span>
+                            <a href="https://homer.management" target="_blank" rel="noopener noreferrer" className="text-xl font-black text-slate-900 hover:text-blue-600 transition-colors tracking-tight">
+                                hOMER <span className="text-blue-600">OS</span>
+                            </a>
+                            <p className="text-slate-500 text-sm font-medium mt-1">הבית של המתווכים</p>
+                        </div>
+
+                        <div className="h-px w-12 bg-slate-200 mx-auto"></div>
+
+                        <p className="text-slate-400 text-[11px] font-medium tracking-wide">
+                            מבית{' '}
+                            <a href="https://www.instagram.com/omer.digital.solutions" target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-blue-500 font-bold transition-colors">
+                                עומר פתרונות דיגיטלים
+                            </a>
+                        </p>
+                    </div>
                 </div>
             </footer>
 

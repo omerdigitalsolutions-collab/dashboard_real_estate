@@ -257,6 +257,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
                     // Dynamically subscribe to global city's properties if set
                     const loadedCities = settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []);
+                    console.log('[DEBUG cities] loadedCities from agency settings:', loadedCities);
                     const citiesChanged = loadedCities.length !== activeCities.length || !loadedCities.every((c: string) => activeCities.includes(c));
 
                     if (citiesChanged) {
@@ -271,8 +272,10 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                             const cityPropsMap: Record<string, Property[]> = {};
 
                             loadedCities.forEach((city: string) => {
+                                console.log('[DEBUG cities] Subscribing to city:', city);
                                 const qCityProps = collection(db, 'cities', city, 'properties');
                                 const unsub = onSnapshot(qCityProps, (citySnap) => {
+                                    console.log('[DEBUG cities] Snapshot for city', city, '- docs count:', citySnap.docs.length);
                                     cityPropsMap[city] = citySnap.docs.map(doc => ({
                                         id: doc.id,
                                         ...doc.data(),

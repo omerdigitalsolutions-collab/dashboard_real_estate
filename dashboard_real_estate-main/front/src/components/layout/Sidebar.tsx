@@ -61,9 +61,7 @@ export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700/60">
           <div className="flex items-center pr-1">
-            <div className="bg-white px-3 py-1.5 rounded-xl flex items-center justify-center shadow-sm">
-              <img src="/homer-logo.png" alt="Homer CRM" className="h-12 w-auto mix-blend-multiply" />
-            </div>
+            <img src="/homer-logo-dark.png" alt="Homer CRM" className="h-12 w-auto" />
           </div>
           <button
             onClick={onClose}
@@ -97,6 +95,8 @@ export default function Sidebar({ open, onClose, onAskAI }: SidebarProps) {
               onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group
+                ${to === '/transactions' ? 'tour-kanban' : ''}
+                ${to === '/leads' ? 'tour-webot tour-whatsapp-control' : ''}
                 ${isActive
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800'

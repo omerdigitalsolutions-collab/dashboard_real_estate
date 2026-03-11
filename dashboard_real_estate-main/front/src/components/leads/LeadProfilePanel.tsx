@@ -278,7 +278,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
 
                 {/* WhatsApp Tab */}
                 {activeSection === 'whatsapp' && (
-                    <div className="flex flex-col flex-1 overflow-hidden">
+                    <div className="flex flex-col flex-1 h-0">
                         {/* Bot Toggle — available for all leads */}
                         <BotToggle
                             leadId={lead.id}
@@ -290,7 +290,6 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 py-10">
                                     <MessageSquare size={36} className="mb-3 opacity-40" />
                                     <p className="text-sm font-medium">אין הודעות עדיין</p>
-                                    <p className="text-xs mt-1">הודעות נכנסות מ-Green API יופיעו כאן</p>
                                 </div>
                             ) : (
                                 messages.map(msg => (
@@ -312,7 +311,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                             <div ref={messagesEndRef} />
                         </div>
                         {/* Compose bar */}
-                        <div className="border-t border-slate-100 bg-white px-3 py-3 flex items-center gap-2">
+                        <div className="border-t border-slate-100 bg-white px-3 pt-3 pb-6 sm:pb-3 flex items-center gap-2 shrink-0">
                             <input
                                 value={msgText}
                                 onChange={e => setMsgText(e.target.value)}

@@ -87,9 +87,10 @@ export interface AppUser {
             deals: number;
         };
     };
-    preferences?: UserPreferences;
+    Preferences?: UserPreferences;
     whatsappTemplates?: { id: string; name: string; content: string }[];
     createdAt?: Timestamp;
+    hasSeenTour?: boolean;
 }
 
 export interface UserPreferences {

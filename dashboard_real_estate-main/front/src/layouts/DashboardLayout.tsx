@@ -75,7 +75,7 @@ export default function DashboardLayout() {
             <aside className={`fixed inset-y-0 right-0 z-50 w-64 flex-shrink-0 bg-slate-900/95 md:bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="shrink-0 h-20 flex items-center justify-between px-6 border-b border-slate-800">
                     <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                        <img src="/homer-logo.png" alt="Homer" className="h-12 w-auto mix-blend-screen brightness-200" />
+                        <img src="/homer-logo-dark.png" alt="Homer" className="h-10 w-auto" />
                     </span>
                     <button
                         className="md:hidden text-slate-400 hover:text-white p-2 mb-1"

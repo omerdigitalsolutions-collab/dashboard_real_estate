@@ -34,3 +34,11 @@ export async function updateUserWhatsAppTemplates(
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, { whatsappTemplates: templates });
 }
+
+/**
+ * Marks the onboarding tour as seen for the user.
+ */
+export async function markTourAsSeen(userId: string): Promise<void> {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { hasSeenTour: true });
+}

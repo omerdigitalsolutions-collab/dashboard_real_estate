@@ -318,7 +318,7 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
     };
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px] sm:min-h-[800px] h-[calc(100vh-8rem)] relative">
+        <div className="tour-kanban bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px] sm:min-h-[800px] h-[calc(100vh-8rem)] relative">
             <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">לוח עסקאות דינמי</h2>

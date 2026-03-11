@@ -162,7 +162,7 @@ export default function Dashboard() {
   const innerWrap = isEditing ? 'pointer-events-none select-none h-full' : 'h-full';
 
   return (
-    <div className="max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 overflow-x-hidden" dir="rtl">
+    <div className="tour-dashboard max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 overflow-x-hidden" dir="rtl">
 
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">

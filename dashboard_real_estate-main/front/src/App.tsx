@@ -29,6 +29,7 @@ import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
 import BillingLockScreen from './pages/BillingLockScreen';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
+import OnboardingTour from './components/common/OnboardingTour';
 
 /** Wraps the dashboard and renders the lock screen if billing is expired */
 function SubscriptionProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -109,6 +110,7 @@ function App() {
               <SubscriptionProtectedRoute>
                 <PreferencesProvider>
                   <DashboardDataProvider>
+                    <OnboardingTour />
                     <DashboardLayout />
                   </DashboardDataProvider>
                 </PreferencesProvider>

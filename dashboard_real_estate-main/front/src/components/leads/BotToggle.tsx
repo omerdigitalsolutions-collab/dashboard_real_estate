@@ -70,7 +70,7 @@ export default function BotToggle({ leadId, isBotActive }: BotToggleProps) {
     };
 
     return (
-        <div className="px-4 py-3 border-b border-slate-100 bg-[#020b18]/95">
+        <div className="tour-whatsapp-control px-4 py-3 border-b border-slate-100 bg-[#020b18]/95">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                 <Bot size={11} className="text-[#00e5ff]" />
                 שליטת בוט AI
@@ -98,7 +98,7 @@ export default function BotToggle({ leadId, isBotActive }: BotToggleProps) {
                 {loading
                     ? 'מעדכן...'
                     : localActive
-                        ? 'השתק בוט (קח טיפול)'
+                        ? 'כיבוי בוט (קח טיפול)'
                         : 'הפעל בוט מחדש'}
             </button>
 

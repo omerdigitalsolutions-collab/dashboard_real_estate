@@ -279,7 +279,7 @@ export default function CopilotChatWidget() {
             <button
                 onClick={() => setIsOpen(v => !v)}
                 aria-label="פתח AI Copilot"
-                className="fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[9999] w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl"
+                className="tour-ai-copilot fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-[9999] w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-xl"
                 style={{
                     background: isOpen
                         ? 'linear-gradient(135deg, #475569, #334155)'

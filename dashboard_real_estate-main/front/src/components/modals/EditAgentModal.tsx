@@ -142,8 +142,8 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                                         type="button"
                                         onClick={() => toggleSpecialization(opt.val)}
                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all ${active
-                                                ? opt.color + ' shadow-sm ring-1 ring-inset ring-current/20'
-                                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                                            ? opt.color + ' shadow-sm ring-1 ring-inset ring-current/20'
+                                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
                                             }`}
                                     >
                                         <span>{opt.emoji}</span>
@@ -159,7 +159,7 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                     <div>
                         <label className={labelCls + ' flex items-center gap-1'}>
                             <MapPin size={12} className="text-slate-400" />
-                            אזורי שירות
+                            אזורי התמחות
                             <span className="text-slate-400 font-normal mr-1">— ערים / שכונות</span>
                         </label>
 
