@@ -125,7 +125,9 @@ export default function Properties() {
         const matchesSearch =
             (prop.city && prop.city.toLowerCase().includes(search.toLowerCase())) ||
             (prop.address && prop.address.toLowerCase().includes(search.toLowerCase())) || '';
-        const matchesFilter = filter === 'All' || prop.type === filter;
+        const matchesFilter =
+            filter === 'All' ||
+            (filter === 'commercial' ? prop.kind === 'מסחרי' : prop.type === filter && prop.kind !== 'מסחרי');
         return matchesSearch && matchesFilter;
     });
 
@@ -151,6 +153,15 @@ export default function Properties() {
         });
         return result;
     }, [filteredPropertiesByTime]);
+
+    // Count per filter tab (calculated from filteredPropertiesByTime, not filtered)
+    const tabCounts = useMemo(() => ({
+        All: filteredPropertiesByTime.length,
+        sale: filteredPropertiesByTime.filter((p: Property) => p.type === 'sale' && p.kind !== 'מסחרי').length,
+        rent: filteredPropertiesByTime.filter((p: Property) => p.type === 'rent' && p.kind !== 'מסחרי').length,
+        commercial: filteredPropertiesByTime.filter((p: Property) => p.kind === 'מסחרי').length,
+        draft: filteredPropertiesByTime.filter((p: Property) => p.status === 'draft').length,
+    }), [filteredPropertiesByTime]);
 
     // Helper functions for Grid View
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
@@ -280,13 +291,22 @@ export default function Properties() {
                         </div>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                        {['All', 'sale', 'rent', 'draft'].map((f) => (
+                        {[
+                            { key: 'All', label: 'הכל' },
+                            { key: 'sale', label: 'למכירה' },
+                            { key: 'rent', label: 'להשכרה' },
+                            { key: 'commercial', label: 'מסחרי' },
+                            { key: 'draft', label: 'טיוטות (WhatsApp)' },
+                        ].map(({ key, label }) => (
                             <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                className={'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ' + (filter === f ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
+                                key={key}
+                                onClick={() => setFilter(key)}
+                                className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (filter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
                             >
-                                {f === 'All' ? 'הכל' : f === 'sale' ? 'למכירה' : f === 'rent' ? 'להשכרה' : 'טיוטות (WhatsApp)'}
+                                {label}
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                    {tabCounts[key as keyof typeof tabCounts]}
+                                </span>
                             </button>
                         ))}
                     </div>

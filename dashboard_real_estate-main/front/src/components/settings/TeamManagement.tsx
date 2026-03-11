@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AppUser, UserRole } from '../../types';
 import { getAgencyTeam, updateAgentRole, toggleAgentStatus, deleteAgent } from '../../services/teamService';
 import InviteAgentModal from './InviteAgentModal';
+import AddAgentManuallyModal from './AddAgentManuallyModal';
 import toast from 'react-hot-toast';
 
 const RoleBadge = ({ role }: { role: UserRole }) =>
@@ -97,6 +98,7 @@ export default function TeamManagement() {
     const { userData, currentUser } = useAuth();
     const [team, setTeam] = useState<AppUser[]>([]);
     const [showInvite, setShowInvite] = useState(false);
+    const [showManual, setShowManual] = useState(false);
     const [loading, setLoading] = useState(true);
     const showToast = (msg: string) => {
         toast.success(msg);
@@ -148,13 +150,22 @@ export default function TeamManagement() {
                     <h2 className="text-base font-bold text-slate-900">ניהול צוות</h2>
                     <p className="text-sm text-slate-400 mt-0.5">{team.length} חברי צוות</p>
                 </div>
-                <button
-                    onClick={() => setShowInvite(true)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                >
-                    <UserPlus size={16} />
-                    הזמן סוכן
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowManual(true)}
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                    >
+                        <UserPlus size={16} />
+                        הוסף ידנית
+                    </button>
+                    <button
+                        onClick={() => setShowInvite(true)}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                    >
+                        <UserPlus size={16} />
+                        הזמן סוכן
+                    </button>
+                </div>
             </div>
 
             {/* Table */}
@@ -224,6 +235,15 @@ export default function TeamManagement() {
                     onSuccess={() => {
                         setShowInvite(false);
                         showToast('הסוכן הוזמן בהצלחה! 🎉');
+                    }}
+                />
+            )}
+
+            {showManual && (
+                <AddAgentManuallyModal
+                    onClose={() => setShowManual(false)}
+                    onSuccess={() => {
+                        showToast('הסוכן נוסף בהצלחה! 🎉');
                     }}
                 />
             )}

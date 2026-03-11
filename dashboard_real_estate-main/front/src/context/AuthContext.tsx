@@ -145,18 +145,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         console.log('[AuthContext] Checking for stubs...');
                         const email = (firebaseUser.email || '').toLowerCase();
                         try {
-                            const stubsSnap = email
-                                ? await getDocs(
-                                    query(
-                                        collection(db, 'users'),
-                                        where('email', '==', email),
-                                        where('uid', '==', null),
-                                        limit(1)
-                                    )
-                                )
-                                : null;
+                            let stubDoc = null;
 
-                            const stubDoc = stubsSnap && !stubsSnap.empty ? stubsSnap.docs[0] : null;
+                            if (email) {
+                                try {
+                                    // Primary: composite query (needs index)
+                                    const stubsSnap = await getDocs(
+                                        query(
+                                            collection(db, 'users'),
+                                            where('email', '==', email),
+                                            where('uid', '==', null),
+                                            limit(1)
+                                        )
+                                    );
+                                    stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+                                } catch (indexErr) {
+                                    // Fallback: query by email only, filter uid===null client-side
+                                    console.warn('[AuthContext] Composite index missing, falling back to email-only query:', indexErr);
+                                    const emailSnap = await getDocs(
+                                        query(
+                                            collection(db, 'users'),
+                                            where('email', '==', email),
+                                            limit(5)
+                                        )
+                                    );
+                                    const unlinked = emailSnap.docs.find(d => d.data().uid === null);
+                                    stubDoc = unlinked || null;
+                                }
+                            }
 
                             if (stubDoc) {
                                 console.log('[AuthContext] Stub found! Linking and redirecting to setup.');
