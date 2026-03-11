@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Shield, Globe, Palette, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus } from 'lucide-react';
+import { Bell, Shield, Globe, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { useAuth } from '../context/AuthContext';
@@ -176,6 +176,7 @@ export default function Settings() {
         name: profileName,
         phone: profilePhone
       });
+      await refreshUserData(); // Update UI immediately without refresh
       showToast('הפרופיל עודכן בהצלחה! ✅');
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -213,99 +214,115 @@ export default function Settings() {
 
         <div className="flex-1 space-y-4">
           {activeSection === 'profile' && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
-              <h2 className="text-base font-semibold text-slate-900">הגדרות פרופיל</h2>
-              <div className="flex items-center gap-4">
-                <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold overflow-hidden shadow-sm">
-                  {isUploading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : userData?.photoURL ? (
-                    <img src={userData.photoURL} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    userData?.name.substring(0, 1).toUpperCase() || 'ע'
-                  )}
+            <div className="space-y-4">
+              {/* ── Card 1: My Personal Details ── */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
+                <div className="flex items-center gap-2.5 pb-1 border-b border-slate-100">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Users2 size={14} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">הפרופיל שלי</h2>
+                    <p className="text-xs text-slate-400">פרטים אישיים של המשתמש המחובר</p>
+                  </div>
                 </div>
-                <div>
-                  <input
-                    type="file"
-                    accept="image/jpeg, image/png, image/gif"
-                    className="hidden"
-                    ref={fileInputRef}
-                    onChange={handlePhotoUpload}
-                  />
+                <div className="flex items-center gap-4">
+                  <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold overflow-hidden shadow-sm">
+                    {isUploading ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : userData?.photoURL ? (
+                      <img src={userData.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      userData?.name?.substring(0, 1).toUpperCase() || 'ע'
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/jpeg, image/png, image/gif"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={handlePhotoUpload}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <Camera size={14} />
+                      {isUploading ? 'מעלה...' : 'שנה תמונה'}
+                    </button>
+                    <p className="text-xs text-slate-400 mt-0.5">JPG, GIF או PNG. גודל מקסימלי 2MB</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">שם מלא</label>
+                    <input
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">כתובת אימייל (לקריאה בלבד)</label>
+                    <input
+                      disabled
+                      value={userData?.email || ''}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 bg-slate-100 cursor-not-allowed"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">מספר טלפון</label>
+                    <input
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">תפקיד (לקריאה בלבד)</label>
+                    <input
+                      disabled
+                      value={userData?.role === 'admin' ? 'מנהל סוכנות' : 'סוכן'}
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 bg-slate-100 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                    onClick={handleSaveProfile}
+                    disabled={profileSaving}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center min-w-[120px]"
                   >
-                    <Camera size={14} />
-                    {isUploading ? 'מעלה...' : 'שנה תמונה'}
+                    {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור שינויים'}
                   </button>
-                  <p className="text-xs text-slate-400 mt-0.5">JPG, GIF או PNG. גודל מקסימלי 2MB</p>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">שם מלא</label>
-                  <input
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">כתובת אימייל (לקריאה בלבד)</label>
-                  <input
-                    disabled
-                    value={userData?.email || ''}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 bg-slate-100 cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">מספר טלפון</label>
-                  <input
-                    value={profilePhone}
-                    onChange={(e) => setProfilePhone(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50"
-                    dir="ltr"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">תפקיד (לקריאה בלבד)</label>
-                  <input
-                    disabled
-                    value={userData?.role === 'admin' ? 'מנהל סוכנות' : 'סוכן'}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-400 bg-slate-100 cursor-not-allowed"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end pt-4 border-t border-slate-100">
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={profileSaving}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center min-w-[120px]"
-                >
-                  {profileSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור שינויים'}
-                </button>
               </div>
 
-              {/* Agency Logo Upload */}
+              {/* ── Card 2: Agency Details (admin only) ── */}
               {userData?.role === 'admin' && (
-                <div className="pt-8 border-t border-slate-100 mt-8">
-                  <h3 className="font-semibold text-slate-800 text-sm mb-4">לוגו סוכנות ראשי</h3>
+                <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6 space-y-4">
+                  <div className="flex items-center gap-2.5 pb-1 border-b border-slate-100">
+                    <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+                      <Building size={14} className="text-amber-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900">פרטי הסוכנות</h2>
+                      <p className="text-xs text-slate-400">לוגו ופרטים של המשרד — נראים ללקוחות ובקטלוגים</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-6">
-                    {/* Logo Preview */}
-                    <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                    <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50 flex items-center justify-center overflow-hidden">
                       {agencyLogoUploading ? (
                         <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
                       ) : agencyLogoUrl ? (
                         <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
                       ) : (
-                        <Palette className="w-8 h-8 text-slate-300" />
+                        <Building size={28} className="text-amber-300" />
                       )}
                     </div>
-
-                    {/* Upload Controls */}
                     <div className="space-y-2">
                       <input
                         type="file"
