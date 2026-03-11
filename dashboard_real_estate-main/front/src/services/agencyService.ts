@@ -64,6 +64,17 @@ export async function updateAgencySettings(
     await updateDoc(docRef, { settings });
 }
 
+/**
+ * Updates the agency's display name shown in the header.
+ */
+export async function updateAgencyName(
+    agencyId: string,
+    name: string
+): Promise<void> {
+    const docRef = doc(db, 'agencies', agencyId);
+    await updateDoc(docRef, { agencyName: name.trim() });
+}
+
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 export interface OnboardingProfile {

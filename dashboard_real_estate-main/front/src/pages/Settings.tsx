@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings, updateAgencyName } from '../services/agencyService';
 import { isValidPhone } from '../utils/validation';
 import { ISRAEL_CITIES } from '../utils/constants';
 
@@ -58,6 +58,10 @@ export default function Settings() {
   const [profilePhone, setProfilePhone] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
+  // Agency name
+  const [agencyNameInput, setAgencyNameInput] = useState('');
+  const [agencyNameSaving, setAgencyNameSaving] = useState(false);
+
   // Global settings
   const [activeGlobalCities, setActiveGlobalCities] = useState<string[]>([]);
   const [newCityInput, setNewCityInput] = useState('');
@@ -80,6 +84,7 @@ export default function Settings() {
       setYearlyDeals(agency.yearlyGoals?.deals || 0);
       setAgencyLogoUrl(agency.settings?.logoUrl || agency.logoUrl || '');
       setCurrentAgencySettings(agency.settings || {});
+      if ((agency as any).agencyName) setAgencyNameInput((agency as any).agencyName);
 
       const loadedCities = agency.settings?.activeGlobalCities || (agency.mainServiceArea ? [agency.mainServiceArea] : []);
       setActiveGlobalCities(loadedCities);
@@ -183,6 +188,24 @@ export default function Settings() {
       showToast('שגיאה בעדכון הפרופיל.', 'error');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const handleSaveAgencyName = async () => {
+    if (!userData?.agencyId) return;
+    if (!agencyNameInput.trim()) {
+      showToast('יש להזין שם סוכנות', 'error');
+      return;
+    }
+    setAgencyNameSaving(true);
+    try {
+      await updateAgencyName(userData.agencyId, agencyNameInput);
+      showToast('שם הסוכנות עודכן! 🏢');
+    } catch (err) {
+      console.error('Failed to update agency name:', err);
+      showToast('שגיאה בעדכון שם הסוכנות.', 'error');
+    } finally {
+      setAgencyNameSaving(false);
     }
   };
 
@@ -303,7 +326,7 @@ export default function Settings() {
 
               {/* ── Card 2: Agency Details (admin only) ── */}
               {userData?.role === 'admin' && (
-                <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6 space-y-4">
+                <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-6 space-y-5">
                   <div className="flex items-center gap-2.5 pb-1 border-b border-slate-100">
                     <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
                       <Building size={14} className="text-amber-600" />
@@ -313,33 +336,61 @@ export default function Settings() {
                       <p className="text-xs text-slate-400">לוגו ופרטים של המשרד — נראים ללקוחות ובקטלוגים</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50 flex items-center justify-center overflow-hidden">
-                      {agencyLogoUploading ? (
-                        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-                      ) : agencyLogoUrl ? (
-                        <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
-                      ) : (
-                        <Building size={28} className="text-amber-300" />
-                      )}
-                    </div>
-                    <div className="space-y-2">
+
+                  {/* Agency Name */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                      שם הסוכנות <span className="text-amber-500 text-[10px] font-normal">— מופיע בכותרת העליונה</span>
+                    </label>
+                    <div className="flex gap-2">
                       <input
-                        type="file"
-                        accept="image/jpeg, image/png, image/webp"
-                        className="hidden"
-                        ref={agencyLogoInputRef}
-                        onChange={handleAgencyLogoUpload}
+                        value={agencyNameInput}
+                        onChange={(e) => setAgencyNameInput(e.target.value)}
+                        placeholder="לדוג׳: אנגלו סקסון מודיעין"
+                        className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-all bg-slate-50 focus:bg-white"
                       />
                       <button
-                        onClick={() => agencyLogoInputRef.current?.click()}
-                        disabled={agencyLogoUploading}
-                        className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                        onClick={handleSaveAgencyName}
+                        disabled={agencyNameSaving || !agencyNameInput.trim()}
+                        className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 flex-shrink-0"
                       >
-                        <Camera size={16} className="text-slate-500" />
-                        {agencyLogoUploading ? 'מעלה לוגו...' : 'העלה לוגו חדש'}
+                        {agencyNameSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                        שמור
                       </button>
-                      <p className="text-xs text-slate-400">מומלץ תמונת PNG שקופה (עד 2MB)</p>
+                    </div>
+                  </div>
+
+                  {/* Agency Logo */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-2">לוגו סוכנות</label>
+                    <div className="flex items-center gap-6">
+                      <div className="relative w-24 h-24 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50 flex items-center justify-center overflow-hidden">
+                        {agencyLogoUploading ? (
+                          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                        ) : agencyLogoUrl ? (
+                          <img src={agencyLogoUrl} alt="Agency Logo" className="w-full h-full object-contain p-2" />
+                        ) : (
+                          <Building size={28} className="text-amber-300" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          accept="image/jpeg, image/png, image/webp"
+                          className="hidden"
+                          ref={agencyLogoInputRef}
+                          onChange={handleAgencyLogoUpload}
+                        />
+                        <button
+                          onClick={() => agencyLogoInputRef.current?.click()}
+                          disabled={agencyLogoUploading}
+                          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                          <Camera size={16} className="text-slate-500" />
+                          {agencyLogoUploading ? 'מעלה לוגו...' : 'העלה לוגו חדש'}
+                        </button>
+                        <p className="text-xs text-slate-400">מומלץ תמונת PNG שקופה (עד 2MB)</p>
+                      </div>
                     </div>
                   </div>
                 </div>
