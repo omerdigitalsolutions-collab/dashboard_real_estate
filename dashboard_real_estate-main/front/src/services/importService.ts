@@ -218,7 +218,7 @@ const SOURCE_MAP: Record<string, string> = {
     'פייסבוק': 'facebook', 'facebook': 'facebook',
     'אינסטגרם': 'instagram', 'instagram': 'instagram',
     'פה לפה': 'referral', 'המלצה': 'referral', 'referral': 'referral',
-    'ייבוא': 'import', 'import': 'import', 'excel': 'import',
+    'ייבוא': 'ייבוא', 'import': 'ייבוא', 'excel': 'אקסל',
     'ידני': 'manual', 'manual': 'manual',
     'טלפון': 'phone_call', 'שיחה': 'phone_call',
 };
@@ -615,7 +615,7 @@ export async function importLeads(
                     assignedAgentId,
                     agencyId,
                     createdBy,
-                    source: row.source || 'import',
+                    source: row.source || 'ייבוא',
                     status: 'new',
                     createdAt: serverTimestamp(),
                 });
@@ -751,7 +751,7 @@ export async function importMixed(
                 ...leadData,
                 agencyId,
                 createdBy,
-                source: row.source || 'import',
+                source: row.source || 'ייבוא',
                 status: 'new',
                 createdAt: serverTimestamp(),
             });
@@ -836,7 +836,7 @@ export async function importDeals(
                     name: row.leadName ?? '',
                     phone: normalizedPhone,
                     email: row.leadEmail ? String(row.leadEmail).trim().toLowerCase() : null,
-                    source: row.source || 'excel_import',
+                    source: row.source || 'ייבוא',
                     type: 'buyer',
                     agencyId,
                     assignedAgentId,

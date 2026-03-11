@@ -283,7 +283,7 @@ exports.askCopilot = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'eur
 });
 // ── Smart Insights Endpoint ──────────────────────────────────────────────────
 exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'europe-west1', cors: true }, async (request) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     // Enforce explicit CORS headers for local dev and production
     if (request.rawRequest) {
         const origin = request.rawRequest.headers.origin;
@@ -303,26 +303,8 @@ exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region
     }
     const db = admin.firestore();
     const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey.value());
-    const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
-        generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-                type: generative_ai_1.SchemaType.ARRAY,
-                description: 'List of 3 to 5 actionable insights for the agency manager.',
-                items: {
-                    type: generative_ai_1.SchemaType.OBJECT,
-                    properties: {
-                        badge: { type: generative_ai_1.SchemaType.STRING, description: 'Short badge text in Hebrew (e.g. מחיר, יעד, קמפיין, לידים, עסקאות).' },
-                        category: { type: generative_ai_1.SchemaType.STRING, description: 'Enum: price, goal, campaign, lead, deal', format: 'enum', enum: ['price', 'goal', 'campaign', 'lead', 'deal'] },
-                        title: { type: generative_ai_1.SchemaType.STRING, description: 'The main insight title in Hebrew.' },
-                        text: { type: generative_ai_1.SchemaType.STRING, description: 'Detailed explanation and recommendation in Hebrew.' },
-                    },
-                    required: ['badge', 'category', 'title', 'text'],
-                },
-            },
-        },
-    });
+    // Use gemini-2.5-flash — consistent with other AI features in this project
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     try {
         // 1. Fetch data snapshots
         const now = new Date();
@@ -353,13 +335,13 @@ exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region
             return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
         });
         const agents = agentsSnap.docs.map(d => ({ name: d.data().firstName + ' ' + (d.data().lastName || ''), role: d.data().role }));
-        // 2. Build the context prompt
-        const contextPrompt = `
-You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate 3 highly actionable, specific insights for the manager.
-Write the insights in Hebrew.
+        const oldPropertiesCount = properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length;
+        // 2. Build the context prompt — embed JSON schema in text
+        const contextPrompt = `You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate exactly 3 highly actionable, specific insights for the manager.
+Write ALL text IN HEBREW.
 
 DATA SNAPSHOT:
-- Active Properties: ${properties.length} (Oldest ones: ${properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length} older than 30 days)
+- Active Properties: ${properties.length} (Oldest ones: ${oldPropertiesCount} older than 30 days)
 - Leads by Status: ${JSON.stringify(leadsStatusCount)}
 - Leads by Source: ${JSON.stringify(leadsSourceCount)}
 - Deals Won This Month: ${currentMonthDeals.length}
@@ -371,16 +353,43 @@ RULES:
 3. If there are many "new" leads untouched, warn about conversion rates.
 4. If a specific lead source performs well (or poorly), point it out.
 5. Be specific but keep it concise and punchy.
-6. The output must perfectly match the JSON schema.
-            `;
+
+Respond ONLY with a valid JSON array, no markdown, no extra text. Use this exact schema:
+[
+  {
+    "badge": "short Hebrew badge (e.g. מחיר, יעד, קמפיין, לידים, עסקאות)",
+    "category": "price | goal | campaign | lead | deal",
+    "title": "Hebrew insight title",
+    "text": "Hebrew explanation and recommendation"
+  }
+]`;
         // 3. Call Gemini
-        const response = await model.generateContent(contextPrompt);
-        const textResponse = response.response.text();
-        return { insights: JSON.parse(textResponse) };
+        const result = await model.generateContent(contextPrompt);
+        const textResponse = result.response.text();
+        console.log('[getSmartInsights] Raw response:', textResponse.substring(0, 500));
+        // 4. Robust JSON parsing — strip markdown code fences if present
+        let parsedInsights;
+        try {
+            const cleaned = textResponse
+                .replace(/^```(?:json)?\s*/i, '')
+                .replace(/\s*```\s*$/i, '')
+                .trim();
+            parsedInsights = JSON.parse(cleaned);
+            if (!Array.isArray(parsedInsights))
+                throw new Error('Response is not an array');
+        }
+        catch (parseError) {
+            console.error('[getSmartInsights] JSON parse failed:', parseError.message, 'Raw:', textResponse.substring(0, 300));
+            throw new https_1.HttpsError('internal', 'AI returned an invalid response format.');
+        }
+        return { insights: parsedInsights };
     }
     catch (error) {
-        console.error('[getSmartInsights] Error:', error);
-        throw new https_1.HttpsError('internal', 'An error occurred while generating smart insights.');
+        console.error('[getSmartInsights] Error type:', (_e = error === null || error === void 0 ? void 0 : error.constructor) === null || _e === void 0 ? void 0 : _e.name);
+        console.error('[getSmartInsights] Error message:', error === null || error === void 0 ? void 0 : error.message);
+        if (error instanceof https_1.HttpsError)
+            throw error;
+        throw new https_1.HttpsError('internal', `An error occurred while generating smart insights. (${(_f = error === null || error === void 0 ? void 0 : error.message) !== null && _f !== void 0 ? _f : 'unknown'})`);
     }
 });
 //# sourceMappingURL=copilot.js.map

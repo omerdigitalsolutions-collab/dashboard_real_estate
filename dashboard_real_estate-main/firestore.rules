@@ -177,9 +177,12 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
 
-      // Writes go through Cloud Functions — direct client create is denied
-      // to enforce server-side agencyId injection via validateUserAuth()
-      allow create: if false;
+      // Writes go through Cloud Functions normally, but direct client creates
+      // are allowed for authenticated agency members (e.g. batch import from ImportModal)
+      // if they set the correct agencyId and billing is active.
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          && isBillingActiveForCaller();
 
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
@@ -196,8 +199,11 @@ service cloud.firestore {
     match /leads/{leadId} {
       allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
 
-      // Create must go through addLead Cloud Function — deny direct client writes
-      allow create: if false;
+      // Direct client creates allowed for authenticated agency members (e.g. batch import)
+      // if they set the correct agencyId and billing is active.
+      allow create: if isAuthed()
+          && inAgency(request.resource.data.agencyId)
+          && isBillingActiveForCaller();
 
       // Updates allowed directly (e.g., status changes from the board)
       // but agencyId must not change and billing must be active

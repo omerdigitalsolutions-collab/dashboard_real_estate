@@ -24,6 +24,7 @@ const statusColors: Record<string, string> = {
   meeting_set: 'bg-emerald-50 text-emerald-600 border border-emerald-100',
   won: 'bg-green-50 text-green-600 border border-green-100',
   lost: 'bg-slate-50 text-slate-600 border border-slate-200',
+  import: 'bg-sky-50 text-sky-600 border border-sky-100',
 };
 
 const statusLabels: Record<string, string> = {
@@ -33,6 +34,7 @@ const statusLabels: Record<string, string> = {
   meeting_set: 'נקבעה פגישה',
   won: 'נסגר הדיל',
   lost: 'אבוד / לא רלוונטי',
+  import: 'חדש (ייבוא)',
 };
 
 type SortConfig = {

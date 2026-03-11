@@ -310,26 +310,8 @@ export const getSmartInsights = onCall(
 
         const db = admin.firestore();
         const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
-            generationConfig: {
-                responseMimeType: 'application/json',
-                responseSchema: {
-                    type: SchemaType.ARRAY,
-                    description: 'List of 3 to 5 actionable insights for the agency manager.',
-                    items: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                            badge: { type: SchemaType.STRING, description: 'Short badge text in Hebrew (e.g. מחיר, יעד, קמפיין, לידים, עסקאות).' },
-                            category: { type: SchemaType.STRING, description: 'Enum: price, goal, campaign, lead, deal', format: 'enum', enum: ['price', 'goal', 'campaign', 'lead', 'deal'] },
-                            title: { type: SchemaType.STRING, description: 'The main insight title in Hebrew.' },
-                            text: { type: SchemaType.STRING, description: 'Detailed explanation and recommendation in Hebrew.' },
-                        },
-                        required: ['badge', 'category', 'title', 'text'],
-                    },
-                },
-            },
-        });
+        // Use gemini-2.5-flash — consistent with other AI features in this project
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         try {
             // 1. Fetch data snapshots
@@ -364,14 +346,14 @@ export const getSmartInsights = onCall(
             });
 
             const agents = agentsSnap.docs.map(d => ({ name: d.data().firstName + ' ' + (d.data().lastName || ''), role: d.data().role }));
+            const oldPropertiesCount = properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length;
 
-            // 2. Build the context prompt
-            const contextPrompt = `
-You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate 3 highly actionable, specific insights for the manager.
-Write the insights in Hebrew.
+            // 2. Build the context prompt — embed JSON schema in text
+            const contextPrompt = `You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate exactly 3 highly actionable, specific insights for the manager.
+Write ALL text IN HEBREW.
 
 DATA SNAPSHOT:
-- Active Properties: ${properties.length} (Oldest ones: ${properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length} older than 30 days)
+- Active Properties: ${properties.length} (Oldest ones: ${oldPropertiesCount} older than 30 days)
 - Leads by Status: ${JSON.stringify(leadsStatusCount)}
 - Leads by Source: ${JSON.stringify(leadsSourceCount)}
 - Deals Won This Month: ${currentMonthDeals.length}
@@ -383,18 +365,44 @@ RULES:
 3. If there are many "new" leads untouched, warn about conversion rates.
 4. If a specific lead source performs well (or poorly), point it out.
 5. Be specific but keep it concise and punchy.
-6. The output must perfectly match the JSON schema.
-            `;
+
+Respond ONLY with a valid JSON array, no markdown, no extra text. Use this exact schema:
+[
+  {
+    "badge": "short Hebrew badge (e.g. מחיר, יעד, קמפיין, לידים, עסקאות)",
+    "category": "price | goal | campaign | lead | deal",
+    "title": "Hebrew insight title",
+    "text": "Hebrew explanation and recommendation"
+  }
+]`;
 
             // 3. Call Gemini
-            const response = await model.generateContent(contextPrompt);
-            const textResponse = response.response.text();
+            const result = await model.generateContent(contextPrompt);
+            const textResponse = result.response.text();
 
-            return { insights: JSON.parse(textResponse) };
+            console.log('[getSmartInsights] Raw response:', textResponse.substring(0, 500));
+
+            // 4. Robust JSON parsing — strip markdown code fences if present
+            let parsedInsights: any[];
+            try {
+                const cleaned = textResponse
+                    .replace(/^```(?:json)?\s*/i, '')
+                    .replace(/\s*```\s*$/i, '')
+                    .trim();
+                parsedInsights = JSON.parse(cleaned);
+                if (!Array.isArray(parsedInsights)) throw new Error('Response is not an array');
+            } catch (parseError: any) {
+                console.error('[getSmartInsights] JSON parse failed:', parseError.message, 'Raw:', textResponse.substring(0, 300));
+                throw new HttpsError('internal', 'AI returned an invalid response format.');
+            }
+
+            return { insights: parsedInsights };
 
         } catch (error: any) {
-            console.error('[getSmartInsights] Error:', error);
-            throw new HttpsError('internal', 'An error occurred while generating smart insights.');
+            console.error('[getSmartInsights] Error type:', error?.constructor?.name);
+            console.error('[getSmartInsights] Error message:', error?.message);
+            if (error instanceof HttpsError) throw error;
+            throw new HttpsError('internal', `An error occurred while generating smart insights. (${error?.message ?? 'unknown'})`);
         }
     }
 );
