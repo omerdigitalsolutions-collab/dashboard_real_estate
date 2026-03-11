@@ -311,7 +311,7 @@ export const getSmartInsights = onCall(
         const db = admin.firestore();
         const genAI = new GoogleGenerativeAI(geminiApiKey.value());
         const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
+            model: 'gemini-2.0-flash',
             generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema: {
@@ -337,10 +337,10 @@ export const getSmartInsights = onCall(
             const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
             const [propertiesSnap, leadsSnap, dealsSnap, agentsSnap] = await Promise.all([
-                db.collection('properties').where('agencyId', '==', agencyId).where('status', '==', 'active').get(),
+                db.collection('properties').where('agencyId', '==', agencyId).limit(100).get(),
                 db.collection('leads').where('agencyId', '==', agencyId).get(),
                 db.collection('deals').where('agencyId', '==', agencyId).where('stage', '==', 'Won').get(),
-                db.collection('agencies').doc(agencyId).collection('agents').get()
+                db.collection('users').where('agencyId', '==', agencyId).get()
             ]);
 
             // Transform into compact representation

@@ -8,6 +8,10 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
+    headers: {
+      // Allows Firebase signInWithPopup to close the Google auth popup correctly
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
     proxy: {
       '/__': {
         target: 'https://homer.management',
@@ -16,3 +20,4 @@ export default defineConfig({
     }
   }
 });
+
