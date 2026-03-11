@@ -109,7 +109,6 @@ export default function Agents() {
                 )}
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-medium font-mono">{(agent.id ?? '').slice(0, 8).toUpperCase()}</span>
                   {userData?.role === 'admin' && (
                     <>
                       <button
