@@ -99,6 +99,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [imageUrls, setImageUrls] = useState<string[]>(property.imageUrls || []);
 
     // Description Edit State
     const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -110,10 +111,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     // Sync state when property prop changes
     useEffect(() => {
         setEditedDescription(property.description || '');
+        if (property.imageUrls) {
+            setImageUrls(property.imageUrls);
+        }
     }, [property]);
 
-    const hasImages = property.imageUrls && property.imageUrls.length > 0;
-    const images = hasImages ? property.imageUrls! : [];
+    const hasImages = imageUrls.length > 0;
+    const images = imageUrls;
 
     const isRent = property.type === 'rent';
     const typeLabel = isRent ? 'להשכרה' : 'למכירה';
@@ -147,7 +151,8 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         try {
             setIsUploading(true);
             const newUrls = await uploadPropertyImages(userData.agencyId, property.id, files);
-            const combinedUrls = [...images, ...newUrls];
+            const combinedUrls = [...imageUrls, ...newUrls];
+            setImageUrls(combinedUrls);
             await updateProperty(property.id, { imageUrls: combinedUrls });
             toast.success('התמונות הועלו בהצלחה ✓');
         } catch (error) {
@@ -162,7 +167,8 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         if (!confirm('האם אתה בטוח שברצונך למחוק תמונה זו?')) return;
 
         try {
-            const newImages = images.filter((_, i) => i !== index);
+            const newImages = imageUrls.filter((_, i) => i !== index);
+            setImageUrls(newImages);
             await updateProperty(property.id, { imageUrls: newImages });
             
             // Adjust active index if needed
@@ -181,14 +187,15 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
-        const oldIndex = images.indexOf(active.id as string);
-        const newIndex = images.indexOf(over.id as string);
+        const oldIndex = imageUrls.indexOf(active.id as string);
+        const newIndex = imageUrls.indexOf(over.id as string);
 
-        const newImages = arrayMove(images, oldIndex, newIndex);
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        const newImages = arrayMove(imageUrls, oldIndex, newIndex);
         
-        // Optimistic update
-        // (The parent component via useFirestoreData should handle the real sync, 
-        // but we might want to update local state if it's lagging)
+        // Immediate UI Update
+        setImageUrls(newImages);
         
         try {
             await updateProperty(property.id, { imageUrls: newImages });
