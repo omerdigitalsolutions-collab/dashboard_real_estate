@@ -140,8 +140,8 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
     const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        if (files.length + imageFiles.length > 5) {
-            showToast('ניתן להעלות עד 5 תמונות בלבד לנכס בבלעדיות', false);
+        if (files.length + imageFiles.length > 10) {
+            showToast('ניתן להעלות עד 10 תמונות בלבד לנכס בבלעדיות', false);
             return;
         }
 
@@ -538,9 +538,9 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
                             {listingType === 'exclusive' && (
                                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                                    <label className={labelCls}>תמונות הנכס (עד 5 תמונות)</label>
+                                    <label className={labelCls}>תמונות הנכס (עד 10 תמונות)</label>
 
-                                    {imageFiles.length < 5 && (
+                                    {imageFiles.length < 10 && (
                                         <div className="relative">
                                             <input
                                                 type="file"
@@ -553,7 +553,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                                 <ImagePlus size={24} className="text-blue-500 mb-2" />
                                                 <span className="text-sm font-semibold text-blue-700">לחץ להעלאת תמונות</span>
                                                 <span className="text-xs text-blue-500/70 mt-1">
-                                                    ניתן לבחור עד 5 קבצים {imageFiles.length > 0 && `(נבחרו ${imageFiles.length}/5)`}
+                                                    ניתן לבחור עד 10 קבצים {imageFiles.length > 0 && `(נבחרו ${imageFiles.length}/10)`}
                                                 </span>
                                             </div>
                                         </div>

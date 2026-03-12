@@ -1,9 +1,27 @@
 import { Property, AppUser, Lead } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake } from 'lucide-react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+    TouchSensor,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    horizontalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface PropertyDetailsModalProps {
     property: Property;
@@ -11,6 +29,69 @@ interface PropertyDetailsModalProps {
     leads: Lead[];
     onClose: () => void;
     onCreateDeal?: (property: Property) => void;
+}
+
+interface SortableThumbnailProps {
+    url: string;
+    index: number;
+    isActive: boolean;
+    onSelect: (index: number) => void;
+    onDelete: (index: number) => void;
+}
+
+function SortableThumbnail({ url, index, isActive, onSelect, onDelete }: SortableThumbnailProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: url });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 20 : 1,
+        opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`relative group w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${isActive ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-transparent'}`}
+        >
+            <img 
+                src={url} 
+                alt={`Thumbnail ${index + 1}`} 
+                className="w-full h-full object-cover cursor-pointer" 
+                onClick={() => onSelect(index)}
+            />
+            
+            {/* Overlay controls */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
+                <div className="flex justify-between items-start">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(index);
+                        }}
+                        className="p-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                    >
+                        <Trash2 size={12} />
+                    </button>
+                    <div 
+                        {...attributes} 
+                        {...listeners}
+                        className="p-1 bg-white/20 text-white rounded-md cursor-grab active:cursor-grabbing"
+                    >
+                        <GripVertical size={12} />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function PropertyDetailsModal({ property, agents, leads, onClose, onCreateDeal }: PropertyDetailsModalProps) {
@@ -38,9 +119,15 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const typeLabel = isRent ? 'להשכרה' : 'למכירה';
     const typeColor = isRent ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100';
 
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
     const handleUploadClick = () => {
-        if (images.length >= 5) {
-            toast.error('לא ניתן להוסיף מעל 5 תמונות לנכס.');
+        if (images.length >= 10) { // Increased limit slightly for better utility, matching general expectations but keeping it reasonable
+            toast.error('לא ניתן להוסיף מעל 10 תמונות לנכס.');
             return;
         }
         fileInputRef.current?.click();
@@ -50,8 +137,8 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
 
-        if (images.length + files.length > 5) {
-            toast.error(`ניתן להעלות עד 5 תמונות סך הכל. נותרו לך ${5 - images.length} תמונות להעלאה.`);
+        if (images.length + files.length > 10) {
+            toast.error(`ניתן להעלות עד 10 תמונות סך הכל. נותרו לך ${10 - images.length} תמונות להעלאה.`);
             return;
         }
 
@@ -68,6 +155,54 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
             toast.error('אירעה שגיאה בהעלאת התמונות.');
         } finally {
             setIsUploading(false);
+        }
+    };
+
+    const handleDeleteImage = async (index: number) => {
+        if (!confirm('האם אתה בטוח שברצונך למחוק תמונה זו?')) return;
+
+        try {
+            const newImages = images.filter((_, i) => i !== index);
+            await updateProperty(property.id, { imageUrls: newImages });
+            
+            // Adjust active index if needed
+            if (activeImageIndex >= newImages.length) {
+                setActiveImageIndex(Math.max(0, newImages.length - 1));
+            }
+            
+            toast.success('התמונה נמחקה בהצלחה');
+        } catch (error) {
+            console.error('Error deleting image:', error);
+            toast.error('שגיאה במחיקת התמונה');
+        }
+    };
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = images.indexOf(active.id as string);
+        const newIndex = images.indexOf(over.id as string);
+
+        const newImages = arrayMove(images, oldIndex, newIndex);
+        
+        // Optimistic update
+        // (The parent component via useFirestoreData should handle the real sync, 
+        // but we might want to update local state if it's lagging)
+        
+        try {
+            await updateProperty(property.id, { imageUrls: newImages });
+            // Sync active index to the moved image
+            if (activeImageIndex === oldIndex) {
+                setActiveImageIndex(newIndex);
+            } else if (activeImageIndex > oldIndex && activeImageIndex <= newIndex) {
+                setActiveImageIndex(activeImageIndex - 1);
+            } else if (activeImageIndex < oldIndex && activeImageIndex >= newIndex) {
+                setActiveImageIndex(activeImageIndex + 1);
+            }
+        } catch (error) {
+            console.error('Error reordering images:', error);
+            toast.error('שגיאה בשינוי סדר התמונות');
         }
     };
 
@@ -143,7 +278,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         </div>
                     </div>
 
-                    <div className="overflow-y-auto flex-1 p-6">
+                    <div className="overflow-y-auto flex-1 p-6 pretty-scroll">
                         {/* Selected Image Banner */}
                         {hasImages ? (
                             <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-6 group bg-slate-100 border border-slate-200">
@@ -181,28 +316,47 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         )}
 
                         {hasImages && (
-                            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 custom-scrollbar items-center">
-                                {images.map((img, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => setActiveImageIndex(idx)}
-                                        className={`relative w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${activeImageIndex === idx ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-transparent hover:opacity-80'}`}
-                                    >
-                                        <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
-                                    </button>
-                                ))}
-                                {images.length < 5 && (
-                                    <button
-                                        onClick={handleUploadClick}
-                                        disabled={isUploading}
-                                        className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50"
-                                    >
-                                        {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-                                        <span className="text-[10px] font-medium leading-tight">
-                                            {isUploading ? 'מעלה...' : 'הוסף תמונה'}
-                                        </span>
-                                    </button>
-                                )}
+                            <div className="mb-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ניהול תמונות (גרור לשינוי סדר)</span>
+                                    <span className="text-xs font-medium text-slate-400">{images.length}/10</span>
+                                </div>
+                                <DndContext 
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragEnd={handleDragEnd}
+                                >
+                                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar items-center">
+                                        <SortableContext 
+                                            items={images}
+                                            strategy={horizontalListSortingStrategy}
+                                        >
+                                            {images.map((img, idx) => (
+                                                <SortableThumbnail 
+                                                    key={img}
+                                                    url={img}
+                                                    index={idx}
+                                                    isActive={activeImageIndex === idx}
+                                                    onSelect={setActiveImageIndex}
+                                                    onDelete={handleDeleteImage}
+                                                />
+                                            ))}
+                                        </SortableContext>
+                                        
+                                        {images.length < 10 && (
+                                            <button
+                                                onClick={handleUploadClick}
+                                                disabled={isUploading}
+                                                className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:border-blue-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                                            >
+                                                {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                                                <span className="text-[10px] font-medium leading-tight">
+                                                    {isUploading ? 'מעלה...' : 'הוסף תמונה'}
+                                                </span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </DndContext>
                             </div>
                         )}
 
@@ -214,7 +368,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
                                 >
                                     {isUploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                                    הוסף תמונות ({images.length}/5)
+                                    הוסף תמונות ({images.length}/10)
                                 </button>
                             </div>
                         )}
