@@ -144,8 +144,14 @@ export default function Leads() {
           aVal = a.requirements?.maxBudget || 0;
           bVal = b.requirements?.maxBudget || 0;
         } else if (sortConfig.key === 'createdAt') {
-          aVal = a.createdAt?.toMillis() || 0;
-          bVal = b.createdAt?.toMillis() || 0;
+          aVal = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt instanceof Date ? a.createdAt.getTime() : 0);
+          bVal = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt instanceof Date ? b.createdAt.getTime() : 0);
+        } else if (sortConfig.key === 'status') {
+          aVal = a.status || '';
+          bVal = b.status || '';
+        } else {
+          aVal = a[sortConfig.key as keyof Lead] || '';
+          bVal = b[sortConfig.key as keyof Lead] || '';
         }
 
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,7 @@ import ImportModal from '../components/modals/ImportModal';
 import MergePropertiesModal from '../components/modals/MergePropertiesModal';
 import CreateDealFromPropertyModal from '../components/modals/CreateDealFromPropertyModal';
 import KpiCard from '../components/dashboard/KpiCard';
-import { Property, AppUser, Lead, Deal, TimeRange } from '../types';
+import { Property, AppUser, Lead, TimeRange } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
 export default function Properties() {
@@ -26,6 +26,7 @@ export default function Properties() {
 
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('All');
+    const [sortConfig, setSortConfig] = useState<{ key: 'price' | 'createdAt', direction: 'asc' | 'desc' } | null>({ key: 'createdAt', direction: 'desc' });
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -131,6 +132,26 @@ export default function Properties() {
         return matchesSearch && matchesFilter;
     });
 
+    const sorted = useMemo(() => {
+        const items = [...filtered];
+        if (sortConfig) {
+            items.sort((a, b) => {
+                let aVal: any = a[sortConfig.key];
+                let bVal: any = b[sortConfig.key];
+
+                if (sortConfig.key === 'createdAt') {
+                    aVal = a.createdAt?.toMillis() || 0;
+                    bVal = b.createdAt?.toMillis() || 0;
+                }
+
+                if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return items;
+    }, [filtered, sortConfig]);
+
     const duplicateGroups = useMemo(() => {
         const groups = new Map<string, Property[]>();
         filteredPropertiesByTime.forEach((p: Property) => {
@@ -167,7 +188,7 @@ export default function Properties() {
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
 
     const getPropertyClient = (propertyId: string) => {
-        const relatedDeal = deals.find((d: Deal) => d.propertyId === propertyId);
+        const relatedDeal = deals.find((d: any) => d.propertyId === propertyId);
         if (!relatedDeal) return null;
         return leads.find((l: Lead) => l.id === relatedDeal.leadId);
     };
@@ -282,8 +303,23 @@ export default function Properties() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="חיפוש עיר או רחוב..."
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-right placeholder-slate-400"
                             />
+                        </div>
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg h-9">
+                            <ArrowUpDown size={14} className="text-slate-400" />
+                            <select
+                                value={`${sortConfig?.key}-${sortConfig?.direction}`}
+                                onChange={(e) => {
+                                    const [key, direction] = e.target.value.split('-') as [any, any];
+                                    setSortConfig({ key, direction });
+                                }}
+                                className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
+                            >
+                                <option value="createdAt-desc">חדש קודם</option>
+                                <option value="createdAt-asc">ישן קודם</option>
+                                <option value="price-asc">מחיר (נמוך לגבוה)</option>
+                                <option value="price-desc">מחיר (גבוה לנמוך)</option>
+                            </select>
                         </div>
                         <div className="flex bg-slate-100 p-1 rounded-lg">
                             <button
@@ -328,12 +364,12 @@ export default function Properties() {
                 <div className="p-4 bg-slate-50/50 min-h-[400px]">
                     {propertiesLoading ? (
                         <div className="text-center text-slate-400 text-sm py-12">טוען נתונים...</div>
-                    ) : filtered.length === 0 ? (
+                    ) : sorted.length === 0 ? (
                         <div className="text-center text-slate-400 text-sm py-12">לא נמצאו נכסים התואמים את החיפוש.</div>
                     ) : viewMode === 'grid' ? (
                         // GRID VIEW
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filtered.map((prop: Property) => {
+                            {sorted.map((prop: Property) => {
                                 const agent = getPropertyAgent(prop.agentId);
                                 const client = getPropertyClient(prop.id);
                                 const imgUrl = prop.imageUrls?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80';
@@ -502,7 +538,7 @@ export default function Properties() {
                                         <th className="px-4 py-3 w-12 text-center">
                                             <input
                                                 type="checkbox"
-                                                checked={filtered.length > 0 && selectedPropertyIds.size === filtered.length}
+                                                checked={sorted.length > 0 && selectedPropertyIds.size === sorted.length}
                                                 onChange={handleSelectAll}
                                                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                             />
@@ -515,7 +551,7 @@ export default function Properties() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {filtered.map((prop: Property) => {
+                                    {sorted.map((prop: Property) => {
                                         const agent = getPropertyAgent(prop.agentId);
                                         const client = getPropertyClient(prop.id);
 
@@ -650,7 +686,7 @@ export default function Properties() {
                 {/* Pagination (Mock) */}
                 <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <p className="text-xs text-slate-500">
-                        מציג <span className="font-semibold text-slate-700">{filtered.length}</span> רשומות
+                        מציג <span className="font-semibold text-slate-700">{sorted.length}</span> רשומות
                     </p>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Download, Plus, Calendar } from 'lucide-react';
+import { Download, Plus, Calendar, Search, ArrowUpDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import DealsKanban from '../components/deals/DealsKanban';
 import AddDealModal from '../components/modals/AddDealModal';
@@ -50,7 +50,43 @@ export default function Transactions() {
     });
   };
 
-  const filteredDeals = useMemo(() => filterByTimeRange(deals, timeRange), [deals, timeRange]);
+  const [search, setSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: 'projectedCommission' | 'createdAt', direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
+
+  const filteredDeals = useMemo(() => {
+    let items = filterByTimeRange(deals, timeRange);
+
+    if (search) {
+      items = items.filter(d => {
+        const prop = properties.find(p => p.id === d.propertyId);
+        const lead = leads.find(l => l.id === d.leadId);
+        const searchLower = search.toLowerCase();
+        return (
+          prop?.address?.toLowerCase().includes(searchLower) ||
+          prop?.city?.toLowerCase().includes(searchLower) ||
+          lead?.name?.toLowerCase().includes(searchLower) ||
+          lead?.phone?.includes(search)
+        );
+      });
+    }
+
+    items.sort((a, b) => {
+      let aVal: any = a[sortConfig.key];
+      let bVal: any = b[sortConfig.key];
+
+      if (sortConfig.key === 'createdAt') {
+        aVal = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt instanceof Date ? a.createdAt.getTime() : 0);
+        bVal = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt instanceof Date ? b.createdAt.getTime() : 0);
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return items;
+  }, [deals, timeRange, search, sortConfig, properties, leads]);
+
   const pipelineStats = useMemo(() => calculatePipelineStats(filteredDeals), [filteredDeals]);
 
   const handleExportCSV = () => {
@@ -97,7 +133,7 @@ export default function Transactions() {
       return match ? `${match.city || ''}, ${match.address || ''}`.replace(/^, |, $/g, '').trim() : '---';
     };
 
-    const csvData = deals.map(deal => {
+    const csvData = (deals as any[]).map(deal => {
       const leadInfo = deal.leadId ? getLeadNameAndPhone(deal.leadId) : { name: '---', phone: '---' };
       const propInfo = deal.propertyId ? getPropertyDetails(deal.propertyId) : '---';
 
@@ -140,8 +176,33 @@ export default function Transactions() {
             <h1 className="text-xl font-bold text-slate-900">עסקאות - Kanban</h1>
             <p className="text-sm text-slate-500 mt-0.5">ניהול עסקאות באמצעות לוח עבודה דינמי</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative flex-1 sm:w-64">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש לפי כתובת או לקוח..."
+                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all text-right placeholder-slate-400"
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl h-10">
+              <ArrowUpDown size={14} className="text-slate-400" />
+              <select
+                value={`${sortConfig.key}-${sortConfig.direction}`}
+                onChange={(e) => {
+                  const [key, direction] = e.target.value.split('-') as [any, any];
+                  setSortConfig({ key, direction });
+                }}
+                className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none appearance-none cursor-pointer"
+              >
+                <option value="createdAt-desc">חדש קודם</option>
+                <option value="createdAt-asc">ישן קודם</option>
+                <option value="projectedCommission-desc">עמלה (גבוה לנמוך)</option>
+                <option value="projectedCommission-asc">עמלה (נמוך לגבוה)</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm h-10">
               <Calendar size={16} className="text-slate-400" />
               <select
                 value={timeRange}
