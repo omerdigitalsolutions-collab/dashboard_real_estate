@@ -91,7 +91,7 @@ export default function Leads() {
   // Multi-selection state
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [matchingLead, setMatchingLead] = useState<Lead | null>(null);
-  const [profileLead, setProfileLead] = useState<Lead | null>(null);
+  const [profileLeadId, setProfileLeadId] = useState<string | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [addingPropertyForLeadId, setAddingPropertyForLeadId] = useState<string | null>(null);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -107,12 +107,17 @@ export default function Leads() {
   useEffect(() => {
     if (location.state?.openId && leads.length > 0) {
       const targetLead = leads.find(l => l.id === location.state.openId);
-      if (targetLead && profileLead?.id !== targetLead.id) {
-        setProfileLead(targetLead);
+      if (targetLead && profileLeadId !== targetLead.id) {
+        setProfileLeadId(targetLead.id);
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
-  }, [location.state, leads, profileLead, navigate, location.pathname]);
+  }, [location.state, leads, profileLeadId, navigate, location.pathname]);
+
+  const profileLead = useMemo(() => {
+    if (!profileLeadId) return null;
+    return leads.find(l => l.id === profileLeadId) || null;
+  }, [profileLeadId, leads]);
 
   const handleSort = (key: any) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -422,7 +427,7 @@ export default function Leads() {
                   <tr
                     key={lead.id}
                     className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
-                    onClick={() => setProfileLead(lead)}
+                    onClick={() => setProfileLeadId(lead.id)}
                   >
                     <td className="px-4 py-4 w-12 text-center">
                       <input
@@ -506,7 +511,7 @@ export default function Leads() {
                           </div>
                         ) : (
                           <button
-                            onClick={e => { e.stopPropagation(); setProfileLead(lead); }}
+                            onClick={e => { e.stopPropagation(); setProfileLeadId(lead.id); }}
                             className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
                           >
                             <UserCircle2 size={14} />
@@ -582,7 +587,7 @@ export default function Leads() {
         <LeadProfilePanel
           lead={profileLead}
           agents={agents}
-          onClose={() => setProfileLead(null)}
+          onClose={() => setProfileLeadId(null)}
           onUpdated={(msg) => {
             setToast({ show: true, message: msg, type: 'success' });
           }}

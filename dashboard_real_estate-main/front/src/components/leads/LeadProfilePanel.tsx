@@ -112,6 +112,11 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [copied, setCopied] = useState(false);
+    
+    // Sync local state when lead prop changes
+    useEffect(() => {
+        setAssignedId(lead.assignedAgentId ?? '');
+    }, [lead.assignedAgentId]);
 
     const handleCopyCatalogLink = async () => {
         if (!lead.catalogUrl) return;
