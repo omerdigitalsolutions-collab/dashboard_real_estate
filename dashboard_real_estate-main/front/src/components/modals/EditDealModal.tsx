@@ -6,6 +6,7 @@ import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidCommission } from '../../utils/validation';
 import { Deal, DealStage } from '../../types';
+import { triggerWonConfetti } from '../../utils/effects';
 
 interface EditDealModalProps {
     deal: Deal;
@@ -107,6 +108,11 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
                 actualCommission: actualCommission ? Number(actualCommission) : undefined,
                 notes: notes || undefined,
             });
+
+            // If the stage was changed to 'won' and it wasn't won before, trigger confetti
+            if (stage === 'won' && deal.stage !== 'won') {
+                triggerWonConfetti();
+            }
 
             showToast('העסקה עודכנה בהצלחה ✓');
             setTimeout(() => {

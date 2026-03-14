@@ -24,6 +24,7 @@ import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { updateDealStage, deleteDeal } from '../../services/dealService';
 import { Deal, DealStage, CustomDealStage, Property, Lead } from '../../types';
 import { Link } from 'react-router-dom';
+import { triggerWonConfetti } from '../../utils/effects';
 
 // ─── Constants & Types ────────────────────────────────────────────────────────
 export const MANDATORY_STAGES: { id: DealStage; label: string; color: string; bg: string; border: string; headerBg: string }[] = [
@@ -288,6 +289,9 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
             alert('אנא הזן סכום חוקי');
             return;
         }
+
+        // Trigger celebration!
+        triggerWonConfetti();
 
         // Optimistic Update
         const originalDeals = [...deals];
