@@ -1,5 +1,6 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { useMemo } from 'react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { useMemo, useState } from 'react';
+import { LayoutGrid, PieChart as PieIcon } from 'lucide-react';
 import { Lead } from '../../types';
 import { aggregateLeadSources } from '../../utils/analytics';
 import PeriodPicker, { usePeriod, periodStartDate, periodLabel } from './PeriodPicker';
@@ -53,6 +54,7 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 };
 
 export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartProps) {
+    const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
     const { period, setPeriod } = usePeriod('1m');
     const startDate = periodStartDate(period);
 
@@ -79,7 +81,25 @@ export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartPr
                     <h2 className="text-base font-bold text-white">מקורות לידים</h2>
                     <p className="text-xs text-slate-400 mt-0.5">{periodLabel(period)}</p>
                 </div>
-                <PeriodPicker value={period} onChange={setPeriod} />
+                <div className="flex items-center gap-2">
+                    <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+                        <button
+                            onClick={() => setChartType('pie')}
+                            className={`p-1.5 rounded-lg transition-all ${chartType === 'pie' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                            title="תרשים עוגה"
+                        >
+                            <PieIcon size={14} />
+                        </button>
+                        <button
+                            onClick={() => setChartType('bar')}
+                            className={`p-1.5 rounded-lg transition-all ${chartType === 'bar' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                            title="תרשים עמודות"
+                        >
+                            <LayoutGrid size={14} />
+                        </button>
+                    </div>
+                    <PeriodPicker value={period} onChange={setPeriod} />
+                </div>
             </div>
 
             <div className="flex flex-col items-center flex-1 min-h-0">
@@ -87,26 +107,49 @@ export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartPr
                     <>
                         <div className="w-full flex-1 min-h-[140px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={sourceData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={55}
-                                        outerRadius={85} // Slightly larger for better label space
-                                        paddingAngle={4}
-                                        dataKey="value"
-                                        stroke="#0f172a"
-                                        strokeWidth={2}
-                                        labelLine={false}
-                                        label={renderCustomizedLabel}
-                                    >
-                                        {sourceData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<CustomTooltip />} />
-                                </PieChart>
+                                {chartType === 'pie' ? (
+                                    <PieChart>
+                                        <Pie
+                                            data={sourceData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={55}
+                                            outerRadius={85} // Slightly larger for better label space
+                                            paddingAngle={4}
+                                            dataKey="value"
+                                            stroke="#0f172a"
+                                            strokeWidth={2}
+                                            labelLine={false}
+                                            label={renderCustomizedLabel}
+                                        >
+                                            {sourceData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip content={<CustomTooltip />} />
+                                    </PieChart>
+                                ) : (
+                                    <BarChart data={sourceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.5} />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            tick={{ fontSize: 9, fill: '#94a3b8' }} 
+                                            axisLine={false} 
+                                            tickLine={false}
+                                        />
+                                        <YAxis 
+                                            tick={{ fontSize: 9, fill: '#64748b' }} 
+                                            axisLine={false} 
+                                            tickLine={false}
+                                        />
+                                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                            {sourceData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                )}
                             </ResponsiveContainer>
                         </div>
 

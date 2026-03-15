@@ -75,6 +75,7 @@ const generative_ai_1 = require("@google/generative-ai");
 //   firebase functions:secrets:set ENCRYPTION_MASTER_KEY
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
+const webhookSecret = (0, params_1.defineSecret)('WAHA_WEBHOOK_SECRET');
 const db = admin.firestore();
 const REGION = 'europe-west1';
 const CATALOG_BASE_URL = 'https://homer.management/catalog';
@@ -141,7 +142,7 @@ async function resolveAgencyByInstance(idInstance) {
 // ─── Helper: AI Criteria Extraction (Gemini) ──────────────────────────────────
 async function extractSearchCriteria(message, apiKey) {
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     // ── System Persona + Security Guardrails ─────────────────────────────────
     // This is the prompt that defines the bot's identity, security boundaries,
     // and the structured output format it must follow.
@@ -380,11 +381,20 @@ async function upsertLead(agencyId, phone) {
 exports.webhookWhatsAppAI = (0, https_1.onRequest)({
     region: REGION,
     // Secrets are injected as env vars at runtime by the Functions runtime
-    secrets: [geminiApiKey, masterKey],
+    secrets: [geminiApiKey, masterKey, webhookSecret],
+    timeoutSeconds: 300,
+    memory: '1GiB'
 }, async (req, res) => {
     var _a, _b, _c, _d;
     // ── 1. ACK immediately to prevent Green API retries ───────────────────────
     res.status(200).send('OK');
+    // ── 2. Security Validation ──────────────────────────────────────────────
+    const incomingSecret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
+    const expectedSecret = webhookSecret.value();
+    if (!expectedSecret || incomingSecret !== expectedSecret) {
+        console.error(`[webhookWhatsAppAI] Unauthorized access attempt. Incoming: '${incomingSecret}'`);
+        return;
+    }
     try {
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || '';

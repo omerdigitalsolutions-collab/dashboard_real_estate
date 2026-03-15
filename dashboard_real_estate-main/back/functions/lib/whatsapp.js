@@ -630,7 +630,12 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
     try {
         const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
         const expected = process.env.WAHA_WEBHOOK_SECRET || '';
-        console.log(`Webhook: Incoming secret header: '${secret}'. Expected: '${expected}'`);
+        if (!expected || secret !== expected) {
+            console.error(`Webhook: Unauthorized access attempt. Incoming secret: '${secret}'.`);
+            res.status(401).send('Unauthorized');
+            return;
+        }
+        console.log(`Webhook: Authorized request.`);
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
         // Support both Green API and WAHA event formats
@@ -706,7 +711,7 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
             }
             try {
                 const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
                 const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
 Scan this message for property listings (for sale or rent).
 If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
@@ -763,7 +768,7 @@ Output strict JSON:
                 if (apiKey) {
                     try {
                         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
                         const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
         Message: "${textMessage}"
         

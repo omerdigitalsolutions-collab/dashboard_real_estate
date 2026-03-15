@@ -1,8 +1,9 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { Building2 } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Building2, LayoutGrid, PieChart as PieIcon } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { periodStartDate } from './PeriodPicker';
 import { TimeRange } from '../../types';
+import { useState } from 'react';
 
 interface InventorySnapshotProps {
     timeRange: TimeRange;
@@ -45,6 +46,7 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 const HEBREW_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 export default function InventorySnapshot({ timeRange, onClick }: InventorySnapshotProps) {
+    const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
     const { properties } = useLiveDashboardData();
     const period = timeRange === '1y' ? '12m' : timeRange;
 
@@ -91,6 +93,22 @@ export default function InventorySnapshot({ timeRange, onClick }: InventorySnaps
                     <h2 className="text-base font-bold text-white">מלאי נכסים</h2>
                     <p className="text-sm text-slate-400 mt-0.5">{subtitleByPeriod[period] || `גיוס בלעדיות לתקופה: ${timeRange}`}</p>
                 </div>
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setChartType('pie'); }}
+                        className={`p-1.5 rounded-lg transition-all ${chartType === 'pie' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                        title="תרשים עוגה"
+                    >
+                        <PieIcon size={14} />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setChartType('bar'); }}
+                        className={`p-1.5 rounded-lg transition-all ${chartType === 'bar' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                        title="תרשים עמודות"
+                    >
+                        <LayoutGrid size={14} />
+                    </button>
+                </div>
             </div>
 
             {/* Total counter */}
@@ -108,24 +126,47 @@ export default function InventorySnapshot({ timeRange, onClick }: InventorySnaps
             <div className="flex flex-col gap-3">
                 <div className="w-full h-[180px]">
                     <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={75}
-                                paddingAngle={3}
-                                dataKey="value"
-                                stroke="#0f172a"
-                                strokeWidth={2}
-                                labelLine={false}
-                                label={renderCustomizedLabel}
-                            >
-                                {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                        </PieChart>
+                        {chartType === 'pie' ? (
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={50}
+                                    outerRadius={75}
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                    stroke="#0f172a"
+                                    strokeWidth={2}
+                                    labelLine={false}
+                                    label={renderCustomizedLabel}
+                                >
+                                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                            </PieChart>
+                        ) : (
+                            <BarChart data={pieData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.5} />
+                                <XAxis 
+                                    dataKey="name" 
+                                    tick={{ fontSize: 9, fill: '#94a3b8' }} 
+                                    axisLine={false} 
+                                    tickLine={false}
+                                />
+                                <YAxis 
+                                    tick={{ fontSize: 9, fill: '#64748b' }} 
+                                    axisLine={false} 
+                                    tickLine={false}
+                                />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                    {pieData.map((entry, i) => (
+                                        <Cell key={i} fill={entry.color} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        )}
                     </ResponsiveContainer>
                 </div>
                 <div className="space-y-3">

@@ -116,7 +116,7 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
 ✅ `agencyId` and `status` injected server-side (cannot be spoofed by client)
 
 ### `ai-askAgencyAgent`
-✅ Auth guard → ✅ Fetches Firestore context (Properties/Leads) → ✅ Gemini 2.5 Flash  
+✅ Auth guard → ✅ Fetches Firestore context (Properties/Leads) → ✅ Gemini 1.5 Flash  
 *Provides RAG-lite experience for agency data.*
 
 ### `ai-extractAiData`

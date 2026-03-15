@@ -89,7 +89,7 @@ exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 
         };
         // 4. Init Gemini
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey.value());
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `
 You are the hOMER AI Assistant for a real estate agency. Here is the agency's current database snapshot in JSON format: 
 

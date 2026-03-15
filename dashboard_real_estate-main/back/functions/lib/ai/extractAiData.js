@@ -26,7 +26,7 @@ exports.extractAiData = (0, https_1.onCall)({
     }
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
         let systemPrompt = '';
         if (entityType === 'properties' || entityType === 'property') {
             systemPrompt = `You are an expert data extraction assistant for a real estate CRM.

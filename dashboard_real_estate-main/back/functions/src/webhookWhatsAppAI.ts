@@ -38,6 +38,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 //   firebase functions:secrets:set ENCRYPTION_MASTER_KEY
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const masterKey = defineSecret('ENCRYPTION_MASTER_KEY');
+const webhookSecret = defineSecret('WAHA_WEBHOOK_SECRET');
 
 const db = admin.firestore();
 const REGION = 'europe-west1';
@@ -141,7 +142,7 @@ async function extractSearchCriteria(
     apiKey: string
 ): Promise<ExtractedCriteria> {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     // ── System Persona + Security Guardrails ─────────────────────────────────
     // This is the prompt that defines the bot's identity, security boundaries,
@@ -432,11 +433,22 @@ export const webhookWhatsAppAI = onRequest(
     {
         region: REGION,
         // Secrets are injected as env vars at runtime by the Functions runtime
-        secrets: [geminiApiKey, masterKey],
+        secrets: [geminiApiKey, masterKey, webhookSecret],
+        timeoutSeconds: 300,
+        memory: '1GiB'
     },
     async (req, res) => {
         // ── 1. ACK immediately to prevent Green API retries ───────────────────────
         res.status(200).send('OK');
+
+        // ── 2. Security Validation ──────────────────────────────────────────────
+        const incomingSecret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
+        const expectedSecret = webhookSecret.value();
+
+        if (!expectedSecret || incomingSecret !== expectedSecret) {
+            console.error(`[webhookWhatsAppAI] Unauthorized access attempt. Incoming: '${incomingSecret}'`);
+            return;
+        }
 
         try {
             const body = req.body;
