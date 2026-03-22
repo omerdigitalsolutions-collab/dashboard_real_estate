@@ -46,18 +46,23 @@ export async function sendWhatsAppMessage(phone: string, message: string, isBroa
 export async function sendWhatsAppBulk(
     leads: Array<{ phone: string; name: string }>,
     message: string
-): Promise<number> {
-    let successCount = 0;
+): Promise<{ sent: number; failed: number }> {
+    let sent = 0;
+    let failed = 0;
 
-    for (const lead of leads) {
-        if (!lead.phone) continue;
+    for (let i = 0; i < leads.length; i++) {
+        const lead = leads[i];
+        if (!lead.phone) { failed++; continue; }
 
         const personalised = message.replace(/\{\{שם_לקוח\}\}/g, lead.name || '');
         const ok = await sendWhatsAppMessage(lead.phone, personalised, true);
-        if (ok) successCount++;
+        if (ok) sent++; else failed++;
+
+        // Introduce a 300ms delay between sends to avoid Green API rate limiting
+        if (i < leads.length - 1) await new Promise(r => setTimeout(r, 300));
     }
 
-    return successCount;
+    return { sent, failed };
 }
 
 /**
@@ -73,10 +78,9 @@ export async function sendWhatsAppWebhook(payload: {
     action: string;
     message: string;
     leads: Array<{ phone: string; name: string }>;
-}): Promise<boolean> {
+}): Promise<{ sent: number; failed: number } | boolean> {
     if (payload.action === 'bulk_broadcast') {
-        const count = await sendWhatsAppBulk(payload.leads, payload.message);
-        return count > 0;
+        return sendWhatsAppBulk(payload.leads, payload.message);
     }
 
     // Single-lead fallback

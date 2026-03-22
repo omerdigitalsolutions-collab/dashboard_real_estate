@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Phone, User, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -17,11 +18,13 @@ interface SubscriptionRequestModalProps {
 }
 
 const SubscriptionRequestModal: React.FC<SubscriptionRequestModalProps> = ({ isOpen, onClose, planName, userData }) => {
+    const navigate = useNavigate();
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [name, setName] = useState(userData?.name || '');
     const [phone, setPhone] = useState(userData?.phone || '');
 
     const PLAN_LABELS: Record<string, string> = {
+        'solo': 'Starter',
         'pro': 'Pro (349 ₪)',
         'boutique': 'Boutique (899 ₪)',
         'enterprise': 'Enterprise'
@@ -106,13 +109,20 @@ const SubscriptionRequestModal: React.FC<SubscriptionRequestModalProps> = ({ isO
                                         </div>
                                         <h3 className="text-2xl font-black text-slate-800">הבקשה התקבלה!</h3>
                                         <p className="text-slate-500 leading-relaxed">
-                                            מנהל המערכת יעבור עליה ויצור איתך קשר בדקות הקרובות להסדרת ההרשמה למסלול ה-{PLAN_LABELS[planName] || planName}.
+                                            מנהל המערכת יעבור עליה ויצור איתך קשר. בינתיים, תוכל להרשם ולהתחיל את <b>7 ימי הניסיון החינמיים</b> שלך עכשיו!
                                         </p>
                                         <button
-                                            onClick={onClose}
-                                            className="mt-6 w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                                            onClick={() => { onClose(); navigate('/register'); }}
+                                            className="mt-6 w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl transition-colors flex items-center justify-center gap-3 text-lg shadow-lg shadow-emerald-500/30"
                                         >
-                                            סגור וסיים
+                                            המשך לניסיון חינם של 7 ימים
+                                            <ArrowLeft className="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            onClick={onClose}
+                                            className="mt-2 w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl transition-colors"
+                                        >
+                                            סגור
                                         </button>
                                     </div>
                                 ) : (

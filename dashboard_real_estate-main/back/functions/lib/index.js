@@ -50,6 +50,7 @@ const copilot_1 = require("./ai/copilot");
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
 const superadmin_1 = require("./superadmin");
+const setAgencyPlan_1 = require("./superadmin/setAgencyPlan");
 const globalImport_1 = require("./admin/globalImport");
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 const checkTrialExpiry_1 = require("./scheduled/checkTrialExpiry");
@@ -83,7 +84,8 @@ exports.superadmin = {
     superAdminImportGlobalPropertiesV2: globalImport_1.superAdminImportGlobalPropertiesV2,
     superAdminGetImportMappingV2: globalImport_1.superAdminGetImportMappingV2,
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage,
-    superAdminUpdateAgencyPlan: superadmin_1.superAdminUpdateAgencyPlan
+    superAdminUpdateAgencyPlan: superadmin_1.superAdminUpdateAgencyPlan,
+    superAdminSetPlan: setAgencyPlan_1.superAdminSetPlan
 };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts };

@@ -59,6 +59,7 @@ import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
 import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan } from './superadmin';
+import { superAdminSetPlan } from './superadmin/setAgencyPlan';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
@@ -95,7 +96,8 @@ export const superadmin = {
     superAdminImportGlobalPropertiesV2,
     superAdminGetImportMappingV2,
     superAdminGetAgencyUsage,
-    superAdminUpdateAgencyPlan
+    superAdminUpdateAgencyPlan,
+    superAdminSetPlan
 };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };

@@ -40,10 +40,10 @@ const admin = __importStar(require("firebase-admin"));
 const resend_1 = require("resend");
 const params_1 = require("firebase-functions/params");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
-const GREEN_API_MASTER_KEY = (0, params_1.defineString)('GREEN_API_MASTER_KEY');
+const greenApiMasterKey = (0, params_1.defineSecret)('GREEN_API_MASTER_KEY');
 exports.onSubscriptionRequestCreated = (0, firestore_1.onDocumentCreated)({
     document: "subscription_requests/{requestId}",
-    secrets: [resendApiKey]
+    secrets: [resendApiKey, greenApiMasterKey]
 }, async (event) => {
     const snap = event.data;
     if (!snap)
@@ -126,7 +126,7 @@ exports.onSubscriptionRequestCreated = (0, firestore_1.onDocumentCreated)({
     // 4. Send WhatsApp Alert via GreenAPI
     try {
         const adminPhoneForWhatsapp = "972507706024";
-        const greenApiKey = GREEN_API_MASTER_KEY.value();
+        const greenApiKey = greenApiMasterKey.value();
         if (greenApiKey) {
             const message = `🔔 *ליד חם - בקשה לשדרוג מנוי!*\n\nהתקבלה בקשה מחלון השדרוג במערכת:\n\n*שם הלקוח:* ${name}\n*טלפון:* ${phone}\n*אימייל:* ${email}\n*מסלול:* ${plan}\n\nמומלץ לחזור אליו כעת! 🚀`;
             await (0, whatsapp_1.sendSystemWhatsappMessage)(adminPhoneForWhatsapp, message, greenApiKey);

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Send, Loader2, Save, Trash2, Plus, MessageSquare } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Send, Loader2, Trash2, Plus, MessageSquare } from 'lucide-react';
 import { Lead } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
@@ -26,8 +26,8 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
     const [newTemplateName, setNewTemplateName] = useState('');
     const [showTemplateForm, setShowTemplateForm] = useState(false);
 
-    // Feature gating
-    const [userPlan, setUserPlan] = useState<string>('starter');
+    // Feature gating — null means "still loading"
+    const [userPlan, setUserPlan] = useState<string | null>(null);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
     useEffect(() => {
@@ -35,6 +35,7 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
             setMessage('');
             setShowTemplateForm(false);
             setNewTemplateName('');
+            setUserPlan(null);
         } else {
             // Fetch plan when modal opens
             const fetchPlan = async () => {
@@ -44,10 +45,15 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
                         const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
                         if (snap.exists()) {
                             setUserPlan(snap.data()?.planId || 'starter');
+                        } else {
+                            setUserPlan('starter');
                         }
                     } catch (err) {
                         console.error('Error fetching plan:', err);
+                        setUserPlan('starter'); // fail-safe
                     }
+                } else {
+                    setUserPlan('starter');
                 }
             };
             fetchPlan();
@@ -57,6 +63,8 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
     if (!isOpen) return null;
 
     const handleSend = async () => {
+        // Gating: wait for plan to load; block starter plans
+        if (userPlan === null) return; // still loading
         if (userPlan === 'starter') {
             setIsUpgradeModalOpen(true);
             return;
@@ -68,13 +76,25 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
         const selectedLeadsPayload = selectedLeads.map(l => ({ phone: l.phone, name: l.name }));
 
         try {
-            const success = await sendWhatsAppWebhook({
+            const result = await sendWhatsAppWebhook({
                 action: 'bulk_broadcast',
                 message: message.trim(),
                 leads: selectedLeadsPayload
             });
 
-            if (success) {
+            // result is { sent, failed } for bulk, or boolean for single
+            if (result && typeof result === 'object' && 'sent' in result) {
+                const { sent, failed } = result as { sent: number; failed: number };
+                if (sent > 0) {
+                    if (failed > 0) {
+                        alert(`✅ ${sent} הודעות נשלחו בהצלחה.\n⚠️ ${failed} הודעות נכשלו (ייתכן שחסרות ספרות טלפון).`);
+                    }
+                    onSuccess();
+                    onClose();
+                } else {
+                    alert('שגיאה: אף הודעה לא נשלחה. בדוק שהווטסאפ מחובר ושיש מספרי טלפון תקינים.');
+                }
+            } else if (result === true) {
                 onSuccess();
                 onClose();
             } else {
@@ -256,11 +276,11 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
                             </button>
                             <button
                                 onClick={handleSend}
-                                disabled={sending || !message.trim()}
+                                disabled={sending || !message.trim() || userPlan === null}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm shadow-emerald-600/20"
                             >
                                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                {sending ? 'שולח...' : 'שגר הודעות'}
+                                {sending ? 'שולח...' : userPlan === null ? 'טוען...' : 'שגר הודעות'}
                             </button>
                         </div>
                     </div>

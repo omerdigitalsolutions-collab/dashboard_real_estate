@@ -32,6 +32,7 @@ import { LogIn } from 'lucide-react';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
+import SubscriptionRequestsManager from '../components/superadmin/SubscriptionRequestsManager';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../config/firebase';
 
@@ -344,6 +345,9 @@ export default function SuperAdminDashboard() {
                     }
                 />
             </div>
+
+            {/* ── Subscription Requests ─────────────────────────────────────── */}
+            <SubscriptionRequestsManager />
 
             {/* ── Finances & Import ────────────────────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
