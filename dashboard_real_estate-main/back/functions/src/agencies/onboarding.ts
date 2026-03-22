@@ -1,7 +1,10 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { defineSecret } from 'firebase-functions/params';
+import { Resend } from 'resend';
 
+const resendApiKey = defineSecret('RESEND_API_KEY');
 const db = getFirestore();
 
 /**
@@ -44,7 +47,7 @@ export const checkPhoneAvailable = onCall({ cors: true }, async (request) => {
  * Input:  { agencyName: string, userName: string, phone: string }
  * Output: { success: true, agencyId: string }
  */
-export const createAgencyAccount = onCall({ cors: true }, async (request) => {
+export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] }, async (request) => {
     // ── Auth Guard ──────────────────────────────────────────────────────────────
     if (!request.auth) {
         throw new HttpsError(
@@ -171,6 +174,59 @@ export const createAgencyAccount = onCall({ cors: true }, async (request) => {
 
     // Set custom claims mapping the user to this new agency as an admin.
     await getAuth().setCustomUserClaims(uid, { agencyId: agencyRef.id, role: 'admin' });
+
+    // ── Send Emails (directly — more reliable than Firestore trigger) ──────────
+    const apiKey = resendApiKey.value();
+    if (apiKey) {
+        try {
+            const resend = new Resend(apiKey);
+            const adminEmail = 'omerdigitalsolutions@gmail.com';
+
+            // 1. Notify admin about new registration
+            await resend.emails.send({
+                from: 'hOMER CRM <noreply@homer-crm.co.il>',
+                to: adminEmail,
+                subject: `🎉 סוכנות חדשה נרשמה: ${agencyName.trim()}`,
+                html: `
+                <div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <h2 style="color: #020b18;">לקוח חדש במערכת!</h2>
+                  <p>סוכנות חדשה סיימה תהליך הרשמה ונמצאת עכשיו בתקופת הניסיון.</p>
+                  <ul style="list-style: none; padding: 0;">
+                    <li><b>שם הסוכנות:</b> ${agencyName.trim()}</li>
+                    <li><b>שם המנהל:</b> ${userName.trim()}</li>
+                    <li><b>אימייל:</b> ${email}</li>
+                    <li><b>טלפון:</b> ${normalizedPhone}</li>
+                    <li><b>זמן הרשמה:</b> ${new Date().toLocaleString('he-IL')}</li>
+                  </ul>
+                  <p>Agency ID: <code>${agencyRef.id}</code></p>
+                </div>`
+            });
+            console.log(`[createAgencyAccount] Admin email sent for agency ${agencyRef.id}`);
+
+            // 2. Send welcome email to the new user
+            await resend.emails.send({
+                from: 'hOMER CRM <noreply@homer-crm.co.il>',
+                to: email,
+                subject: `ברוכים הבאים ל-hOMER CRM! 🎉`,
+                html: `
+                <div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                  <h2 style="color: #020b18;">שלום ${userName.trim()}, ברוכים הבאים ל-hOMER!</h2>
+                  <p>שמחים שבחרת ב-hOMER לניהול סוכנות הנדל"ן שלך: <b>${agencyName.trim()}</b>.</p>
+                  <p>החשבון שלך נוצר בהצלחה וקיבלת <b>7 ימי ניסיון חינם</b> במסלול הפרימיום שלנו.</p>
+                  <br/>
+                  <a href="https://homer-crm.co.il" style="display:inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">היכנס למערכת</a>
+                  <br/><br/>
+                  <p>בהצלחה,<br/>צוות hOMER</p>
+                </div>`
+            });
+            console.log(`[createAgencyAccount] Welcome email sent to ${email}`);
+        } catch (emailErr) {
+            // Don't fail the whole function if email fails — log and continue
+            console.error('[createAgencyAccount] Failed to send emails:', emailErr);
+        }
+    } else {
+        console.warn('[createAgencyAccount] RESEND_API_KEY not set — emails skipped.');
+    }
 
     return { success: true, agencyId: agencyRef.id };
 });
