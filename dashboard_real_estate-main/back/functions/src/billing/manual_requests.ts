@@ -5,12 +5,12 @@ import { Resend } from "resend";
 import { defineSecret, defineString } from 'firebase-functions/params';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
-const greenApiMasterKey = defineSecret('GREEN_API_MASTER_KEY');
+const greenApiMasterKey = defineString('GREEN_API_MASTER_KEY');
 
 export const onSubscriptionRequestCreated = onDocumentCreated(
     {
         document: "subscription_requests/{requestId}",
-        secrets: [resendApiKey, greenApiMasterKey]
+        secrets: [resendApiKey]
     },
     async (event) => {
         const snap = event.data;
