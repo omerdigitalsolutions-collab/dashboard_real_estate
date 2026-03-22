@@ -7,6 +7,9 @@ import { Resend } from 'resend';
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const db = getFirestore();
 
+// Google Apps Script webhook — same URL used in LandingPage contact form
+const SHEETS_WEBHOOK = 'https://script.google.com/macros/s/AKfycbz2XVMpUrISGf6TwoHOb9LFw_Q5AuGVpd7ZEbJBf0V9681fpbjSB9BDrvEMUUqrdelu/exec';
+
 /**
  * checkPhoneAvailable — Checks if a given phone number is already registered in the system.
  */
@@ -226,6 +229,28 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
         }
     } else {
         console.warn('[createAgencyAccount] RESEND_API_KEY not set — emails skipped.');
+    }
+
+    // ── Log to Google Sheets ─────────────────────────────────────────
+    try {
+        const sheetsPayload = JSON.stringify({
+            type: 'new_registration',
+            name: userName.trim(),
+            phone: normalizedPhone,
+            agencyName: agencyName.trim(),
+            email,
+            agencyId: agencyRef.id,
+            timestamp: new Date().toISOString(),
+        });
+        // fetch is available in Node 18+
+        await fetch(SHEETS_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: sheetsPayload,
+        });
+        console.log(`[createAgencyAccount] Sheets log sent for ${normalizedPhone}`);
+    } catch (sheetsErr) {
+        console.warn('[createAgencyAccount] Sheets log failed (non-critical):', sheetsErr);
     }
 
     return { success: true, agencyId: agencyRef.id };

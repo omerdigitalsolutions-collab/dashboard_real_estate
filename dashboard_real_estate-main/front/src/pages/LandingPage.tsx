@@ -18,9 +18,6 @@ import {
     Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import SubscriptionRequestModal from '../components/billing/SubscriptionRequestModal';
-
-// ─── Payment handled manually via SubscriptionRequestModal ──────────
 
 export default function LandingPage() {
     const { userData } = useAuth();
@@ -84,7 +81,6 @@ export default function LandingPage() {
     };
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedPlan, setSelectedPlan] = useState('');
 
     const scrollToPricing = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -94,9 +90,8 @@ export default function LandingPage() {
         }
     };
 
-    const handleSubscribe = (plan: 'solo' | 'boutique' | 'pro' | 'enterprise') => {
-        setSelectedPlan(plan);
-        setIsModalOpen(true);
+    const handleSubscribe = (_plan: 'solo' | 'boutique' | 'pro' | 'enterprise') => {
+        navigate('/register');
     };
     return (
         <div className="min-h-screen bg-[#eff5f5] font-sans selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden text-slate-900" dir="rtl">
@@ -872,13 +867,6 @@ export default function LandingPage() {
                     דברו איתנו בוואטסאפ
                 </span>
             </a>
-            {/* Subscription Modal */}
-            <SubscriptionRequestModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                planName={selectedPlan}
-                userData={userData}
-            />
         </div>
     );
 }
