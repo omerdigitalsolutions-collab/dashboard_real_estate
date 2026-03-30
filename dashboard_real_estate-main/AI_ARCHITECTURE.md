@@ -61,6 +61,7 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
     ├── properties/     CRUD, geocoding, URL scraping, import
     ├── leads/          CRUD, smart matching, external webhook intake
     ├── catalogs/       Webot shared catalog snapshots
+    ├── calendar/       Google Calendar OAuth API and Event Manager
     ├── tasks/          Firestore trigger cleanups
     ├── alerts/         System alert triggers
     ├── whatsapp.ts     WhatsApp managed integration (WAHA / Green API)
@@ -144,6 +145,10 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
 ✅ Auth guard → ✅ Snapshot created for `shared_catalogs` with `expiresAt`  
 ✅ Public read of catalog gated by `expiresAt > request.time` in Firestore Rules
 
+### `calendar-*` (getAuthUrl, handleOAuthCallback, createEvent)
+✅ Auth guard → ✅ Handles OAuth token exchange entirely server-side  
+✅ Tokens safely persisted to Firestore (`userTokens/{uid}`) with auto-refresh
+
 ### `whatsapp-generateWhatsAppQR`
 ✅ Auth guard → ✅ `agencyId` resolved from `users/{uid}` (never trusted from client)  
 ✅ WAHA credentials never returned to frontend  
@@ -210,6 +215,9 @@ Direct Firestore SDK calls (in `/services/`) rely on **Firestore Security Rules*
 | `STRIPE_SECRET_KEY` | Firebase Secret Manager | `stripeWebhook.ts` |
 | `STRIPE_WEBHOOK_SECRET` | Firebase Secret Manager | `stripeWebhook.ts` |
 | `GEMINI_API_KEY` | Firebase Secret Manager | `ai/*.ts`, `whatsapp.ts` |
+| `GOOGLE_CLIENT_ID` | Firebase Secret Manager | `calendar/*.ts` |
+| `GOOGLE_CLIENT_SECRET` | Firebase Secret Manager | `calendar/*.ts` |
+| `GOOGLE_REDIRECT_URI` | Firebase Secret Manager | `calendar/*.ts` |
 | `VITE_FIREBASE_*` | `.env` (frontend, public) | Firebase SDK init |
 
 > ⚠️ **Never commit `.env` files with real keys to Git.** Use `.env.example` templates only.
@@ -245,6 +253,9 @@ deals/{dealId}
   ├── agencyId, leadId, propertyId, assignedAgentId
   ├── stage, projectedCommission, actualCommission
   └── probability
+
+userTokens/{userId}  ← Google Calendar OAuth tokens (access & refresh)
+calendarLinks/{eventId} ← Reverse lookup for events (eventId -> leadId/propertyId)
 
 tasks/{taskId}       ← per-agency tasks with leadId/propertyId refs
 alerts/{alertId}     ← system-generated notifications

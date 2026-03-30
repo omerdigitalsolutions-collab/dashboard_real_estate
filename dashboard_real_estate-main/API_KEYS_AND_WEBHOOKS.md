@@ -55,6 +55,14 @@
 
 ---
 
+## 7. Google Calendar API (סנכרון יומנים)
+שירות זה משמש למערכת לקישור ישיר אל מול יומן גוגל של הסוכנים. כל משתמש מזדהה לחשבונו הפרטי דרך תהליך OAuth 2.0.
+* **`GOOGLE_CLIENT_ID`**: מזהה האפליקציה (Client ID) מתוך ה-Google Cloud Console.
+* **`GOOGLE_CLIENT_SECRET`**: הסוד לאפליקציה (Client Secret) מתוך ה-Google Cloud Console.
+* **`GOOGLE_REDIRECT_URI`**: הקישור אליו גוגל מנתבים את המשתמש לאחר אישור הגישה (בדרך כלל `https://your-app-domain.com/auth/google/callback`).
+
+---
+
 ### איך מעדכנים משתני סביבה ב-Firebase?
 כל משתנה חסר יגרום לפונקציות לא לעבוד כראוי. כדי להגדיר אותם בצורה בטוחה יש להשתמש ב-CLI של Firebase עם הפקודה הבאה מהטרמינל עבור כל מפתח:
 
