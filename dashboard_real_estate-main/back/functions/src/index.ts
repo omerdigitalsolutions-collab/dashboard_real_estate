@@ -53,6 +53,10 @@ import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, ch
 import { askAgencyAgent } from './ai/agent';
 import { extractAiData } from './ai/extractAiData';
 import { askCopilot, getSmartInsights } from './ai/copilot';
+import { textToActionAgent } from './ai/textToAction';
+
+// ── Calendar Module ────────────────────────────────────────────────────────────
+import { getAuthUrl, handleOAuthCallback, createEvent } from './calendar';
 
 // ── Automation Module ──────────────────────────────────────────────────────────
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
@@ -79,6 +83,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
+//   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 export const agencies = { createAgencyAccount, checkPhoneAvailable };
 export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
@@ -87,7 +92,8 @@ export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, ma
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
-export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights };
+export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent };
+export const calendar = { getAuthUrl, handleOAuthCallback, createEvent };
 export const automation = { webhookProcessGlobalYad2Email };
 export const superadmin = {
     superAdminUpdateExpenses,

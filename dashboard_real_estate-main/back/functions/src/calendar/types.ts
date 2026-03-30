@@ -1,0 +1,78 @@
+/**
+ * ─── Calendar Module — Shared Types ──────────────────────────────────────────
+ *
+ * All TypeScript interfaces and types shared across the calendar module.
+ */
+
+// ── OAuth Token Storage ───────────────────────────────────────────────────────
+
+/**
+ * The shape of OAuth2 tokens as returned by Google and stored in Firestore.
+ */
+export interface StoredTokens {
+    access_token: string;
+    refresh_token: string;
+    expiry_date: number;   // Unix timestamp in milliseconds
+    token_type: string;
+    scope: string;
+}
+
+// ── Event Creation ────────────────────────────────────────────────────────────
+
+/**
+ * A structured time value as required by the Google Calendar API.
+ */
+export interface CalendarDateTime {
+    /**
+     * ISO 8601 datetime string, e.g. "2025-06-15T09:00:00"
+     */
+    dateTime: string;
+    /**
+     * IANA timezone name, e.g. "Asia/Jerusalem"
+     */
+    timeZone: string;
+}
+
+/**
+ * An attendee entry for a Google Calendar event.
+ */
+export interface CalendarAttendee {
+    email: string;
+    displayName?: string;
+}
+
+/**
+ * The payload required to create a new Google Calendar event.
+ * Mirrors the relevant subset of the Google Calendar Events resource.
+ */
+export interface CalendarEventPayload {
+    /** Short, human-readable title of the event. */
+    summary: string;
+    /** Optional detailed description / agenda. */
+    description?: string;
+    /** Optional physical or virtual location. */
+    location?: string;
+    /** Event start time. */
+    start: CalendarDateTime;
+    /** Event end time. */
+    end: CalendarDateTime;
+    /** Optional list of attendees to invite. */
+    attendees?: CalendarAttendee[];
+}
+
+// ── Create Event Result ───────────────────────────────────────────────────────
+
+/**
+ * The data returned after successfully creating a Google Calendar event.
+ */
+export interface CreateEventResult {
+    eventId: string;
+    htmlLink: string;
+}
+
+// ── Entity Linking ────────────────────────────────────────────────────────────
+
+/**
+ * The CRM entity types that can be linked to a Google Calendar event.
+ */
+export type CalendarEntityType = 'lead' | 'property';
