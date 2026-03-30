@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.superadmin = exports.automation = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -46,6 +46,9 @@ const whatsapp_1 = require("./whatsapp");
 const agent_1 = require("./ai/agent");
 const extractAiData_1 = require("./ai/extractAiData");
 const copilot_1 = require("./ai/copilot");
+const textToAction_1 = require("./ai/textToAction");
+// ── Calendar Module ────────────────────────────────────────────────────────────
+const calendar_1 = require("./calendar");
 // ── Automation Module ──────────────────────────────────────────────────────────
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
@@ -67,6 +70,7 @@ const manual_requests_1 = require("./billing/manual_requests");
 //   leads-webhookReceiveLead  |  leads-addLead
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
+//   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, checkPhoneAvailable: onboarding_1.checkPhoneAvailable };
 exports.users = { inviteAgent: team_1.inviteAgent, getInviteInfo: team_1.getInviteInfo, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
@@ -75,7 +79,8 @@ exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, a
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
-exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights };
+exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights, textToActionAgent: textToAction_1.textToActionAgent };
+exports.calendar = { getAuthUrl: calendar_1.getAuthUrl, handleOAuthCallback: calendar_1.handleOAuthCallback, createEvent: calendar_1.createEvent };
 exports.automation = { webhookProcessGlobalYad2Email: globalYad2Webhook_1.webhookProcessGlobalYad2Email };
 exports.superadmin = {
     superAdminUpdateExpenses: superadmin_1.superAdminUpdateExpenses,
