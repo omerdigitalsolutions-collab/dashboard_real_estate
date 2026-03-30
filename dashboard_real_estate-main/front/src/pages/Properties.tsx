@@ -201,6 +201,90 @@ export default function Properties() {
         return `972${cleaned}`;
     };
 
+    /**
+     * Returns visual styles per listing type / source:
+     * - exclusive  → gold/amber (agency's own exclusive)
+     * - external   → purple (another agency's listing)
+     * - private    → slate (private / owner-listed)
+     * - city       → teal/cyan (system-sourced from cities collection)
+     * - draft      → amber-warm (WhatsApp draft)
+     */
+    const getListingStyle = (prop: Property): {
+        borderColor: string;
+        iconBg: string;
+        iconText: string;
+        badgeBg: string;
+        badgeText: string;
+        badgeLabel: string;
+        badgeEmoji: string;
+    } => {
+        if (prop.isGlobalCityProperty) {
+            return {
+                borderColor: 'border-l-4 border-l-cyan-400',
+                iconBg: 'bg-cyan-50',
+                iconText: 'text-cyan-600',
+                badgeBg: 'bg-cyan-50 border-cyan-200 text-cyan-700',
+                badgeText: 'text-cyan-700',
+                badgeLabel: 'נכס שהמערת איתרה',
+                badgeEmoji: '🔍',
+            };
+        }
+        if (prop.status === 'draft') {
+            return {
+                borderColor: 'border-l-4 border-l-amber-400',
+                iconBg: 'bg-amber-50',
+                iconText: 'text-amber-600',
+                badgeBg: 'bg-amber-50 border-amber-200 text-amber-700',
+                badgeText: 'text-amber-700',
+                badgeLabel: 'טיוטה (WhatsApp)',
+                badgeEmoji: '💬',
+            };
+        }
+        if (prop.listingType === 'exclusive' || prop.isExclusive) {
+            return {
+                borderColor: 'border-l-4 border-l-amber-500',
+                iconBg: 'bg-amber-50',
+                iconText: 'text-amber-600',
+                badgeBg: 'bg-amber-50 border-amber-200 text-amber-700',
+                badgeText: 'text-amber-700',
+                badgeLabel: 'בלעדיות המשרד',
+                badgeEmoji: '👑',
+            };
+        }
+        if (prop.listingType === 'external') {
+            return {
+                borderColor: 'border-l-4 border-l-purple-400',
+                iconBg: 'bg-purple-50',
+                iconText: 'text-purple-600',
+                badgeBg: 'bg-purple-50 border-purple-200 text-purple-700',
+                badgeText: 'text-purple-700',
+                badgeLabel: 'ממשרד אחר',
+                badgeEmoji: '🤝',
+            };
+        }
+        if (prop.listingType === 'private') {
+            return {
+                borderColor: 'border-l-4 border-l-slate-400',
+                iconBg: 'bg-slate-50',
+                iconText: 'text-slate-600',
+                badgeBg: 'bg-slate-50 border-slate-200 text-slate-600',
+                badgeText: 'text-slate-600',
+                badgeLabel: 'נכס פרטי',
+                badgeEmoji: '🔑',
+            };
+        }
+        // Default (no listingType set — agency-owned)
+        return {
+            borderColor: 'border-l-4 border-l-blue-400',
+            iconBg: 'bg-blue-50',
+            iconText: 'text-blue-600',
+            badgeBg: 'bg-blue-50 border-blue-200 text-blue-700',
+            badgeText: 'text-blue-700',
+            badgeLabel: 'נכס המשרד',
+            badgeEmoji: '🏠',
+        };
+    };
+
     return (
         <div className="space-y-6" dir="rtl">
             {/* Header Area */}
@@ -374,12 +458,23 @@ export default function Properties() {
                                 const client = getPropertyClient(prop.id);
                                 const imgUrl = prop.imageUrls?.[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80';
 
+                                const listingStyle = getListingStyle(prop);
+
                                 return (
                                     <div
                                         key={prop.id}
                                         onClick={() => setSelectedProperty(prop)}
-                                        className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col group"
+                                        className={`relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden flex flex-col group ${listingStyle.borderColor}`}
                                     >
+                                        {/* Hover-only "System Found" tooltip for city properties */}
+                                        {prop.isGlobalCityProperty && (
+                                            <div className="absolute inset-0 z-20 pointer-events-none flex items-start justify-center pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                <span className="bg-cyan-600/90 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+                                                    🔍 נכס שהמערת איתרה
+                                                </span>
+                                            </div>
+                                        )}
+
                                         {/* Thumbnail */}
                                         <div className="relative h-48 overflow-hidden bg-slate-100">
                                             <img
@@ -387,16 +482,35 @@ export default function Properties() {
                                                 alt="Property"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />
+                                            {/* Property type badge (top-right) */}
                                             <div className="absolute top-3 right-3 flex flex-col gap-2">
                                                 <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : prop.kind === 'מסחרי' ? 'bg-orange-600/90 text-white' : prop.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
                                                     {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : prop.kind === 'מסחרי' ? 'מסחרי' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
                                                 </span>
                                             </div>
-                                            {prop.listingType === 'exclusive' || (prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && prop.status !== 'draft') ? (
-                                                <div className="absolute top-3 left-3 flex items-center gap-1 bg-amber-500/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm w-max">
-                                                    👑 בלעדיות
-                                                </div>
-                                            ) : null}
+                                            {/* Listing-type badge (top-left) */}
+                                            <div className="absolute top-3 left-3">
+                                                {(prop.listingType === 'exclusive' || (prop.exclusivityEndDate && prop.exclusivityEndDate.toDate() > new Date() && prop.status !== 'draft')) && (
+                                                    <span className="flex items-center gap-1 bg-amber-500/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
+                                                        👑 בלעדיות
+                                                    </span>
+                                                )}
+                                                {prop.listingType === 'external' && prop.status !== 'draft' && !prop.isGlobalCityProperty && (
+                                                    <span className="flex items-center gap-1 bg-purple-600/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
+                                                        🤝 ממשרד אחר
+                                                    </span>
+                                                )}
+                                                {prop.listingType === 'private' && prop.status !== 'draft' && (
+                                                    <span className="flex items-center gap-1 bg-slate-600/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
+                                                        🔑 פרטי
+                                                    </span>
+                                                )}
+                                                {prop.isGlobalCityProperty && (
+                                                    <span className="flex items-center gap-1 bg-cyan-600/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
+                                                        🔍 מאגר ציבורי
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Details */}
@@ -480,8 +594,8 @@ export default function Properties() {
                                         {/* Card Footer Actions */}
                                         <div className="px-4 pb-4 pt-2 flex items-center gap-2 border-t border-slate-100 mt-3 flex-wrap">
                                             {prop.isGlobalCityProperty ? (
-                                                <div className="flex-1 w-full text-center py-1.5 px-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold" title="מאגר ציבורי אותר אוטומטית">
-                                                    המערכת איתרה נכס זה
+                                                <div className={`flex-1 w-full text-center py-1.5 px-2 border rounded-lg text-xs font-bold ${listingStyle.badgeBg}`}>
+                                                    {listingStyle.badgeEmoji} {listingStyle.badgeLabel}
                                                 </div>
                                             ) : (
                                                 <button
@@ -555,6 +669,8 @@ export default function Properties() {
                                         const agent = getPropertyAgent(prop.agentId);
                                         const client = getPropertyClient(prop.id);
 
+                                        const tableListingStyle = getListingStyle(prop);
+
                                         return (
                                             <tr
                                                 key={prop.id}
@@ -573,14 +689,25 @@ export default function Properties() {
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${prop.status === 'draft' ? 'bg-amber-50 text-amber-600' : prop.kind === 'מסחרי' ? 'bg-orange-50 text-orange-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                        {/* Icon color-coded per listing type */}
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tableListingStyle.iconBg} ${tableListingStyle.iconText}`}>
                                                             {prop.status === 'draft' ? <MessageCircle size={18} /> : <Building size={18} />}
                                                         </div>
-                                                        <div>
+                                                        <div className="relative group/addr">
                                                             {prop.status === 'draft' ? (
                                                                 <span className="block text-sm font-semibold text-amber-800">ממתין לאישור (WhatsApp)</span>
                                                             ) : (
                                                                 <span className="block text-sm font-semibold text-slate-800">{prop.address} {prop.city ? `, ${prop.city}` : ''}</span>
+                                                            )}
+                                                            {/* Listing type tag */}
+                                                            <span className={`inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${tableListingStyle.badgeBg}`}>
+                                                                {tableListingStyle.badgeEmoji} {tableListingStyle.badgeLabel}
+                                                            </span>
+                                                            {/* Hover tooltip for city properties */}
+                                                            {prop.isGlobalCityProperty && (
+                                                                <span className="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-cyan-700 text-white text-xs font-bold px-2 py-1 rounded-lg shadow-lg opacity-0 group-hover/addr:opacity-100 transition-opacity pointer-events-none z-10">
+                                                                    🔍 נכס שהמערת איתרה
+                                                                </span>
                                                             )}
                                                         </div>
                                                     </div>
