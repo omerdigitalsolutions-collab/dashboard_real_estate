@@ -142,7 +142,7 @@ async function extractSearchCriteria(
     apiKey: string
 ): Promise<ExtractedCriteria> {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // ── System Persona + Security Guardrails ─────────────────────────────────
     // This is the prompt that defines the bot's identity, security boundaries,
