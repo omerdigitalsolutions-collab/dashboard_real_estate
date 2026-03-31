@@ -142,7 +142,7 @@ async function resolveAgencyByInstance(idInstance) {
 // ─── Helper: AI Criteria Extraction (Gemini) ──────────────────────────────────
 async function extractSearchCriteria(message, apiKey) {
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     // ── System Persona + Security Guardrails ─────────────────────────────────
     // This is the prompt that defines the bot's identity, security boundaries,
     // and the structured output format it must follow.

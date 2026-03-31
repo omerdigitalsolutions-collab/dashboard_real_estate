@@ -65,7 +65,7 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
             throw new Error('GEMINI_API_KEY is not configured');
         }
         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const prompt = `You are an expert real estate data parser. Extract ALL property listings from the provided Yad2 email HTML into a strict JSON ARRAY of objects.
   Rules for each object:
   - \`price\`: Number (remove ₪ and commas. e.g., 2290000).

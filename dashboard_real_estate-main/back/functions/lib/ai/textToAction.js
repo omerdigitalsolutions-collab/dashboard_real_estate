@@ -262,7 +262,7 @@ exports.textToActionAgent = (0, https_1.onCall)({
         throw new https_1.HttpsError('internal', 'GEMINI_API_KEY is not configured.');
     }
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     // ── 3. Build content parts — audio or text ───────────────────────────────
     const inputParts = hasAudio
         ? buildContents({ audio: audio, mimeType: resolvedMimeType })

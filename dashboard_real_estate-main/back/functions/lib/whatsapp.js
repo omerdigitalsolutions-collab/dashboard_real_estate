@@ -711,7 +711,7 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
             }
             try {
                 const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
                 const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
 Scan this message for property listings (for sale or rent).
 If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
@@ -768,7 +768,7 @@ Output strict JSON:
                 if (apiKey) {
                     try {
                         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
                         const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
         Message: "${textMessage}"
         

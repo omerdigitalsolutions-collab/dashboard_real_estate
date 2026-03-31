@@ -49,7 +49,7 @@ exports.importPropertyFromUrl = (0, https_1.onCall)({
         const htmlSnippet = html.slice(0, 15000);
         // 3. Ask Gemini Flash to extract the details
         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
         const prompt = `
 You are a real estate data extraction assistant.
 I am providing HTML code from a real estate listing URL (e.g., Yad2, Madlan, or similar).
