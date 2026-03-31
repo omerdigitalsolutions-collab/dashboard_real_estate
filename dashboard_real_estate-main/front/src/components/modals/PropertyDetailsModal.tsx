@@ -1,9 +1,10 @@
 import { Property, AppUser, Lead } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical } from 'lucide-react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import { AddMeetingModal } from './AddMeetingModal';
 import {
     DndContext,
     closestCenter,
@@ -105,6 +106,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const [isEditingDescription, setIsEditingDescription] = useState(false);
     const [editedDescription, setEditedDescription] = useState(property.description || '');
     const [isSavingDescription, setIsSavingDescription] = useState(false);
+    const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -279,6 +281,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     <span className="hidden sm:inline">צור עסקה</span>
                                 </button>
                             )}
+                            <button
+                                onClick={() => setShowAddMeetingModal(true)}
+                                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-lg transition-colors text-sm"
+                            >
+                                <Calendar size={16} />
+                                <span className="hidden sm:inline">קבע פגישה</span>
+                            </button>
                             <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
                                 <X size={20} />
                             </button>
@@ -557,6 +566,21 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         </div>
                     )}
                 </div>
+            )}
+
+            {showAddMeetingModal && (
+                <AddMeetingModal
+                    isOpen={showAddMeetingModal}
+                    onClose={() => setShowAddMeetingModal(false)}
+                    initialData={{
+                        summary: `פגישה בנכס: ${property.address}`,
+                        location: property.address,
+                        description: `פגישה לסיור בנכס: ${property.address}\nמחיר: ₪${property.price.toLocaleString()}\nעיר: ${property.city}`,
+                        relatedEntityType: 'property',
+                        relatedEntityId: property.id,
+                        relatedEntityName: property.address
+                    }}
+                />
             )}
         </>
     );

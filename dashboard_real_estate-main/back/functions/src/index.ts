@@ -54,6 +54,7 @@ import { askAgencyAgent } from './ai/agent';
 import { extractAiData } from './ai/extractAiData';
 import { askCopilot, getSmartInsights } from './ai/copilot';
 import { textToActionAgent } from './ai/textToAction';
+import { homerChatBot } from './ai/homerChatBot';
 
 // ── Calendar Module ────────────────────────────────────────────────────────────
 import { getAuthUrl, handleOAuthCallback, createEvent } from './calendar';
@@ -92,7 +93,7 @@ export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, ma
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
-export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent };
+export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot };
 export const calendar = { getAuthUrl, handleOAuthCallback, createEvent };
 export const automation = { webhookProcessGlobalYad2Email };
 export const superadmin = {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Sparkles, X, Send, Bot, Loader2 } from 'lucide-react';
+import { Sparkles, X, Send, Bot, Loader2, Mic, MicOff } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
 
@@ -8,15 +8,87 @@ interface Message {
     id: string;
     role: 'user' | 'assistant';
     text: string;
+    isVoice?: boolean;
 }
 
 const INITIAL_MESSAGES: Message[] = [
     {
         id: 'welcome',
         role: 'assistant',
-        text: 'שלום! אני הCopilot של hOMER 🏠\nשאל אותי על הסוכנות שלך — ביצועים, לידים, נכסים ועסקאות.',
+        text: 'שלום! אני hOMER Chat Bot 🏠\nשאל אותי על הסוכנות שלך — ביצועים, לידים, נכסים ועסקאות.',
     },
 ];
+
+// ── Voice Recording Hook ──────────────────────────────────────────────────────
+type RecordingState = 'idle' | 'recording' | 'processing';
+
+function useVoiceRecorder() {
+    const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const chunksRef = useRef<BlobPart[]>([]);
+
+    const startRecording = useCallback(async (): Promise<boolean> => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+            chunksRef.current = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunksRef.current.push(e.data);
+            };
+
+            mediaRecorderRef.current = recorder;
+            recorder.start();
+            setRecordingState('recording');
+            return true;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    const stopRecording = useCallback((): Promise<{ base64: string; mimeType: string } | null> => {
+        return new Promise((resolve) => {
+            const recorder = mediaRecorderRef.current;
+            if (!recorder) { resolve(null); return; }
+
+            recorder.onstop = async () => {
+                const mimeType = recorder.mimeType || getSupportedMimeType();
+                const blob = new Blob(chunksRef.current, { type: mimeType });
+
+                recorder.stream.getTracks().forEach((t) => t.stop());
+
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = (reader.result as string).replace(/^data:.+;base64,/, '');
+                    resolve({ base64, mimeType });
+                };
+                reader.readAsDataURL(blob);
+            };
+
+            recorder.stop();
+            setRecordingState('processing');
+        });
+    }, []);
+
+    const cancelRecording = useCallback(() => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stream.getTracks().forEach((t) => t.stop());
+            recorder.stop();
+        }
+        setRecordingState('idle');
+    }, []);
+
+    return { recordingState, setRecordingState, startRecording, stopRecording, cancelRecording };
+}
+
+function getSupportedMimeType(): string {
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4'];
+    for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return 'audio/webm';
+}
 
 // ── Typing indicator ────────────────────────────────────────────────────────────
 function TypingIndicator() {
@@ -56,6 +128,8 @@ export default function CopilotChatWidget() {
     const bottomRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
+    const { recordingState, setRecordingState, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
+
     // Auto-scroll to bottom on new messages
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -63,14 +137,15 @@ export default function CopilotChatWidget() {
 
     // Focus input when chat opens
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && recordingState === 'idle') {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen]);
+    }, [isOpen, recordingState]);
 
+    // ── Handle text sending ──
     const handleSendMessage = useCallback(async () => {
         const prompt = inputValue.trim();
-        if (!prompt || isLoading) return;
+        if (!prompt || isLoading || recordingState !== 'idle') return;
 
         setError(null);
         setInputValue('');
@@ -85,11 +160,11 @@ export default function CopilotChatWidget() {
         setIsLoading(true);
 
         try {
-            const askCopilot = httpsCallable<{ prompt: string }, { response: string }>(
+            const homerChatBot = httpsCallable<{ text: string }, { response: string }>(
                 functions,
-                'ai-askCopilot'
+                'ai-homerChatBot'
             );
-            const result = await askCopilot({ prompt });
+            const result = await homerChatBot({ text: prompt });
 
             const assistantMsg: Message = {
                 id: `a-${Date.now()}`,
@@ -103,15 +178,75 @@ export default function CopilotChatWidget() {
                 ? 'שגיאת הרשאות — פנה למנהל המערכת.'
                 : 'אירעה שגיאה בתקשורת עם הCopilot. נסה שוב.';
             setError(errText);
-            // Also add error as assistant message for in-chat visibility
             setMessages(prev => [
                 ...prev,
                 { id: `err-${Date.now()}`, role: 'assistant', text: `⚠️ ${errText}` },
             ]);
         } finally {
             setIsLoading(false);
+            setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [inputValue, isLoading]);
+    }, [inputValue, isLoading, recordingState]);
+
+    // ── Handle mic sending ──
+    const handleMicClick = async () => {
+        if (recordingState === 'recording') {
+            // Stop and submit
+            const result = await stopRecording();
+            if (!result) { setRecordingState('idle'); return; }
+
+            const { base64, mimeType } = result;
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                // For voice recordings, we send to the textToActionAgent function
+                const homerChatBot = httpsCallable(
+                    functions,
+                    'ai-homerChatBot'
+                );
+                const response = await homerChatBot({ audio: base64, mimeType });
+                const data = response.data as any;
+
+                const userText = data.transcribedText || '🎙️ [הודעת קול]';
+                const userMsg: Message = {
+                    id: `u-${Date.now()}`,
+                    role: 'user',
+                    text: userText,
+                    isVoice: true,
+                };
+                setMessages((prev) => [...prev, userMsg]);
+
+                const assistantMsg: Message = {
+                    id: `a-${Date.now()}`,
+                    role: 'assistant',
+                    text: data.response || 'הפעולה הושלמה.',
+                };
+                setMessages((prev) => [...prev, assistantMsg]);
+            } catch (err: any) {
+                console.error('[CopilotChatWidget] Voice Error:', err);
+                const errText = 'לא הצלחתי לעבד את ההקלטה. אנא נסה שנית.';
+                setError(errText);
+                setMessages((prev) => [
+                    ...prev,
+                    { id: `err-${Date.now()}`, role: 'assistant', text: `⚠️ ${errText}` },
+                ]);
+            } finally {
+                setIsLoading(false);
+                setRecordingState('idle');
+            }
+        } else if (recordingState === 'idle') {
+            const ok = await startRecording();
+            if (!ok) {
+                const errText = 'לא ניתן לגשת למיקרופון. אנא הרשה גישה בדפדפן.';
+                setError(errText);
+                setMessages((prev) => [
+                    ...prev,
+                    { id: `err-${Date.now()}`, role: 'assistant', text: `⚠️ ${errText}` },
+                ]);
+            }
+        }
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -119,6 +254,18 @@ export default function CopilotChatWidget() {
             handleSendMessage();
         }
     };
+
+    // Calculate mic button classes based on recordingState
+    const micButtonClass = (() => {
+        const base = 'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ml-1.5';
+        if (recordingState === 'recording')
+            return `${base} bg-red-500/90 hover:bg-red-500 text-white animate-pulse shadow-[0_0_12px_rgba(239,68,68,0.5)]`;
+        if (recordingState === 'processing')
+            return `${base} bg-amber-500/90 text-white cursor-wait`;
+        return `${base} bg-transparent hover:bg-white/10 text-slate-400 hover:text-cyan-400 border border-transparent hover:border-cyan-500/30`;
+    })();
+
+    const MicIcon = recordingState === 'processing' ? Loader2 : recordingState === 'recording' ? MicOff : Mic;
 
     return (
         <>
@@ -167,10 +314,16 @@ export default function CopilotChatWidget() {
                                 <Sparkles className="w-4.5 h-4.5 text-white" />
                             </div>
                             <div>
-                                <p className="text-white font-bold text-sm leading-tight">hOMER Copilot</p>
+                                <p className="text-white font-bold text-sm leading-tight">hOMER Chat Bot</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
-                                    <span className="text-[10px] text-emerald-400 font-medium">מחובר ופעיל</span>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${recordingState === 'recording' ? 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.8)]' : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]'} animate-pulse`} />
+                                    <span className={`text-[10px] ${recordingState === 'recording' ? 'text-red-400' : 'text-emerald-400'} font-medium`}>
+                                        {recordingState === 'recording'
+                                            ? 'מקשיב...'
+                                            : recordingState === 'processing'
+                                                ? 'מעבד הקלטה...'
+                                                : 'מחובר ופעיל'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -198,7 +351,7 @@ export default function CopilotChatWidget() {
                                     </div>
                                 )}
                                 <div
-                                    className={`max-w-[78%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
+                                    className={`relative max-w-[78%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
                                         ? 'rounded-2xl rounded-bl-none text-slate-100'
                                         : 'rounded-2xl rounded-br-none text-slate-200'
                                         }`}
@@ -215,7 +368,16 @@ export default function CopilotChatWidget() {
                                             }
                                     }
                                 >
-                                    {msg.text}
+                                    {msg.isVoice ? (
+                                        <div className="flex flex-col">
+                                            <span className="inline-flex items-center gap-1 text-cyan-200 text-[10px] mb-1 opacity-80">
+                                                <Mic size={10} /> הודעה קולית
+                                            </span>
+                                            <span>{msg.text}</span>
+                                        </div>
+                                    ) : (
+                                        msg.text
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -223,6 +385,22 @@ export default function CopilotChatWidget() {
                         {isLoading && <TypingIndicator />}
                         <div ref={bottomRef} />
                     </div>
+
+                    {/* Recording banner */}
+                    {recordingState === 'recording' && (
+                        <div className="mx-4 mb-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 flex items-center justify-between backdrop-blur-md">
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse shadow-[0_0_8px_rgba(248,113,113,0.8)]" />
+                                <span className="text-xs text-red-300 font-medium tracking-wide">מקליט... שוב לחיצה לסיום</span>
+                            </div>
+                            <button
+                                onClick={cancelRecording}
+                                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                            >
+                                ביטול
+                            </button>
+                        </div>
+                    )}
 
                     {/* Input Area */}
                     <div
@@ -237,29 +415,39 @@ export default function CopilotChatWidget() {
                             <p className="text-xs text-red-400 mb-2 px-1">{error}</p>
                         )}
                         <div
-                            className="flex items-end gap-2 rounded-xl p-1.5 pr-3"
+                            className="flex items-end gap-1 rounded-xl p-1.5 pr-2"
                             style={{
                                 background: 'rgba(30,41,59,0.7)',
                                 border: '1px solid rgba(6,182,212,0.2)',
                             }}
                         >
+                            <button
+                                onClick={handleMicClick}
+                                disabled={recordingState === 'processing' || isLoading}
+                                className={micButtonClass}
+                                title={recordingState === 'recording' ? 'עצור הקלטה' : 'התחל הקלטה'}
+                            >
+                                <MicIcon className={`w-4 h-4 ${recordingState === 'processing' ? 'animate-spin' : ''}`} />
+                            </button>
+
                             <textarea
                                 ref={inputRef}
-                                value={inputValue}
+                                value={recordingState === 'recording' ? '' : inputValue}
                                 onChange={e => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="שאל אותי כל שאלה עסקית..."
+                                placeholder={recordingState === 'recording' ? '🔴 מקשיב...' : 'שאל אותי ביצועים או קולית...'}
                                 rows={1}
-                                disabled={isLoading}
-                                className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none min-h-[28px] max-h-[100px] py-1 leading-relaxed"
+                                disabled={isLoading || recordingState !== 'idle'}
+                                className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none min-h-[28px] max-h-[100px] py-1.5 px-2 leading-relaxed disabled:opacity-50"
                                 style={{ direction: 'rtl', scrollbarWidth: 'none' }}
                             />
+                            
                             <button
                                 onClick={handleSendMessage}
-                                disabled={isLoading || !inputValue.trim()}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled={isLoading || !inputValue.trim() || recordingState !== 'idle'}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed ml-0.5"
                                 style={{
-                                    background: inputValue.trim() && !isLoading
+                                    background: inputValue.trim() && !isLoading && recordingState === 'idle'
                                         ? 'linear-gradient(135deg, #06b6d4, #8b5cf6)'
                                         : 'rgba(71,85,105,0.5)',
                                 }}
@@ -270,7 +458,9 @@ export default function CopilotChatWidget() {
                                 }
                             </button>
                         </div>
-                        <p className="text-[10px] text-slate-600 text-center mt-1.5">Enter לשליחה · Shift+Enter לשורה חדשה</p>
+                        <p className="text-[10px] text-slate-500 text-center mt-1.5 flex justify-center gap-2">
+                            <span>Enter לשליחה</span> · <span>Shift+Enter לשורה חדשה</span>
+                        </p>
                     </div>
                 </div>
             )}

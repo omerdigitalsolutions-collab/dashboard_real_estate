@@ -89,6 +89,11 @@ export interface AppUser {
     };
     Preferences?: UserPreferences;
     whatsappTemplates?: { id: string; name: string; content: string }[];
+    googleCalendar?: {
+        enabled: boolean;
+        connectedAt?: Timestamp;
+        error?: string;
+    };
     createdAt?: Timestamp;
     hasSeenTour?: boolean;
 }
@@ -220,6 +225,7 @@ export interface Deal {
     propertyId: string;
     buyerId?: string;
     sellerId?: string;
+    leadId?: string;
     notes?: string;
     stage: DealStage;
     probability?: number;

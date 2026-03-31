@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Handshake, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { X, Handshake, AlertTriangle } from 'lucide-react';
 import { addDeal } from '../../services/dealService';
 import { addLead } from '../../services/leadService';
 import { addProperty } from '../../services/propertyService';
@@ -7,17 +7,18 @@ import { useAuth } from '../../context/AuthContext';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidCommission, isValidPhone } from '../../utils/validation';
-import { DealStage, Deal, Lead } from '../../types';
+import { DealStage, Lead } from '../../types';
 
 interface AddDealModalProps {
     isOpen: boolean;
     onClose: () => void;
+    prefilledLead?: Lead;
 }
 
 const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50 focus:bg-white';
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
-export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
+export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDealModalProps) {
     const { userData } = useAuth();
     const { leads, properties, deals: allDeals, agencySettings } = useLiveDashboardData();
     const { data: agents } = useAgents();
@@ -32,14 +33,27 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
     // -- Selection modes --
     const [buyerMode, setBuyerMode] = useState<'select' | 'create'>('select');
     const [sellerMode, setSellerMode] = useState<'select' | 'create'>('select');
-    const [propertyMode, setPropertyMode] = useState<'select' | 'create'>('select');
+    const [propertyMode, setPropertyMode] = useState<'select' | 'create' | 'none'>('select');
 
     // -- Existing states --
     const [buyerId, setBuyerId] = useState('');
     const [sellerId, setSellerId] = useState('');
     const [propertyId, setPropertyId] = useState('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
+    const [manualCommission, setManualCommission] = useState('');
     const [assignedAgentId, setAssignedAgentId] = useState('');
+
+    useEffect(() => {
+        if (isOpen && prefilledLead) {
+            if (prefilledLead.type === 'buyer') {
+                setBuyerMode('select');
+                setBuyerId(prefilledLead.id);
+            } else if (prefilledLead.type === 'seller') {
+                setSellerMode('select');
+                setSellerId(prefilledLead.id);
+            }
+        }
+    }, [isOpen, prefilledLead]);
 
     // -- New Item states --
     const [newBuyerName, setNewBuyerName] = useState('');
@@ -60,7 +74,9 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
         ? (properties.find(p => p.id === propertyId)?.price || 0)
         : (parseFloat(newPropertyPrice) || 0);
 
-    const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
+    const calculatedCommission = propertyMode === 'none' 
+        ? (parseFloat(manualCommission) || 0)
+        : ((displayPrice * (parseFloat(commissionPercentage) || 0)) / 100);
 
     // Inline duplicate checks
     const propertyDeals = propertyId ? allDeals.filter(d => d.propertyId === propertyId && d.stage !== 'won') : [];
@@ -78,13 +94,15 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
         setNewBuyerName(''); setNewBuyerPhone('');
         setNewSellerName(''); setNewSellerPhone('');
         setNewPropertyCity(''); setNewPropertyAddress(''); setNewPropertyPrice(''); setNewPropertyType('sale');
-        setCommissionPercentage('2'); setAssignedAgentId('');
+        setCommissionPercentage('2'); setManualCommission(''); setAssignedAgentId('');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userData?.agencyId || !commissionPercentage) return;
-        if (!isValidCommission(commissionPercentage)) return showToast('אחוז עמלה חייב להיות מספר תקין בין 0 ל-100', false);
+        if (!userData?.agencyId) return;
+        if (propertyMode !== 'none' && !commissionPercentage) return showToast('חובה להזין אחוז עמלה', false);
+        if (propertyMode !== 'none' && !isValidCommission(commissionPercentage)) return showToast('אחוז עמלה חייב להיות מספר תקין בין 0 ל-100', false);
+        if (propertyMode === 'none' && (!manualCommission || parseFloat(manualCommission) <= 0)) return showToast('חובה להזין את סכום העמלה הצפוי', false);
 
         // Validation based on modes
         if (buyerMode === 'select' && !buyerId && sellerMode === 'select' && !sellerId) {
@@ -112,7 +130,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
             setLoading(true);
             let finalBuyerId = buyerMode === 'select' ? buyerId : '';
             let finalSellerId = sellerMode === 'select' ? sellerId : '';
-            let finalPropertyId = propertyId;
+            let finalPropertyId = propertyMode === 'none' ? 'none' : propertyId;
 
             // 1. Create Buyer if needed
             if (buyerMode === 'create' && newBuyerName && newBuyerPhone) {
@@ -278,6 +296,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                             <div className="flex bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm">
                                 <button type="button" onClick={() => setPropertyMode('select')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${propertyMode === 'select' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>בחירה מקיים</button>
                                 <button type="button" onClick={() => setPropertyMode('create')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${propertyMode === 'create' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>+ נכס חדש</button>
+                                <button type="button" onClick={() => setPropertyMode('none')} className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${propertyMode === 'none' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}>ללא נכס</button>
                             </div>
                         </div>
 
@@ -286,7 +305,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                                 <select
                                     value={propertyId}
                                     onChange={e => setPropertyId(e.target.value)}
-                                    required
+                                    required={propertyMode === 'select'}
                                     className={`${inputCls} ${propertyDeals.length > 0 ? 'border-red-300 bg-red-50' : ''}`}
                                 >
                                     <option value="" disabled>בחר נכס מהרשימה...</option>
@@ -305,7 +324,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                                     </div>
                                 )}
                             </>
-                        ) : (
+                        ) : propertyMode === 'create' ? (
                             <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1">
                                 <div>
                                     <label className={labelCls}>עיר <span className="text-red-500">*</span></label>
@@ -327,7 +346,7 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                                     <input value={newPropertyPrice} onChange={e => setNewPropertyPrice(e.target.value)} required type="number" min="0" className={inputCls} placeholder="3,000,000" dir="ltr" />
                                 </div>
                             </div>
-                        )}
+                        ) : null}
                     </div>
 
                     {/* --- DEAL DETAILS SECTION --- */}
@@ -350,23 +369,42 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
 
                         {/* Projected Commission */}
                         <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
-                            <div className="flex justify-between items-end mb-1.5">
-                                <label className="block text-xs font-semibold text-blue-900">
-                                    אחוז עמלה משוער (%) <span className="text-red-500">*</span>
-                                </label>
-                                {displayPrice > 0 && (
-                                    <span className="text-sm font-bold text-blue-700 px-2 py-0.5 rounded-md">
-                                        צפי הכנסה: ₪{calculatedCommission.toLocaleString()}
-                                    </span>
-                                )}
-                            </div>
-                            <input
-                                type="number" min="0" max="100" step="0.01" required
-                                value={commissionPercentage} onChange={e => setCommissionPercentage(e.target.value)}
-                                placeholder="לדוגמא 2.0"
-                                className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
-                                dir="ltr"
-                            />
+                            {propertyMode === 'none' ? (
+                                <>
+                                    <div className="flex justify-between items-end mb-1.5">
+                                        <label className="block text-xs font-semibold text-blue-900">
+                                            עמלה משוערת (₪) <span className="text-red-500">*</span>
+                                        </label>
+                                    </div>
+                                    <input
+                                        type="number" min="0" required
+                                        value={manualCommission} onChange={e => setManualCommission(e.target.value)}
+                                        placeholder="לדוגמא 10000"
+                                        className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
+                                        dir="ltr"
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-end mb-1.5">
+                                        <label className="block text-xs font-semibold text-blue-900">
+                                            אחוז עמלה משוער (%) <span className="text-red-500">*</span>
+                                        </label>
+                                        {displayPrice > 0 && (
+                                            <span className="text-sm font-bold text-blue-700 px-2 py-0.5 rounded-md">
+                                                צפי הכנסה: ₪{calculatedCommission.toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <input
+                                        type="number" min="0" max="100" step="0.01" required
+                                        value={commissionPercentage} onChange={e => setCommissionPercentage(e.target.value)}
+                                        placeholder="לדוגמא 2.0"
+                                        className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
+                                        dir="ltr"
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -386,7 +424,8 @@ export default function AddDealModal({ isOpen, onClose }: AddDealModalProps) {
                             type="submit"
                             disabled={
                                 loading ||
-                                !commissionPercentage ||
+                                (propertyMode !== 'none' && !commissionPercentage) ||
+                                (propertyMode === 'none' && !manualCommission) ||
                                 calculatedCommission <= 0 ||
                                 (propertyMode === 'select' && propertyDeals.length > 0)
                             }

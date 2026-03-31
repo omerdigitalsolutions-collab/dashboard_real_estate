@@ -26,7 +26,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [selectedAddress, setSelectedAddress] = useState<{ address: string, city: string, lat: number, lng: number } | null>(null);
 
     const [city, setCity] = useState('');
-    const [type, setType] = useState<'sale' | 'rent'>('sale');
+    const [type, setType] = useState<'sale' | 'rent' | 'commercial'>('sale');
     const [kind, setKind] = useState('דירה');
     const [price, setPrice] = useState('');
     const [rooms, setRooms] = useState('');
@@ -448,7 +448,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                         {/* Price */}
                         <div>
                             <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
-                            <input type="number" min="1" value={price} onChange={e => setPrice(e.target.value)} required placeholder="1,500,000" className={inputCls} dir="ltr" />
+                            <input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} required placeholder="1,500,000" className={inputCls} dir="ltr" />
                         </div>
 
                         {/* Rooms + Sqm + Floor */}

@@ -47,6 +47,7 @@ const agent_1 = require("./ai/agent");
 const extractAiData_1 = require("./ai/extractAiData");
 const copilot_1 = require("./ai/copilot");
 const textToAction_1 = require("./ai/textToAction");
+const homerChatBot_1 = require("./ai/homerChatBot");
 // ── Calendar Module ────────────────────────────────────────────────────────────
 const calendar_1 = require("./calendar");
 // ── Automation Module ──────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, a
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
-exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights, textToActionAgent: textToAction_1.textToActionAgent };
+exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights, textToActionAgent: textToAction_1.textToActionAgent, homerChatBot: homerChatBot_1.homerChatBot };
 exports.calendar = { getAuthUrl: calendar_1.getAuthUrl, handleOAuthCallback: calendar_1.handleOAuthCallback, createEvent: calendar_1.createEvent };
 exports.automation = { webhookProcessGlobalYad2Email: globalYad2Webhook_1.webhookProcessGlobalYad2Email };
 exports.superadmin = {

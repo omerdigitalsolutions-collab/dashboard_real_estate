@@ -23,6 +23,7 @@ import {
     Menu,
     X,
     TrendingUp,
+    CalendarDays,
 } from 'lucide-react';
 
 const navigation = [
@@ -30,6 +31,7 @@ const navigation = [
     { name: 'לידים', href: '/dashboard/leads', icon: Contact },
     { name: 'עסקאות', href: '/dashboard/transactions', icon: Handshake },
     { name: 'נכסים', href: '/dashboard/properties', icon: Building2 },
+    { name: 'יומן', href: '/dashboard/calendar', icon: CalendarDays },
     { name: 'רווח והפסד', href: '/dashboard/pnl', icon: TrendingUp, roles: ['admin'] },
     { name: 'סוכנים', href: '/dashboard/agents', icon: Users, roles: ['admin'] },
     { name: 'הגדרות', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { addTask } from '../../services/taskService';
-import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target } from 'lucide-react';
+import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target, CalendarDays } from 'lucide-react';
+import { createCalendarEvent } from '../../services/calendarService';
 
 interface AddTaskModalProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
     const [dueDate, setDueDate] = useState('');
     const [relatedEntityType, setRelatedEntityType] = useState<'none' | 'lead' | 'property'>('none');
     const [relatedEntityId, setRelatedEntityId] = useState('');
+    const [syncToGoogle, setSyncToGoogle] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -35,9 +37,10 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
             setDueDate(new Date().toISOString().split('T')[0]);
             setRelatedEntityType('none');
             setRelatedEntityId('');
+            setSyncToGoogle(userData?.googleCalendar?.enabled || false);
             setError('');
         }
-    }, [isOpen]);
+    }, [isOpen, userData]);
 
     if (!isOpen || !userData) return null;
 
@@ -80,7 +83,18 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                 };
             }
 
-            await addTask(userData.agencyId, taskData);
+            const taskId = await addTask(userData.agencyId, taskData);
+            
+            if (syncToGoogle) {
+                try {
+                    await createCalendarEvent(taskId);
+                } catch (calErr) {
+                    console.error('Failed to sync to Google Calendar:', calErr);
+                    // We don't block the modal close on calendar error, but maybe show a toast?
+                    // For now, just log it. The task is created successfully anyway.
+                }
+            }
+
             onClose();
         } catch (err: any) {
             console.error('Error adding task:', err);
@@ -221,6 +235,28 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                                 )}
                             </div>
                         </div>
+
+                        {/* Google Calendar Sync Toggle */}
+                        {userData?.googleCalendar?.enabled && (
+                            <div className="flex items-center justify-between p-4 rounded-xl border border-blue-100 bg-blue-50/50">
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays size={18} className="text-blue-600" />
+                                    <div>
+                                        <p className="text-sm font-bold text-blue-900">סנכרן ליומן גוגל</p>
+                                        <p className="text-[10px] text-blue-600">המשימה תופיע ביומן האישי שלך</p>
+                                    </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={syncToGoogle}
+                                        onChange={e => setSyncToGoogle(e.target.checked)}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                        )}
 
                     </form>
                 </div>

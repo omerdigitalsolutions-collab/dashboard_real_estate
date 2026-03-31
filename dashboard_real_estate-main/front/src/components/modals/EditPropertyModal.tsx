@@ -30,7 +30,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
 
     const [address, setAddress] = useState(property.address);
     const [city, setCity] = useState(property.city ?? '');
-    const [type, setType] = useState<'sale' | 'rent'>(property.type);
+    const [type, setType] = useState<'sale' | 'rent' | 'commercial'>(property.type);
     const [kind, setKind] = useState(property.kind ?? '');
     const [price, setPrice] = useState(property.price.toString());
     const [rooms, setRooms] = useState(property.rooms?.toString() ?? '');
@@ -162,7 +162,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
-                                <input type="number" min="0" step="1000" value={price} onChange={e => setPrice(e.target.value)} required placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                <input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} required placeholder="2,500,000" className={inputCls} dir="ltr" />
                             </div>
                             <div>
                                 <label className={labelCls}>חדרים</label>

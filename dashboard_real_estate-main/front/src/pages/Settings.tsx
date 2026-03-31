@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bell, Shield, Globe, CreditCard, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
+import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
@@ -614,7 +615,10 @@ export default function Settings() {
           )}
 
           {activeSection === 'integrations' && (
-            <WhatsAppSettings />
+            <div className="space-y-6">
+              <WhatsAppSettings />
+              <GoogleCalendarSettings />
+            </div>
           )}
 
           {(activeSection === 'billing') && (

@@ -3,7 +3,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
     X, Phone, Mail, MapPin, Wallet, BedDouble,
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
-    MessageSquare, Send, Loader2, Heart, Link, Copy, Check, ExternalLink
+    MessageSquare, Send, Loader2, Heart, Link, Copy, Check, ExternalLink,
+    ArrowRightLeft, Calendar
 } from 'lucide-react';
 import { Lead, AppUser, Property } from '../../types';
 import { updateLead } from '../../services/leadService';
@@ -13,6 +14,8 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import BotToggle from './BotToggle';
+import AddDealModal from '../modals/AddDealModal';
+import { AddMeetingModal } from '../modals/AddMeetingModal';
 
 const conditionLabels: Record<string, string> = {
     new: 'חדש מקבלן',
@@ -62,13 +65,13 @@ function InfoRow({ icon: Icon, label, value, color = 'text-slate-500' }: {
     color?: string;
 }) {
     return (
-        <div className="flex items-start gap-3 py-2.5 border-b border-slate-50 last:border-0">
+        <div className="flex items-start gap-2 py-2 border-b border-slate-50 last:border-0">
             <div className={`mt-0.5 flex-shrink-0 ${color}`}>
-                <Icon size={15} />
+                <Icon size={14} />
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
-                <div className="text-sm font-medium text-slate-800 mt-0.5">{value || <span className="text-slate-400 italic">לא צוין</span>}</div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none">{label}</p>
+                <div className="text-[13px] font-medium text-slate-800 mt-1 leading-tight">{value || <span className="text-slate-400 italic">לא צוין</span>}</div>
             </div>
         </div>
     );
@@ -112,6 +115,8 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [copied, setCopied] = useState(false);
+    const [showAddDealModal, setShowAddDealModal] = useState(false);
+    const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
     
     // Sync local state when lead prop changes
     useEffect(() => {
@@ -225,28 +230,28 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     return (
         <>
             {/* Backdrop */}
-            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onClick={onClose} />
+            <div className="fixed top-16 inset-x-0 bottom-0 bg-black/10 backdrop-blur-[1px] z-40" onClick={onClose} />
 
             {/* Panel */}
             <div
                 dir="rtl"
-                className="fixed top-0 left-0 h-full w-full max-w-sm bg-white shadow-2xl z-50 flex flex-col overflow-hidden
-                           animate-in slide-in-from-left duration-300"
+                className="fixed top-16 left-0 h-[calc(100vh-64px)] w-full max-w-[300px] bg-white shadow-2xl z-50 flex flex-col overflow-hidden
+                           animate-in slide-in-from-left duration-300 border-r border-slate-200"
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-gradient-to-l from-blue-600 to-indigo-700 text-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-gradient-to-l from-slate-800 to-slate-900 text-white">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="w-8 h-8 rounded bg-white/20 flex items-center justify-center text-sm font-bold shrink-0">
                             {lead.name.charAt(0)}
                         </div>
-                        <div>
-                            <p className="font-bold text-base leading-tight">{lead.name}</p>
-                            <p className="text-blue-100 text-xs mt-0.5" dir="ltr">{lead.phone}</p>
+                        <div className="min-w-0">
+                            <p className="font-bold text-[13px] leading-tight truncate">{lead.name}</p>
+                            <p className="text-slate-400 text-[9px] mt-0.5" dir="ltr">{lead.phone}</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
-                            <X size={18} />
+                            <X size={20} />
                         </button>
                     </div>
                 </div>
@@ -271,14 +276,14 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                 </div>
 
                 {/* Status + Type badges */}
-                <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex text-xs font-semibold px-2.5 py-1 rounded-full border ${statusColors[lead.status] || statusColors.new}`}>
+                <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-1.5 flex-wrap">
+                    <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors[lead.status] || statusColors.new}`}>
                         {statusLabels[lead.status] || lead.status}
                     </span>
-                    <span className="inline-flex text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
+                    <span className="inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
                         {lead.type === 'buyer' ? 'קונה / שוכר' : 'בעל נכס'}
                     </span>
-                    <span className="inline-flex text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                    <span className="inline-flex text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                         {lead.source}
                     </span>
                 </div>
@@ -340,10 +345,28 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
 
                 {/* Details Tab */}
                 {activeSection === 'details' && <div className="flex-1 overflow-y-auto">
+                    {/* Quick Action: Convert to Deal */}
+                    <div className="px-3 py-2.5 bg-gradient-to-br from-blue-50 to-indigo-50/30 border-b border-blue-100/50 flex flex-col gap-2">
+                        <button
+                            onClick={() => setShowAddDealModal(true)}
+                            className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg font-bold text-[11px] shadow-sm transition-all active:scale-95 group"
+                        >
+                            <ArrowRightLeft size={13} className="group-hover:rotate-12 transition-transform" />
+                            המר ליד זה לעסקה (דיל)
+                        </button>
+                        <button
+                            onClick={() => setShowAddMeetingModal(true)}
+                            className="w-full flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 py-2 px-3 rounded-lg font-bold text-[11px] shadow-sm transition-all active:scale-95 group"
+                        >
+                            <Calendar size={13} className="group-hover:scale-110 transition-transform" />
+                            קבע פגישה ביומן
+                        </button>
+                    </div>
+
                     {/* Agent assignment */}
-                    <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <UserCheck size={13} />
+                    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                            <UserCheck size={12} />
                             סוכן מטפל
                         </p>
                         <div className="relative">
@@ -434,16 +457,16 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                     </div>
 
                     {/* Contact */}
-                    <div className="px-5 pt-4 pb-2">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">פרטי קשר</p>
+                    <div className="px-4 py-3">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">פרטי קשר</p>
                         <InfoRow icon={Phone} label="טלפון" value={<a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline" dir="ltr">{lead.phone}</a>} color="text-blue-500" />
                         {lead.email && <InfoRow icon={Mail} label="אימייל" value={<a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">{lead.email}</a>} color="text-violet-500" />}
                     </div>
 
                     {/* Requirements — only for buyers */}
                     {lead.type !== 'seller' && (
-                        <div className="px-5 pt-3 pb-4">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                        <div className="px-4 pt-2 pb-4">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                                 <Sparkles size={12} />
                                 קריטריוני חיפוש
                             </p>
@@ -611,6 +634,28 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                     </div>
                 </div>}
             </div>
+
+            {showAddDealModal && (
+                <AddDealModal
+                    isOpen={showAddDealModal}
+                    onClose={() => setShowAddDealModal(false)}
+                    prefilledLead={lead}
+                />
+            )}
+
+            {showAddMeetingModal && (
+                <AddMeetingModal
+                    isOpen={showAddMeetingModal}
+                    onClose={() => setShowAddMeetingModal(false)}
+                    initialData={{
+                        summary: `פגישה עם ${lead.name}`,
+                        description: `פגישה עם הליד: ${lead.name}\nטלפון: ${lead.phone}`,
+                        relatedEntityType: 'lead',
+                        relatedEntityId: lead.id,
+                        relatedEntityName: lead.name
+                    }}
+                />
+            )}
         </>
     );
 }

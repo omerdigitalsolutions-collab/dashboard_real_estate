@@ -22,7 +22,7 @@ const COLLECTION = 'properties';
 export interface NewPropertyData {
     address: string;
     city: string;
-    type: 'sale' | 'rent';
+    type: 'sale' | 'rent' | 'commercial';
     kind: string;      // e.g. דירה, בית פרטי, פנטהאוז, מסחרי
     price: number;
     rooms?: number;

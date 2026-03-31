@@ -17,6 +17,7 @@ import Properties from './pages/Properties';
 import Transactions from './pages/Transactions';
 import Agents from './pages/Agents';
 import Settings from './pages/Settings';
+import Calendar from './pages/Calendar';
 import SharedCatalogPage from './pages/SharedCatalog';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import SuperAdminRoute from './components/routing/SuperAdminRoute';
@@ -124,6 +125,7 @@ function App() {
           <Route path="transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
           <Route path="agents" element={<ErrorBoundary><Agents /></ErrorBoundary>} />
           <Route path="pnl" element={<ErrorBoundary><ProfitAndLossDashboard /></ErrorBoundary>} />
+          <Route path="calendar" element={<ErrorBoundary><Calendar /></ErrorBoundary>} />
           <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>

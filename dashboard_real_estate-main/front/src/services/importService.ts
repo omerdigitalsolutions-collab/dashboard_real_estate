@@ -175,12 +175,34 @@ const REQUIRED_FIELDS: Record<EntityType, string[]> = {
     deal: ['propertyName', 'price', 'stage', 'projectedCommission'],
 };
 
-const VALID_PROPERTY_TYPES = ['sale', 'rent', 'commercial', 'למכירה', 'להשכרה', 'מכירה', 'השכרה', 'מסחרי', 'מסחר', 'for sale', 'rental'];
+const VALID_PROPERTY_TYPES = [
+    'sale', 'rent', 'commercial',
+    'למכירה', 'להשכרה', 'מכירה', 'השכרה', 'מסחרי', 'מסחר',
+    'for sale', 'rental', 'מכירה', 'שכירות', 'שכ"ד',
+    'חנות', 'משרד', 'תעשייה', 'קליניקה', 'מחסן',
+];
 const PROPERTY_TYPE_MAP: Record<string, 'sale' | 'rent' | 'commercial'> = {
-    'למכירה': 'sale', 'מכירה': 'sale', 'for sale': 'sale', sale: 'sale',
-    'להשכרה': 'rent', 'השכרה': 'rent', rental: 'rent', rent: 'rent',
-    'מסחרי': 'commercial', 'commercial': 'commercial', 'מסחר': 'commercial'
+    // Sale
+    'למכירה': 'sale', 'מכירה': 'sale', 'for sale': 'sale', 'sale': 'sale',
+    // Rent
+    'להשכרה': 'rent', 'השכרה': 'rent', 'rental': 'rent', 'rent': 'rent',
+    'שכירות': 'rent', 'שכ"ד': 'rent', 'שכד': 'rent',
+    // Commercial
+    'מסחרי': 'commercial', 'commercial': 'commercial', 'מסחר': 'commercial',
+    'חנות': 'commercial', 'משרד': 'commercial', 'תעשייה': 'commercial',
+    'קליניקה': 'commercial', 'מחסן': 'commercial', 'office': 'commercial',
+    'shop': 'commercial', 'industrial': 'commercial', 'warehouse': 'commercial',
 };
+
+/** Infer property type from 'kind' or 'address' if not set explicitly. */
+function inferPropertyType(kind: string, address: string): 'sale' | 'rent' | 'commercial' {
+    const combined = `${kind} ${address}`.toLowerCase();
+    const commercialKeywords = ['חנות', 'משרד', 'מסחר', 'תעשייה', 'קליניקה', 'מחסן', 'office', 'shop', 'industrial', 'warehouse', 'מרלו"ג'];
+    const rentKeywords = ['להשכרה', 'השכרה', 'שכירות', 'שכ"ד', 'rent', 'rental'];
+    if (commercialKeywords.some(k => combined.includes(k))) return 'commercial';
+    if (rentKeywords.some(k => combined.includes(k))) return 'rent';
+    return 'sale';
+}
 
 const LISTING_TYPE_MAP: Record<string, 'exclusive' | 'external' | 'private'> = {
     'exclusive': 'exclusive', 'בלעדיות': 'exclusive', 'בלעדי': 'exclusive', 'בלעדי המשרד': 'exclusive',
@@ -283,16 +305,22 @@ export function validateAndTransform(
             }
             transformed['price'] = price;
 
-            // type (sale/rent) — optional, defaults to 'sale'
+            // type (sale/rent/commercial) — auto-detect from 'סוג עסקה' column, then infer from kind/address
             const rawType = String(transformed['type'] || '').trim().toLowerCase();
-            if (rawType && VALID_PROPERTY_TYPES.includes(rawType)) {
-                transformed['type'] = PROPERTY_TYPE_MAP[rawType] ?? PROPERTY_TYPE_MAP[rawType.toLowerCase()] ?? 'sale';
+            if (rawType && PROPERTY_TYPE_MAP[rawType]) {
+                // Exact match in keyword map (e.g. 'מכירה', 'להשכרה', 'מסחרי', 'חנות')
+                transformed['type'] = PROPERTY_TYPE_MAP[rawType];
+            } else if (rawType && VALID_PROPERTY_TYPES.includes(rawType)) {
+                transformed['type'] = PROPERTY_TYPE_MAP[rawType.toLowerCase()] ?? 'sale';
             } else {
-                // If type field has a building name (e.g. "דירה") or is empty, move it to kind
+                // If type field contains a building category (e.g. "דירה"), move it to kind
                 if (rawType && !transformed['kind']) {
                     transformed['kind'] = rawType;
                 }
-                transformed['type'] = 'sale'; // default
+                // Infer from kind + address before falling back to 'sale'
+                const kindStr = String(transformed['kind'] || '').trim();
+                const addrStr = String(transformed['address'] || '').trim();
+                transformed['type'] = inferPropertyType(kindStr, addrStr);
             }
 
             // kind — free-text (e.g. דירה, פנטהאוז, דירת גן)
