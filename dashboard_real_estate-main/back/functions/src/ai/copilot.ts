@@ -198,7 +198,7 @@ export const askCopilot = onCall(
 
         const db = admin.firestore();
         const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', tools });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', tools });
 
         const systemInstruction = {
             role: 'user' as const,
@@ -311,7 +311,7 @@ export const getSmartInsights = onCall(
         const db = admin.firestore();
         const genAI = new GoogleGenerativeAI(geminiApiKey.value());
         // Use gemini-2.5-flash — consistent with other AI features in this project
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         try {
             // 1. Fetch data snapshots
