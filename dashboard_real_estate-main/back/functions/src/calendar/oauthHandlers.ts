@@ -12,6 +12,7 @@
  */
 
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { getFirestore } from 'firebase-admin/firestore';
 import { google } from 'googleapis';
 import { validateUserAuth } from '../config/authGuard';
 import { saveUserTokens } from './tokenStore';
@@ -133,6 +134,13 @@ export const handleOAuthCallback = onRequest({
 
         // Persist tokens in Firestore under userTokens/{userId}
         await saveUserTokens(userId.trim(), storedTokens);
+
+        // Update user profile to mark calendar as enabled
+        const db = getFirestore();
+        await db.collection('users').doc(userId.trim()).update({
+            'googleCalendar.enabled': true,
+            'googleCalendar.lastConnected': new Date().toISOString(),
+        });
 
         // Success! Redirect user back to settings with a success flag
         const dashboardUrl = (process.env.DASHBOARD_FRONTEND_URL || 'https://dashboard-6f9d1.web.app').replace(/\/$/, '');
