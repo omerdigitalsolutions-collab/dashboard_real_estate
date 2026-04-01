@@ -67,7 +67,7 @@ function MapAutoCenter({ center, zoom }: { center: [number, number]; zoom: numbe
             prevCenter.current[0] !== center[0] ||
             prevCenter.current[1] !== center[1]
         ) {
-            map.setView(center, zoom, { animate: true });
+            map.setView(center, zoom, { animate: false });
             prevCenter.current = center;
         }
         // Re-render tiles when container size changes

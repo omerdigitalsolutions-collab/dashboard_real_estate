@@ -202,7 +202,7 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
 
                     {/* Info box */}
                     <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed">
-                        📧 הסוכן יקבל מייל מ<strong>omerdigitalsolutions@gmail.com</strong> עם לינק להצטרפות
+                        📧 הסוכן יקבל מייל מ<strong>hello@homer.management</strong> עם לינק להצטרפות
                         {phone && <span> + הודעת וואטסאפ עם הקישור</span>}.
                     </div>
 

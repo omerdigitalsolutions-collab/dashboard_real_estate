@@ -166,7 +166,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                     price: parseFloat(newPropertyPrice) || 0,
                     type: newPropertyType as 'sale' | 'rent',
                     kind: 'דירה', // Default kind
-                    agentId: assignedAgentId || undefined
+                    ...(assignedAgentId ? { agentId: assignedAgentId } : {})
                 });
             }
 

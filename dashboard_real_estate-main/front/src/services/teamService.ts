@@ -3,8 +3,6 @@ import {
     query,
     where,
     onSnapshot,
-    addDoc,
-    serverTimestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../config/firebase';
@@ -44,7 +42,6 @@ export async function inviteAgent(
         { success: boolean; stubId: string }
     >(functions, 'users-inviteAgent');
 
-    // Let any HttpsError propagate — the UI catches and surfaces it via toast
     const res = await callInviteAgent({ email, name, role });
     return { stubId: res.data.stubId };
 }
@@ -73,34 +70,11 @@ export async function toggleAgentStatus(userId: string, isActive: boolean): Prom
 
 /**
  * [Cloud Function] Permanently deletes a team member's account.
+ * RBAC enforcement and same-agency verification are done server-side.
  */
 export async function deleteAgent(userId: string): Promise<void> {
     const fn = httpsCallable<{ userId: string }, { success: boolean }>(
         functions, 'users-deleteAgent'
     );
     await fn({ userId });
-}
-
-/**
- * Manually adds a new agent stub directly to Firestore.
- * Used when the admin does not want to send an email invitation.
- * The agent will be marked as "ממתין לחיבור" until they log in with
- * a Google account matching the agency (admin can share the join link manually).
- */
-export async function addAgentManually(
-    agencyId: string,
-    data: { name: string; phone?: string; role: UserRole }
-): Promise<string> {
-    const docRef = await addDoc(collection(db, 'users'), {
-        uid: null,
-        email: null,
-        name: data.name.trim(),
-        phone: data.phone?.trim() || null,
-        role: data.role,
-        agencyId,
-        isActive: true,
-        manuallyAdded: true,
-        createdAt: serverTimestamp(),
-    });
-    return docRef.id;
 }
