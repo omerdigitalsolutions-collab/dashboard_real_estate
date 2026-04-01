@@ -11,7 +11,7 @@
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
  */
 
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { google } from 'googleapis';
 import { validateUserAuth } from '../config/authGuard';
 import { saveUserTokens } from './tokenStore';
@@ -57,7 +57,7 @@ export const getAuthUrl = onCall({
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     // Ensure the caller is an authenticated agent
-    await validateUserAuth(request);
+    const authData = await validateUserAuth(request);
 
     try {
         const oauth2Client = buildBaseOAuth2Client();
@@ -66,9 +66,10 @@ export const getAuthUrl = onCall({
             access_type: 'offline',   // Required to receive a refresh_token
             prompt: 'consent',        // Force consent screen to always get refresh_token
             scope: CALENDAR_SCOPES,
+            state: authData.uid,   // Track user across the browser redirect
         });
 
-        return { authUrl };
+        return { url: authUrl, authUrl }; // Return both for compatibility
     } catch (error) {
         if (error instanceof HttpsError) throw error;
         console.error('[calendar] getAuthUrl error:', error);
@@ -89,16 +90,25 @@ export const getAuthUrl = onCall({
  *   code — The authorization code returned by Google in the redirect URI
  *          query string after the user has consented.
  */
-export const handleOAuthCallback = onCall({ 
+/**
+ * HTTPS Redirect Handler: calendar-handleOAuthCallback
+ *
+ * This is an 'onRequest' function because Google redirects the user's browser
+ * here. It parses the 'code' and 'state' (userId) from the URL, exchanges 
+ * them for tokens, and redirects the user back to the app.
+ *
+ * URL: https://<region>-<project-id>.cloudfunctions.net/calendar-handleOAuthCallback
+ */
+export const handleOAuthCallback = onRequest({ 
     cors: true,
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
-}, async (request) => {
-    const authData = await validateUserAuth(request);
+}, async (request, response) => {
+    const { code, state: userId } = request.query as { code?: string; state?: string };
 
-    const { code } = request.data as { code?: string };
-
-    if (!code?.trim()) {
-        throw new HttpsError('invalid-argument', 'Authorization code is required.');
+    if (!code?.trim() || !userId?.trim()) {
+        console.error('[calendar] Missing code or state (userId) in callback');
+        response.status(400).send('Missing authorization code or user identification.');
+        return;
     }
 
     try {
@@ -108,11 +118,9 @@ export const handleOAuthCallback = onCall({
         const { tokens } = await oauth2Client.getToken(code.trim());
 
         if (!tokens.access_token || !tokens.refresh_token) {
-            throw new HttpsError(
-                'internal',
-                'Google did not return the expected tokens. ' +
-                'Ensure prompt=consent is used in the auth URL to always receive a refresh_token.'
-            );
+            console.error('[calendar] Google did not return required tokens');
+            response.status(500).send('Google did not return required tokens.');
+            return;
         }
 
         const storedTokens: StoredTokens = {
@@ -123,13 +131,14 @@ export const handleOAuthCallback = onCall({
             scope: tokens.scope ?? CALENDAR_SCOPES.join(' '),
         };
 
-        // Persist tokens in Firestore under userTokens/{uid}
-        await saveUserTokens(authData.uid, storedTokens);
+        // Persist tokens in Firestore under userTokens/{userId}
+        await saveUserTokens(userId.trim(), storedTokens);
 
-        return { success: true };
+        // Success! Redirect user back to settings with a success flag
+        const dashboardUrl = (process.env.DASHBOARD_FRONTEND_URL || 'https://dashboard-6f9d1.web.app').replace(/\/$/, '');
+        response.redirect(`${dashboardUrl}/dashboard/settings?tab=integrations&connected=google_calendar`);
     } catch (error) {
-        if (error instanceof HttpsError) throw error;
         console.error('[calendar] handleOAuthCallback error:', error);
-        throw new HttpsError('internal', 'Failed to exchange authorization code for tokens.');
+        response.status(500).send('Failed to connect Google Calendar. Please try again.');
     }
 });
