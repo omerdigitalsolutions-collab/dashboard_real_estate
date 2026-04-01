@@ -99,7 +99,10 @@ export async function createCalendarEvent(
  *
  * Output: { success: true, eventId: string, htmlLink: string }
  */
-export const createEvent = onCall({ cors: true }, async (request) => {
+export const createEvent = onCall({ 
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     const authData = await validateUserAuth(request);
 
     const data = request.data as Partial<CalendarEventPayload>;

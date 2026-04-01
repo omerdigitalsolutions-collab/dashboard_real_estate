@@ -43,7 +43,10 @@ function buildBaseOAuth2Client() {
  * After the user consents, Google will redirect to GOOGLE_REDIRECT_URI
  * with a `code` query parameter, which is then passed to handleOAuthCallback.
  */
-exports.getAuthUrl = (0, https_1.onCall)({ cors: true }, async (request) => {
+exports.getAuthUrl = (0, https_1.onCall)({
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     // Ensure the caller is an authenticated agent
     await (0, authGuard_1.validateUserAuth)(request);
     try {
@@ -74,7 +77,10 @@ exports.getAuthUrl = (0, https_1.onCall)({ cors: true }, async (request) => {
  *   code — The authorization code returned by Google in the redirect URI
  *          query string after the user has consented.
  */
-exports.handleOAuthCallback = (0, https_1.onCall)({ cors: true }, async (request) => {
+exports.handleOAuthCallback = (0, https_1.onCall)({
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     var _a, _b, _c;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const { code } = request.data;

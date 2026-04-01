@@ -52,7 +52,10 @@ function buildBaseOAuth2Client() {
  * After the user consents, Google will redirect to GOOGLE_REDIRECT_URI
  * with a `code` query parameter, which is then passed to handleOAuthCallback.
  */
-export const getAuthUrl = onCall({ cors: true }, async (request) => {
+export const getAuthUrl = onCall({ 
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     // Ensure the caller is an authenticated agent
     await validateUserAuth(request);
 
@@ -86,7 +89,10 @@ export const getAuthUrl = onCall({ cors: true }, async (request) => {
  *   code — The authorization code returned by Google in the redirect URI
  *          query string after the user has consented.
  */
-export const handleOAuthCallback = onCall({ cors: true }, async (request) => {
+export const handleOAuthCallback = onCall({ 
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     const authData = await validateUserAuth(request);
 
     const { code } = request.data as { code?: string };

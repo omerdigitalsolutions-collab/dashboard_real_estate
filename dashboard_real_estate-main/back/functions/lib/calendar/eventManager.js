@@ -92,7 +92,10 @@ async function createCalendarEvent(userId, payload) {
  *
  * Output: { success: true, eventId: string, htmlLink: string }
  */
-exports.createEvent = (0, https_1.onCall)({ cors: true }, async (request) => {
+exports.createEvent = (0, https_1.onCall)({
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     var _a, _b, _c, _d, _e, _f, _g;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const data = request.data;

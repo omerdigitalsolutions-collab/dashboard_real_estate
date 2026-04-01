@@ -14,7 +14,10 @@ import { getOAuthClient } from './oauthClient';
  *
  * Returns a list of upcoming events from the user's primary Google Calendar.
  */
-export const listEvents = onCall({ cors: true }, async (request) => {
+export const listEvents = onCall({ 
+    cors: true,
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
     const authData = await validateUserAuth(request);
 
     try {
