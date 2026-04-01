@@ -63,7 +63,7 @@ import { getAuthUrl, handleOAuthCallback, createEvent } from './calendar';
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
-import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan } from './superadmin';
+import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan, superAdminListAuthUsers } from './superadmin';
 import { superAdminSetPlan } from './superadmin/setAgencyPlan';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
@@ -104,7 +104,8 @@ export const superadmin = {
     superAdminGetImportMappingV2,
     superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan,
-    superAdminSetPlan
+    superAdminSetPlan,
+    superAdminListAuthUsers
 };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };

@@ -82,12 +82,9 @@ export default function LandingPage() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const scrollToPricing = (e: React.MouseEvent) => {
+    const handleRegisterClick = (e: React.MouseEvent) => {
         e.preventDefault();
-        const pricingSect = document.getElementById('pricing');
-        if (pricingSect) {
-            pricingSect.scrollIntoView({ behavior: 'smooth' });
-        }
+        navigate('/register');
     };
 
     const handleSubscribe = (_plan: 'solo' | 'boutique' | 'pro' | 'enterprise') => {
@@ -110,7 +107,7 @@ export default function LandingPage() {
                             <a href="/login" onClick={handleLoginClick} className="text-sm md:text-base font-semibold text-slate-600 hover:text-blue-900 transition-colors cursor-pointer">
                                 התחברות
                             </a>
-                            <a href="#pricing" onClick={scrollToPricing} className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 cursor-pointer">
+                            <a href="/register" onClick={handleRegisterClick} className="text-sm md:text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-emerald-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2 cursor-pointer">
                                 הירשם עכשיו
                             </a>
                         </>
@@ -144,7 +141,7 @@ export default function LandingPage() {
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </Link>
                         ) : (
-                            <a href="#pricing" onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                            <a href="/register" onClick={handleRegisterClick} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
                                 הירשם עכשיו (7 ימי ניסיון בחינם)
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </a>
@@ -277,7 +274,7 @@ export default function LandingPage() {
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </Link>
                         ) : (
-                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                            <button onClick={handleRegisterClick} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
                                 הירשם עכשיו
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </button>
@@ -422,7 +419,7 @@ export default function LandingPage() {
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </Link>
                         ) : (
-                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                            <button onClick={handleRegisterClick} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
                                 הירשם עכשיו
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </button>
@@ -630,7 +627,7 @@ export default function LandingPage() {
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </Link>
                         ) : (
-                            <button onClick={scrollToPricing} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                            <button onClick={handleRegisterClick} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
                                 הירשם עכשיו
                                 <ArrowLeft size={28} strokeWidth={2.5} />
                             </button>

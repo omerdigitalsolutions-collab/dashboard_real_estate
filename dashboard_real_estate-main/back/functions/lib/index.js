@@ -91,7 +91,8 @@ exports.superadmin = {
     superAdminGetImportMappingV2: globalImport_1.superAdminGetImportMappingV2,
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan: superadmin_1.superAdminUpdateAgencyPlan,
-    superAdminSetPlan: setAgencyPlan_1.superAdminSetPlan
+    superAdminSetPlan: setAgencyPlan_1.superAdminSetPlan,
+    superAdminListAuthUsers: superadmin_1.superAdminListAuthUsers
 };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts };

@@ -19,15 +19,12 @@ exports.checkPhoneAvailable = (0, https_1.onCall)({ cors: true }, async (request
         if (!(phone === null || phone === void 0 ? void 0 : phone.trim())) {
             throw new https_1.HttpsError('invalid-argument', 'phone is required.');
         }
-        // Assume phone arrives in E.164 format from the client e.g. +9725...
-        // The normalized phone for the DB is exactly the E.164 string to be strict.
         const phoneRef = db.collection('used_phones').doc(phone);
         const snap = await phoneRef.get();
         return { available: !snap.exists };
     }
     catch (error) {
         console.error('[checkPhoneAvailable] Error:', error);
-        // If it's already an HttpsError, rethrow it
         if (error instanceof https_1.HttpsError) {
             throw error;
         }
@@ -40,107 +37,124 @@ exports.checkPhoneAvailable = (0, https_1.onCall)({ cors: true }, async (request
  * Creates:
  *   1. A new `agencies` document.
  *   2. A `users/{uid}` document linked to the new agency.
+ *   3. An `activeTrials` document.
+ *   4. A `used_phones` document.
  *
  * Security: Requires an authenticated Firebase user.
- *
- * Input:  { agencyName: string, userName: string, phone: string }
- * Output: { success: true, agencyId: string }
  */
 exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resendApiKey] }, async (request) => {
     var _a;
-    // ── Auth Guard ──────────────────────────────────────────────────────────────
+    // 1. Auth Guard
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'You must be signed in to create an agency account.');
     }
     const uid = request.auth.uid;
     const email = (_a = request.auth.token.email) !== null && _a !== void 0 ? _a : '';
-    // ── Input Validation ────────────────────────────────────────────────────────
+    // 2. Input Validation
     const { agencyName, userName, phone } = request.data;
     if (!(agencyName === null || agencyName === void 0 ? void 0 : agencyName.trim()) || !(userName === null || userName === void 0 ? void 0 : userName.trim()) || !(phone === null || phone === void 0 ? void 0 : phone.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'agencyName, userName, and phone are all required.');
     }
-    // ── Already onboarded? ──────────────────────────────────────────────────────
-    const existingUser = await db.doc(`users/${uid}`).get();
-    if (existingUser.exists) {
-        throw new https_1.HttpsError('already-exists', 'User is already associated with an agency.');
-    }
-    // ── Trial Eligibility Check (`activeTrials`) ────────────────────────────────
-    let trialEligible = true;
-    // We check if this UID or Email already has an active or expired trial
-    const oldTrialsMap = await db.collection('activeTrials')
-        .where('uid', '==', uid)
-        .where('hasUsedTrial', '==', true)
-        .get();
-    if (!oldTrialsMap.empty) {
-        throw new https_1.HttpsError('permission-denied', 'You have already used your free trial on another agency account.');
-    }
-    // ── Phone Verification & Uniqueness Check ───────────────────────────────────
-    // Phone must arrive in E.164 format (e.g., +97250...)
+    // 3. Phone verification via Firebase Auth
     const normalizedPhone = phone.trim();
-    // 1. Ensure the user actually verified this phone via Firebase Phone Auth
     const userRecord = await (0, auth_1.getAuth)().getUser(uid);
     if (userRecord.phoneNumber !== normalizedPhone) {
-        throw new https_1.HttpsError('permission-denied', `Phone number mismatch or not verified. Expected ${normalizedPhone} but Auth has ${userRecord.phoneNumber || 'None'}`);
+        throw new https_1.HttpsError('permission-denied', 'אימות מספר הטלפון לא הושלם. אנא חזור לשלב אימות ה-SMS ונסה שוב.');
     }
-    // 2. Ensure phone is absolutely unique
-    const phoneRef = db.collection('used_phones').doc(normalizedPhone);
-    const phoneSnap = await phoneRef.get();
-    if (phoneSnap.exists) {
-        throw new https_1.HttpsError('already-exists', 'This phone number is already registered to an agency.');
+    // 4. Duplicate Trial Check (outside transaction)
+    const oldTrials = await db.collection('activeTrials')
+        .where('uid', '==', uid)
+        .limit(1)
+        .get();
+    if (!oldTrials.empty) {
+        throw new https_1.HttpsError('permission-denied', 'You have already used your free trial on another agency account.');
     }
-    // Mark phone as used (write BEFORE batch to prevent quick double submissions)
-    await phoneRef.set({ uid, email, usedAt: firestore_1.FieldValue.serverTimestamp() });
-    // Trial ends 7 days from now (set only if eligible)
-    const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const trialEndsAt = trialEligible ? trialEndsDate : null;
-    // ── Atomic Batch Write ──────────────────────────────────────────────────────
     const agencyRef = db.collection('agencies').doc();
     const userRef = db.doc(`users/${uid}`);
     const trialRef = db.collection('activeTrials').doc();
-    const batch = db.batch();
-    batch.set(agencyRef, {
-        name: agencyName.trim(),
-        subscriptionTier: 'free',
-        monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
-        settings: {},
-        billing: {
-            planId: 'free_trial',
-            status: trialEligible ? 'trialing' : 'past_due',
-            trialEndsAt: trialEndsAt,
-            ownerPhone: normalizedPhone,
-        },
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-    });
-    batch.set(userRef, {
-        uid,
-        email,
-        name: userName.trim(),
-        phone: phone.trim(),
-        agencyId: agencyRef.id,
-        role: 'admin',
-        isActive: true,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-    });
-    if (trialEligible) {
-        batch.set(trialRef, {
+    const phoneRef = db.collection('used_phones').doc(normalizedPhone);
+    // 5. Set Custom User Claims before Firestore writes
+    try {
+        await (0, auth_1.getAuth)().setCustomUserClaims(uid, {
             agencyId: agencyRef.id,
-            uid,
-            trialEndsAt: trialEndsDate,
-            hasUsedTrial: false,
-            status: 'active',
-            createdAt: firestore_1.FieldValue.serverTimestamp()
+            role: 'admin',
         });
     }
-    await batch.commit();
-    // Set custom claims mapping the user to this new agency as an admin.
-    await (0, auth_1.getAuth)().setCustomUserClaims(uid, { agencyId: agencyRef.id, role: 'admin' });
-    // ── Send Emails (directly — more reliable than Firestore trigger) ──────────
+    catch (claimsErr) {
+        console.error('[createAgencyAccount] Failed to set custom claims:', claimsErr);
+        throw new https_1.HttpsError('internal', 'Failed to set user permissions. Please try again.');
+    }
+    // 6. DB Transaction — Reads then Writes
+    const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    try {
+        await db.runTransaction(async (t) => {
+            // Reads first
+            const existingUser = await t.get(userRef);
+            if (existingUser.exists) {
+                throw new https_1.HttpsError('already-exists', 'User is already associated with an agency.');
+            }
+            const existingPhone = await t.get(phoneRef);
+            if (existingPhone.exists) {
+                throw new https_1.HttpsError('already-exists', 'This phone number is already registered to an agency.');
+            }
+            // Writes
+            t.set(agencyRef, {
+                name: agencyName.trim(),
+                subscriptionTier: 'free',
+                monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
+                settings: {},
+                billing: {
+                    planId: 'free_trial',
+                    status: 'trialing',
+                    trialEndsAt: trialEndsDate,
+                    ownerPhone: normalizedPhone,
+                },
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            t.set(userRef, {
+                uid,
+                email,
+                name: userName.trim(),
+                phone: normalizedPhone,
+                agencyId: agencyRef.id,
+                role: 'admin',
+                isActive: true,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            t.set(trialRef, {
+                agencyId: agencyRef.id,
+                uid,
+                trialEndsAt: trialEndsDate,
+                status: 'active',
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            t.set(phoneRef, {
+                uid,
+                email,
+                usedAt: firestore_1.FieldValue.serverTimestamp()
+            });
+        });
+    }
+    catch (txErr) {
+        console.error('[createAgencyAccount] Transaction failed:', txErr);
+        // Step 5 rollback — clear claims if DB write failed
+        try {
+            await (0, auth_1.getAuth)().setCustomUserClaims(uid, {});
+        }
+        catch (cleanupErr) {
+            console.error('[createAgencyAccount] Failed to clear stale claims:', uid, cleanupErr);
+        }
+        if (txErr instanceof https_1.HttpsError) {
+            throw txErr;
+        }
+        throw new https_1.HttpsError('internal', 'Failed to create agency account. Please try again.');
+    }
+    // 7. Non-blocking side effects: Emails
     const apiKey = resendApiKey.value();
     if (apiKey) {
         try {
             const resend = new resend_1.Resend(apiKey);
             const adminEmail = 'omerdigitalsolutions@gmail.com';
-            // 1. Notify admin about new registration
             await resend.emails.send({
                 from: 'hOMER CRM <noreply@homer-crm.co.il>',
                 to: adminEmail,
@@ -159,8 +173,6 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
                   <p>Agency ID: <code>${agencyRef.id}</code></p>
                 </div>`
             });
-            console.log(`[createAgencyAccount] Admin email sent for agency ${agencyRef.id}`);
-            // 2. Send welcome email to the new user
             await resend.emails.send({
                 from: 'hOMER CRM <noreply@homer-crm.co.il>',
                 to: email,
@@ -176,17 +188,12 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
                   <p>בהצלחה,<br/>צוות hOMER</p>
                 </div>`
             });
-            console.log(`[createAgencyAccount] Welcome email sent to ${email}`);
         }
         catch (emailErr) {
-            // Don't fail the whole function if email fails — log and continue
-            console.error('[createAgencyAccount] Failed to send emails:', emailErr);
+            console.error('[createAgencyAccount] Email error:', emailErr);
         }
     }
-    else {
-        console.warn('[createAgencyAccount] RESEND_API_KEY not set — emails skipped.');
-    }
-    // ── Log to Google Sheets ─────────────────────────────────────────
+    // 8. Non-blocking side effects: Google Sheets
     try {
         const sheetsPayload = JSON.stringify({
             type: 'new_registration',
@@ -197,16 +204,14 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
             agencyId: agencyRef.id,
             timestamp: new Date().toISOString(),
         });
-        // fetch is available in Node 18+
         await fetch(SHEETS_WEBHOOK, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: sheetsPayload,
         });
-        console.log(`[createAgencyAccount] Sheets log sent for ${normalizedPhone}`);
     }
     catch (sheetsErr) {
-        console.warn('[createAgencyAccount] Sheets log failed (non-critical):', sheetsErr);
+        console.warn('[createAgencyAccount] Sheets log failed:', sheetsErr);
     }
     return { success: true, agencyId: agencyRef.id };
 });

@@ -23,18 +23,27 @@ import {
     Activity,
     Cpu,
     RefreshCw,
-    DollarSign
+    DollarSign,
+    ChevronLeft,
+    ChevronRight,
+    Search,
+    UserMinus,
+    UserCheck,
+    LogIn,
+    AlertTriangle,
+    AlertCircle,
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn } from 'lucide-react';
 import SystemFinancesManager from '../components/superadmin/SystemFinancesManager';
 import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport';
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
 import SubscriptionRequestsManager from '../components/superadmin/SubscriptionRequestsManager';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../config/firebase';
+import { useAuthUsers } from '../hooks/useAuthUsers';
+import ActiveTrialsWidget from '../components/superadmin/ActiveTrialsWidget';
 
 // ─── Tooltip customisation ───────────────────────────────────────────────────
 const NeonBarTooltip = ({ active, payload, label }: any) => {
@@ -189,22 +198,76 @@ export default function SuperAdminDashboard() {
         totalUsers,
         totalActiveProperties,
         totalLeads,
-        recentAgencies,
+        allAgencies,
+        allUsers,
         monthlyGrowth,
         subscriptionBreakdown,
         expenses,
         loading,
+        error: statsError
     } = useGlobalStats();
 
-    const [search, setSearch] = useState('');
-    const [selectedAgency, setSelectedAgency] = useState<AgencyRow | null>(null);
+    const [activeTab, setActiveTab] = useState<'agencies' | 'users'>('agencies');
+    const [agencySearch, setAgencySearch] = useState('');
+    const [userSearch, setUserSearch] = useState('');
+    const [agencyPage, setAgencyPage] = useState(1);
+    const [userPage, setUserPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
 
+    const [selectedAgency, setSelectedAgency] = useState<AgencyRow | null>(null);
     const { setUserData, userData } = useAuth();
+    const { authUsers, loading: authLoading, error: authError } = useAuthUsers();
     const navigate = useNavigate();
 
-    const filteredAgencies = recentAgencies.filter((ag) =>
-        (ag.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (ag.adminEmail ?? '').toLowerCase().includes(search.toLowerCase())
+    // DEBUG: Log counts to console for developer tracing
+    console.log('[DEBUG] SuperAdminDashboard State:', {
+        allAgencies: allAgencies.length,
+        allUsers: allUsers.length,
+        authUsers: authUsers.length,
+        authError,
+        loading
+    });
+
+    // ─── Filtering & Pagination ──────────────────────────────────────────────
+    // Merge Firestore users with Auth users
+    const mergedUsers = [...allUsers];
+    
+    // Add users from Auth that don't exist in Firestore
+    authUsers.forEach(authUser => {
+        // Use u.id as it's the document ID which matches authUser.uid
+        const exists = allUsers.some(u => u.id === authUser.uid || u.email === authUser.email);
+        if (!exists) {
+            mergedUsers.push({
+                id: authUser.uid,
+                uid: authUser.uid,
+                email: authUser.email,
+                name: authUser.displayName || 'משתמש חדש',
+                createdAt: { toDate: () => new Date(authUser.createdAt) } as any,
+                isRegistrationPending: true,
+                role: 'agent',
+                isActive: !authUser.disabled
+            });
+        }
+    });
+
+    const filteredAgencies = allAgencies.filter((ag) =>
+        (ag.name ?? '').toLowerCase().includes(agencySearch.toLowerCase()) ||
+        (ag.adminEmail ?? '').toLowerCase().includes(agencySearch.toLowerCase())
+    );
+
+    const paginatedAgencies = filteredAgencies.slice(
+        (agencyPage - 1) * ITEMS_PER_PAGE,
+        agencyPage * ITEMS_PER_PAGE
+    );
+
+    const filteredUsers = mergedUsers.filter((u) =>
+        (u.name ?? '').toLowerCase().includes(userSearch.toLowerCase()) ||
+        (u.email ?? '').toLowerCase().includes(userSearch.toLowerCase())
+    );
+
+    const paginatedUsers = filteredUsers.slice(
+        (userPage - 1) * ITEMS_PER_PAGE,
+        userPage * ITEMS_PER_PAGE
     );
 
     const handleUpdatePlan = async (e: React.ChangeEvent<HTMLSelectElement>, agencyId: string, currentPlan: string) => {
@@ -213,25 +276,56 @@ export default function SuperAdminDashboard() {
         if (!newPlan) return;
 
         if (!window.confirm(`האם אתה בטוח שברצונך לשנות את מנוי הסוכנות למסלול ${newPlan}?`)) {
-            // Revert select visually
             e.target.value = currentPlan;
-            return;
-        }
-
-        const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
-        if (!validPlans.includes(newPlan.toLowerCase())) {
-            alert("מסלול שגוי. יש להזין starter, pro או enterprise.");
             return;
         }
 
         try {
             const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminUpdateAgencyPlan');
-            await fn({ agencyId: agencyId, newPlanId: newPlan.toLowerCase() });
+            await fn({ agencyId, newPlanId: newPlan.toLowerCase() });
             alert("המסלול עודכן בהצלחה!");
             window.location.reload();
         } catch (err: any) {
             console.error('Update Plan Error:', err);
             alert("שגיאה בעדכון המסלול: " + err.message);
+        }
+    };
+
+    const handleSetAgencyStatus = async (agencyId: string, currentStatus: string, agencyName: string) => {
+        const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+        const actionText = newStatus === 'suspended' ? 'להשעות' : 'להפעיל מחדש';
+        
+        if (!window.confirm(`האם אתה בטוח שברצונך ${actionText} את הסוכנות "${agencyName}"?${newStatus === 'suspended' ? '\nפעולה זו תשבית גם את כל המשתמשים המשויכים.' : ''}`)) {
+            return;
+        }
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminSetAgencyStatus');
+            await fn({ agencyId, status: newStatus });
+            alert(`הסוכנות הועברה לסטטוס ${newStatus === 'active' ? 'פעיל' : 'מושהה'} בהצלחה!`);
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Set Agency Status Error:', err);
+            alert("שגיאה בעדכון סטטוס סוכנות: " + err.message);
+        }
+    };
+
+    const handleSetUserStatus = async (userId: string, currentIsActive: boolean, userName: string) => {
+        const newIsActive = !currentIsActive;
+        const actionText = newIsActive ? 'להפעיל' : 'להשבית';
+
+        if (!window.confirm(`האם אתה בטוח שברצונך ${actionText} את המשתמש "${userName}"?`)) {
+            return;
+        }
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminSetUserStatus');
+            await fn({ userId, isActive: newIsActive });
+            alert(`המשתמש הועבר לסטטוס ${newIsActive ? 'פעיל' : 'מושבת'} בהצלחה!`);
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Set User Status Error:', err);
+            alert("שגיאה בעדכון סטטוס משתמש: " + err.message);
         }
     };
 
@@ -348,6 +442,28 @@ export default function SuperAdminDashboard() {
 
             {/* ── Subscription Requests ─────────────────────────────────────── */}
             <SubscriptionRequestsManager />
+
+            {/* ── Active Trials ────────────────────────────────────────────── */}
+            {/* Global Error Banner */}
+            {(statsError || authError) && (
+                <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 backdrop-blur-md flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                        <h3 className="text-sm font-bold text-red-500 uppercase tracking-wider">Storage Error / שגיאת נתונים</h3>
+                        <p className="text-sm text-slate-400">
+                            {statsError && <span>Firestore: {statsError} </span>}
+                            {authError && <span>Auth List: {authError}</span>}
+                        </p>
+                        <p className="text-xs text-slate-500 italic mt-2">
+                           * וודא שביצעת deploy לפונקציות ה-superadmin ושיש לך הרשאות מתאימות.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <ActiveTrialsWidget />
 
             {/* ── Finances & Import ────────────────────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
@@ -479,170 +595,349 @@ export default function SuperAdminDashboard() {
                 </div>
             </div>
 
-            {/* ── Recent Agencies Table ────────────────────────────────────── */}
-            <div
-                className="rounded-2xl border bg-slate-900/60 backdrop-blur-xl overflow-hidden"
-                style={{
-                    borderColor: 'rgba(249,115,22,0.2)',
-                    boxShadow: '0 0 30px rgba(249,115,22,0.05)',
-                }}
-            >
-                {/* Table header */}
-                <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <Building2 className="w-5 h-5 text-orange-400" />
-                        <h2
-                            className="text-xs font-bold uppercase tracking-widest text-slate-400"
-                            style={{ letterSpacing: '0.15em' }}
-                        >
-                            RECENT AGENCIES — לקוחות אחרונים
-                        </h2>
-                    </div>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="חיפוש..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full sm:w-56 pl-3 pr-4 py-2 text-sm rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-orange-500/40 transition-all"
-                        />
-                    </div>
+            {/* ── Tabs & Content ────────────────────────────────────────── */}
+            <div className="space-y-6">
+                <div className="flex border-b border-slate-800">
+                    <button
+                        onClick={() => setActiveTab('agencies')}
+                        className={`px-6 py-3 text-sm font-bold tracking-widest uppercase transition-all border-b-2 ${
+                            activeTab === 'agencies'
+                                ? 'text-cyan-400 border-cyan-400 shadow-[0_4px_12px_rgba(6,182,212,0.2)]'
+                                : 'text-slate-500 border-transparent hover:text-slate-300'
+                        }`}
+                    >
+                        ניהול סוכנויות
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-6 py-3 text-sm font-bold tracking-widest uppercase transition-all border-b-2 ${
+                            activeTab === 'users'
+                                ? 'text-purple-400 border-purple-400 shadow-[0_4px_12px_rgba(168,85,247,0.2)]'
+                                : 'text-slate-500 border-transparent hover:text-slate-300'
+                        }`}
+                    >
+                        ניהול משתמשים
+                    </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-right">
-                        <thead>
-                            <tr className="border-b border-slate-800">
-                                {['סוכנות', 'מנהל', 'תחילת ניסיון', 'סיום ניסיון', 'סטטוס חידוש', 'מנוי נוכחי', ''].map((h) => (
-                                    <th
-                                        key={h}
-                                        className="px-6 py-3 text-right text-xs font-bold uppercase tracking-widest text-slate-600 whitespace-nowrap"
-                                    >
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                Array.from({ length: 4 }).map((_, i) => (
-                                    <tr key={i} className="border-b border-slate-800/50">
-                                        {Array.from({ length: 5 }).map((__, j) => (
-                                            <td key={j} className="px-6 py-4">
-                                                <div className="h-4 rounded-md bg-slate-800 animate-pulse" />
-                                            </td>
+                {activeTab === 'agencies' ? (
+                    <div
+                        className="rounded-2xl border bg-slate-900/60 backdrop-blur-xl overflow-hidden"
+                        style={{
+                            borderColor: 'rgba(6,182,212,0.2)',
+                            boxShadow: '0 0 30px rgba(6,182,212,0.05)',
+                        }}
+                    >
+                        {/* Agencies Table header */}
+                        <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <Building2 className="w-5 h-5 text-cyan-400" />
+                                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                                    AGENCIES MANAGEMENT — ניהול סוכנויות
+                                </h2>
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <input
+                                    type="text"
+                                    placeholder="חיפוש סוכנות..."
+                                    value={agencySearch}
+                                    onChange={(e) => { setAgencySearch(e.target.value); setAgencyPage(1); }}
+                                    className="w-full sm:w-64 pr-10 pl-4 py-2 text-sm rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-right">
+                                <thead>
+                                    <tr className="border-b border-slate-800">
+                                        {['סוכנות', 'מנהל', 'תחילת ניסיון', 'מנוי', 'סטטוס', 'פעולות'].map((h) => (
+                                            <th key={h} className="px-6 py-3 text-right text-xs font-bold uppercase text-slate-600">
+                                                {h}
+                                            </th>
                                         ))}
                                     </tr>
-                                ))
-                            ) : filteredAgencies.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-10 text-center text-slate-600">
-                                        לא נמצאו סוכנויות
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredAgencies.map((ag: AgencyRow) => (
-                                    <tr
-                                        key={ag.id}
-                                        className="group border-b border-slate-800/50 hover:bg-cyan-500/5 transition-colors cursor-pointer"
-                                        onClick={() => setSelectedAgency(prev => prev?.id === ag.id ? null : ag)}
-                                        style={selectedAgency?.id === ag.id ? { background: 'rgba(6,182,212,0.08)' } : undefined}
-                                    >
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div
-                                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
-                                                    style={{
-                                                        background: 'rgba(6,182,212,0.1)',
-                                                        color: '#06b6d4',
-                                                        border: '1px solid rgba(6,182,212,0.2)',
-                                                    }}
-                                                >
-                                                    {(ag.name ?? 'A').charAt(0).toUpperCase()}
-                                                </div>
-                                                <span className="font-semibold text-slate-200 group-hover:text-cyan-400 transition-colors">
-                                                    {ag.name ?? 'ללא שם'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500 font-mono text-xs">
-                                            {ag.adminEmail ?? '—'}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500 text-xs font-medium">
-                                            {ag.createdAt?.toDate
-                                                ? ag.createdAt.toDate().toLocaleDateString('he-IL')
-                                                : '—'}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-500 text-xs font-medium">
-                                            {ag.billing?.trialEndsAt?.toDate
-                                                ? ag.billing.trialEndsAt.toDate().toLocaleDateString('he-IL')
-                                                : '—'}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {ag.billing?.status === 'trialing' ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-900/30 text-blue-400 border border-blue-500/20">
-                                                    בניסיון
-                                                </span>
-                                            ) : ag.billing?.status === 'past_due' ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-900/40 text-red-500 border border-red-500/30">
-                                                    <ShieldAlert className="w-3.5 h-3.5" /> לא חידש
-                                                </span>
-                                            ) : ag.billing?.status === 'active' || ag.planId && ag.planId !== 'free' ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                                    <ShieldCheck className="w-3.5 h-3.5" /> פעיל
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                                                    לא ידוע
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <TierBadge plan={ag.planId} />
-                                                <select
-                                                    defaultValue={ag.planId || 'starter'}
-                                                    onChange={(e) => handleUpdatePlan(e, ag.id, ag.planId || 'starter')}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-cyan-500/50 transition-colors"
-                                                    title="שנה מסלול מנוי"
-                                                >
-                                                    <option value="starter">Starter</option>
-                                                    <option value="pro">Pro</option>
-                                                    <option value="enterprise">Enterprise</option>
-                                                </select>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-left">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (window.confirm(`האם אתה בטוח שברצונך להתחבר כעת לסוכנות ${ag.name}? (רענן עמוד ליציאה)`)) {
-                                                        if (userData) {
-                                                            setUserData({
-                                                                ...userData,
-                                                                agencyId: ag.id,
-                                                                // @ts-ignore
-                                                                agencyName: ag.name,
-                                                            });
-                                                            navigate('/');
-                                                        }
-                                                    }
-                                                }}
-                                                className="p-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/20 transition-colors flex items-center justify-center gap-2 text-xs font-bold whitespace-nowrap"
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        Array.from({ length: 5 }).map((_, i) => (
+                                            <tr key={i} className="border-b border-slate-800/50">
+                                                {Array.from({ length: 6 }).map((__, j) => (
+                                                    <td key={j} className="px-6 py-4"><div className="h-4 rounded bg-slate-800 animate-pulse" /></td>
+                                                ))}
+                                            </tr>
+                                        ))
+                                    ) : paginatedAgencies.length === 0 ? (
+                                        <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-600">לא נמצאו סוכנויות</td></tr>
+                                    ) : (
+                                        paginatedAgencies.map((ag) => (
+                                            <tr
+                                                key={ag.id}
+                                                className="group border-b border-slate-800/50 hover:bg-cyan-500/5 transition-colors cursor-pointer"
+                                                onClick={() => setSelectedAgency(prev => prev?.id === ag.id ? null : ag)}
+                                                style={selectedAgency?.id === ag.id ? { background: 'rgba(6,182,212,0.08)' } : undefined}
                                             >
-                                                <LogIn className="w-3.5 h-3.5" /> היכנס כמנהל
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black bg-cyan-900/20 text-cyan-400 border border-cyan-500/20">
+                                                            {(ag.name ?? 'A').charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span className="font-semibold text-slate-200">{ag.name ?? 'ללא שם'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-500 font-mono text-xs">{ag.adminEmail ?? '—'}</td>
+                                                <td className="px-6 py-4 text-slate-500 text-xs">{ag.createdAt?.toDate ? ag.createdAt.toDate().toLocaleDateString('he-IL') : '—'}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                        <TierBadge plan={ag.planId} />
+                                                        <select
+                                                            defaultValue={ag.planId || 'starter'}
+                                                            onChange={(e) => handleUpdatePlan(e, ag.id, ag.planId || 'starter')}
+                                                            className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 outline-none cursor-pointer"
+                                                        >
+                                                            <option value="starter">Starter</option>
+                                                            <option value="pro">Pro</option>
+                                                            <option value="enterprise">Enterprise</option>
+                                                        </select>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {ag.status === 'suspended' ? (
+                                                        <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-red-900/40 text-red-500 border border-red-500/30">מושהה</span>
+                                                    ) : (
+                                                        <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">פעיל</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                        <button
+                                                            onClick={() => handleSetAgencyStatus(ag.id, ag.status || 'active', ag.name)}
+                                                            className={`p-1.5 rounded-lg border transition-all ${
+                                                                ag.status === 'suspended'
+                                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20'
+                                                                    : 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20'
+                                                            }`}
+                                                            title={ag.status === 'suspended' ? 'הפעל סוכנות' : 'השהה סוכנות'}
+                                                        >
+                                                            {ag.status === 'suspended' ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (window.confirm(`התחבר כמנהל לסוכנות "${ag.name}"?`)) {
+                                                                    if (userData) {
+                                                                        // @ts-ignore
+                                                                        setUserData({ ...userData, agencyId: ag.id });
+                                                                        navigate('/');
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20"
+                                                            title="התחבר כמנהל"
+                                                        >
+                                                            <LogIn className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
 
-                {/* ── Agency Drill-Down: Resource Usage ────────────────────────────── */}
-                {selectedAgency && (
+                        {/* Pagination Agencies */}
+                        {filteredAgencies.length > ITEMS_PER_PAGE && (
+                            <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+                                <span className="text-xs text-slate-500">מציג {paginatedAgencies.length} מתוך {filteredAgencies.length} סוכנויות</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        disabled={agencyPage === 1}
+                                        onClick={() => setAgencyPage(prev => prev - 1)}
+                                        className="p-1.5 rounded-lg border border-slate-700 text-slate-400 disabled:opacity-30"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-xs font-bold text-slate-300 px-2">{agencyPage}</span>
+                                    <button
+                                        disabled={agencyPage >= Math.ceil(filteredAgencies.length / ITEMS_PER_PAGE)}
+                                        onClick={() => setAgencyPage(prev => prev + 1)}
+                                        className="p-1.5 rounded-lg border border-slate-700 text-slate-400 disabled:opacity-30"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div
+                        className="rounded-2xl border bg-slate-900/60 backdrop-blur-xl overflow-hidden"
+                        style={{
+                            borderColor: 'rgba(168,85,247,0.2)',
+                            boxShadow: '0 0 30px rgba(168,85,247,0.05)',
+                        }}
+                    >
+                        {/* Users Table header */}
+                        <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <Users className="w-5 h-5 text-purple-400" />
+                                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                                    USERS MANAGEMENT — ניהול משתמשים
+                                </h2>
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <input
+                                    type="text"
+                                    placeholder="חיפוש משתמש..."
+                                    value={userSearch}
+                                    onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
+                                    className="w-full sm:w-64 pr-10 pl-4 py-2 text-sm rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-right">
+                                <thead>
+                                    <tr className="border-b border-slate-800">
+                                        {['משתמש', 'אימייל', 'סוכנות', 'הרשמה וניסיון', 'מנוי', 'תפקיד', 'סטטוס', 'פעולות'].map((h) => (
+                                            <th key={h} className="px-6 py-3 text-right text-xs font-bold uppercase text-slate-600">
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        Array.from({ length: 5 }).map((_, i) => (
+                                            <tr key={i} className="border-b border-slate-800/50">
+                                                {Array.from({ length: 8 }).map((__, j) => (
+                                                    <td key={j} className="px-6 py-4"><div className="h-4 rounded bg-slate-800 animate-pulse" /></td>
+                                                ))}
+                                            </tr>
+                                        ))
+                                    ) : paginatedUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-10 text-center text-slate-600">
+                                                לא נמצאו משתמשים. 
+                                                <div className="text-xs mt-2 text-slate-700">
+                                                    Firestore: {allUsers.length} | Auth: {authUsers.length}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginatedUsers.map((u) => {
+                                            const agency = allAgencies.find(a => a.id === u.agencyId);
+                                            return (
+                                                <tr key={u.id} className="border-b border-slate-800/50 hover:bg-purple-500/5 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black bg-purple-900/20 text-purple-400 border border-purple-500/20">
+                                                                {(u.name ?? 'U').charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="font-semibold text-slate-200">{u.name ?? 'ללא שם'}</span>
+                                                                {u.isRegistrationPending && (
+                                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Registration Pending</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-slate-500 font-mono text-xs">{u.email}</td>
+                                                    <td className="px-6 py-4 text-slate-400 text-xs font-medium">{agency?.name ?? 'סוכנות לא ידועה'}</td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col gap-1 text-[11px]">
+                                                            <span className="text-slate-300">
+                                                                הרשמה: {u.createdAt && typeof u.createdAt.toDate === 'function' ? u.createdAt.toDate().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                                                            </span>
+                                                            <span className="text-slate-500">
+                                                                סיום נסיון: {agency?.billing?.trialEndsAt && typeof agency.billing.trialEndsAt.toDate === 'function' ? agency.billing.trialEndsAt.toDate().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col items-start gap-1.5">
+                                                            <TierBadge plan={agency?.planId} />
+                                                            {(() => {
+                                                                if (u.isRegistrationPending) return <span className="text-[10px] bg-slate-800/80 text-slate-500 border border-slate-700/50 px-2 py-0.5 rounded font-bold">רישום בהמתנה</span>;
+
+                                                                const isTrialing = agency?.billing?.status === 'trialing';
+                                                                const trialEndsAt = agency?.billing?.trialEndsAt && typeof agency.billing.trialEndsAt.toDate === 'function' ? agency.billing.trialEndsAt.toDate() : null;
+                                                                const isTrialExpired = trialEndsAt && new Date() > trialEndsAt;
+                                                                
+                                                                if (isTrialing && !isTrialExpired) return <span className="text-[10px] bg-blue-900/40 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-bold">בתקופת ניסיון</span>;
+                                                                if (isTrialing && isTrialExpired) return <span className="text-[10px] bg-red-900/40 text-red-400 border border-red-500/30 px-2 py-0.5 rounded font-bold">ניסיון הסתיים</span>;
+                                                                if (agency?.billing?.status === 'active' || agency?.billing?.status === 'paid') return <span className="text-[10px] bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">מנוי פעיל</span>;
+                                                                if (agency?.billing?.status === 'canceled' || agency?.billing?.status === 'past_due') return <span className="text-[10px] bg-red-900/40 text-red-500 border border-red-500/30 px-2 py-0.5 rounded font-bold">מנוי מבוטל</span>;
+                                                                return <span className="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded font-bold">ללא נתונים</span>;
+                                                            })()}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                                            u.role === 'admin' ? 'bg-orange-900/30 text-orange-400 border-orange-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'
+                                                        }`}>
+                                                            {u.role === 'admin' ? 'ADMIN' : 'AGENT'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {u.isActive === false ? (
+                                                            <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-red-900/40 text-red-500 border border-red-500/30">מושבת</span>
+                                                        ) : (
+                                                            <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">פעיל</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <button
+                                                            onClick={() => handleSetUserStatus(u.id, u.isActive !== false, u.name)}
+                                                            className={`p-1.5 rounded-lg border transition-all ${
+                                                                u.isActive === false
+                                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20'
+                                                                    : 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20'
+                                                            }`}
+                                                            title={u.isActive === false ? 'הפעל משתמש' : 'השבת משתמש'}
+                                                        >
+                                                            {u.isActive === false ? <UserCheck className="w-4 h-4" /> : <UserMinus className="w-4 h-4" />}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination Users */}
+                        {filteredUsers.length > ITEMS_PER_PAGE && (
+                            <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+                                <span className="text-xs text-slate-500">מציג {paginatedUsers.length} מתוך {filteredUsers.length} משתמשים</span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        disabled={userPage === 1}
+                                        onClick={() => setUserPage(prev => prev - 1)}
+                                        className="p-1.5 rounded-lg border border-slate-700 text-slate-400 disabled:opacity-30"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-xs font-bold text-slate-300 px-2">{userPage}</span>
+                                    <button
+                                        disabled={userPage >= Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)}
+                                        onClick={() => setUserPage(prev => prev + 1)}
+                                        className="p-1.5 rounded-lg border border-slate-700 text-slate-400 disabled:opacity-30"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Drill-down UI (only for agencies) */}
+                {activeTab === 'agencies' && selectedAgency && (
                     <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                         <AgencyUsageWidget agencyId={selectedAgency.id} agencyName={selectedAgency.name ?? undefined} />
                     </div>

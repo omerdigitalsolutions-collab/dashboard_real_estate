@@ -48,7 +48,8 @@ export interface GlobalStats {
     totalUsers: number;
     totalActiveProperties: number;
     totalLeads: number;
-    recentAgencies: AgencyRow[];
+    allAgencies: AgencyRow[];
+    allUsers: any[]; // List of all system users
     monthlyGrowth: MonthlyDataPoint[];
     subscriptionBreakdown: SubscriptionBreakdown[];
     expenses: ExpensesBreakdown | null;
@@ -67,9 +68,25 @@ function buildLast6Months(): MonthlyDataPoint[] {
     return result;
 }
 
-function monthIndexOffset(ts: Timestamp | undefined | null): number {
+function monthIndexOffset(ts: any): number {
     if (!ts) return -1;
-    const d = ts.toDate();
+    
+    let d: Date;
+    if (typeof ts.toDate === 'function') {
+        d = ts.toDate();
+    } else if (ts instanceof Date) {
+        d = ts;
+    } else if (typeof ts === 'string' || typeof ts === 'number') {
+        d = new Date(ts);
+    } else if (ts.seconds !== undefined) {
+        // Fallback for objects that look like Timestamps but lost their methods
+        d = new Date(ts.seconds * 1000);
+    } else {
+        return -1;
+    }
+
+    if (isNaN(d.getTime())) return -1;
+
     const now = new Date();
     const diffMonths =
         (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
@@ -82,7 +99,8 @@ export function useGlobalStats(): GlobalStats {
         totalUsers: 0,
         totalActiveProperties: 0,
         totalLeads: 0,
-        recentAgencies: [],
+        allAgencies: [],
+        allUsers: [],
         monthlyGrowth: [],
         subscriptionBreakdown: [],
         expenses: null,
@@ -109,8 +127,8 @@ export function useGlobalStats(): GlobalStats {
                     ...(d.data() as { createdAt?: Timestamp; email?: string; role?: string; agencyId?: string }),
                 }));
 
-                // Attach admin email & sort recent agencies
-                const recentAgencies = [...allAgencies]
+                // Attach admin email & sort agencies
+                const allAgenciesWithAdmin = [...allAgencies]
                     .map((ag) => {
                         const adminUser = allUsers.find(
                             (u) => u.agencyId === ag.id && u.role === 'admin' && !!u.email
@@ -121,8 +139,7 @@ export function useGlobalStats(): GlobalStats {
                         const ta = a.createdAt?.seconds ?? 0;
                         const tb = b.createdAt?.seconds ?? 0;
                         return tb - ta;
-                    })
-                    .slice(0, 10);
+                    });
 
                 // Subscription breakdown
                 const tierCounts: Record<string, number> = { starter: 0, pro: 0, enterprise: 0 };
@@ -183,7 +200,8 @@ export function useGlobalStats(): GlobalStats {
                         totalUsers: allUsers.length,
                         totalActiveProperties: activeProps.length,
                         totalLeads: leadsSnap.size,
-                        recentAgencies,
+                        allAgencies: allAgenciesWithAdmin,
+                        allUsers: allUsers,
                         monthlyGrowth,
                         subscriptionBreakdown,
                         expenses,
