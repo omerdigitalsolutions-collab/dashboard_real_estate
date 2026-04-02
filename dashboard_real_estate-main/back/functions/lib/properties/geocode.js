@@ -15,7 +15,7 @@ const firestore_2 = require("firebase-admin/firestore");
 const params_1 = require("firebase-functions/params");
 const axios_1 = __importDefault(require("axios"));
 const db = (0, firestore_2.getFirestore)();
-const googleMapsKey = (0, params_1.defineSecret)('GOOGLE_MAPS_API_KEY');
+const googleMapsKey = (0, params_1.defineSecret)('VITE_GOOGLE_MAPS_API_KEY');
 exports.getCoordinates = (0, https_1.onCall)({ cors: true, secrets: [googleMapsKey] }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
@@ -27,7 +27,7 @@ exports.getCoordinates = (0, https_1.onCall)({ cors: true, secrets: [googleMapsK
     const apiKey = googleMapsKey.value();
     if (!apiKey) {
         // Fallback to nominatim if key is missing (optional, but safer to just fail if we want "real" ones)
-        console.warn('[geocode] GOOGLE_MAPS_API_KEY is not set. Falling back to Nominatim.');
+        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Nominatim.');
         try {
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Israel')}&limit=1`;
             const response = await axios_1.default.get(url, {
@@ -73,7 +73,7 @@ exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true, secrets: [goog
     }
     const apiKey = googleMapsKey.value();
     if (!apiKey) {
-        console.warn('[geocode] GOOGLE_MAPS_API_KEY is not set. Falling back to Photon.');
+        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Photon.');
         // Original Photon fallback logic... (omitted for brevity in this replace, but I'll keep it functional)
         return []; // Simplified for now since we have the key
     }

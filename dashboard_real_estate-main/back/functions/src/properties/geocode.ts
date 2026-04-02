@@ -10,7 +10,7 @@ import { defineSecret } from 'firebase-functions/params';
 import axios from 'axios';
 
 const db = getFirestore();
-const googleMapsKey = defineSecret('GOOGLE_MAPS_API_KEY');
+const googleMapsKey = defineSecret('VITE_GOOGLE_MAPS_API_KEY');
 
 export const getCoordinates = onCall({ cors: true, secrets: [googleMapsKey] }, async (request) => {
     if (!request.auth) {
@@ -25,7 +25,7 @@ export const getCoordinates = onCall({ cors: true, secrets: [googleMapsKey] }, a
     const apiKey = googleMapsKey.value();
     if (!apiKey) {
         // Fallback to nominatim if key is missing (optional, but safer to just fail if we want "real" ones)
-        console.warn('[geocode] GOOGLE_MAPS_API_KEY is not set. Falling back to Nominatim.');
+        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Nominatim.');
         try {
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Israel')}&limit=1`;
             const response = await axios.get(url, {
@@ -75,7 +75,7 @@ export const getAddressSuggestions = onCall({ cors: true, secrets: [googleMapsKe
 
     const apiKey = googleMapsKey.value();
     if (!apiKey) {
-        console.warn('[geocode] GOOGLE_MAPS_API_KEY is not set. Falling back to Photon.');
+        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Photon.');
         // Original Photon fallback logic... (omitted for brevity in this replace, but I'll keep it functional)
         return []; // Simplified for now since we have the key
     }

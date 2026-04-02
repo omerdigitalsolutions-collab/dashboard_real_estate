@@ -12,6 +12,12 @@ import { httpsCallable, getFunctions } from 'firebase/functions';
 // ─── Google Maps Config ────────────────────────────────────────────────────────
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+if (!GOOGLE_MAPS_API_KEY) {
+    console.error("VITE_GOOGLE_MAPS_API_KEY is missing in the local environment!");
+} else {
+    console.log("Google Maps API Key loaded (length):", GOOGLE_MAPS_API_KEY.length);
+}
+
 // ─── Israel fallback center ────────────────────────────────────────────────────
 const ISRAEL_CENTER = { lat: 31.7683, lng: 35.2137 };
 
