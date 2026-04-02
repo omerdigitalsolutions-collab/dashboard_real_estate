@@ -6,7 +6,7 @@ import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 
 // ─── Contact Links ─────────────────────────────────────────────────────────────
-const WHATSAPP_URL = 'https://wa.me/972526292624'; // Update with your number
+const WHATSAPP_URL = 'https://wa.me/972507706024?text=%D7%94%D7%99%D7%99%20homer'; // Updated with user number and message
 const EMAIL = 'omerdigitalsolutions@gmail.com';
 const INSTAGRAM_URL = 'https://www.instagram.com/p/DOaY9Z5CMwM/';
 const FACEBOOK_URL = 'https://www.facebook.com/profile.php?id=61575865530708';
