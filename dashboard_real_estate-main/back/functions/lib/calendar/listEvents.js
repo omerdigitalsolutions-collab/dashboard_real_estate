@@ -16,7 +16,7 @@ const oauthClient_1 = require("./oauthClient");
  * Returns a list of upcoming events from the user's primary Google Calendar.
  */
 exports.listEvents = (0, https_1.onCall)({
-    cors: true,
+    cors: ['https://homer.management', 'http://localhost:5173'],
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);

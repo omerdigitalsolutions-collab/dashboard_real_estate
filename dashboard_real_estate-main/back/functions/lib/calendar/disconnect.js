@@ -18,7 +18,7 @@ const db = (0, firestore_1.getFirestore)();
  * 2. Updates the user's profile to disable Google Calendar integration.
  */
 exports.disconnect = (0, https_1.onCall)({
-    cors: true,
+    cors: ['https://homer.management', 'http://localhost:5173'],
 }, async (request) => {
     // 1. Authenticate user
     const authData = await (0, authGuard_1.validateUserAuth)(request);
