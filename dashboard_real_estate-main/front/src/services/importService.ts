@@ -12,6 +12,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { inviteAgent } from './teamService';
+import axios from 'axios';
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -511,6 +514,26 @@ async function getBatchChunks<T>(items: T[]): Promise<T[][]> {
     return chunks;
 }
 
+async function geocodeAddress(address?: string, city?: string): Promise<{ lat: number, lng: number, formatted: string } | null> {
+    if (!GOOGLE_MAPS_API_KEY || !address) return null;
+    try {
+        const fullAddress = `${address}${city ? `, ${city}` : ''}, Israel`;
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${GOOGLE_MAPS_API_KEY}&language=he`;
+        const response = await axios.get(url);
+        if (response.data.status === 'OK' && response.data.results[0]) {
+            const loc = response.data.results[0].geometry.location;
+            return {
+                lat: loc.lat,
+                lng: loc.lng,
+                formatted: response.data.results[0].formatted_address
+            };
+        }
+    } catch (error) {
+        console.error('Geocoding error:', error);
+    }
+    return null;
+}
+
 // ─── Shared: Agent lookup map ─────────────────────────────────────────────────
 
 async function buildAgentMap(agencyId: string): Promise<Map<string, string>> {
@@ -564,14 +587,14 @@ function buildPropertyDefaults(
         createdBy,
         status: 'active',
         daysOnMarket: 0,
-        lat: 31.5,
-        lng: 34.75,
-        location: { lat: 31.5, lng: 34.75 },
+        lat: extra?.lat || 31.5,
+        lng: extra?.lng || 34.75,
+        location: { lat: extra?.lat || 31.5, lng: extra?.lng || 34.75 },
         geocode: {
-            lat: 31.5,
-            lng: 34.75,
-            formattedAddress: `${row.address ?? row.propertyName ?? ''}, ${row.city ?? ''}`,
-            placeId: '',
+            lat: extra?.lat || 31.5,
+            lng: extra?.lng || 34.75,
+            formattedAddress: extra?.formattedAddress || `${row.address ?? row.propertyName ?? ''}, ${row.city ?? ''}`,
+            source: extra?.lat ? 'google_import' : 'placeholder',
             lastUpdated: serverTimestamp(),
         },
         ...(row.customData ? { customData: row.customData } : {}),
@@ -718,7 +741,13 @@ export async function importProperties(
         const chunk = chunks[ci];
         const batch = writeBatch(db);
 
-        for (const row of chunk) {
+        // Geocode addresses in this chunk in parallel (Google Maps is fast)
+        const geocodePromises = chunk.map(row => geocodeAddress(row.address, row.city));
+        const geocodeResults = await Promise.all(geocodePromises);
+
+        for (let i = 0; i < chunk.length; i++) {
+            const row = chunk[i];
+            const geo = geocodeResults[i];
             const key = `${String(row.address ?? '').trim().toLowerCase()}|${String(row.city ?? '').trim().toLowerCase()}`;
 
             if (strategy === 'skip' && existingKeys.has(key)) continue;
@@ -728,11 +757,20 @@ export async function importProperties(
             if (strategy === 'update' && existingKeys.has(key)) {
                 const existingId = existingDocsMap.get(key)!;
                 const ref = doc(db, 'properties', existingId);
-                const updateData: any = { ...row, agentId: resolvedAgentId, updatedAt: serverTimestamp() };
+                const updateData: any = { 
+                    ...row, 
+                    agentId: resolvedAgentId, 
+                    updatedAt: serverTimestamp(),
+                    ...(geo ? { lat: geo.lat, lng: geo.lng, location: { lat: geo.lat, lng: geo.lng } } : {})
+                };
                 batch.update(ref, updateData);
             } else {
                 const ref = doc(collection(db, 'properties'));
-                batch.set(ref, buildPropertyDefaults(row, agencyId, resolvedAgentId, createdBy));
+                batch.set(ref, buildPropertyDefaults(row, agencyId, resolvedAgentId, createdBy, geo ? {
+                    lat: geo.lat,
+                    lng: geo.lng,
+                    formattedAddress: geo.formatted
+                } : undefined));
             }
             imported++;
         }
@@ -767,7 +805,14 @@ export async function importMixed(
         const chunk = chunks[ci];
         const batch = writeBatch(db);
 
-        for (const row of chunk) {
+        // Geocode check
+        const geocodePromises = chunk.map(row => geocodeAddress(row.address, row.city));
+        const geocodeResults = await Promise.all(geocodePromises);
+
+        for (let i = 0; i < chunk.length; i++) {
+            const row = chunk[i];
+            const geo = geocodeResults[i];
+
             // 1. Lead
             const leadRef = doc(collection(db, 'leads'));
             const leadData = buildLeadDefaults({
@@ -788,6 +833,7 @@ export async function importMixed(
             const propertyRef = doc(collection(db, 'properties'));
             batch.set(propertyRef, buildPropertyDefaults(row, agencyId, createdBy, createdBy, {
                 ownerId: leadRef.id,
+                ...(geo ? { lat: geo.lat, lng: geo.lng, formattedAddress: geo.formatted } : {})
             }));
 
             imported++;

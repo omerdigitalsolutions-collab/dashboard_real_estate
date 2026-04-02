@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { ResponsiveGridLayout } from 'react-grid-layout';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { LayoutItem } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -63,6 +64,7 @@ export default function Dashboard() {
   const [isResetting, setIsResetting] = useState(false);
   const [activeTab, setActiveTab] = useState<'finance' | 'office'>('office');
   const [timeRange, setTimeRange] = useState<TimeRange>('6m');
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   // Per-tab layout state
   const [layoutFinance, setLayoutFinance] = useState<LayoutItem[]>(DEFAULT_LAYOUT_FINANCE);
@@ -192,10 +194,11 @@ export default function Dashboard() {
           {/* Import button – always visible */}
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-lg"
+            className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all shadow-lg"
+            title="ייבוא מאקסל"
           >
             <Upload size={16} />
-            ייבוא מאקסל
+            <span className="hidden sm:inline">ייבוא</span>
           </button>
 
           {isEditing && (
@@ -212,18 +215,20 @@ export default function Dashboard() {
           {isEditing ? (
             <button
               onClick={() => setIsEditing(false)}
-              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
             >
               <Save size={16} />
-              נשמר אוטומטית. סיים עריכה
+              <span className="hidden sm:inline">שמור עיצוב</span>
+              <span className="sm:hidden">שמור</span>
             </button>
           ) : (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-lg"
+              className="inline-flex items-center gap-2 bg-[#0f172a]/80 backdrop-blur-md border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-sm font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all shadow-lg"
+              title="ערוך דאשבורד"
             >
               <Edit3 size={16} />
-              ערוך דאשבורד
+              <span className="hidden sm:inline">ערוך</span>
             </button>
           )}
         </div>
@@ -268,14 +273,16 @@ export default function Dashboard() {
       <div dir="ltr" ref={gridWrapperRef} className="w-full">
         <ResponsiveGridLayout
           width={gridWidth}
-          layouts={{ lg: currentLayout }}
+          layouts={{ lg: currentLayout, md: currentLayout, sm: currentLayout, xs: currentLayout, xxs: currentLayout }}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-          cols={{ lg: 12, md: 12, sm: 12, xs: 4, xxs: 2 }}
+          cols={{ lg: 12, md: 12, sm: 12, xs: 1, xxs: 1 }}
           rowHeight={80}
           margin={[16, 16]}
           containerPadding={[0, 0]}
-          dragConfig={{ enabled: isEditing, bounded: true }}
-          resizeConfig={{ enabled: isEditing }}
+          // @ts-ignore
+          isDraggable={isEditing && !isMobile}
+          // @ts-ignore
+          isResizable={isEditing && !isMobile}
           onLayoutChange={(layout: any) => handleLayoutChange(layout)}
         >
           {/* ─ KPI Cards ───────────────────────────────────────────────────── */}

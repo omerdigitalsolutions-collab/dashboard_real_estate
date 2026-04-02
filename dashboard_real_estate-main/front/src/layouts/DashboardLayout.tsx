@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { auth } from '../config/firebase';
 import { signOut } from 'firebase/auth';
@@ -14,7 +14,6 @@ import {
     Building2,
     Users,
     Settings,
-    Search,
     Bell,
     LogOut,
     Contact,
@@ -54,6 +53,20 @@ export default function DashboardLayout() {
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+    // סגירת התפריט אוטומטית במובייל בעת מעבר בין עמודים (שינוי Route)
+    useEffect(() => {
+        setIsMobileMenuOpen(false);
+    }, [navigate]);
+
+    // מניעת גלילה של המסך האחורי כשהתפריט פתוח
+    useEffect(() => {
+        if (isMobileMenuOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+    }, [isMobileMenuOpen]);
+
     const handleLogout = async () => {
         try {
             await signOut(auth);
@@ -68,19 +81,23 @@ export default function DashboardLayout() {
             {/* Mobile Sidebar Overlay */}
             {isMobileMenuOpen && (
                 <div
-                    className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm transition-opacity"
+                    className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-md transition-opacity duration-300"
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed inset-y-0 right-0 z-50 w-64 flex-shrink-0 bg-slate-900/95 md:bg-slate-900/50 backdrop-blur-xl border-l border-slate-800 flex flex-col transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                <div className="shrink-0 h-20 flex items-center justify-between px-6 border-b border-slate-800">
+            <aside className={`
+                fixed inset-y-0 right-0 z-50 w-64 bg-slate-900 border-l border-slate-800 flex flex-col transform transition-transform duration-300 ease-in-out
+                md:relative md:translate-x-0 md:bg-slate-900/50 md:backdrop-blur-xl
+                ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+            `}>
+                <div className="shrink-0 h-20 flex items-center justify-between px-6 border-b border-slate-800/50">
                     <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
                         <img src="/homer-logo-dark.png" alt="Homer" className="h-10 w-auto" />
                     </span>
                     <button
-                        className="md:hidden text-slate-400 hover:text-white p-2 mb-1"
+                        className="md:hidden text-slate-400 hover:text-white p-2 mb-1 hover:bg-slate-800 rounded-lg transition-colors"
                         onClick={() => setIsMobileMenuOpen(false)}
                     >
                         <X size={20} />
@@ -129,34 +146,33 @@ export default function DashboardLayout() {
                 <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none"></div>
 
                 {/* Header */}
-                <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-4 md:px-8 z-10">
-                    <div className="flex items-center gap-2">
+                <header className="shrink-0 h-16 bg-[#0a0f1c]/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-4 md:px-8 z-30">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsMobileMenuOpen(true)}
-                            className="md:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                            className="md:hidden p-2 -mr-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
                         >
-                            <Menu size={22} />
+                            <Menu size={24} />
                         </button>
                         <button
                             onClick={() => navigate('/dashboard/settings')}
-                            className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 -ml-1.5 rounded-xl transition-colors text-right"
+                            className="flex items-center gap-3 hover:bg-slate-800/50 p-1.5 rounded-xl transition-colors text-right"
                         >
                             {agencyLogo && agencyLogo.trim() !== '' ? (
                                 <img
                                     src={agencyLogo}
                                     alt="לוגו סוכנות"
-                                    className="h-10 w-auto object-contain rounded-lg shadow-sm bg-white/10"
+                                    className="h-9 w-auto object-contain rounded-lg shadow-sm bg-white/10"
                                     onError={(e) => {
-                                        // Fallback if image fails to load
                                         (e.target as HTMLImageElement).style.display = 'none';
                                     }}
                                 />
                             ) : (
-                                <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
-                                    <Building2 className="w-6 h-6 text-cyan-400" />
+                                <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                                    <Building2 className="w-5 h-5 text-cyan-400" />
                                 </div>
                             )}
-                            <h1 className="text-lg md:text-xl font-bold text-white tracking-tight hidden sm:block max-w-[150px] md:max-w-xs truncate">
+                            <h1 className="text-base md:text-xl font-bold text-white tracking-tight hidden sm:block max-w-[150px] md:max-w-xs truncate">
                                 {agencyName || 'הסוכנות שלי'}
                             </h1>
                         </button>
@@ -169,8 +185,8 @@ export default function DashboardLayout() {
                                 onClick={() => setQuickAddOpen(v => !v)}
                                 className="flex items-center gap-1.5 md:gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-sm font-bold px-3 md:px-4 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
                             >
-                                <Plus size={16} />
-                                <span className="hidden sm:inline">חדש</span>
+                                <Plus size={18} />
+                                <span className="hidden md:inline">חדש</span>
                             </button>
 
                             {quickAddOpen && (
@@ -195,16 +211,7 @@ export default function DashboardLayout() {
                                 </>
                             )}
                         </div>
-                        <div className="relative hidden md:block">
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-slate-500" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="חיפוש..."
-                                className="block w-48 lg:w-64 pl-3 pr-10 py-2 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 bg-slate-900/50 backdrop-blur-sm transition-all focus:bg-slate-900"
-                            />
-                        </div>
+
 
                         <div className="relative">
                             <button

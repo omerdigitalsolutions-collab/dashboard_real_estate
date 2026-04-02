@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, DollarSign, Users, Handshake, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, Handshake, BarChart3, Wallet, Building, Briefcase } from 'lucide-react';
 
 interface KpiCardProps {
     title: string;
@@ -14,7 +14,7 @@ interface KpiCardProps {
 }
 
 const iconMap: Record<string, React.ElementType> = {
-    DollarSign, Users, Handshake, TrendingUp, BarChart3,
+    DollarSign, Users, Handshake, TrendingUp, BarChart3, Wallet, Building, Briefcase
 };
 
 const colorMap: Record<string, { icon: string; bar: string; badge: string }> = {

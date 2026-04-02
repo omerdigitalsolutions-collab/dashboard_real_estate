@@ -9,7 +9,8 @@ import {
     where,
     serverTimestamp,
     writeBatch,
-    documentId
+    documentId,
+    onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
@@ -105,6 +106,31 @@ export async function getPropertiesByAgency(
 
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Property));
+}
+
+/**
+ * getLiveProperties — Real-time listener for properties.
+ */
+export function getLiveProperties(
+    agencyId: string,
+    callback: (properties: Property[]) => void,
+    onError?: (err: Error) => void
+): () => void {
+    const q = query(
+        collection(db, COLLECTION),
+        where('agencyId', '==', agencyId)
+    );
+
+    return onSnapshot(
+        q,
+        (snap) => {
+            const properties = snap.docs.map(
+                (d) => ({ id: d.id, ...d.data() } as Property)
+            );
+            callback(properties);
+        },
+        onError
+    );
 }
 
 /**

@@ -4,6 +4,7 @@ import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import EditPropertyModal from '../components/modals/EditPropertyModal';
@@ -23,6 +24,7 @@ export default function Properties() {
     const { agency } = useAgency();
     const { userData } = useAuth();
     const isAdmin = userData?.role === 'admin';
+    const isMobile = useMediaQuery('(max-width: 768px)');
 
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('All');
@@ -286,78 +288,165 @@ export default function Properties() {
     };
 
     return (
-        <div className="space-y-6" dir="rtl">
+        <div className="space-y-4 sm:space-y-6" dir="rtl">
             {/* Header Area */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-xl font-bold text-slate-900 leading-tight">ניהול נכסים</h1>
-                    <p className="text-sm text-slate-500 mt-1">{properties.length} נכסים במערכת</p>
+            {!isMobile ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-xl font-bold text-slate-900 leading-tight">ניהול נכסים</h1>
+                        <p className="text-sm text-slate-500 mt-1">{properties.length} נכסים במערכת</p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                        {selectedPropertyIds.size > 0 && (
+                            <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                                <button
+                                    onClick={() => {
+                                        const selected = properties.filter(p => selectedPropertyIds.has(p.id));
+                                        setPropertiesToCreateDeal(selected);
+                                    }}
+                                    className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                >
+                                    <Handshake size={16} />
+                                    צור עסקה ({selectedPropertyIds.size})
+                                </button>
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                >
+                                    <Trash2 size={16} />
+                                    מחק ({selectedPropertyIds.size})
+                                </button>
+                            </div>
+                        )}
+                        <button
+                            onClick={() => setShowImportModal(true)}
+                            className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                        >
+                            <Upload size={16} />
+                            ייבוא מאקסל / תמונה
+                        </button>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                        >
+                            <Plus size={16} />
+                            הוסף נכס
+                        </button>
+                        <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm h-10 w-full sm:w-auto overflow-hidden">
+                            <select
+                                value={timeRange}
+                                onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
+                                className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none appearance-none pr-2 cursor-pointer w-full text-right"
+                            >
+                                <option value="all">כל הזמן</option>
+                                <option value="1m">חודש אחרון</option>
+                                <option value="3m">3 חודשים</option>
+                                <option value="6m">6 חודשים</option>
+                                <option value="1y">שנה אחרונה</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+            ) : (
+                /* Mobile Header */
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-900 leading-tight">ניהול נכסים</h1>
+                            <p className="text-sm text-slate-500 mt-0.5">{properties.length} נכסים במערכת</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <button
+                                onClick={() => setShowImportModal(true)}
+                                className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm"
+                            >
+                                <Upload size={18} />
+                            </button>
+                            <div className="relative">
+                                <select
+                                    value={timeRange}
+                                    onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
+                                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                                >
+                                    <option value="all">כל הזמן</option>
+                                    <option value="1m">חודש אחרון</option>
+                                    <option value="3m">3 חודשים</option>
+                                    <option value="6m">6 חודשים</option>
+                                    <option value="1y">שנה אחרונה</option>
+                                </select>
+                                <div className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm pointer-events-none">
+                                    <Building size={18} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile Filter Tabs */}
+                    <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x touch-pan-x">
+                        {[
+                            { key: 'All', label: 'הכל' },
+                            { key: 'sale', label: 'למכירה' },
+                            { key: 'rent', label: 'להשכרה' },
+                            { key: 'commercial', label: 'מסחרי' },
+                            { key: 'draft', label: 'טיוטות' },
+                        ].map(({ key, label }) => (
+                            <button
+                                key={key}
+                                onClick={() => setFilter(key)}
+                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap snap-start border ${
+                                    filter === key 
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' 
+                                    : 'bg-white text-slate-600 border-slate-200'
+                                }`}
+                            >
+                                {label}
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                    {tabCounts[key as keyof typeof tabCounts]}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Mobile Bulk Actions */}
                     {selectedPropertyIds.size > 0 && (
-                        <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 border border-blue-100 rounded-2xl animate-in slide-in-from-top-2">
+                            <span className="text-sm font-bold text-blue-700 px-2">{selectedPropertyIds.size} נבחרו</span>
+                            <div className="flex-1" />
                             <button
                                 onClick={() => {
                                     const selected = properties.filter(p => selectedPropertyIds.has(p.id));
                                     setPropertiesToCreateDeal(selected);
                                 }}
-                                className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                className="p-2 bg-emerald-100 text-emerald-700 rounded-xl"
                             >
-                                <Handshake size={16} />
-                                צור עסקה ({selectedPropertyIds.size})
+                                <Handshake size={18} />
                             </button>
                             <button
                                 onClick={handleBulkDelete}
-                                className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                className="p-2 bg-red-100 text-red-700 rounded-xl"
                             >
-                                <Trash2 size={16} />
-                                מחק ({selectedPropertyIds.size})
+                                <Trash2 size={18} />
                             </button>
                         </div>
                     )}
-                    <button
-                        onClick={() => setShowImportModal(true)}
-                        className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                    >
-                        <Upload size={16} />
-                        ייבוא מאקסל / תמונה
-                    </button>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                    >
-                        <Plus size={16} />
-                        הוסף נכס
-                    </button>
-                    <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2.5 rounded-xl shadow-sm h-10 w-full sm:w-auto overflow-hidden">
-                        <select
-                            value={timeRange}
-                            onChange={(e) => handleRangeChange(e.target.value as TimeRange | 'all')}
-                            className="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none appearance-none pr-2 cursor-pointer w-full text-right"
-                        >
-                            <option value="all">כל הזמן</option>
-                            <option value="1m">חודש אחרון</option>
-                            <option value="3m">3 חודשים</option>
-                            <option value="6m">6 חודשים</option>
-                            <option value="1y">שנה אחרונה</option>
-                        </select>
-                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Top KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" dir="rtl">
-                <KpiCard
-                    title="מלאי נכסים"
-                    value={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length.toString()}
-                    rawValue={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length}
-                    target={20}
-                    change="חדשים בתקופה"
-                    positive={true}
-                    subtitle={timeRange === 'all' ? "בלעדיות נכסים (כל הזמן)" : `נכסים בבלעדיות (${timeRange})`}
-                    icon="Home"
-                    color="sky"
-                />
+            <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto sm:overflow-x-visible pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide snap-x touch-pan-x" dir="rtl">
+                <div className="min-w-[280px] sm:min-w-full snap-start">
+                    <KpiCard
+                        title="מלאי נכסים"
+                        value={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length.toString()}
+                        rawValue={filteredPropertiesByTime.filter(p => p.listingType === 'exclusive' || p.isExclusive === true).length}
+                        target={20}
+                        change="חדשים בתקופה"
+                        positive={true}
+                        subtitle={timeRange === 'all' ? "בלעדיות נכסים (כל הזמן)" : `נכסים בבלעדיות (${timeRange})`}
+                        icon="Home"
+                        color="sky"
+                    />
+                </div>
             </div>
 
             {/* Duplicates Banner */}
@@ -387,61 +476,85 @@ export default function Properties() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="חיפוש עיר או רחוב..."
+                                className="w-full bg-slate-50 border-none rounded-xl pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
                             />
                         </div>
-                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg h-9">
-                            <ArrowUpDown size={14} className="text-slate-400" />
-                            <select
-                                value={`${sortConfig?.key}-${sortConfig?.direction}`}
-                                onChange={(e) => {
-                                    const [key, direction] = e.target.value.split('-') as [any, any];
-                                    setSortConfig({ key, direction });
-                                }}
-                                className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
-                            >
-                                <option value="createdAt-desc">חדש קודם</option>
-                                <option value="createdAt-asc">ישן קודם</option>
-                                <option value="price-asc">מחיר (נמוך לגבוה)</option>
-                                <option value="price-desc">מחיר (גבוה לנמוך)</option>
-                            </select>
-                        </div>
-                        <div className="flex bg-slate-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => setViewMode('grid')}
-                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                                title="תצוגת כרטיסיות"
-                            >
-                                <LayoutGrid size={16} />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('table')}
-                                className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                                title="תצוגת טבלה"
-                            >
-                                <List size={16} />
-                            </button>
-                        </div>
+                        {!isMobile && (
+                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg h-9">
+                                <ArrowUpDown size={14} className="text-slate-400" />
+                                <select
+                                    value={`${sortConfig?.key}-${sortConfig?.direction}`}
+                                    onChange={(e) => {
+                                        const [key, direction] = e.target.value.split('-') as [any, any];
+                                        setSortConfig({ key, direction });
+                                    }}
+                                    className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
+                                >
+                                    <option value="createdAt-desc">חדש קודם</option>
+                                    <option value="createdAt-asc">ישן קודם</option>
+                                    <option value="price-asc">מחיר (נמוך לגבוה)</option>
+                                    <option value="price-desc">מחיר (גבוה לנמוך)</option>
+                                </select>
+                            </div>
+                        )}
+                        {!isMobile && (
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button
+                                    onClick={() => setViewMode('grid')}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                    title="תצוגת כרטיסיות"
+                                >
+                                    <LayoutGrid size={16} />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('table')}
+                                    className={`p-1.5 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                    title="תצוגת טבלה"
+                                >
+                                    <List size={16} />
+                                </button>
+                            </div>
+                        )}
+                        {isMobile && (
+                             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl h-10">
+                                <ArrowUpDown size={14} className="text-slate-400" />
+                                <select
+                                    value={`${sortConfig?.key}-${sortConfig?.direction}`}
+                                    onChange={(e) => {
+                                        const [key, direction] = e.target.value.split('-') as [any, any];
+                                        setSortConfig({ key, direction });
+                                    }}
+                                    className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
+                                >
+                                    <option value="createdAt-desc">חדש</option>
+                                    <option value="price-asc">מחיר ↑</option>
+                                    <option value="price-desc">מחיר ↓</option>
+                                </select>
+                            </div>
+                        )}
                     </div>
-                    <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                        {[
-                            { key: 'All', label: 'הכל' },
-                            { key: 'sale', label: 'למכירה' },
-                            { key: 'rent', label: 'להשכרה' },
-                            { key: 'commercial', label: 'מסחרי' },
-                            { key: 'draft', label: 'טיוטות (WhatsApp)' },
-                        ].map(({ key, label }) => (
-                            <button
-                                key={key}
-                                onClick={() => setFilter(key)}
-                                className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (filter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
-                            >
-                                {label}
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                    {tabCounts[key as keyof typeof tabCounts]}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
+                    {!isMobile && (
+                        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                            {[
+                                { key: 'All', label: 'הכל' },
+                                { key: 'sale', label: 'למכירה' },
+                                { key: 'rent', label: 'להשכרה' },
+                                { key: 'commercial', label: 'מסחרי' },
+                                { key: 'draft', label: 'טיוטות (WhatsApp)' },
+                            ].map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setFilter(key)}
+                                    className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (filter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
+                                >
+                                    {label}
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                        {tabCounts[key as keyof typeof tabCounts]}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Content Area */}
@@ -450,9 +563,9 @@ export default function Properties() {
                         <div className="text-center text-slate-400 text-sm py-12">טוען נתונים...</div>
                     ) : sorted.length === 0 ? (
                         <div className="text-center text-slate-400 text-sm py-12">לא נמצאו נכסים התואמים את החיפוש.</div>
-                    ) : viewMode === 'grid' ? (
-                        // GRID VIEW
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    ) : (viewMode === 'grid' || isMobile) ? (
+                        // GRID VIEW (Always on mobile)
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                             {sorted.map((prop: Property) => {
                                 const agent = getPropertyAgent(prop.agentId);
                                 const client = getPropertyClient(prop.id);
@@ -817,6 +930,16 @@ export default function Properties() {
                     </p>
                 </div>
             </div>
+
+            {/* Mobile FAB */}
+            {isMobile && (
+                <button
+                    onClick={() => setShowAddModal(true)}
+                    className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-500/40 flex items-center justify-center z-40 animate-in zoom-in duration-300"
+                >
+                    <Plus size={28} />
+                </button>
+            )}
 
             <AddPropertyModal
                 isOpen={showAddModal}
