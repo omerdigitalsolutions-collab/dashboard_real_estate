@@ -35,7 +35,7 @@ export const listCalendarEvents = async () => {
  */
 export const createCalendarEvent = async (taskId: string) => {
     try {
-        const createEventFn = httpsCallable<{ taskId: string }, { success: boolean; eventId?: string }>(functions, 'calendar-createEvent');
+        const createEventFn = httpsCallable<{ taskId: string }, { success: boolean; eventId?: string; htmlLink?: string }>(functions, 'calendar-createEvent');
         const result = await createEventFn({ taskId });
         return result.data;
     } catch (error) {
@@ -63,7 +63,7 @@ export const disconnectCalendar = async () => {
  */
 export const createEvent = async (payload: any) => {
     try {
-        const createEventFn = httpsCallable<any, { success: boolean; eventId?: string }>(functions, 'calendar-createEvent');
+        const createEventFn = httpsCallable<any, { success: boolean; eventId?: string; htmlLink?: string }>(functions, 'calendar-createEvent');
         const result = await createEventFn(payload);
         return result.data;
     } catch (error) {
