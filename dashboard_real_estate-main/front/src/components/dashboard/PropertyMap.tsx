@@ -86,7 +86,9 @@ interface PropertyMapProps {
 export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: GOOGLE_MAPS_API_KEY || ''
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
+        language: 'he',
+        region: 'IL'
     });
 
     const { properties } = useLiveDashboardData();
