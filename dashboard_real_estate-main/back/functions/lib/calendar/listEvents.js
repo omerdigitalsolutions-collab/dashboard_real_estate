@@ -19,7 +19,6 @@ exports.listEvents = (0, https_1.onCall)({
     cors: true,
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
-    var _a, _b;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     try {
         const authClient = await (0, oauthClient_1.getOAuthClient)(authData.uid);
@@ -48,12 +47,13 @@ exports.listEvents = (0, https_1.onCall)({
     catch (error) {
         if (error instanceof https_1.HttpsError)
             throw error;
-        console.error('[calendar] listEvents error:', error);
-        // Handle the case where the user hasn't authorized yet
-        if (((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes('authorization')) || ((_b = error.message) === null || _b === void 0 ? void 0 : _b.includes('tokens'))) {
-            throw new https_1.HttpsError('unauthenticated', 'Google Calendar access not authorized.');
+        console.error(`[calendar] listEvents error for user ${authData.uid}:`, error);
+        // Handle the case where the user hasn't authorized yet or tokens are invalid
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('authorization') || errorMessage.includes('tokens') || errorMessage.includes('No tokens')) {
+            throw new https_1.HttpsError('unauthenticated', 'חיבור ליומן גוגל פג או לא קיים. אנא התחבר מחדש.');
         }
-        throw new https_1.HttpsError('internal', 'Failed to fetch Google Calendar events.');
+        throw new https_1.HttpsError('internal', 'נכשל פיענוח אירועים מיומן גוגל. בדוק את החיבור.');
     }
 });
 //# sourceMappingURL=listEvents.js.map

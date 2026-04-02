@@ -14,6 +14,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleOAuthCallback = exports.getAuthUrl = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const firestore_1 = require("firebase-admin/firestore");
 const googleapis_1 = require("googleapis");
 const authGuard_1 = require("../config/authGuard");
 const tokenStore_1 = require("./tokenStore");
@@ -116,6 +117,12 @@ exports.handleOAuthCallback = (0, https_1.onRequest)({
         };
         // Persist tokens in Firestore under userTokens/{userId}
         await (0, tokenStore_1.saveUserTokens)(userId.trim(), storedTokens);
+        // Update user profile to mark calendar as enabled
+        const db = (0, firestore_1.getFirestore)();
+        await db.collection('users').doc(userId.trim()).update({
+            'googleCalendar.enabled': true,
+            'googleCalendar.lastConnected': new Date().toISOString(),
+        });
         // Success! Redirect user back to settings with a success flag
         const dashboardUrl = (process.env.DASHBOARD_FRONTEND_URL || 'https://dashboard-6f9d1.web.app').replace(/\/$/, '');
         response.redirect(`${dashboardUrl}/dashboard/settings?tab=integrations&connected=google_calendar`);

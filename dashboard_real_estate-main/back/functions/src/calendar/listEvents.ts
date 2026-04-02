@@ -49,13 +49,14 @@ export const listEvents = onCall({
     } catch (error: any) {
         if (error instanceof HttpsError) throw error;
         
-        console.error('[calendar] listEvents error:', error);
+        console.error(`[calendar] listEvents error for user ${authData.uid}:`, error);
         
-        // Handle the case where the user hasn't authorized yet
-        if (error.message?.includes('authorization') || error.message?.includes('tokens')) {
-            throw new HttpsError('unauthenticated', 'Google Calendar access not authorized.');
+        // Handle the case where the user hasn't authorized yet or tokens are invalid
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('authorization') || errorMessage.includes('tokens') || errorMessage.includes('No tokens')) {
+            throw new HttpsError('unauthenticated', 'חיבור ליומן גוגל פג או לא קיים. אנא התחבר מחדש.');
         }
 
-        throw new HttpsError('internal', 'Failed to fetch Google Calendar events.');
+        throw new HttpsError('internal', 'נכשל פיענוח אירועים מיומן גוגל. בדוק את החיבור.');
     }
 });

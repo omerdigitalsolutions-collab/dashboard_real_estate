@@ -81,7 +81,7 @@ exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperti
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp, whatsappWebhook: whatsapp_1.whatsappWebhook };
 exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights, textToActionAgent: textToAction_1.textToActionAgent, homerChatBot: homerChatBot_1.homerChatBot };
-exports.calendar = { getAuthUrl: calendar_1.getAuthUrl, handleOAuthCallback: calendar_1.handleOAuthCallback, createEvent: calendar_1.createEvent };
+exports.calendar = { getAuthUrl: calendar_1.getAuthUrl, handleOAuthCallback: calendar_1.handleOAuthCallback, createEvent: calendar_1.createEvent, disconnect: calendar_1.disconnect, listEvents: calendar_1.listEvents };
 exports.automation = { webhookProcessGlobalYad2Email: globalYad2Webhook_1.webhookProcessGlobalYad2Email };
 exports.superadmin = {
     superAdminUpdateExpenses: superadmin_1.superAdminUpdateExpenses,

@@ -45,6 +45,20 @@ export const createCalendarEvent = async (taskId: string) => {
 };
 
 /**
+ * Disconnects the Google Calendar integration for the current user.
+ */
+export const disconnectCalendar = async () => {
+    try {
+        const disconnectFn = httpsCallable<void, { success: boolean }>(functions, 'calendar-disconnect');
+        const result = await disconnectFn();
+        return result.data;
+    } catch (error) {
+        console.error('Error disconnecting calendar:', error);
+        throw error;
+    }
+};
+
+/**
  * Creates a generic Google Calendar event with a full payload.
  */
 export const createEvent = async (payload: any) => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { getCalendarAuthUrl } from '../../services/calendarService';
+import { getCalendarAuthUrl, disconnectCalendar } from '../../services/calendarService';
 import { 
     CalendarDays, 
     CheckCircle, 
@@ -9,9 +9,10 @@ import {
     AlertCircle,
     ArrowRightLeft
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export const GoogleCalendarSettings = () => {
-    const { userData } = useAuth();
+    const { userData, refreshUserData } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -40,9 +41,12 @@ export const GoogleCalendarSettings = () => {
         if (!confirm('האם אתה בטוח שברצונך לנתק את החיבור ליומן גוגל?')) return;
         setIsLoading(true);
         try {
-            // Logic for disconnection would go here (calling a service)
-            // For now, we'll just show a message or wait for implementation
-            alert('אפשרות הניתוק תופעל בקרוב. כרגע ניתן לנתק דרך הגדרות האבטחה של גוגל.');
+            await disconnectCalendar();
+            await refreshUserData();
+            toast.success('החיבור ליומן גוגל נותק בהצלחה');
+        } catch (err: any) {
+            console.error('Failed to disconnect calendar:', err);
+            toast.error('שגיאה בניתוק החיבור');
         } finally {
             setIsLoading(false);
         }

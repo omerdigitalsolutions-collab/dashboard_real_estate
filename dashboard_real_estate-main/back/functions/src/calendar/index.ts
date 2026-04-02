@@ -10,6 +10,7 @@
 export { getAuthUrl, handleOAuthCallback } from './oauthHandlers';
 export { createEvent } from './eventManager';
 export { listEvents } from './listEvents';
+export { disconnect } from './disconnect';
 
 // ── Also export utility functions for use by other server-side modules ────────
 export { createCalendarEvent } from './eventManager';
