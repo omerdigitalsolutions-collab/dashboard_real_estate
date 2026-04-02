@@ -5,3 +5,4 @@ export { superAdminGetAgencyUsage } from './usage';
 export { superAdminUpdateAgencyPlan } from './updateSubscription';
 export { superAdminSetAgencyStatus, superAdminSetUserStatus } from './status';
 export { superAdminListAuthUsers } from './admin';
+export { superAdminApproveAgency } from './approveAgency';

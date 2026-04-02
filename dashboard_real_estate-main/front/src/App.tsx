@@ -29,6 +29,7 @@ import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
 import BillingLockScreen from './pages/BillingLockScreen';
+import PendingApproval from './pages/PendingApproval';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
 import OnboardingTour from './components/common/OnboardingTour';
 
@@ -97,6 +98,16 @@ function App() {
           element={
             <ProtectedRoute>
               <AgentSetup />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Pending Approval — shown when agency registration is awaiting admin approval */}
+        <Route
+          path="/pending-approval"
+          element={
+            <ProtectedRoute>
+              <PendingApproval />
             </ProtectedRoute>
           }
         />

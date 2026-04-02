@@ -17,6 +17,7 @@ const oauthClient_1 = require("./oauthClient");
  */
 exports.listEvents = (0, https_1.onCall)({
     cors: ['https://homer.management', 'http://localhost:5173'],
+    invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);

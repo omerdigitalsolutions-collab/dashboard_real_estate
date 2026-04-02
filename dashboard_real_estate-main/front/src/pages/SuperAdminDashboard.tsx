@@ -310,6 +310,20 @@ export default function SuperAdminDashboard() {
         }
     };
 
+    const handleApproveAgency = async (agencyId: string, agencyName: string) => {
+        if (!window.confirm(`האם אתה בטוח שברצונך לאשר כניסה לסוכנות החדשה "${agencyName}"? זו פעולה שתפתח להם גישה למערכת ותשלח להם אימייל פתיחה.`)) return;
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminApproveAgency');
+            await fn({ agencyId });
+            alert(`הסוכנות ${agencyName} אושרה ומשתמשיה הופעלו בהצלחה! אימייל ברוכים הבאים נשלח.`);
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Approve Agency Error:', err);
+            alert("שגיאה באישור סוכנות: " + err.message);
+        }
+    };
+
     const handleSetUserStatus = async (userId: string, currentIsActive: boolean, userName: string) => {
         const newIsActive = !currentIsActive;
         const actionText = newIsActive ? 'להפעיל' : 'להשבית';
@@ -703,7 +717,9 @@ export default function SuperAdminDashboard() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    {ag.status === 'suspended' ? (
+                                                    {ag.status === 'pending_approval' ? (
+                                                        <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-amber-900/40 text-amber-500 border border-amber-500/30 animate-pulse">ממתין לאישור</span>
+                                                    ) : ag.status === 'suspended' ? (
                                                         <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-red-900/40 text-red-500 border border-red-500/30">מושהה</span>
                                                     ) : (
                                                         <span className="inline-flex px-2 py-1 rounded-md text-[10px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-500/30">פעיל</span>
@@ -711,6 +727,15 @@ export default function SuperAdminDashboard() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                        {ag.status === 'pending_approval' && (
+                                                            <button
+                                                                onClick={() => handleApproveAgency(ag.id, ag.name ?? 'ללא שם')}
+                                                                className="p-1.5 rounded-lg border transition-all bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:scale-110"
+                                                                title="אשר סוכנות ופתח גישה למערכת"
+                                                            >
+                                                                <UserCheck className="w-4 h-4" />
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => handleSetAgencyStatus(ag.id, ag.status || 'active', ag.name)}
                                                             className={`p-1.5 rounded-lg border transition-all ${

@@ -46,6 +46,7 @@ function buildBaseOAuth2Client() {
  */
 exports.getAuthUrl = (0, https_1.onCall)({
     cors: ['https://homer.management', 'http://localhost:5173'],
+    invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     // Ensure the caller is an authenticated agent
@@ -90,6 +91,7 @@ exports.getAuthUrl = (0, https_1.onCall)({
  */
 exports.handleOAuthCallback = (0, https_1.onRequest)({
     cors: true,
+    invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request, response) => {
     var _a, _b, _c;

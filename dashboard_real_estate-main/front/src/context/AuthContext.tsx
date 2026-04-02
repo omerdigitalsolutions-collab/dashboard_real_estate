@@ -6,7 +6,7 @@ import {
     ReactNode,
 } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
 import { linkStubUser } from '../services/authService';
@@ -80,8 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          * if the user is already logged in) and again on every subsequent
          * login / logout.  We return its unsubscribe function for cleanup.
          */
+        let unsubUserDoc: (() => void) | null = null;
+
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             console.log('[AuthContext] onAuthStateChanged fired:', firebaseUser ? `User: ${firebaseUser.email} (UID: ${firebaseUser.uid})` : 'LOGGED OUT');
+
+            // Clean up any previous real-time user doc listener
+            if (unsubUserDoc) {
+                unsubUserDoc();
+                unsubUserDoc = null;
+            }
 
             setLoading(true);
 
@@ -138,9 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     }
 
                     if (uidDocSnap.exists()) {
-                        console.log('[AuthContext] Setting userData from doc.');
+                        console.log('[AuthContext] Setting userData and starting real-time listener.');
                         setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...uidDocSnap.data() } as AppUser);
                         setRequireOnboarding(false);
+
+                        // ── REAL-TIME LISTENER ──────────────────────────────────
+                        // When Super Admin approves a pending agency (flips isActive
+                        // to true), this listener fires and the PendingApproval screen
+                        // auto-transitions into the full CRM — no F5 required.
+                        unsubUserDoc = onSnapshot(uidDocRef, (snap) => {
+                            if (snap.exists()) {
+                                console.log('[AuthContext] onSnapshot: user doc updated.');
+                                setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...snap.data() } as AppUser);
+                            }
+                        }, (err) => {
+                            console.warn('[AuthContext] onSnapshot error (non-fatal):', err);
+                        });
                     } else {
                         console.log('[AuthContext] Checking for stubs...');
                         const email = (firebaseUser.email || '').toLowerCase();
@@ -204,7 +225,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         });
 
-        return unsubscribe; // Cleanup listener on unmount
+        return () => {
+            unsubscribe();
+            if (unsubUserDoc) unsubUserDoc();
+        };
     }, []);
 
     const value: AuthContextType = { currentUser, userData, loading, requireOnboarding, refreshUserData, setUserData };

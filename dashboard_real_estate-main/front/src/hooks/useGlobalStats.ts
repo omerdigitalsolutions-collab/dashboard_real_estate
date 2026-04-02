@@ -13,7 +13,7 @@ export interface AgencyRow {
     name: string;
     adminEmail?: string;
     planId?: string;
-    status?: 'active' | 'suspended';
+    status?: 'active' | 'suspended' | 'pending_approval';
     isWhatsappConnected?: boolean;
     createdAt?: Timestamp;
     billing?: {

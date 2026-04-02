@@ -19,6 +19,7 @@ const db = getFirestore();
  */
 export const disconnect = onCall({ 
     cors: ['https://homer.management', 'http://localhost:5173'],
+    invoker: 'public',
 }, async (request) => {
     // 1. Authenticate user
     const authData = await validateUserAuth(request);

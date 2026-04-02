@@ -131,6 +131,7 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
             t.set(agencyRef, {
                 name: agencyName.trim(),
                 subscriptionTier: 'free',
+                status: 'pending_approval',
                 monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
                 settings: {},
                 billing: {
@@ -149,7 +150,8 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
                 phone: normalizedPhone,
                 agencyId: agencyRef.id,
                 role: 'admin',
-                isActive: true,
+                isActive: false,
+                isRegistrationPending: true,
                 createdAt: FieldValue.serverTimestamp(),
             });
 
@@ -189,40 +191,36 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
             const resend = new Resend(apiKey);
             const adminEmail = 'omerdigitalsolutions@gmail.com';
 
+            // Admin notification: new pending registration
             await resend.emails.send({
                 from: 'hOMER CRM <noreply@homer-crm.co.il>',
                 to: adminEmail,
-                subject: `🎉 סוכנות חדשה נרשמה: ${agencyName.trim()}`,
+                subject: `🔔 בקשה חדשה להצטרפות: ${agencyName.trim()}`,
                 html: `
-                <div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                  <h2 style="color: #020b18;">לקוח חדש במערכת!</h2>
-                  <p>סוכנות חדשה סיימה תהליך הרשמה ונמצאת עכשיו בתקופת הניסיון.</p>
-                  <ul style="list-style: none; padding: 0;">
-                    <li><b>שם הסוכנות:</b> ${agencyName.trim()}</li>
-                    <li><b>שם המנהל:</b> ${userName.trim()}</li>
-                    <li><b>אימייל:</b> ${email}</li>
-                    <li><b>טלפון:</b> ${normalizedPhone}</li>
-                    <li><b>זמן הרשמה:</b> ${new Date().toLocaleString('he-IL')}</li>
-                  </ul>
-                  <p>Agency ID: <code>${agencyRef.id}</code></p>
+                <div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.8; color: #1e293b; max-width: 600px; margin: 0 auto;">
+                  <div style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); padding: 32px; border-radius: 16px 16px 0 0; text-align: center;">
+                    <h1 style="color: #38bdf8; font-size: 24px; margin: 0;">🔔 בקשת הצטרפות חדשה</h1>
+                  </div>
+                  <div style="background: #f8fafc; padding: 32px; border-radius: 0 0 16px 16px; border: 1px solid #e2e8f0; border-top: none;">
+                    <p style="color: #475569; font-size: 16px;">סוכנות חדשה השלימה את תהליך ההרשמה וממתינה לאישורך.</p>
+                    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+                      <tr style="background: #f1f5f9;"><td style="padding: 10px 14px; font-weight: bold; color: #64748b; width: 40%;">שם הסוכנות</td><td style="padding: 10px 14px; color: #0f172a; font-weight: 600;">${agencyName.trim()}</td></tr>
+                      <tr><td style="padding: 10px 14px; font-weight: bold; color: #64748b;">שם המנהל</td><td style="padding: 10px 14px; color: #0f172a;">${userName.trim()}</td></tr>
+                      <tr style="background: #f1f5f9;"><td style="padding: 10px 14px; font-weight: bold; color: #64748b;">אימייל</td><td style="padding: 10px 14px; color: #0f172a;">${email}</td></tr>
+                      <tr><td style="padding: 10px 14px; font-weight: bold; color: #64748b;">טלפון</td><td style="padding: 10px 14px; color: #0f172a;">${normalizedPhone}</td></tr>
+                      <tr style="background: #f1f5f9;"><td style="padding: 10px 14px; font-weight: bold; color: #64748b;">זמן הרשמה</td><td style="padding: 10px 14px; color: #0f172a;">${new Date().toLocaleString('he-IL')}</td></tr>
+                      <tr><td style="padding: 10px 14px; font-weight: bold; color: #64748b;">Agency ID</td><td style="padding: 10px 14px; font-family: monospace; color: #6366f1;">${agencyRef.id}</td></tr>
+                    </table>
+                    <div style="text-align: center; margin-top: 24px;">
+                      <a href="https://homer-crm.co.il/dashboard/super-admin"
+                         style="display:inline-block; padding: 14px 36px; background: linear-gradient(135deg, #2563eb, #0ea5e9); color: white; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 15px;">
+                        אשר את הסוכנות בדאשבורד ←
+                      </a>
+                    </div>
+                  </div>
                 </div>`
             });
-
-            await resend.emails.send({
-                from: 'hOMER CRM <noreply@homer-crm.co.il>',
-                to: email,
-                subject: `ברוכים הבאים ל-hOMER CRM! 🎉`,
-                html: `
-                <div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                  <h2 style="color: #020b18;">שלום ${userName.trim()}, ברוכים הבאים ל-hOMER!</h2>
-                  <p>שמחים שבחרת ב-hOMER לניהול סוכנות הנדל"ן שלך: <b>${agencyName.trim()}</b>.</p>
-                  <p>החשבון שלך נוצר בהצלחה וקיבלת <b>7 ימי ניסיון חינם</b> במסלול הפרימיום שלנו.</p>
-                  <br/>
-                  <a href="https://homer-crm.co.il" style="display:inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">היכנס למערכת</a>
-                  <br/><br/>
-                  <p>בהצלחה,<br/>צוות hOMER</p>
-                </div>`
-            });
+            // Note: Welcome email to user is sent later via superAdminApproveAgency when admin approves.
         } catch (emailErr) {
             console.error('[createAgencyAccount] Email error:', emailErr);
         }

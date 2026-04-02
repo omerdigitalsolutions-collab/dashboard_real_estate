@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-    const { currentUser, loading, requireOnboarding } = useAuth();
+    const { currentUser, userData, loading, requireOnboarding } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -33,6 +33,20 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
     if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone')) {
         return <Navigate to="/" replace />;
+    }
+
+    // ── Pending Approval Gate ───────────────────────────────────────────────────
+    // If the user has a Firestore doc but isActive is explicitly false, they are
+    // awaiting Super Admin approval. Route them to the waiting screen.
+    // The onSnapshot listener in AuthContext will auto-lift this gate when approved —
+    // no F5 needed; the screen transitions automatically.
+    if (userData && userData.isActive === false && location.pathname !== '/pending-approval') {
+        return <Navigate to="/pending-approval" replace />;
+    }
+
+    // If already approved and somehow lands on /pending-approval, bounce to dashboard
+    if (userData && userData.isActive !== false && location.pathname === '/pending-approval') {
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <>{children}</>;
