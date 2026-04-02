@@ -447,3 +447,43 @@ export const completeAgentSetup = onCall({ cors: true }, async (request) => {
 
   return { success: true };
 });
+
+/**
+ * addAgentManually — Creates a stub user document without sending an email.
+ * Returns the stub ID so the admin can generate a join link manually.
+ * 
+ * Input:  { name: string, role: 'admin' | 'agent', phone?: string }
+ * Output: { success: true, stubId: string }
+ */
+export const addAgentManually = onCall({ cors: true }, async (request) => {
+  const authData = await validateUserAuth(request);
+
+  if (authData.role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only admins can add team members.');
+  }
+
+  const { name, role, phone } = request.data as {
+    name?: string;
+    role?: string;
+    phone?: string;
+  };
+
+  if (!name?.trim()) {
+    throw new HttpsError('invalid-argument', 'name is required.');
+  }
+
+  const normalizedRole: Role = role === 'admin' ? 'admin' : 'agent';
+
+  const stubRef = await db.collection('users').add({
+    uid: null,
+    email: null, // Manually added users might not have email set yet
+    name: name.trim(),
+    role: normalizedRole,
+    agencyId: authData.agencyId,
+    phone: phone?.trim() || null,
+    isActive: true,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, stubId: stubRef.id };
+});

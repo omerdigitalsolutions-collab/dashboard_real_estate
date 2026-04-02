@@ -78,3 +78,18 @@ export async function deleteAgent(userId: string): Promise<void> {
     );
     await fn({ userId });
 }
+
+/**
+ * [Cloud Function] Manually adds an agent without an email, returning a stub ID.
+ */
+export async function addAgentManually(
+    agencyId: string,
+    data: { name: string; phone?: string; role: UserRole }
+): Promise<string> {
+    const fn = httpsCallable<
+        { name: string; phone?: string; role: string },
+        { success: boolean; stubId: string }
+    >(functions, 'users-addAgentManually');
+    const res = await fn(data);
+    return res.data.stubId;
+}

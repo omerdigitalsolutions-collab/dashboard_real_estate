@@ -1,0 +1,28 @@
+
+> vite-react-typescript-starter@0.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 3654 modules transformed.
+x Build failed in 6.58s
+error during build:
+src/components/settings/AddAgentManuallyModal.tsx (5:9): "addAgentManually" is not exported by "src/services/teamService.ts", imported by "src/components/settings/AddAgentManuallyModal.tsx".
+file: /Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/src/components/settings/AddAgentManuallyModal.tsx:5:9
+
+3: import { useAuth } from '../../context/AuthContext';
+4: import { UserRole } from '../../types';
+5: import { addAgentManually } from '../../services/teamService';
+            ^
+6: import { isValidPhone } from '../../utils/validation';
+
+    at getRollupError (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at error (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/parseAst.js:398:42)
+    at Module.error (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:17040:16)
+    at Module.traceVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:17452:29)
+    at ModuleScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:15070:39)
+    at FunctionScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at FunctionBodyScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at ReturnValueScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at FunctionBodyScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)
+    at BlockScope.findVariable (file:///Users/omerasis/Desktop/dashboard/dashboard_real_estate-main/front/node_modules/rollup/dist/es/shared/node-entry.js:5673:38)

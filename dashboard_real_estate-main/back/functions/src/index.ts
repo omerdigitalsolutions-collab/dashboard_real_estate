@@ -18,7 +18,7 @@ import './config/admin';
 import { createAgencyAccount, checkPhoneAvailable } from './agencies/onboarding';
 
 // ── Users Module ───────────────────────────────────────────────────────────────
-import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup } from './users/team';
+import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually } from './users/team';
 
 // ── Tasks Module ───────────────────────────────────────────────────────────────
 import { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete } from './tasks/cleanup';
@@ -86,7 +86,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 //   catalogs-generateCatalog
 //   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 export const agencies = { createAgencyAccount, checkPhoneAvailable };
-export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup };
+export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
