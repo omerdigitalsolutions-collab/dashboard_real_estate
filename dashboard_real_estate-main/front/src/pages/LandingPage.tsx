@@ -15,7 +15,8 @@ import {
     Facebook,
     Mail,
     Clock,
-    Loader2
+    Loader2,
+    Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -42,6 +43,7 @@ export default function LandingPage() {
     const [contactPhone, setContactPhone] = useState('');
     const [contactEmail, setContactEmail] = useState('');
     const [contactStatus, setContactStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [billingInterval, setBillingInterval] = useState<'monthly' | '6m' | '1year'>('monthly');
 
     const handleContactSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,14 +82,19 @@ export default function LandingPage() {
         }
     };
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
+
 
     const handleRegisterClick = (e: React.MouseEvent) => {
         e.preventDefault();
-        navigate('/register');
+        const pricingSection = document.getElementById('pricing');
+        if (pricingSection) {
+            pricingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            navigate('/register');
+        }
     };
 
-    const handleSubscribe = (_plan: 'solo' | 'boutique' | 'pro' | 'enterprise') => {
+    const handleSubscribe = (_plan: 'basic' | 'advanced' | 'premium') => {
         navigate('/register');
     };
     return (
@@ -434,206 +441,195 @@ export default function LandingPage() {
             </section>
 
             {/* Pricing Section */}
-            <section className="py-24 bg-[#eff5f5] relative border-t border-slate-200/50">
+            <section className="py-24 bg-[#eff5f5] relative border-t border-slate-200/50" id="pricing">
                 <div className="max-w-7xl mx-auto px-6 lg:px-8">
-                    <div className="text-center max-w-3xl mx-auto mb-16">
-                        <h2 className="text-3xl md:text-5xl font-black text-blue-900 mb-4">תוכניות ומחירים</h2>
-                    </div>
+                    <div className="text-center max-w-3xl mx-auto mb-12">
+                        <h2 className="text-4xl md:text-5xl font-black text-blue-900 mb-6">תוכניות ומחירים</h2>
 
-                    <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-start">
-                        {/* Tier 1 - Starter */}
-                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-slate-800 shadow-sm hover:border-[#00e5ff]/30 transition-all flex flex-col h-full group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Starter</h3>
-                                    <p className="text-slate-400 text-sm mt-1 font-medium">לעשות סדר בבלגן</p>
-                                </div>
-                            </div>
-                            <ul className="mt-8 space-y-4 mb-8 flex-1 text-sm md:text-base">
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ניהול לידים (קונים ומוכרים)</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ניהול סטטוס עסקאות ב-Kanban</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>דאשבורד חכם עם נתונים</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ניהול דירות המשרד על המפה</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ייבוא דירות/לידים מאקסל</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ניהול משימות ויומן</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>התאמה בין ליד לדירה</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>קטלוגים דיגיטליים ומיני-סייט</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>מסך דו״ח רווח והפסד (P&L)</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">בוט WhatsApp AI וסינון</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">הודעות תפוצה בווטסאפ</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">סריקת B2B קבוצות ווטסאפ</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">יבוא נכסים חכם (AI) מטקסט</span>
-                                </li>
-                            </ul>
+                        {/* Billing Interval Toggle */}
+                        {/* Refined Billing Interval Toggle (Claude/Premium Style) */}
+                        <div className="flex items-center justify-center p-1 bg-[#1a1a1a] rounded-full w-fit mx-auto mt-8 border border-white/5 shadow-2xl backdrop-blur-md">
                             <button
-                                onClick={() => handleSubscribe('solo')}
-                                className="w-full py-4 bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white font-bold text-lg text-center rounded-xl transition-all"
+                                onClick={() => setBillingInterval('monthly')}
+                                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingInterval === 'monthly' ? 'bg-[#333333] text-white shadow-xl' : 'text-slate-400 hover:text-slate-200'}`}
                             >
-                                בחר Starter
+                                חודשי
                             </button>
-                        </div>
-
-                        {/* Tier 2 (Recommended) - Pro */}
-                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-[#00e5ff]/50 shadow-[0_0_30px_rgba(0,229,255,0.15)] transform lg:-translate-y-4 flex flex-col h-full relative group z-10">
-                            <div className="absolute top-0 inset-x-0 flex justify-center -translate-y-1/2">
-                                <div className="bg-[#00e5ff] text-[#020b18] text-sm font-black px-5 py-1.5 rounded-full shadow-[0_0_15px_rgba(0,229,255,0.4)]">
-                                    הבחירה הפופולרית
-                                </div>
-                            </div>
-                            <div className="flex justify-between items-start mb-4 mt-2">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Pro</h3>
-                                    <p className="text-[#00e5ff]/80 text-sm mt-1 font-medium">למשרדים שרוצים לגדול</p>
-                                </div>
-                            </div>
-                            <ul className="mt-8 space-y-4 mb-8 flex-1 text-sm md:text-base">
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>ניהול לידים, עסקאות ומשימות</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>דאשבורד, דירות במפה ואקסלים</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>התאמה בין ליד לדירה וקטלוגים</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>מסך דו״ח רווח והפסד (P&L)</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">בוט WhatsApp AI וסינון</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">הודעות תפוצה בווטסאפ</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">יבוא נכסים חכם (AI) מטקסט</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">סריקת B2B קבוצות ווטסאפ</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">משתמשים ללא הגבלה</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-slate-600 font-medium border-b border-slate-800 pb-2 strike-through">
-                                    <XCircle className="text-slate-700 w-5 h-5 flex-shrink-0" />
-                                    <span className="line-through">ריבוי מספרי ווטסאפ רובוטיים</span>
-                                </li>
-                            </ul>
                             <button
-                                onClick={() => handleSubscribe('pro')}
-                                className="w-full py-4 bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] font-black text-lg text-center rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.3)] transition-all hover:-translate-y-1"
+                                onClick={() => setBillingInterval('6m')}
+                                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingInterval === '6m' ? 'bg-[#333333] text-white shadow-xl' : 'text-slate-400 hover:text-slate-200'}`}
                             >
-                                התחל 7 ימים ניסיון
+                                חצי שנה
                             </button>
-                        </div>
-
-                        {/* Tier 3 - Enterprise */}
-                        <div className="bg-[#020b18] rounded-[2rem] p-8 border border-slate-800 shadow-sm hover:border-[#00e5ff]/30 transition-all flex flex-col h-full group">
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">Enterprise</h3>
-                                    <p className="text-slate-400 text-sm mt-1 font-medium">לרשתות תיווך ולזיכיונות</p>
-                                </div>
-                            </div>
-                            <ul className="mt-8 space-y-4 mb-8 flex-1 text-sm md:text-base">
-                                <li className="flex items-center gap-3 text-slate-300 font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span>כל יכולות ה-Pro</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold text-[#00e5ff]">סריקת B2B קבוצות ווטסאפ</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">משתמשים וסוכנים ללא הגבלה</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">ריבוי מספרי ווטסאפ למשרד</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">דאשבורד אדמיניסטרציה מתקדם</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-white font-medium border-b border-slate-800 pb-2">
-                                    <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0" />
-                                    <span className="font-bold">מנהל תיק אישי ואינטגרציות API</span>
-                                </li>
-                            </ul>
                             <button
-                                onClick={() => handleSubscribe('enterprise')}
-                                className="w-full py-4 mt-auto bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white font-bold text-lg text-center rounded-xl transition-all block"
+                                onClick={() => setBillingInterval('1year')}
+                                className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${billingInterval === '1year' ? 'bg-[#333333] text-white shadow-xl' : 'text-slate-400 hover:text-slate-200'}`}
                             >
-                                קבל 7 ימים ניסיון דמו
+                                שנתי
                             </button>
                         </div>
                     </div>
 
-                    <div className="mt-16 flex flex-col items-center justify-center gap-3">
-                        <h4 className="text-xl md:text-2xl font-black text-blue-900 mb-4 text-center">
+                    <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+                        {[
+                            {
+                                id: 'basic',
+                                name: 'בסיסי',
+                                subtitle: 'להתחיל נכון',
+                                badge: 'שליטה ובקרה על העסק',
+                                basePrice: 249,
+                                setup: 250,
+                                features: [
+                                    'ניהול לידים (קונים ומוכרים)',
+                                    'ניהול סטטוס עסקאות ב-Kanban',
+                                    'דאשבורד חכם עם נתונים',
+                                    'ניהול דירות המשרד על המפה',
+                                    'ייבוא דירות/לידים מאקסל',
+                                    'ניהול משימות ויומן מתווך',
+                                    'התאמה אוטומטית בין ליד לדירה',
+                                ],
+                                excluded: [
+                                    'בוט WhatsApp AI וסינון',
+                                    'תפוצת הודעות ווטסאפ (Broadcast)',
+                                ]
+                            },
+                            {
+                                id: 'advanced',
+                                name: 'מתקדם',
+                                subtitle: 'למשרדים שרוצים לגדול',
+                                basePrice: 349,
+                                setup: 350,
+                                badge: 'וואטסאפ וקטלוג נכסים',
+                                popular: true,
+                                features: [
+                                    'כל יכולות ה-בסיסי',
+                                    'הודעות תפוצה בווטסאפ (Broadcast)',
+                                    'סינון ופילוח לידים מתקדם',
+                                    'מותאם למשרדי בוטיק',
+                                    'איתור והוספה של נכסים חדשים',
+                                ],
+                                excluded: [
+                                    'בוט WhatsApp AI וסינון',
+                                ]
+                            },
+                            {
+                                id: 'premium',
+                                name: 'פרימיום',
+                                subtitle: 'שליטה מוחלטת ב-AI',
+                                basePrice: 499,
+                                setup: 500,
+                                badge: 'בוט ai שיהפוך את המשרד שלך למכונת לידים',
+                                features: [
+                                    'כל יכולות ה-מתקדם',
+                                    <span className="text-white font-black">בוט WhatsApp AI וסינון לידים (WeBot)</span> as any,
+                                    'ייבוא נכסים חכם (AI) מטקסט',
+                                    'סריקת B2B קבוצות ווטסאפ',
+                                ],
+                                excluded: []
+                            }
+                        ].map((plan) => {
+                            const discount = billingInterval === '6m' ? 0.95 : (billingInterval === '1year' ? 0.875 : 1);
+                            const finalPrice = Math.floor(plan.basePrice * discount);
+
+                            return (
+                                <div key={plan.id} className={`bg-[#020b18] rounded-[2rem] p-8 border ${plan.id === 'advanced' ? 'border-[#00e5ff]/50 shadow-[0_0_40px_rgba(0,229,255,0.1)] lg:-translate-y-4' : 'border-slate-800 shadow-sm'} transition-all flex flex-col h-full group relative backdrop-blur-sm`}>
+                                    {(plan as any).badge && (
+                                        <div className="absolute top-0 inset-x-0 flex justify-center -translate-y-[60%] z-20">
+                                            <div className="transform -rotate-2 hover:rotate-1 transition-all duration-300 relative group cursor-default">
+                                                <div className="absolute inset-0 bg-gradient-to-r from-[#00e5ff] to-blue-400 blur-md opacity-40 group-hover:opacity-75 transition-opacity duration-300"></div>
+                                                <div className="relative bg-gradient-to-r from-[#00e5ff] to-[#00bfff] text-[#020b18] text-xs md:text-sm font-black px-6 py-2 shadow-[0_5px_15px_rgba(0,229,255,0.3)] skew-x-[-12deg] border border-[#00e5ff]/50">
+                                                    <div className="skew-x-[12deg] tracking-wide text-center">
+                                                        {(plan as any).badge}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="relative z-10 mb-8">
+                                        <h3 className="text-2xl font-black text-white group-hover:text-[#00e5ff] transition-colors">{plan.name}</h3>
+                                        <p className="text-slate-400 text-sm mt-1 font-medium">{plan.subtitle}</p>
+
+                                        <div className="mt-6 flex flex-col">
+                                            <div className="h-7 flex items-end gap-3 mb-1">
+                                                {billingInterval !== 'monthly' && (
+                                                    <>
+                                                        <span className="text-slate-500 font-bold text-xl line-through decoration-red-500/70 decoration-2">₪{plan.basePrice}</span>
+                                                        <span className="text-[#00e5ff] text-xs font-black bg-[#00e5ff]/10 px-2 py-1 rounded-md border border-[#00e5ff]/20">
+                                                            חיסכון של {billingInterval === '6m' ? '5%' : '12.5%'}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-5xl font-black text-white tracking-tight">₪{finalPrice}</span>
+                                                <span className="text-slate-500 font-bold text-lg">/חודש</span>
+                                            </div>
+                                            <div className="h-6 mt-2">
+                                                {billingInterval !== 'monthly' && (
+                                                    <span className="text-blue-400 font-black text-sm uppercase tracking-wider block">
+                                                        תשלום {billingInterval === '6m' ? 'חצי-שנתי' : 'שנתי'} מראש
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <ul className="space-y-4 mb-10 flex-1 text-sm md:text-base border-t border-slate-800/50 pt-8 min-h-[420px]">
+                                        {plan.features.map((feature) => (
+                                            <li key={feature} className="flex items-start gap-3 text-slate-300 font-medium group/feat">
+                                                <CheckCircle2 className="text-[#00e5ff] w-5 h-5 flex-shrink-0 mt-0.5 group-hover/feat:scale-110 transition-transform" />
+                                                <span>{feature}</span>
+                                            </li>
+                                        ))}
+                                        {plan.excluded?.map((feature) => (
+                                            <li key={feature} className="flex items-start gap-3 text-slate-600 font-medium opacity-50">
+                                                <XCircle className="text-slate-800 w-5 h-5 flex-shrink-0 mt-0.5" />
+                                                <span className="line-through">{feature}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+
+                                    <button
+                                        onClick={() => handleSubscribe(plan.id as any)}
+                                        className={`w-full py-4 font-black text-lg text-center rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${plan.popular ? 'bg-[#00e5ff] hover:bg-[#00cce6] text-[#020b18] shadow-[0_0_25px_rgba(0,229,255,0.2)]' : 'bg-transparent border border-slate-700 hover:border-[#00e5ff] hover:bg-[#00e5ff]/10 text-white'}`}
+                                    >
+                                        בחר מסלול {plan.name}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Global Limit Disclaimer - Simple Version */}
+                    <div className="mt-8 max-w-3xl mx-auto text-center px-4">
+                        <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                            <span className="block font-black text-slate-700 mb-1"></span>
+                            *כל מסלול דורש בנוסף עלות אפיון והקמה חד פעמית במחיר של התשלום החודשי של המערכת.
+                            המחירים הם עבור משתמש אדמין + 5 משתמשים נוספים. כל משתמש נוסף כרוך בתוספת של ₪39 שקלים נוספים.
+                        </p>
+                    </div>
+
+                    <div className="mt-16 flex flex-col items-center justify-center gap-4">
+                        <h4 className="text-xl md:text-2xl font-black text-blue-900 text-center">
                             הגעת עד לכאן ועוד לא נרשמת? הגיע הזמן!
                         </h4>
-                        {userData ? (
-                            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
-                                כניסה למערכת
-                                <ArrowLeft size={28} strokeWidth={2.5} />
-                            </Link>
-                        ) : (
-                            <button onClick={handleRegisterClick} className="w-full sm:w-auto px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl md:text-2xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
-                                הירשם עכשיו
-                                <ArrowLeft size={28} strokeWidth={2.5} />
-                            </button>
-                        )}
+                        <div className="flex flex-col sm:flex-row gap-4 w-full justify-center px-4 md:px-0">
+                            {userData ? (
+                                <Link to="/dashboard" className="w-full sm:w-80 px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3">
+                                    כניסה למערכת
+                                    <ArrowLeft size={28} strokeWidth={3} />
+                                </Link>
+                            ) : (
+                                <button onClick={handleRegisterClick} className="w-full sm:w-80 px-10 py-5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xl shadow-2xl shadow-emerald-500/40 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                                    הירשם עכשיו
+                                    <ArrowLeft size={28} strokeWidth={3} />
+                                </button>
+                            )}
+                        </div>
                         {!userData && (
-                            <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-5 py-2 rounded-full shadow-sm border border-emerald-100">
+                            <span className="text-emerald-700 font-bold text-lg bg-emerald-50 px-6 py-2.5 rounded-full shadow-sm border border-emerald-100 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5" />
                                 🎁 7 ימי ניסיון ללא עלות!
                             </span>
                         )}

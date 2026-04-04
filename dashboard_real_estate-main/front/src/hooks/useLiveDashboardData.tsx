@@ -349,7 +349,12 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         if (toDelete.length > 0) {
             import('../services/taskService').then(({ deleteTask }) => {
-                toDelete.forEach(id => deleteTask(id).catch(console.error));
+                toDelete.forEach(id => {
+                    const taskToDelete = tasks.find(t => t.id === id);
+                    if (taskToDelete) {
+                        deleteTask(taskToDelete).catch(console.error);
+                    }
+                });
             });
         }
     }, [tasks]);

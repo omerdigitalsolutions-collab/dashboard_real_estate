@@ -59,10 +59,12 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
     const email = request.auth.token.email ?? '';
 
     // 2. Input Validation
-    const { agencyName, userName, phone } = request.data as {
+    const { agencyName, userName, phone, legalConsent, leadId } = request.data as {
         agencyName?: string;
         userName?: string;
         phone?: string;
+        legalConsent?: { acceptedAt: string; version: string };
+        leadId?: string;
     };
 
     if (!agencyName?.trim() || !userName?.trim() || !phone?.trim()) {
@@ -72,8 +74,17 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
         );
     }
 
-    // 3. Phone verification via Firebase Auth
+    // 2.1 Legal Consent Validation
+    if (!legalConsent || !legalConsent.acceptedAt || !legalConsent.version) {
+        throw new HttpsError(
+            'invalid-argument',
+            'Legal consent is mandatory for registration.'
+        );
+    }
+
+    // 3. Phone verification via Firebase Auth (TEMPORARILY DISABLED)
     const normalizedPhone = phone.trim();
+    /*
     const userRecord = await getAuth().getUser(uid);
     if (userRecord.phoneNumber !== normalizedPhone) {
         throw new HttpsError(
@@ -81,6 +92,7 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
             'אימות מספר הטלפון לא הושלם. אנא חזור לשלב אימות ה-SMS ונסה שוב.'
         );
     }
+    */
 
     // 4. Duplicate Trial Check (outside transaction)
     const oldTrials = await db.collection('activeTrials')
@@ -134,6 +146,12 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
                 status: 'pending_approval',
                 monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
                 settings: {},
+                legalConsent: {
+                    acceptedBy: uid,
+                    acceptedAt: legalConsent.acceptedAt,
+                    version: legalConsent.version,
+                    ipAddress: request.rawRequest?.ip || 'unknown'
+                },
                 billing: {
                     planId: 'free_trial',
                     status: 'trialing',
@@ -142,6 +160,16 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
                 },
                 createdAt: FieldValue.serverTimestamp(),
             });
+
+            // Conversion trigger: mark lead as converted if exists
+            if (leadId) {
+                const leadRef = db.collection('leads').doc(leadId);
+                t.update(leadRef, {
+                    status: 'converted',
+                    convertedToAgencyId: agencyRef.id,
+                    convertedAt: FieldValue.serverTimestamp()
+                });
+            }
 
             t.set(userRef, {
                 uid,
@@ -248,3 +276,42 @@ export const createAgencyAccount = onCall({ cors: true, secrets: [resendApiKey] 
 
     return { success: true, agencyId: agencyRef.id };
 });
+
+/**
+ * captureLead — Records initial onboarding data (Step 0) for lead management.
+ * Returns a leadId to be used in createAgencyAccount.
+ * This is publicly accessible to allow "immediate save" before auth.
+ */
+export const captureLead = onCall({ cors: true }, async (request) => {
+    try {
+        const { name, email, phone } = request.data as {
+            name?: string;
+            email?: string;
+            phone?: string;
+        };
+
+        if (!name?.trim() || !phone?.trim()) {
+            throw new HttpsError('invalid-argument', 'name and phone are required for lead capture.');
+        }
+
+        const leadRef = db.collection('leads').doc();
+        const leadData = {
+            name: name.trim(),
+            email: email?.trim() || '',
+            phone: phone.trim(),
+            source: 'onboarding_step_0',
+            status: 'pending',
+            createdAt: FieldValue.serverTimestamp(),
+            ipAddress: request.rawRequest?.ip || 'unknown'
+        };
+
+        await leadRef.set(leadData);
+
+        return { leadId: leadRef.id };
+    } catch (error: any) {
+        console.error('[captureLead] Error:', error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'שגיאה בשמירת פרטי הליד. אנא נסה שוב.');
+    }
+});
+

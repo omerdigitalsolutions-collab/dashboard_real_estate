@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RecaptchaVerifier, linkWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Loader2, Phone, XCircle, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
 import { isValidPhone, normalizePhoneIL } from '../utils/validation';
-import { checkPhoneAvailableService } from '../services/authService';
+import { checkPhoneAvailableService, completeOnboarding as completeAuthOnboarding, forceRefreshToken } from '../services/authService';
+import { completeOnboarding, updateAgencyGoals } from '../services/agencyService';
+import { updateUserProfile } from '../services/userService';
 
 export default function VerifyPhonePage() {
-    const { currentUser, requireOnboarding } = useAuth();
+    const { currentUser, requireOnboarding, refreshUserData } = useAuth();
+    const location = useLocation() as { state?: { phone?: string; fromOnboarding?: boolean } };
     const navigate = useNavigate();
 
-    const [phone, setPhone] = useState('');
+    const [phone, setPhone] = useState(location.state?.phone || '');
     const [step, setStep] = useState<'input' | 'send' | 'verify'>('input');
     const [code, setCode] = useState('');
     const [error, setError] = useState('');
@@ -110,7 +113,71 @@ export default function VerifyPhonePage() {
             if (auth.currentUser) {
                 await auth.currentUser.getIdToken(true);
             }
-            // Upon success, move to onboarding
+
+            // --- New Onboarding Finalization Logic ---
+            const rawData = sessionStorage.getItem('onboarding_pending_data');
+            if (rawData) {
+                const data = JSON.parse(rawData);
+                try {
+                    // 1. Create the agency via Cloud Function
+                    const result = await completeAuthOnboarding(
+                        auth.currentUser?.uid || '',
+                        auth.currentUser?.email || '',
+                        data.fullName,
+                        normalizePhoneIL(phone)!,
+                        data.agencyName
+                    );
+
+                    const newAgencyId = result.agencyId;
+
+                    // 2. Refresh token to get agencyId claim
+                    await forceRefreshToken();
+                    await refreshUserData();
+
+                    // 3. Save extended profile
+                    await completeOnboarding(newAgencyId, {
+                        agencyName: data.agencyName,
+                        slogan: data.slogan,
+                        officePhone: data.officePhone,
+                        licenseNumber: data.licenseNumber,
+                        mainServiceArea: data.mainServiceArea,
+                        specialization: data.specialization
+                    });
+
+                    // 4. Save goals
+                    if (data.goals.agency.revenue || data.goals.agency.deals) {
+                        await updateAgencyGoals(newAgencyId, {
+                            commissions: data.goals.agency.revenue,
+                            deals: data.goals.agency.deals,
+                            leads: 0
+                        });
+                    }
+
+                    if (data.goals.personal.revenue || data.goals.personal.deals) {
+                        await updateUserProfile(auth.currentUser?.uid || '', {
+                            goals: {
+                                monthly: {
+                                    revenue: data.goals.personal.revenue,
+                                    deals: data.goals.personal.deals
+                                },
+                                yearly: { revenue: 0, deals: 0 }
+                            }
+                        });
+                    }
+
+                    // Success!
+                    sessionStorage.removeItem('onboarding_pending_data');
+                    navigate('/pending-approval', { replace: true });
+                    return;
+                } catch (onboardingErr) {
+                    console.error('Finalization error:', onboardingErr);
+                    setError('אימות הטלפון הצליח, אך אירעה שגיאה בשמירת פרטי הסוכנות. אנא פנה לתמיכה.');
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            // Fallback for legacy flows
             navigate('/onboarding', { replace: true });
         } catch (err: any) {
             console.error('Error verifying code:', err);

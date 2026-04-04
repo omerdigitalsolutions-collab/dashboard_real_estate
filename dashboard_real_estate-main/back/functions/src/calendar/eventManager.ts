@@ -12,10 +12,11 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { google } from 'googleapis';
 import { validateUserAuth } from '../config/authGuard';
 import { getOAuthClient } from './oauthClient';
-import { CalendarEventPayload, CreateEventResult } from './types';
+import { CalendarEventPayload, CreateEventResult, AppTask } from './types';
 
 // ── Core Utility ──────────────────────────────────────────────────────────────
 
@@ -128,11 +129,130 @@ export const createEvent = onCall({
     };
 
     try {
+        // 1. Create the event in Google Calendar
         const result = await createCalendarEvent(authData.uid, payload);
-        return { success: true, ...result };
-    } catch (error) {
+
+        // 2. Synchronize with CRM by creating a Task
+        const db = getFirestore();
+        const taskRef = db.collection('tasks').doc();
+
+        const taskData: AppTask = {
+            id: taskRef.id,
+            agencyId: authData.agencyId,
+            createdBy: authData.uid,
+            title: `פגישה: ${payload.summary}`,
+            description: payload.description || '',
+            dueDate: Timestamp.fromDate(new Date(payload.start.dateTime)),
+            priority: 'Medium', // Default to Medium, matching frontend case
+            isCompleted: false,
+            type: 'meeting',
+            googleEventId: result.eventId,
+            relatedTo: payload.relatedTo,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+        };
+
+        await taskRef.set(taskData);
+
+        return { 
+            success: true, 
+            ...result,
+            taskId: taskRef.id 
+        };
+    } catch (error: any) {
         if (error instanceof HttpsError) throw error;
+        
         console.error('[calendar] createEvent error:', error);
-        throw new HttpsError('internal', 'Failed to create Google Calendar event.');
+
+        // Status 401 or specific OAuth 'invalid_grant' suggests a broken connection
+        if (error.code === 401 || error.message?.includes('invalid_grant')) {
+            const db = getFirestore();
+            await db.collection('users').doc(authData.uid).update({
+                'googleCalendar.enabled': false,
+            });
+            throw new HttpsError('unauthenticated', 'Google Calendar authorization expired. Please reconnect.');
+        }
+
+        throw new HttpsError('internal', 'Failed to create event and sync with CRM.');
+    }
+});
+
+// ── deleteEvent ───────────────────────────────────────────────────────────────
+
+/**
+ * Cloud Function: calendar-deleteEvent
+ *
+ * Securely deletes a Google Calendar event and its associated CRM Task.
+ * Standardizes deletion flow to ensure no orphaned events remain in the calendar.
+ */
+export const deleteEvent = onCall({
+    cors: ['https://homer.management', 'http://localhost:5173'],
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+}, async (request) => {
+    const authData = await validateUserAuth(request);
+    const { taskId } = request.data;
+
+    if (!taskId) {
+        throw new HttpsError('invalid-argument', 'Missing taskId.');
+    }
+
+    const db = getFirestore();
+
+    try {
+        // 1. Fetch task and verify ownership (Tenant Isolation)
+        const taskRef = db.collection('tasks').doc(taskId);
+        const taskDoc = await taskRef.get();
+
+        if (!taskDoc.exists) {
+            throw new HttpsError('not-found', 'Task not found in CRM.');
+        }
+
+        const taskData = taskDoc.data();
+
+        if (taskData?.agencyId !== authData.agencyId) {
+            throw new HttpsError('permission-denied', 'You do not have permission to delete this task.');
+        }
+
+        const googleEventId = taskData?.googleEventId;
+
+        // 2. Delete from Google Calendar (if linked)
+        if (googleEventId) {
+            try {
+                // getOAuthClient handles token retrieval and refresh listeners
+                const authClient = await getOAuthClient(authData.uid);
+                const calendar = google.calendar({ version: 'v3', auth: authClient as any });
+
+                await calendar.events.delete({
+                    calendarId: 'primary',
+                    eventId: googleEventId
+                });
+            } catch (gcalError: any) {
+                // If event is already gone (404/410), we ignore and proceed to CRM cleanup
+                const code = gcalError.code || gcalError.response?.status;
+                if (code !== 404 && code !== 410) {
+                    console.error('[calendar] GCal delete error:', gcalError);
+                    
+                    // Specific OAuth failure (token revoked/expired)
+                    if (code === 401 || gcalError.message?.includes('invalid_grant')) {
+                        await db.collection('users').doc(authData.uid).update({
+                            'googleCalendar.enabled': false
+                        });
+                    } else {
+                        // For other critical failures, we stop to avoid inconsistent state
+                        throw new HttpsError('internal', 'Failed to delete event from Google Calendar.');
+                    }
+                }
+            }
+        }
+
+        // 3. Finalize: Delete Task from Firestore
+        await taskRef.delete();
+
+        return { success: true };
+
+    } catch (error: any) {
+        if (error instanceof HttpsError) throw error;
+        console.error('[calendar] deleteEvent error:', error);
+        throw new HttpsError('internal', 'An unexpected error occurred during event deletion.');
     }
 });

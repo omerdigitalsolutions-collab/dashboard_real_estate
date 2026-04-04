@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
 import { useAuth } from '../../context/AuthContext';
 import { markTourAsSeen } from '../../services/userService';
+import WelcomeExperience from './WelcomeExperience';
 
 const tourSteps: Step[] = [
   {
@@ -65,17 +66,35 @@ const tourSteps: Step[] = [
 export default function OnboardingTour() {
   const { userData } = useAuth();
   const [run, setRun] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    // Only run if the user data is loaded and they haven't seen the tour yet
-    if (userData && userData.uid && userData.hasSeenTour !== true) {
-        // Small delay to ensure the DOM elements (targets) are fully rendered
-        const timer = setTimeout(() => {
-            setRun(true);
-        }, 1500);
-        return () => clearTimeout(timer);
+    // Determine which onboarding phase to show
+    if (userData && userData.uid) {
+        if (userData.hasSeenWelcome !== true) {
+            setShowWelcome(true);
+        } else if (userData.hasSeenTour !== true) {
+            // If they saw welcome but not tour, wait a bit then start tour
+            const timer = setTimeout(() => {
+                setRun(true);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
     }
   }, [userData]);
+
+  const handleStartTour = () => {
+    setShowWelcome(false);
+    // Brief delay to allow welcome modal exit animation before starting joyride
+    setTimeout(() => {
+        setRun(true);
+    }, 400);
+  };
+
+  const handleSkipTotal = () => {
+      setShowWelcome(false);
+      setRun(false);
+  };
 
   const handleJoyrideCallback = async (data: CallBackProps) => {
     const { status } = data;
@@ -93,59 +112,66 @@ export default function OnboardingTour() {
     }
   };
 
-  if (!run) return null;
-
   return (
-    <Joyride
-      callback={handleJoyrideCallback}
-      continuous
-      run={run}
-      steps={tourSteps}
-      showProgress
-      showSkipButton
-      locale={{
-        back: 'חזור',
-        close: 'סגור',
-        last: 'סיום',
-        next: 'הבא',
-        skip: 'דלג על הסיור',
-      }}
-      styles={{
-        options: {
-          arrowColor: '#ffffff',
-          backgroundColor: '#ffffff',
-          overlayColor: 'rgba(15, 23, 42, 0.6) /* Tailwind slate-900 with 60% opacity */',
-          primaryColor: '#2563eb', /* Tailwind blue-600 */
-          textColor: '#1e293b', /* Tailwind slate-800 */
-          width: 400,
-          zIndex: 1000,
-        },
-        tooltipContainer: {
-          textAlign: 'right',
-          direction: 'rtl',
-        },
-        buttonNext: {
-          backgroundColor: '#2563eb',
-          borderRadius: '8px',
-          fontWeight: 600,
-          fontSize: '14px',
-          padding: '8px 16px',
-        },
-        buttonBack: {
-          marginRight: 10,
-          color: '#64748b', /* Tailwind slate-500 */
-          fontWeight: 600,
-        },
-        buttonSkip: {
-          color: '#94a3b8', /* Tailwind slate-400 */
-          fontWeight: 600,
-        },
-        tooltip: {
-            borderRadius: '16px',
-            padding: '24px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-        }
-      }}
-    />
+    <>
+      {showWelcome && (
+          <WelcomeExperience 
+            onStartTour={handleStartTour}
+            onClose={handleSkipTotal}
+          />
+      )}
+
+      <Joyride
+        callback={handleJoyrideCallback}
+        continuous
+        run={run}
+        steps={tourSteps}
+        showProgress
+        showSkipButton
+        locale={{
+          back: 'חזור',
+          close: 'סגור',
+          last: 'סיום',
+          next: 'הבא',
+          skip: 'דלג על הסיור',
+        }}
+        styles={{
+          options: {
+            arrowColor: '#ffffff',
+            backgroundColor: '#ffffff',
+            overlayColor: 'rgba(15, 23, 42, 0.6)',
+            primaryColor: '#2563eb',
+            textColor: '#1e293b',
+            width: 400,
+            zIndex: 1000,
+          },
+          tooltipContainer: {
+            textAlign: 'right',
+            direction: 'rtl',
+          },
+          buttonNext: {
+            backgroundColor: '#2563eb',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '14px',
+            padding: '8px 16px',
+          },
+          buttonBack: {
+            marginRight: 10,
+            color: '#64748b',
+            fontWeight: 600,
+          },
+          buttonSkip: {
+            color: '#94a3b8',
+            fontWeight: 600,
+          },
+          tooltip: {
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+          }
+        }}
+      />
+    </>
   );
 }

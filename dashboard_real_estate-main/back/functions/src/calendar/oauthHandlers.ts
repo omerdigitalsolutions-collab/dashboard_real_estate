@@ -21,7 +21,6 @@ import { StoredTokens } from './types';
 /** Google Calendar scope required to create / read events. */
 const CALENDAR_SCOPES = [
     'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/calendar.readonly',
 ];
 
 // ── Internal: build a bare client from env vars only (no user tokens needed) ─

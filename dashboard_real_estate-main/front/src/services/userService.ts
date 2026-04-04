@@ -36,6 +36,14 @@ export async function updateUserWhatsAppTemplates(
 }
 
 /**
+ * Marks the initial welcome experience as seen for the user.
+ */
+export async function markWelcomeAsSeen(userId: string): Promise<void> {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { hasSeenWelcome: true });
+}
+
+/**
  * Marks the onboarding tour as seen for the user.
  */
 export async function markTourAsSeen(userId: string): Promise<void> {

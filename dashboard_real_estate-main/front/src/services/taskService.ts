@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AppTask } from '../types';
+import { deleteCalendarEvent } from './calendarService';
 
 const COLLECTION = 'tasks';
 
@@ -100,9 +101,23 @@ export async function toggleTaskCompletion(
     });
 }
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
-
-export async function deleteTask(taskId: string): Promise<void> {
-    const ref = doc(db, COLLECTION, taskId);
-    await deleteDoc(ref);
+/**
+ * deleteTask — Deletes a task from the system.
+ * If the task is linked to a Google Calendar event, it delegates the deletion
+ * to the backend Cloud Function to ensure synchronized cleanup.
+ */
+export async function deleteTask(task: AppTask): Promise<void> {
+    try {
+        if (task.googleEventId) {
+            // Use the Cloud Function for synchronized deletion (API + DB)
+            await deleteCalendarEvent(task.id);
+        } else {
+            // Local-only task: delete directly from Firestore
+            const ref = doc(db, COLLECTION, task.id);
+            await deleteDoc(ref);
+        }
+    } catch (error) {
+        console.error('Error in deleteTask:', error);
+        throw new Error('שגיאה במחיקת המשימה. אנא נסה שוב.');
+    }
 }

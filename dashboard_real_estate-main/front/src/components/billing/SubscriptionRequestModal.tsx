@@ -24,10 +24,9 @@ const SubscriptionRequestModal: React.FC<SubscriptionRequestModalProps> = ({ isO
     const [phone, setPhone] = useState(userData?.phone || '');
 
     const PLAN_LABELS: Record<string, string> = {
-        'solo': 'Starter',
-        'pro': 'Pro (349 ₪)',
-        'boutique': 'Boutique (899 ₪)',
-        'enterprise': 'Enterprise'
+        'basic': 'בסיסי (279 ₪)',
+        'advanced': 'מתקדם (349 ₪)',
+        'premium': 'פרימיום (499 ₪)',
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

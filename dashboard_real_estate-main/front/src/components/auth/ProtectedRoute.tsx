@@ -19,16 +19,12 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
 
     if (requireOnboarding) {
-        // If they don't have a verified phone, send to verify-phone
-        // (Unless they are already there)
-        if (!currentUser.phoneNumber && location.pathname !== '/verify-phone') {
-            return <Navigate to="/verify-phone" replace />;
+        // If they are on onboarding or verify-phone, let them stay
+        if (location.pathname === '/onboarding' || location.pathname === '/verify-phone') {
+            return <>{children}</>;
         }
-        // If they DO have a verified phone, send to onboarding
-        // (Unless they are already there or at /verify-phone where we do local redirect)
-        if (currentUser.phoneNumber && location.pathname !== '/onboarding' && location.pathname !== '/verify-phone') {
-            return <Navigate to="/onboarding" replace />;
-        }
+        // Otherwise, send to onboarding first (new flow)
+        return <Navigate to="/onboarding" replace />;
     }
 
     if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone')) {

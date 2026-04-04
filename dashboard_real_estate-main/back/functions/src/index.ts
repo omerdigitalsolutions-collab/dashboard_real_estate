@@ -15,7 +15,7 @@ setGlobalOptions({ region: 'europe-west1' });
 import './config/admin';
 
 // ── Agencies Module ────────────────────────────────────────────────────────────
-import { createAgencyAccount, checkPhoneAvailable } from './agencies/onboarding';
+import { createAgencyAccount, checkPhoneAvailable, captureLead } from './agencies/onboarding';
 
 // ── Users Module ───────────────────────────────────────────────────────────────
 import { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually } from './users/team';
@@ -85,7 +85,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 //   leads-updateLead  |  leads-getLiveLeads  |  leads-matchPropertiesForLead
 //   catalogs-generateCatalog
 //   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
-export const agencies = { createAgencyAccount, checkPhoneAvailable };
+export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
 export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };

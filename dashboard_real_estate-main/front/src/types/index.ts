@@ -96,6 +96,7 @@ export interface AppUser {
     };
     createdAt?: Timestamp;
     hasSeenTour?: boolean;
+    hasSeenWelcome?: boolean;
 }
 
 export interface UserPreferences {
@@ -251,6 +252,7 @@ export interface AppTask {
         type: 'lead' | 'property';
         name?: string;
     };
+    googleEventId?: string;
     createdAt?: Timestamp;
 }
 

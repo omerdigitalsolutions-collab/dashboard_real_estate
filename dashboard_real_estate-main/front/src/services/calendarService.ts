@@ -58,9 +58,6 @@ export const disconnectCalendar = async () => {
     }
 };
 
-/**
- * Creates a generic Google Calendar event with a full payload.
- */
 export const createEvent = async (payload: any) => {
     try {
         const createEventFn = httpsCallable<any, { success: boolean; eventId?: string; htmlLink?: string }>(functions, 'calendar-createEvent');
@@ -68,6 +65,21 @@ export const createEvent = async (payload: any) => {
         return result.data;
     } catch (error) {
         console.error('Error creating calendar event:', error);
+        throw error;
+    }
+};
+
+/**
+ * Deletes a Google Calendar event and its CRM task via backend.
+ * @param taskId - The Firestore task ID to delete.
+ */
+export const deleteCalendarEvent = async (taskId: string): Promise<boolean> => {
+    try {
+        const deleteEventCall = httpsCallable<{ taskId: string }, { success: boolean }>(functions, 'calendar-deleteEvent');
+        const result = await deleteEventCall({ taskId });
+        return result.data.success;
+    } catch (error) {
+        console.error('Error deleting calendar event:', error);
         throw error;
     }
 };

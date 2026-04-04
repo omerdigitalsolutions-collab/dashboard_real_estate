@@ -58,6 +58,13 @@ export interface CalendarEventPayload {
     end: CalendarDateTime;
     /** Optional list of attendees to invite. */
     attendees?: CalendarAttendee[];
+
+    /** Polymorphic CRM relationship (e.g. Lead or Property). */
+    relatedTo?: {
+        id: string;
+        type: 'lead' | 'property';
+        name: string;
+    };
 }
 
 // ── Create Event Result ───────────────────────────────────────────────────────
@@ -71,6 +78,31 @@ export interface CreateEventResult {
 }
 
 // ── Entity Linking ────────────────────────────────────────────────────────────
+
+/**
+ * The CRM entry structure for synchronization with Firestore.
+ * Matches the frontend interface 'AppTask' in front/src/types/index.ts.
+ */
+export interface AppTask {
+    id: string;
+    agencyId: string;
+    createdBy: string; // The user ID of the agent who created the task
+    title: string;
+    description?: string;
+    dueDate: any; // Firestore Timestamp
+    priority: 'High' | 'Medium' | 'Low';
+    isCompleted: boolean;
+    completedAt?: any | null;
+    type: 'meeting' | 'call' | 'general';
+    googleEventId?: string;
+    relatedTo?: {
+        id: string;
+        type: 'lead' | 'property';
+        name?: string;
+    };
+    createdAt?: any;
+    updatedAt?: any;
+}
 
 /**
  * The CRM entity types that can be linked to a Google Calendar event.

@@ -353,6 +353,10 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    match /userTokens/{document=**} {
+      allow read, write: if false;
+    }
+
     match /cities/{cityId}/properties/{propertyId} {
       allow read: if isAuthed();
       allow create, update, delete: if isSuperAdmin();

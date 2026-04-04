@@ -72,15 +72,8 @@ function App() {
           <Route path="/join" element={<AgentJoin />} />
         </Route>
 
-        {/* Onboarding (new agency admins) */}
-        <Route
-          path="/onboarding"
-          element={
-            <ProtectedRoute>
-              <Onboarding />
-            </ProtectedRoute>
-          }
-        />
+        {/* Onboarding (new agency admins) - Now public for Step 0 lead capture */}
+        <Route path="/onboarding" element={<Onboarding />} />
 
         {/* Dedicated SMS Verification before full onboarding */}
         <Route
