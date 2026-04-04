@@ -518,11 +518,11 @@ export default function LandingPage() {
                                 subtitle: 'שליטה מוחלטת ב-AI',
                                 basePrice: 499,
                                 setup: 500,
-                                badge: 'בוט ai שיהפוך את המשרד שלך למכונת לידים',
+                                badge: 'בוט AI שיהפוך את המשרד שלך למכונת לידים',
                                 features: [
                                     'כל יכולות ה-מתקדם',
-                                    <span className="text-white font-black">בוט WhatsApp AI וסינון לידים (WeBot)</span> as any,
-                                    'ייבוא נכסים חכם (AI) מטקסט',
+                                    <span className="text-white font-black">בוט WhatsApp AI וסינון לידים </span> as any,
+                                    'ייבוא נכסים חכם (AI) מתמונה או טקסט',
                                     'סריקת B2B קבוצות ווטסאפ',
                                 ],
                                 excluded: []

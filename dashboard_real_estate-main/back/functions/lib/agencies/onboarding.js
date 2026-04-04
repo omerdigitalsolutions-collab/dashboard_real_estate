@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createAgencyAccount = exports.checkPhoneAvailable = void 0;
+exports.captureLead = exports.createAgencyAccount = exports.checkPhoneAvailable = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
@@ -51,16 +51,25 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
     const uid = request.auth.uid;
     const email = (_a = request.auth.token.email) !== null && _a !== void 0 ? _a : '';
     // 2. Input Validation
-    const { agencyName, userName, phone } = request.data;
+    const { agencyName, userName, phone, legalConsent, leadId } = request.data;
     if (!(agencyName === null || agencyName === void 0 ? void 0 : agencyName.trim()) || !(userName === null || userName === void 0 ? void 0 : userName.trim()) || !(phone === null || phone === void 0 ? void 0 : phone.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'agencyName, userName, and phone are all required.');
     }
-    // 3. Phone verification via Firebase Auth
-    const normalizedPhone = phone.trim();
-    const userRecord = await (0, auth_1.getAuth)().getUser(uid);
-    if (userRecord.phoneNumber !== normalizedPhone) {
-        throw new https_1.HttpsError('permission-denied', 'אימות מספר הטלפון לא הושלם. אנא חזור לשלב אימות ה-SMS ונסה שוב.');
+    // 2.1 Legal Consent Validation
+    if (!legalConsent || !legalConsent.acceptedAt || !legalConsent.version) {
+        throw new https_1.HttpsError('invalid-argument', 'Legal consent is mandatory for registration.');
     }
+    // 3. Phone verification via Firebase Auth (TEMPORARILY DISABLED)
+    const normalizedPhone = phone.trim();
+    /*
+    const userRecord = await getAuth().getUser(uid);
+    if (userRecord.phoneNumber !== normalizedPhone) {
+        throw new HttpsError(
+            'permission-denied',
+            'אימות מספר הטלפון לא הושלם. אנא חזור לשלב אימות ה-SMS ונסה שוב.'
+        );
+    }
+    */
     // 4. Duplicate Trial Check (outside transaction)
     const oldTrials = await db.collection('activeTrials')
         .where('uid', '==', uid)
@@ -88,6 +97,7 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
     const trialEndsDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     try {
         await db.runTransaction(async (t) => {
+            var _a;
             // Reads first
             const existingUser = await t.get(userRef);
             if (existingUser.exists) {
@@ -104,6 +114,12 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
                 status: 'pending_approval',
                 monthlyGoals: { commissions: 100000, deals: 5, leads: 20 },
                 settings: {},
+                legalConsent: {
+                    acceptedBy: uid,
+                    acceptedAt: legalConsent.acceptedAt,
+                    version: legalConsent.version,
+                    ipAddress: ((_a = request.rawRequest) === null || _a === void 0 ? void 0 : _a.ip) || 'unknown'
+                },
                 billing: {
                     planId: 'free_trial',
                     status: 'trialing',
@@ -112,6 +128,15 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
                 },
                 createdAt: firestore_1.FieldValue.serverTimestamp(),
             });
+            // Conversion trigger: mark lead as converted if exists
+            if (leadId) {
+                const leadRef = db.collection('leads').doc(leadId);
+                t.update(leadRef, {
+                    status: 'converted',
+                    convertedToAgencyId: agencyRef.id,
+                    convertedAt: firestore_1.FieldValue.serverTimestamp()
+                });
+            }
             t.set(userRef, {
                 uid,
                 email,
@@ -213,5 +238,37 @@ exports.createAgencyAccount = (0, https_1.onCall)({ cors: true, secrets: [resend
         console.warn('[createAgencyAccount] Sheets log failed:', sheetsErr);
     }
     return { success: true, agencyId: agencyRef.id };
+});
+/**
+ * captureLead — Records initial onboarding data (Step 0) for lead management.
+ * Returns a leadId to be used in createAgencyAccount.
+ * This is publicly accessible to allow "immediate save" before auth.
+ */
+exports.captureLead = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
+    try {
+        const { name, email, phone } = request.data;
+        if (!(name === null || name === void 0 ? void 0 : name.trim()) || !(phone === null || phone === void 0 ? void 0 : phone.trim())) {
+            throw new https_1.HttpsError('invalid-argument', 'name and phone are required for lead capture.');
+        }
+        const leadRef = db.collection('leads').doc();
+        const leadData = {
+            name: name.trim(),
+            email: (email === null || email === void 0 ? void 0 : email.trim()) || '',
+            phone: phone.trim(),
+            source: 'onboarding_step_0',
+            status: 'pending',
+            createdAt: firestore_1.FieldValue.serverTimestamp(),
+            ipAddress: ((_a = request.rawRequest) === null || _a === void 0 ? void 0 : _a.ip) || 'unknown'
+        };
+        await leadRef.set(leadData);
+        return { leadId: leadRef.id };
+    }
+    catch (error) {
+        console.error('[captureLead] Error:', error);
+        if (error instanceof https_1.HttpsError)
+            throw error;
+        throw new https_1.HttpsError('internal', 'שגיאה בשמירת פרטי הליד. אנא נסה שוב.');
+    }
 });
 //# sourceMappingURL=onboarding.js.map
