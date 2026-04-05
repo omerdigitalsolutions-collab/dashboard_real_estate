@@ -9,6 +9,7 @@ const resend_1 = require("resend");
 const authGuard_1 = require("../config/authGuard");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = (0, firestore_1.getFirestore)();
+const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 /**
  * updateAgentRole — Changes the role of a team member.
  *
@@ -226,6 +227,7 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
     // ── Read Agency Name ─────────────────────────────────────────────────────────
     const agencyDoc = await db.doc(`agencies/${authData.agencyId}`).get();
     const agencyName = ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'הסוכנות שלנו';
+    const inviteToken = generateToken();
     // ── Create Stub Document ─────────────────────────────────────────────────────
     const stubRef = await db.collection('users').add({
         uid: null, // linked when the agent first signs in
@@ -236,13 +238,12 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
         phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
         isActive: true,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
+        inviteToken,
     });
     const stubId = stubRef.id;
     // ── Compute Join URL ─────────────────────────────────────────────────────────
-    const baseUrl = (appUrl === null || appUrl === void 0 ? void 0 : appUrl.trim())
-        ? appUrl.trim().replace(/\/$/, '')
-        : 'https://your-app.web.app'; // fallback — frontend passes real origin
-    const joinLink = `${baseUrl}/join?token=${stubId}`;
+    const baseUrl = 'https://homer.management';
+    const joinLink = `${baseUrl}/join?token=${inviteToken}`;
     // ── Send Invite Email ────────────────────────────────────────────────────────
     const apiKey = resendApiKey.value();
     if (apiKey) {
@@ -273,7 +274,7 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
         const msg = encodeURIComponent(`שלום ${name.trim()}! 👋\nהוזמנת להצטרף ל${agencyName} כסוכן נדל"ן.\nלחץ על הקישור כדי להצטרף: ${joinLink}`);
         whatsappUrl = `https://wa.me/${intl}?text=${msg}`;
     }
-    return { success: true, stubId, whatsappUrl };
+    return { success: true, stubId, inviteToken, whatsappUrl };
 });
 /**
  * getInviteInfo — Public (no-auth) function to fetch invite details from a stub ID.
@@ -288,8 +289,20 @@ exports.getInviteInfo = (0, https_1.onCall)({ cors: true }, async (request) => {
     if (!(token === null || token === void 0 ? void 0 : token.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'token is required.');
     }
-    const stubDoc = await db.doc(`users/${token.trim()}`).get();
-    if (!stubDoc.exists) {
+    let stubsSnap = await db.collection('users')
+        .where('inviteToken', '==', token.trim())
+        .limit(1)
+        .get();
+    let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+    // Fallback for legacy invitations (token was docId)
+    if (!stubDoc && token.trim().length >= 20) {
+        const legacyDoc = await db.collection('users').doc(token.trim()).get();
+        const legacyData = legacyDoc.data();
+        if (legacyDoc.exists && !(legacyData === null || legacyData === void 0 ? void 0 : legacyData.inviteToken)) {
+            stubDoc = legacyDoc;
+        }
+    }
+    if (!stubDoc) {
         throw new https_1.HttpsError('not-found', 'Invite token not found or already used.');
     }
     const stub = stubDoc.data();
@@ -328,11 +341,23 @@ exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request)
     if (!(token === null || token === void 0 ? void 0 : token.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'token is required.');
     }
-    const stubRef = db.doc(`users/${token.trim()}`);
-    const stubDoc = await stubRef.get();
-    if (!stubDoc.exists) {
+    let stubsSnap = await db.collection('users')
+        .where('inviteToken', '==', token.trim())
+        .limit(1)
+        .get();
+    let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+    // Fallback for legacy invitations (token was docId)
+    if (!stubDoc && token.trim().length >= 20) {
+        const legacyDoc = await db.collection('users').doc(token.trim()).get();
+        const legacyData = legacyDoc.data();
+        if (legacyDoc.exists && !(legacyData === null || legacyData === void 0 ? void 0 : legacyData.inviteToken)) {
+            stubDoc = legacyDoc;
+        }
+    }
+    if (!stubDoc) {
         throw new https_1.HttpsError('not-found', 'Invite token not found.');
     }
+    const stubRef = stubDoc.ref;
     const stub = stubDoc.data();
     // Ensure the caller is the linked agent
     if (stub.uid !== request.auth.uid) {
@@ -360,6 +385,7 @@ exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request)
  * Output: { success: true, stubId: string }
  */
 exports.addAgentManually = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can add team members.');
@@ -378,7 +404,10 @@ exports.addAgentManually = (0, https_1.onCall)({ cors: true }, async (request) =
         phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
         isActive: true,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
+        inviteToken: generateToken(),
     });
-    return { success: true, stubId: stubRef.id };
+    const stubDoc = await stubRef.get();
+    const inviteToken = (_a = stubDoc.data()) === null || _a === void 0 ? void 0 : _a.inviteToken;
+    return { success: true, stubId: stubRef.id, inviteToken };
 });
 //# sourceMappingURL=team.js.map

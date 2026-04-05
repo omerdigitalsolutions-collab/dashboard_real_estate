@@ -94,6 +94,30 @@ Return a raw JSON array of objects with EXACTLY these keys:
 
 Do not wrap in markdown blocks. Return ONLY a parseable JSON array. Ignore completely empty rows.`;
         }
+        else if (entityType === 'deals' || entityType === 'deal') {
+            systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
+You will receive raw transaction data or image text. Intelligently map this data into a strictly formatted JSON array of objects.
+Rules for deal objects:
+- "propertyName" (string - address or name of the property)
+- "leadName" (string - name of the buyer/client)
+- "leadPhone" (string - phone of the buyer/client)
+- "price" (number - total deal value)
+- "projectedCommission" (number - expected commission amount)
+- "stage" (string - 'משא ומתן', 'סגירה', 'נחתם', 'בוטל')
+- "agentName" (string - name of the agent handling the deal)
+- "notes" (string - extra details about the transaction)
+Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping.`;
+        }
+        else if (entityType === 'agents' || entityType === 'agent') {
+            systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
+You will receive team member lists or image text. Intelligently map this data into a strictly formatted JSON array of objects.
+Rules for agent objects:
+- "name" (string - full name)
+- "email" (string - must be unique)
+- "phone" (string)
+- "role" (string - 'admin' or 'agent')
+Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping.`;
+        }
         else if (entityType === 'combined' || entityType === 'mixed') {
             systemPrompt = `You are an expert data extraction assistant for a real estate CRM.
 You will receive a mixed file that might contain both Lead (client/owner) information and Property information in the same row or alternating rows.
@@ -105,7 +129,7 @@ For each logical record, extract:
 Return ONLY a valid parseable JSON array of objects. Do not use markdown wrapping (\`\`\`json) in the response.`;
         }
         else {
-            throw new https_1.HttpsError('invalid-argument', `Unsupported entityType '${entityType}'. Must be properties, leads, combined, mixed, or expenses.`);
+            throw new https_1.HttpsError('invalid-argument', `Unsupported entityType '${entityType}'. Must be properties, leads, deals, agents, combined, mixed, or expenses.`);
         }
         // Decide payload format (if it's base64 image or text)
         let contents = [];

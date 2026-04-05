@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import { useSearchParams } from 'react-router-dom';
@@ -20,12 +20,12 @@ import { Lead, Property, TimeRange } from '../types';
 import { deleteLead } from '../services/leadService';
 
 const statusColors: Record<string, string> = {
-  new: 'bg-sky-50 text-sky-600 border border-sky-100',
-  contacted: 'bg-amber-50 text-amber-600 border border-amber-100',
-  meeting_set: 'bg-emerald-50 text-emerald-600 border border-emerald-100',
-  won: 'bg-green-50 text-green-600 border border-green-100',
-  lost: 'bg-slate-50 text-slate-600 border border-slate-200',
-  import: 'bg-sky-50 text-sky-600 border border-sky-100',
+  new: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
+  contacted: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  meeting_set: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+  won: 'bg-green-500/10 text-green-400 border border-green-500/20',
+  lost: 'bg-slate-700/50 text-slate-400 border border-slate-600',
+  import: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
 };
 
 const statusLabels: Record<string, string> = {
@@ -221,28 +221,33 @@ export default function Leads() {
   };
 
   return (
-    <div className="relative min-h-screen pb-24 md:pb-8 bg-slate-50/50" dir="rtl">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 px-4 md:px-0 pt-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">ניהול לידים</h1>
-          <p className="text-slate-500 text-sm mt-1">ניהול ומעקב אחר לקוחות פוטנציאליים</p>
+    <div className="relative min-h-screen pb-24 md:pb-8" dir="rtl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 px-4 md:px-0 pt-6">
+        <div className="relative">
+          <div className="absolute -right-4 top-0 w-1 h-12 bg-blue-600 rounded-full blur-sm opacity-50 hidden md:block" />
+          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+            ניהול לידים
+            <span className="text-xs font-bold px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20 shadow-sm">
+              BETA
+            </span>
+          </h1>
+          <p className="text-slate-400 text-sm mt-1 font-medium">ניהול ומעקב אחר לקוחות פוטנציאליים ושליחת קטלוגים</p>
         </div>
 
         {/* Desktop actions */}
-        <div className="hidden md:flex gap-3">
+        <div className="hidden md:flex items-center gap-4">
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
+            className="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl hover:bg-slate-50 transition-all font-bold shadow-sm hover:shadow-md active:scale-95"
           >
             <Upload size={18} className="text-slate-400" />
             ייבוא לידים
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold shadow-lg shadow-blue-500/20"
+            className="flex items-center gap-2.5 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all font-black shadow-xl shadow-blue-500/25 active:scale-95 group"
           >
-            <Plus size={20} />
+            <Plus size={22} className="group-hover:rotate-90 transition-transform duration-300" />
             ליד חדש
           </button>
         </div>
@@ -280,22 +285,22 @@ export default function Leads() {
 
       <div className="px-4 md:px-0">
         {/* Search and Filters Card */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6">
-          <div className="flex flex-col gap-4">
-            <div className="relative">
-              <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="bg-[#0f172a]/80 backdrop-blur-md p-5 rounded-[2rem] shadow-xl border border-slate-800 mb-8">
+          <div className="flex flex-col gap-6">
+            <div className="relative group">
+              <Search size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="חיפוש לפי שם, טלפון או נכס..."
-                className="w-full pr-10 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all text-right"
+                className="w-full pr-12 pl-4 py-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-base font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500/50 transition-all text-right shadow-inner text-white placeholder:text-slate-500"
               />
             </div>
 
-            <div className="flex overflow-x-auto pb-2 -mb-2 scrollbar-hide gap-2 px-1 snap-x touch-pan-x">
+            <div className="flex overflow-x-auto pb-1 -mb-1 scrollbar-hide gap-3 px-1 snap-x touch-pan-x">
                <button
                 onClick={() => setFilter('All')}
-                className={`flex-shrink-0 px-5 py-2 rounded-full text-xs font-bold transition-all snap-start shadow-sm border ${filter === 'All' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-xs font-black transition-all snap-start shadow-sm border-2 ${filter === 'All' ? 'bg-blue-600 text-white border-blue-600 shadow-blue-200' : 'bg-white text-slate-500 border-slate-50 hover:border-slate-200 hover:text-slate-700'}`}
               >
                 הכל
               </button>
@@ -303,10 +308,10 @@ export default function Leads() {
                 <button
                   key={f}
                   onClick={(e) => { e.stopPropagation(); setFilter(f); }}
-                  className={`flex-shrink-0 whitespace-nowrap px-5 py-2 rounded-full border text-xs font-bold transition-all snap-start shadow-sm ${
+                  className={`px-5 py-2 rounded-xl text-sm font-black whitespace-nowrap transition-all border snap-start ${
                     filter === f
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200'
+                      ? 'bg-blue-500 border-blue-400 text-white shadow-lg shadow-blue-500/25 scale-105'
+                      : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200 hover:border-slate-600'
                   }`}
                 >
                   {statusLabels[f] || f}
@@ -344,43 +349,53 @@ export default function Leads() {
 
         <PendingLeadsInbox />
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mt-6">
+        <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl shadow-xl border border-slate-800 overflow-hidden mt-6">
           {/* Tabs */}
-          <div className="flex border-b border-slate-100 bg-slate-50/10 p-1.5">
+          <div className="flex border-b border-slate-800 bg-slate-900/50 p-1.5">
+            <div className="flex bg-slate-800/80 p-1.5 rounded-[1.25rem] w-full md:w-fit border border-slate-700/50">
             <button
-              onClick={() => { setActiveTab('buyer'); setSelectedLeadIds(new Set()); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'buyer' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:bg-slate-100/50'}`}
+              onClick={() => setActiveTab('buyer')}
+              className={`flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-sm font-black transition-all ${
+                activeTab === 'buyer'
+                  ? 'bg-blue-500 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-               <Users size={16} />
-               רוכשים ({filteredLeadsByTime.filter(l => l.type === 'buyer').length || 0})
+              <Users size={16} />
+              רוכשים
             </button>
             <button
-              onClick={() => { setActiveTab('seller'); setSelectedLeadIds(new Set()); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'seller' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:bg-slate-100/50'}`}
+              onClick={() => setActiveTab('seller')}
+              className={`flex items-center gap-2.5 px-8 py-2.5 rounded-xl text-sm font-black transition-all ${
+                activeTab === 'seller'
+                  ? 'bg-blue-500 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-               <Home size={16} />
-               מוכרים ({filteredLeadsByTime.filter(l => l.type === 'seller').length || 0})
+              <Home size={16} />
+              מוכרים
             </button>
           </div>
+          </div>
 
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/30">
              {/* Time actions */}
-            <div className="flex bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
+            <div className="flex bg-slate-800/50 border border-slate-700 p-1 rounded-xl shadow-inner">
                 <button
                   onClick={() => handleRangeChange('1m')}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === '1m' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === '1m' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-slate-400'}`}
                 >
                   חודש
                 </button>
                 <button
                   onClick={() => handleRangeChange('3m')}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === '3m' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === '3m' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-slate-400'}`}
                 >
                   רבעון
                 </button>
                 <button
                   onClick={() => handleRangeChange('all')}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === 'all' ? 'bg-blue-50 text-blue-600' : 'text-slate-500'}`}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${timeRange === 'all' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-slate-400'}`}
                 >
                   הכל
                 </button>
@@ -388,9 +403,9 @@ export default function Leads() {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors shadow-sm shrink-0"
+              className="w-10 h-10 flex items-center justify-center bg-slate-800/50 border border-slate-700 text-slate-400 rounded-xl hover:bg-slate-750 hover:text-slate-200 transition-colors shadow-sm shrink-0"
             >
-              <RefreshCw size={16} className={isRefreshing ? "animate-spin text-blue-600" : ""} />
+              <RefreshCw size={16} className={isRefreshing ? "animate-spin text-blue-400" : ""} />
             </button>
           </div>
 
@@ -398,19 +413,19 @@ export default function Leads() {
           {!isMobile ? (
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse">
-                <thead className="bg-slate-50/50">
+                <thead className="bg-slate-800/50">
                   <tr>
-                    <th className="px-4 py-3 border-b border-slate-100 w-12 text-center">
+                    <th className="px-4 py-3 border-b border-slate-700 w-12 text-center">
                       <input
                         type="checkbox"
                         checked={processedLeads.length > 0 && selectedLeadIds.size === processedLeads.length}
                         onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
                       />
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">איש קשר</th>
+                    <th className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700">איש קשר</th>
                     <th
-                      className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 cursor-pointer group"
+                      className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700 cursor-pointer group"
                       onClick={() => handleSort('potentialValue')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -418,9 +433,9 @@ export default function Leads() {
                         <SortIcon column="potentialValue" />
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">סוכן מטפל</th>
+                    <th className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700">סוכן מטפל</th>
                     <th
-                      className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 cursor-pointer group"
+                      className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700 cursor-pointer group"
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -429,7 +444,7 @@ export default function Leads() {
                       </div>
                     </th>
                     <th
-                      className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 cursor-pointer group"
+                      className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700 cursor-pointer group"
                       onClick={() => handleSort('createdAt')}
                     >
                       <div className="flex items-center gap-1.5">
@@ -437,10 +452,10 @@ export default function Leads() {
                         <SortIcon column="createdAt" />
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">פעולות</th>
+                    <th className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-wide border-b border-slate-700">פעולות</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-800/50">
                   {loading ? (
                     <tr>
                       <td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">טוען נתונים...</td>
@@ -453,7 +468,7 @@ export default function Leads() {
                     processedLeads.map((lead) => (
                       <tr
                         key={lead.id}
-                        className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                        className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
                         onClick={() => setProfileLeadId(lead.id)}
                       >
                         <td className="px-4 py-4 w-12 text-center">
@@ -461,17 +476,17 @@ export default function Leads() {
                             type="checkbox"
                             checked={selectedLeadIds.has(lead.id)}
                             onChange={() => handleSelectRow(lead.id)}
-                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer"
                           />
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700 flex-shrink-0">
+                            <div className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-sm font-bold text-blue-400 flex-shrink-0 border border-blue-500/20">
                               {lead.name.charAt(0)}
                             </div>
                             <div>
-                              <span className="block text-sm font-semibold text-slate-800">{lead.name}</span>
-                              <span className="block text-xs text-slate-500 mt-0.5" dir="ltr">{lead.phone}</span>
+                              <span className="block text-sm font-black text-white">{lead.name}</span>
+                              <span className="block text-xs text-slate-500 mt-0.5 font-medium" dir="ltr">{lead.phone}</span>
                             </div>
                           </div>
                         </td>
@@ -480,13 +495,13 @@ export default function Leads() {
                             {activeTab === 'buyer' ? (
                               <>
                                 {lead.requirements?.desiredCity && lead.requirements.desiredCity.length > 0 && (
-                                  <span className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-100 rounded px-2 py-0.5">
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-800/50 rounded px-2 py-0.5 border border-slate-700/50">
                                     <MapPin size={10} />
                                     {lead.requirements.desiredCity.join(', ')}
                                   </span>
                                 )}
                                 {lead.requirements?.maxBudget && (
-                                  <span className="block text-xs font-medium text-slate-700">עד ₪{lead.requirements.maxBudget.toLocaleString()}</span>
+                                  <span className="block text-xs font-bold text-slate-300">עד ₪{lead.requirements.maxBudget.toLocaleString()}</span>
                                 )}
                               </>
                             ) : (
@@ -497,20 +512,20 @@ export default function Leads() {
                                     return (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); setSelectedProperty(sellerProperty); }}
-                                        className="flex items-center gap-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors border border-blue-100"
+                                        className="flex items-center gap-1.5 text-xs text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-lg transition-colors border border-blue-500/20"
                                       >
-                                        <Home size={12} className="text-blue-500" />
-                                        <span className="font-semibold truncate max-w-[150px]">{sellerProperty.address}</span>
+                                        <Home size={12} className="text-blue-400" />
+                                        <span className="font-bold truncate max-w-[150px]">{sellerProperty.address}</span>
                                       </button>
                                     );
                                   }
                                   return (
                                     <button
                                       onClick={(e) => { e.stopPropagation(); setAddingPropertyForLeadId(lead.id); }}
-                                      className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition-colors border border-slate-200"
+                                      className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800/50 hover:bg-slate-800 px-2.5 py-1 rounded-lg transition-colors border border-slate-700"
                                     >
                                       <Plus size={12} />
-                                      <span className="font-semibold">שייך נכס</span>
+                                      <span className="font-bold">שייך נכס</span>
                                     </button>
                                   );
                                 })()}
@@ -523,10 +538,10 @@ export default function Leads() {
                             const agent = agents?.find(a => a.uid === lead.assignedAgentId || a.id === lead.assignedAgentId);
                             return agent ? (
                               <div className="flex items-center gap-1.5">
-                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-700 flex-shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-300 flex-shrink-0 border border-slate-700">
                                   {agent.name.charAt(0)}
                                 </div>
-                                <span className="text-sm font-medium text-slate-700">{agent.name}</span>
+                                <span className="text-sm font-bold text-slate-300">{agent.name}</span>
                               </div>
                             ) : (
                               <span className="text-xs text-slate-400">טרם שויך</span>
@@ -543,29 +558,41 @@ export default function Leads() {
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
+                             {activeTab === 'buyer' && (
+                               <button
+                                 onClick={(e) => { e.stopPropagation(); setMatchingLead(lead); }}
+                                 className="p-1.5 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 transition-all hover:scale-110"
+                                 title="התאמה חכמה"
+                               >
+                                 <Sparkles size={18} fill="currentColor" fillOpacity={0.1} />
+                               </button>
+                             )}
                              {lead.phone && (
                               <a
                                 href={`https://wa.me/${lead.phone.replace(/^0/, '972').replace(/[^\d]/g, '')}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all hover:scale-110"
+                                title="שלח וואטסאפ"
                               >
-                                <MessageSquare size={16} />
+                                <MessageSquare size={18} />
                               </a>
                             )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                             <button
+                               onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
+                               className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all hover:scale-110"
+                               title="ערוך ליד"
+                             >
+                               <Pencil size={18} />
+                             </button>
+                             <button
+                               onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
+                               className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all hover:scale-110"
+                               title="מחק ליד"
+                             >
+                               <Trash2 size={18} />
+                             </button>
                           </div>
                         </td>
                       </tr>
@@ -575,23 +602,23 @@ export default function Leads() {
               </table>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+             <div className="divide-y divide-slate-800">
               {processedLeads.length === 0 ? (
                 <div className="px-4 py-12 text-center text-slate-400 text-sm">לא נמצאו לקוחות.</div>
               ) : (
                 processedLeads.map((lead) => (
-                  <div
+                   <div
                     key={lead.id}
                     onClick={() => setProfileLeadId(lead.id)}
-                    className="p-5 hover:bg-slate-50/50 transition-colors active:bg-slate-100"
+                    className="p-5 hover:bg-slate-800/30 transition-colors active:bg-slate-800"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-lg font-bold text-blue-700 border-2 border-white shadow-sm shrink-0">
+                         <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-lg font-black text-blue-400 border-2 border-blue-500/20 shadow-sm shrink-0">
                           {lead.name.charAt(0)}
                         </div>
                         <div className="overflow-hidden">
-                          <h3 className="font-bold text-slate-900 text-base truncate">{lead.name}</h3>
+                          <h3 className="font-black text-white text-base truncate">{lead.name}</h3>
                           <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 uppercase tracking-tight border border-blue-100">
                             {statusLabels[lead.status] || lead.status}
                           </span>
@@ -605,18 +632,18 @@ export default function Leads() {
                       </button>
                     </div>
 
-                    <div className="flex flex-col gap-3 py-4 border-y border-slate-50 text-sm text-slate-600">
+                     <div className="flex flex-col gap-3 py-4 border-y border-slate-800/50 text-sm text-slate-400">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500 shadow-sm border border-blue-100/50">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shadow-sm border border-blue-500/20">
                           <Phone size={14} />
                         </div>
-                        <span dir="ltr" className="font-bold text-slate-700">{lead.phone}</span>
+                        <span dir="ltr" className="font-bold text-slate-300">{lead.phone}</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shadow-sm border border-orange-100/50">
+                       <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 shadow-sm border border-orange-500/20">
                           <Search size={14} />
                         </div>
-                        <span className="text-slate-600 font-medium truncate">
+                        <span className="text-slate-400 font-medium truncate">
                           {activeTab === 'buyer' 
                             ? `${lead.requirements?.desiredCity?.join(', ') || 'כל עיר'} • עד ₪${lead.requirements?.maxBudget?.toLocaleString() || 'לא צוין'}`
                             : properties?.find(p => p.leadId === lead.id)?.address || 'אין נכס משוייך'
@@ -625,24 +652,35 @@ export default function Leads() {
                       </div>
                     </div>
 
-                    <div className="mt-4 flex gap-3">
-                      {lead.phone && (
-                        <a 
-                          href={`https://wa.me/${lead.phone.replace(/^0/, '972').replace(/[^\d]/g, '')}`} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex-1 bg-emerald-500 text-white py-3 rounded-2xl text-center font-bold text-xs hover:bg-emerald-600 transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
-                        >
-                          <MessageSquare size={16} />
-                          שלח וואטסאפ
-                        </a>
-                      )}
-                      <button 
+                    <div className="mt-4 flex flex-col gap-3">
+                      <div className="flex gap-3">
+                         {activeTab === 'buyer' && (
+                           <button 
+                            onClick={(e) => { e.stopPropagation(); setMatchingLead(lead); }}
+                            className="flex-1 bg-amber-500 text-white py-3.5 rounded-2xl text-center font-black text-xs hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                           >
+                            <Sparkles size={16} fill="white" />
+                            התאמה חכמה
+                           </button>
+                         )}
+                         {lead.phone && (
+                          <a 
+                            href={`https://wa.me/${lead.phone.replace(/^0/, '972').replace(/[^\d]/g, '')}`} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 bg-emerald-500 text-white py-3.5 rounded-2xl text-center font-black text-xs hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2"
+                          >
+                            <MessageSquare size={16} />
+                            וואטסאפ
+                          </a>
+                        )}
+                      </div>
+                       <button 
                         onClick={(e) => { e.stopPropagation(); setProfileLeadId(lead.id); }}
-                        className="flex-1 bg-white border border-slate-200 text-slate-700 py-3 rounded-2xl text-center font-bold text-xs hover:bg-slate-50 transition-all shadow-sm"
+                        className="w-full bg-slate-800/50 border-2 border-slate-700 text-slate-300 py-3.5 rounded-2xl text-center font-black text-xs hover:bg-slate-800 transition-all shadow-sm"
                       >
-                        פרטים מלאים
+                        פרטים מלאים לעריכה
                       </button>
                     </div>
                   </div>
@@ -651,8 +689,8 @@ export default function Leads() {
             </div>
           )}
 
-          <div className="px-4 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/20">
-            <p className="text-xs text-slate-400">מציג <span className="font-bold text-slate-600">{processedLeads.length}</span> לקוחות</p>
+           <div className="px-4 py-4 border-t border-slate-800 flex items-center justify-between bg-slate-900/30">
+            <p className="text-xs text-slate-500">מציג <span className="font-bold text-slate-400">{processedLeads.length}</span> לקוחות</p>
           </div>
         </div>
       </div>

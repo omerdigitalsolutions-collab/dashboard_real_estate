@@ -41,6 +41,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
     const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
     const [assignedAgentId, setAssignedAgentId] = useState<string>(properties[0]?.agentId || '');
+    const [includeVat, setIncludeVat] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
@@ -52,6 +53,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
             setSelectedSellerId('');
             setCommissionPercentage('2');
             setAssignedAgentId(properties[0]?.agentId || '');
+            setIncludeVat(false);
             setErrorMsg('');
         }
     }, [isOpen, properties, activeStages]);
@@ -74,13 +76,15 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
             // Create a deal for each property
             const creations = properties.map(property => {
                 const displayPrice = property.price || 0;
-                const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
+                const base = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
+                const calculatedCommission = includeVat ? base : base * 1.18;
 
                 const dealPayload: any = {
                     propertyId: property.id,
                     ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
                     stage: selectedStage,
                     projectedCommission: calculatedCommission,
+                    isVatIncluded: includeVat,
                     createdBy: userData.name || userData.email || 'Agent',
                 };
 
@@ -204,6 +208,25 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
                             className={inputCls}
                             dir="ltr"
                         />
+                        <div className="flex items-center gap-2 mt-3">
+                            <button
+                                type="button"
+                                onClick={() => setIncludeVat(!includeVat)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[11px] font-bold ${includeVat ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}
+                            >
+                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${includeVat ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                    {includeVat && <div className="w-2 h-2 bg-blue-600 rounded-sm" />}
+                                </div>
+                                כולל מע"מ (18%)
+                            </button>
+                            {properties.length === 1 && properties[0].price > 0 && (
+                                <span className="text-[10px] text-slate-400 font-medium italic">
+                                    {includeVat 
+                                        ? `(נטו: ₪${Math.round((properties[0].price * (parseFloat(commissionPercentage) || 0) / 100) / 1.18).toLocaleString()})` 
+                                        : `(סופי: ₪${Math.round((properties[0].price * (parseFloat(commissionPercentage) || 0) / 100) * 1.18).toLocaleString()})`}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Error message */}

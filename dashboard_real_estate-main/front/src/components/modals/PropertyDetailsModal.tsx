@@ -1,5 +1,5 @@
 import { Property, AppUser, Lead } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar } from 'lucide-react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
@@ -491,6 +491,34 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 )
                             )}
                         </div>
+                        
+                        {/* External Source / Link */}
+                        {(property.originalSource || property.externalLink || property.yad2Link) && (
+                            <div className="mb-8 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">
+                                        <ExternalLink size={20} />
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">מקור הנכס</div>
+                                        <div className="text-sm font-bold text-slate-900">
+                                            {property.originalSource || (property.yad2Link ? 'Yad2' : 'מקור חיצוני')}
+                                        </div>
+                                    </div>
+                                </div>
+                                {(property.externalLink || property.yad2Link) && (
+                                    <a
+                                        href={property.externalLink || property.yad2Link}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-orange-200"
+                                    >
+                                        צפה במודעה המקורית
+                                        <ArrowUpLeft size={16} />
+                                    </a>
+                                )}
+                            </div>
+                        )}
 
                         {/* Footer Info / Associations */}
                         <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row gap-6 text-sm">

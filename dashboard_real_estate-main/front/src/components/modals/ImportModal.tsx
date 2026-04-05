@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     Upload, Table as TableIcon, CheckCircle, AlertCircle,
-    X, FileSpreadsheet, Sparkles, ImagePlus, Loader2, Download, ChevronRight, ChevronLeft
+    X, FileSpreadsheet, Sparkles, ImagePlus, Loader2, Download, ChevronRight, ChevronLeft, Lock
 } from 'lucide-react';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,8 @@ import {
     importAgents, importMixed, importDeals, exportErrorsToExcel,
     EntityType, DuplicateStrategy, ValidationResult, TransformedRow,
 } from '../../services/importService';
+import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
+import UpgradeModal from '../ui/UpgradeModal';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -369,7 +371,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     defaultEntityType = 'lead',
 }) => {
     const { userData } = useAuth();
+    const { features, loading: billingLoading } = useSubscriptionGuard();
     const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [entityType, setEntityType] = useState<ModalEntityType>(defaultEntityType);
     const [leadSubType, setLeadSubType] = useState<'buyer' | 'seller' | 'mixed'>('mixed');
 
@@ -403,6 +407,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     const [isExtracting, setIsExtracting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
+    const [scanningImage, setScanningImage] = useState<string | null>(null);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -419,7 +424,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     const file = items[i].getAsFile();
                     if (file) {
                         e.preventDefault();
-                        await processImage(file);
+                        if (!features.canAccessAiImport) {
+                            setIsUpgradeModalOpen(true);
+                        } else {
+                            await processImage(file);
+                        }
                         break; // Process one image at a time
                     }
                 }
@@ -428,7 +437,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
         window.addEventListener('paste', handlePaste);
         return () => window.removeEventListener('paste', handlePaste);
-    }, [isOpen, step, isExtracting, isProcessing]);
+    }, [isOpen, step, isExtracting, isProcessing, features.canAccessAiImport]);
 
     if (!isOpen) return null;
 
@@ -437,7 +446,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
     const handleImageInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) await processImage(file);
+        if (file) {
+            if (!features.canAccessAiImport) {
+                setIsUpgradeModalOpen(true);
+            } else {
+                await processImage(file);
+            }
+        }
         e.target.value = '';
     };
 
@@ -485,6 +500,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         try {
             // Resize image to ensure payload size is manageable
             const base64data = await resizeImage(file);
+            setScanningImage(base64data);
 
             // Determine target entity type
             let targetEntity = entityType;
@@ -492,13 +508,22 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 targetEntity = defaultEntityType;
             }
 
+            // Map frontend types to backend types
+            const typeMap: Record<string, string> = {
+                lead: 'leads',
+                property: 'properties',
+                deal: 'deals',
+                agent: 'agents'
+            };
+            const backendEntityType = typeMap[targetEntity] || 'leads';
+
             const fns = getFunctions(undefined, 'europe-west1');
             const extractAiData = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any[] }>(fns, 'ai-extractAiData');
 
             const result = await extractAiData({
                 payload: base64data,
                 mode: 'bulk',
-                entityType: targetEntity === 'lead' ? 'leads' : 'properties'
+                entityType: backendEntityType
             });
 
             if (result.data.success && Array.isArray(result.data.data) && result.data.data.length > 0) {
@@ -506,7 +531,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 const headers = Object.keys(rows[0]);
                 setRawHeaders(headers);
                 setRawRows(rows);
-                setMapping(buildAutoMapping(headers, targetEntity as EntityType));
+                setMapping(buildSmartAutoMapping(headers, targetEntity as EntityType));
                 setDiscriminatorCol('');
                 setStep(2);
             } else {
@@ -517,6 +542,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             setErrorMsg(err.message || 'אירעה שגיאה בעיבוד התמונה.');
         } finally {
             setIsExtracting(false);
+            setScanningImage(null);
         }
     };
 
@@ -556,7 +582,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         const file = e.dataTransfer.files?.[0];
         if (file) {
             if (file.type.startsWith('image/')) {
-                await processImage(file);
+                if (!features.canAccessAiImport) {
+                    setIsUpgradeModalOpen(true);
+                } else {
+                    await processImage(file);
+                }
             } else {
                 await processFile(file);
             }
@@ -581,19 +611,6 @@ export const ImportModal: React.FC<ImportModalProps> = ({
             if (agentMatch) na[h] = agentMatch; else na[h] = `__custom__${h}`;
         });
         return { nl, np, na };
-    };
-
-    const buildAutoMapping = (headers: string[], type: EntityType) => {
-        const newMapping: Record<string, string> = {};
-        const opts = FIELD_OPTIONS[type];
-        headers.forEach(h => {
-            const clean = h.trim();
-            const dictMap = HEBREW_MAP[clean] || HEBREW_MAP[clean.toLowerCase()];
-            const match = opts.find(o => o.key === dictMap || o.label === clean)?.key;
-            if (match) newMapping[h] = match;
-            else newMapping[h] = `__custom__${h}`;
-        });
-        return newMapping;
     };
 
     const handleAutoMap = () => {
@@ -934,26 +951,74 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
                                 {/* AI Image Box */}
                                 <div
-                                    onClick={() => { if (!isExtracting) imageInputRef.current?.click(); }}
-                                    className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all ${isExtracting ? 'border-purple-300 bg-purple-50/50 cursor-not-allowed opacity-80' : 'border-purple-200 cursor-pointer hover:border-purple-400 hover:bg-purple-50/50'}`}
+                                    onClick={() => {
+                                        if (isExtracting) return;
+                                        if (!features.canAccessAiImport) {
+                                            setIsUpgradeModalOpen(true);
+                                        } else {
+                                            imageInputRef.current?.click();
+                                        }
+                                    }}
+                                    className={`relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all overflow-hidden ${isExtracting ? 'border-purple-300 bg-purple-50/50 cursor-not-allowed opacity-100' : 'border-purple-200 cursor-pointer hover:border-purple-400 hover:bg-purple-50/50'}`}
                                 >
-                                    <div className="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center relative">
+                                    {!features.canAccessAiImport && (
+                                        <div className="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-400 text-[10px] font-black uppercase tracking-wider">
+                                            <Lock size={10} />
+                                            <span>Premium</span>
+                                        </div>
+                                    )}
+
+                                    {/* Scanning Overlay Animation */}
+                                    {isExtracting && (
+                                        <div className="absolute inset-0 z-0 flex items-center justify-center">
+                                            {scanningImage && (
+                                                <img src={scanningImage} alt="Scanning" className="w-full h-full object-cover opacity-20 grayscale brightness-125" />
+                                            )}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-purple-50/80 via-transparent to-purple-50/80"></div>
+                                            <div className="absolute top-0 left-0 w-full h-[3px] bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.9)] animate-scan"></div>
+                                            <style>{`
+                                                @keyframes scan {
+                                                    0% { top: 0%; opacity: 0; }
+                                                    10% { opacity: 1; }
+                                                    90% { opacity: 1; }
+                                                    100% { top: 100%; opacity: 0; }
+                                                }
+                                                .animate-scan {
+                                                    animation: scan 2s linear infinite;
+                                                }
+                                            `}</style>
+                                        </div>
+                                    )}
+
+                                    <div className="z-10 w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center relative">
                                         {isExtracting ? (
                                             <Loader2 size={24} className="text-purple-600 animate-spin" />
                                         ) : (
                                             <>
                                                 <ImagePlus size={24} className="text-purple-600" />
-                                                <div className="absolute -top-1 -right-1 bg-white rounded-full">
-                                                    <Sparkles size={12} className="text-purple-500" />
+                                                <div className="absolute -top-1 -right-1 bg-white rounded-full p-0.5 border border-purple-100 shadow-sm">
+                                                    <Sparkles size={10} className="text-purple-500" />
                                                 </div>
                                             </>
                                         )}
                                     </div>
-                                    <div className="text-center">
-                                        <p className="font-bold text-slate-700 text-sm">{isExtracting ? 'מפענח תמונה...' : 'ייבוא חכם מתמונה (AI)'}</p>
-                                        <p className="text-slate-400 text-xs mt-1">צילום מסך או תמונה של טבלה</p>
+                                    <div className="z-10 text-center">
+                                        <p className="font-bold text-slate-700 text-sm">
+                                            {isExtracting ? 'מפענח תמונה באמצעות AI...' : 'ייבוא חכם מתמונה (AI)'}
+                                        </p>
+                                        <p className="text-slate-400 text-xs mt-1">צילום מסך, תמונת טופס או כתב יד</p>
                                     </div>
                                     <input ref={imageInputRef} type="file" className="hidden" accept="image/*" onChange={handleImageInput} disabled={isExtracting} />
+                                    
+                                    {isExtracting && (
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setIsExtracting(false); setScanningImage(null); }}
+                                            className="z-20 mt-2 text-[10px] font-bold text-purple-600 hover:text-purple-800 underline underline-offset-2"
+                                        >
+                                            ביטול פעולה
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1253,6 +1318,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     </div>
                 </div>
             </div>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName="ייבוא חכם מתמונה (AI)"
+            />
         </div>
     );
 };

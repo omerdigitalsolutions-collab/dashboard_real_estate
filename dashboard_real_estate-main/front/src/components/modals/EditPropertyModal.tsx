@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, Building2, Loader2 } from 'lucide-react';
 import { updateProperty } from '../../services/propertyService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Property } from '../../types';
+import { httpsCallable, getFunctions } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { ISRAEL_CITIES } from '../../utils/constants';
 
@@ -41,12 +42,76 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>(
         property.listingType || (property.isExclusive ? 'exclusive' : 'private')
     );
+    const [originalSource, setOriginalSource] = useState(property.originalSource ?? '');
+    const [externalLink, setExternalLink] = useState(property.externalLink ?? property.yad2Link ?? '');
+
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [selectedAddress, setSelectedAddress] = useState<{ address: string, city: string, lat?: number, lng?: number } | null>(null);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [cityFocus, setCityFocus] = useState(false);
 
     if (!isOpen) return null;
+
+    const fetchSuggestions = async (query: string) => {
+        if (!query || query.length < 3) {
+            setSuggestions([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
+            const res = await getSuggestions({ query });
+            const data = res.data as any[];
+            setSuggestions(data.slice(0, 5));
+        } catch (error) {
+            console.error('Error fetching suggestions', error);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const searchTimeout = useRef<any>(null);
+    const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setAddress(val);
+        setSelectedAddress(null);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 600);
+    };
+
+    const handleSelectSuggestion = async (place: any) => {
+        setIsSearching(true);
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const getDetails = httpsCallable(fns, 'properties-getPlaceDetails');
+            const res = await getDetails({ placeId: place.place_id });
+            const details = res.data as { street: string, houseNumber: string, city: string, lat: number, lng: number, formattedAddress: string } | null;
+
+            if (details) {
+                const finalAddress = `${details.street}${details.houseNumber ? ` ${details.houseNumber}` : ''}`;
+                setAddress(finalAddress || details.formattedAddress);
+                setCity(details.city);
+                setSelectedAddress({
+                    address: finalAddress || details.formattedAddress,
+                    city: details.city,
+                    lat: details.lat,
+                    lng: details.lng
+                });
+            } else {
+                setAddress(place.display_name);
+            }
+        } catch (error) {
+            console.error('Error fetching place details', error);
+            setAddress(place.display_name);
+        } finally {
+            setIsSearching(false);
+            setSuggestions([]);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -61,25 +126,36 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
         setLoading(true);
         try {
             await updateProperty(property.id, {
-                address: address.trim(),
+                address: selectedAddress ? selectedAddress.address : address.trim(),
                 city: city.trim(),
                 type,
                 kind,
                 price: parsedPrice,
-                rooms: rooms ? parseFloat(rooms) : undefined,
-                sqm: sqm ? parseFloat(sqm) : undefined,
+                rooms: (rooms && !isNaN(parseFloat(rooms))) ? parseFloat(rooms) : 0,
+                sqm: (sqm && !isNaN(parseFloat(sqm))) ? parseFloat(sqm) : 0,
                 status,
                 agentId: agentId || property.agentId,
-                description: description.trim() || undefined,
+                description: (description || "").trim(),
                 listingType,
                 isExclusive: listingType === 'exclusive',
+                originalSource: originalSource.trim(),
+                externalLink: externalLink.trim(),
+                ...(selectedAddress?.lat && selectedAddress?.lng ? { 
+                    lat: selectedAddress.lat, 
+                    lng: selectedAddress.lng,
+                    location: { lat: selectedAddress.lat, lng: selectedAddress.lng }
+                } : {}),
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
             toast.success('הנכס עודכן בהצלחה ✓');
             onClose();
         } catch (err: any) {
-            toast.error(err?.message || 'שגיאה בעדכון הנכס');
-            setError(err?.message || 'שגיאה בעדכון הנכס');
+            console.error('Update property error:', err);
+            const friendlyMsg = err?.message?.includes('Unsupported field value: undefined') 
+                ? 'שגיאה בשמירת הנתונים. אנא וודא שכל השדות תקינים.'
+                : 'אירעה שגיאה בעדכון הנכס. אנא נסה שנית.';
+            toast.error(friendlyMsg);
+            setError(friendlyMsg);
         } finally {
             setLoading(false);
         }
@@ -120,10 +196,32 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                             </div>
                         </div>
 
-                        {/* Address + City */}
-                        <div>
+                        {/* Address Autocomplete */}
+                        <div className="relative">
                             <label className={labelCls}>כתובת <span className="text-red-500">*</span></label>
-                            <input value={address} onChange={e => setAddress(e.target.value)} required placeholder="הרצל 15" className={inputCls} />
+                            <input
+                                value={address}
+                                onChange={handleAddressChange}
+                                required
+                                placeholder="הקלד כתובת לחיפוש..."
+                                className={inputCls}
+                            />
+                            {isSearching && (
+                                <div className="absolute left-3 top-[34px] text-xs text-slate-400">מחפש...</div>
+                            )}
+                            {suggestions.length > 0 && (
+                                <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                    {suggestions.map((s, i) => (
+                                        <li
+                                            key={i}
+                                            onMouseDown={() => handleSelectSuggestion(s)}
+                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0 text-right"
+                                        >
+                                            {s.display_name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
                         <div className="relative">
                             <label className={labelCls}>עיר</label>
@@ -244,6 +342,31 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                                     />
                                     <span className="text-sm font-medium text-slate-700">🤝 שת"פ</span>
                                 </label>
+                            </div>
+                        </div>
+
+                        {/* Source + Link */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className={labelCls}>מקור הנכס</label>
+                                <select value={originalSource} onChange={e => setOriginalSource(e.target.value)} className={inputCls}>
+                                    <option value="">פרטי</option>
+                                    <option value="Yad2">יד 2</option>
+                                    <option value="Madlan">מדלן</option>
+                                    <option value="Facebook">פייסבוק</option>
+                                    <option value="Other">אחר</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelCls}>קישור למודעה</label>
+                                <input
+                                    type="url"
+                                    value={externalLink}
+                                    onChange={e => setExternalLink(e.target.value)}
+                                    placeholder="https://..."
+                                    className={inputCls}
+                                    dir="ltr"
+                                />
                             </div>
                         </div>
 

@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
+import { getPlanFeatures, PlanFeatures } from '../config/plans';
 
 interface BillingInfo {
     planId?: string;
@@ -28,6 +29,8 @@ interface BillingInfo {
 export interface SubscriptionGuardResult {
     isLockedOut: boolean;
     billingStatus: string | null;
+    planId: string | null;
+    features: PlanFeatures;
     trialEndsAt: Date | null;
     loading: boolean;
 }
@@ -54,7 +57,12 @@ export function useSubscriptionGuard(): SubscriptionGuardResult {
             (snap) => {
                 if (snap.exists()) {
                     const data = snap.data();
-                    setBilling((data.billing as BillingInfo) ?? null);
+                    // Some agencies have planId at the root, some in billing. Handle both.
+                    const planId = data.planId || data.billing?.planId || 'basic';
+                    setBilling({
+                        ...(data.billing as BillingInfo),
+                        planId
+                    });
                 } else {
                     setBilling(null);
                 }
@@ -91,9 +99,14 @@ export function useSubscriptionGuard(): SubscriptionGuardResult {
             ? billing.trialEndsAt.toDate()
             : null;
 
+    const planId = billing?.planId || 'basic';
+    const features = getPlanFeatures(planId);
+
     return {
         isLockedOut,
         billingStatus: billing?.status ?? null,
+        planId,
+        features,
         trialEndsAt,
         loading,
     };

@@ -98,6 +98,49 @@ export const getAddressSuggestions = onCall({ cors: true, secrets: [googleMapsKe
 });
 
 /**
+ * Fetch detailed address components (city, street, etc.) from Google Places
+ */
+export const getPlaceDetails = onCall({ cors: true, secrets: [googleMapsKey] }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const { placeId } = request.data;
+    if (!placeId) {
+        throw new HttpsError('invalid-argument', 'placeId is required.');
+    }
+
+    const apiKey = googleMapsKey.value();
+    if (!apiKey) {
+        throw new HttpsError('failed-precondition', 'Google Maps API key is missing.');
+    }
+
+    try {
+        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}&language=he&fields=address_components,geometry,formatted_address`;
+        const response = await axios.get(url);
+        const result = response.data.result;
+
+        if (!result) return null;
+
+        const components = result.address_components || [];
+        
+        const getComp = (types: string[]) => components.find((c: any) => types.some(t => c.types.includes(t)))?.long_name || '';
+
+        return {
+            street: getComp(['route']),
+            houseNumber: getComp(['street_number']),
+            city: getComp(['locality', 'postal_town', 'administrative_area_level_2']),
+            lat: result.geometry?.location?.lat,
+            lng: result.geometry?.location?.lng,
+            formattedAddress: result.formatted_address
+        };
+    } catch (error: any) {
+        console.error('[geocode] getPlaceDetails failed:', error.message);
+        throw new HttpsError('internal', 'Failed to fetch place details.');
+    }
+});
+
+/**
  * Automatically attempt to geocode newly imported/created properties
  * that have the exact default Israel center coordinates.
  */

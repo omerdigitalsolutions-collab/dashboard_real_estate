@@ -17,6 +17,8 @@ interface SendPayload {
     phone: string;
     message: string;
     isBroadcast?: boolean;
+    fileUrl?: string;
+    fileName?: string;
 }
 
 const cfSend = httpsCallable<SendPayload, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
@@ -25,9 +27,15 @@ const cfSend = httpsCallable<SendPayload, { success: boolean }>(fns, 'whatsapp-s
  * Send a single WhatsApp message to a lead.
  * Returns `true` on success, `false` on any error.
  */
-export async function sendWhatsAppMessage(phone: string, message: string, isBroadcast = false): Promise<boolean> {
+export async function sendWhatsAppMessage(
+    phone: string,
+    message: string,
+    isBroadcast = false,
+    fileUrl?: string,
+    fileName?: string
+): Promise<boolean> {
     try {
-        const result = await cfSend({ phone, message, isBroadcast });
+        const result = await cfSend({ phone, message, isBroadcast, fileUrl, fileName });
         return result.data.success === true;
     } catch (err) {
         console.error('[WhatsApp] sendWhatsAppMessage failed:', err);
@@ -45,7 +53,9 @@ export async function sendWhatsAppMessage(phone: string, message: string, isBroa
  */
 export async function sendWhatsAppBulk(
     leads: Array<{ phone: string; name: string }>,
-    message: string
+    message: string,
+    fileUrl?: string,
+    fileName?: string
 ): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
@@ -55,7 +65,7 @@ export async function sendWhatsAppBulk(
         if (!lead.phone) { failed++; continue; }
 
         const personalised = message.replace(/\{\{שם_לקוח\}\}/g, lead.name || '');
-        const ok = await sendWhatsAppMessage(lead.phone, personalised, true);
+        const ok = await sendWhatsAppMessage(lead.phone, personalised, true, fileUrl, fileName);
         if (ok) sent++; else failed++;
 
         // Introduce a 300ms delay between sends to avoid Green API rate limiting
@@ -78,13 +88,15 @@ export async function sendWhatsAppWebhook(payload: {
     action: string;
     message: string;
     leads: Array<{ phone: string; name: string }>;
+    fileUrl?: string;
+    fileName?: string;
 }): Promise<{ sent: number; failed: number } | boolean> {
     if (payload.action === 'bulk_broadcast') {
-        return sendWhatsAppBulk(payload.leads, payload.message);
+        return sendWhatsAppBulk(payload.leads, payload.message, payload.fileUrl, payload.fileName);
     }
 
     // Single-lead fallback
     const lead = payload.leads[0];
     if (!lead?.phone) return false;
-    return sendWhatsAppMessage(lead.phone, payload.message);
+    return sendWhatsAppMessage(lead.phone, payload.message, false, payload.fileUrl, payload.fileName);
 }

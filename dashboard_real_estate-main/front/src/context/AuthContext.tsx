@@ -198,9 +198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             if (stubDoc) {
                                 console.log('[AuthContext] Stub found! Linking and redirecting to setup.');
                                 await linkStubUser(stubDoc.id, firebaseUser.uid);
-                                setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubDoc.data() } as AppUser);
+                                const stubData = stubDoc.data();
+                                setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubData } as AppUser);
                                 setRequireOnboarding(false);
-                                window.location.replace(`/agent-setup?token=${stubDoc.id}`);
+
+                                const token = stubData.inviteToken || stubDoc.id;
+                                window.location.replace(`/agent-setup?token=${token}`);
                             } else {
                                 console.log('[AuthContext] No stub found. Require onboarding.');
                                 setUserData(null);

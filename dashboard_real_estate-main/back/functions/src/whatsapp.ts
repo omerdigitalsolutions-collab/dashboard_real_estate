@@ -435,7 +435,13 @@ export const sendWhatsappMessage = onCall({
 }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Must be logged in.');
 
-  const { phone, message, isBroadcast } = request.data as { phone: string; message: string; isBroadcast?: boolean };
+  const { phone, message, isBroadcast, fileUrl, fileName } = request.data as {
+    phone: string;
+    message: string;
+    isBroadcast?: boolean;
+    fileUrl?: string;
+    fileName?: string;
+  };
   if (!phone || !message) throw new HttpsError('invalid-argument', 'phone and message are required.');
 
   // Check feature guard if it's a broadcast
@@ -453,12 +459,23 @@ export const sendWhatsappMessage = onCall({
   // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
   const keys = await getGreenApiCredentials(agencyId, masterKey.value());
   if (keys?.idInstance && keys?.apiTokenInstance) {
-    const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
-    await axios.post(sendUrl, {
-      chatId: toWaId(phone),
-      message: message
-    }, { timeout: 10_000 });
-    console.log(`[Green API] Message sent to ${phone}`);
+    if (fileUrl) {
+      const sendFileUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
+      await axios.post(sendFileUrl, {
+        chatId: toWaId(phone),
+        urlFile: fileUrl,
+        fileName: fileName || 'file',
+        caption: message
+      }, { timeout: 20_000 });
+      console.log(`[Green API] File message sent to ${phone}`);
+    } else {
+      const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+      await axios.post(sendUrl, {
+        chatId: toWaId(phone),
+        message: message
+      }, { timeout: 10_000 });
+      console.log(`[Green API] Message sent to ${phone}`);
+    }
     return { success: true };
   }
 

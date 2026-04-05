@@ -1,7 +1,9 @@
-import { Sparkles, TrendingDown, Target, BarChart2, ChevronLeft, CheckCircle, ChevronDown, ChevronUp, Loader2, RefreshCcw, Handshake, Users } from 'lucide-react';
+import { Sparkles, TrendingDown, Target, BarChart2, ChevronLeft, CheckCircle, ChevronDown, ChevronUp, Loader2, RefreshCcw, Handshake, Users, Lock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
+import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
+import UpgradeModal from '../ui/UpgradeModal';
 
 interface SmartInsight {
     badge: string;
@@ -19,16 +21,22 @@ const categoryConfig = {
 };
 
 export default function AIInsights() {
+    const { features, loading: billingLoading } = useSubscriptionGuard();
     const [insights, setInsights] = useState<SmartInsight[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [applied, setApplied] = useState<number[]>([]);
     const [isExpanded, setIsExpanded] = useState(true); // Load expanded by default if they are useful
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
     // Auto-fetch on mount
     useEffect(() => {
-        fetchInsights();
-    }, []);
+        if (!billingLoading && features.canAccessAiInsights) {
+            fetchInsights();
+        } else if (!billingLoading && !features.canAccessAiInsights) {
+            setIsLoading(false);
+        }
+    }, [billingLoading, features.canAccessAiInsights]);
 
     const fetchInsights = async () => {
         try {
@@ -79,8 +87,30 @@ export default function AIInsights() {
                     </div>
                 </div>
 
+                {/* Locked State */}
+                {isExpanded && !billingLoading && !features.canAccessAiInsights && (
+                    <div className="flex flex-col items-center justify-center py-10 gap-4 text-center animate-in fade-in zoom-in-95 duration-500">
+                        <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.15)] mb-2">
+                            <Lock size={28} className="text-indigo-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-white mb-2">תובנות AI במסלול מתקדם בלבד</h3>
+                            <p className="text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
+                                שדרג למסלול <span className="text-indigo-400 font-bold">Advanced</span> או <span className="text-violet-400 font-bold">Premium</span> כדי לקבל ניתוח עמוק של העסק שלך, זיהוי הזדמנויות וטיפים לשיפור ביצועים.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setIsUpgradeModalOpen(true)}
+                            className="mt-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/25 flex items-center gap-2 group"
+                        >
+                            <span>שדרג עכשיו</span>
+                            <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                        </button>
+                    </div>
+                )}
+
                 {/* Loading State */}
-                {isExpanded && isLoading && (
+                {isExpanded && isLoading && features.canAccessAiInsights && (
                     <div className="flex flex-col items-center justify-center py-8 gap-3 animate-in fade-in duration-300">
                         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
                         <p className="text-sm text-slate-400">ה-AI מנתח את נתוני הסוכנות (לידים, נכסים, עסקאות)...</p>
@@ -88,7 +118,7 @@ export default function AIInsights() {
                 )}
 
                 {/* Error State */}
-                {isExpanded && !isLoading && error && (
+                {isExpanded && !isLoading && error && features.canAccessAiInsights && (
                     <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
                         <p className="text-sm text-red-400/80">{error}</p>
                         <button
@@ -102,7 +132,7 @@ export default function AIInsights() {
                 )}
 
                 {/* Empty State */}
-                {isExpanded && !isLoading && !error && insights.length === 0 && (
+                {isExpanded && !isLoading && !error && insights.length === 0 && features.canAccessAiInsights && (
                     <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
                         <p className="text-sm text-slate-400">אין תובנות חדשות כרגע. הכל נראה מעולה! 🎉</p>
                         <button
@@ -116,7 +146,7 @@ export default function AIInsights() {
                 )}
 
                 {/* Insights Grid */}
-                {isExpanded && !isLoading && !error && insights.length > 0 && (
+                {isExpanded && !isLoading && !error && insights.length > 0 && features.canAccessAiInsights && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                         {insights.map((insight, idx) => {
                             const conf = categoryConfig[insight.category] || categoryConfig.campaign;
@@ -156,7 +186,7 @@ export default function AIInsights() {
                 )}
 
                 {/* Refresh Button - visible when loaded and expanded to manually trigger new analysis */}
-                {isExpanded && !isLoading && insights.length > 0 && (
+                {isExpanded && !isLoading && insights.length > 0 && features.canAccessAiInsights && (
                     <div className="mt-4 flex justify-end">
                         <button
                             onClick={(e) => { e.stopPropagation(); fetchInsights(); }}
@@ -168,6 +198,12 @@ export default function AIInsights() {
                     </div>
                 )}
             </div>
+
+            <UpgradeModal
+                isOpen={isUpgradeModalOpen}
+                onClose={() => setIsUpgradeModalOpen(false)}
+                featureName="תובנות AI חכמות"
+            />
         </div>
     );
 }

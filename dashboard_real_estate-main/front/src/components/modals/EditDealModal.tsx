@@ -31,6 +31,7 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
     const [actualCommission, setActualCommission] = useState('');
     const [assignedAgentId, setAssignedAgentId] = useState('');
     const [stage, setStage] = useState<DealStage>('qualification');
+    const [includeVat, setIncludeVat] = useState(false);
     const [notes, setNotes] = useState('');
 
     const [loading, setLoading] = useState(false);
@@ -46,7 +47,9 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
             // Try to reverse-calculate the commission percentage based on the property price if available
             const prop = properties.find(p => p.id === deal.propertyId);
             if (prop && prop.price > 0 && deal.projectedCommission > 0) {
-                const perc = (deal.projectedCommission / prop.price) * 100;
+                const isVat = deal.isVatIncluded || false;
+                const base = isVat ? deal.projectedCommission : (deal.projectedCommission / 1.18);
+                const perc = (base / prop.price) * 100;
                 setCommissionPercentage(perc.toFixed(2));
             } else {
                 setCommissionPercentage('2'); // Fallback default
@@ -55,13 +58,16 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
             setActualCommission(deal.actualCommission ? deal.actualCommission.toString() : '');
             setAssignedAgentId(deal.agentId || '');
             setStage(deal.stage);
+            setIncludeVat(deal.isVatIncluded || false);
             setNotes(deal.notes || '');
         }
     }, [isOpen, deal, properties]);
 
     // Derived helpers
     const displayPrice = properties.find(p => p.id === propertyId)?.price || 0;
-    const calculatedCommission = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
+    const baseValue = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
+    const calculatedCommission = includeVat ? baseValue : baseValue * 1.18;
+    const netCommission = includeVat ? baseValue / 1.18 : baseValue;
 
     // Duplicate checks (excluding the current deal)
     const propertyDeals = propertyId
@@ -105,6 +111,7 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
                 agentId: assignedAgentId || undefined,
                 stage,
                 projectedCommission: finalCalculatedCommission,
+                isVatIncluded: includeVat,
                 actualCommission: actualCommission ? Number(actualCommission) : undefined,
                 notes: notes || undefined,
             });
@@ -242,16 +249,15 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
                                 ))}
                             </select>
                         </div>
-
                         {/* Projected Commission */}
-                        <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                        <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                             <div className="flex justify-between items-end mb-1.5">
                                 <label className="block text-xs font-semibold text-blue-900">
                                     אחוז עמלה משוער (%) <span className="text-red-500">*</span>
                                 </label>
                                 {displayPrice > 0 && (
                                     <span className="text-sm font-bold text-blue-700 px-2 py-0.5 rounded-md">
-                                        צפי עתידי: ₪{calculatedCommission.toLocaleString()}
+                                        צפי עתידי: ₪{Math.round(calculatedCommission).toLocaleString()}
                                     </span>
                                 )}
                             </div>
@@ -262,6 +268,22 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
                                 className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
                                 dir="ltr"
                             />
+
+                            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-blue-100/50">
+                                <button
+                                    type="button"
+                                    onClick={() => setIncludeVat(!includeVat)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[11px] font-bold ${includeVat ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}
+                                >
+                                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${includeVat ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                        {includeVat && <div className="w-2 h-2 bg-blue-600 rounded-sm" />}
+                                    </div>
+                                    כולל מע"מ (18%)
+                                </button>
+                                <span className="text-[10px] text-slate-400 font-medium italic">
+                                    {includeVat ? `(נטו: ₪${Math.round(netCommission).toLocaleString()})` : `(סופי: ₪${Math.round(calculatedCommission).toLocaleString()})`}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Actual Commission */}

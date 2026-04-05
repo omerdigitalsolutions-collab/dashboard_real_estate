@@ -440,7 +440,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     var _a;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
-    const { phone, message, isBroadcast } = request.data;
+    const { phone, message, isBroadcast, fileUrl, fileName } = request.data;
     if (!phone || !message)
         throw new https_1.HttpsError('invalid-argument', 'phone and message are required.');
     // Check feature guard if it's a broadcast
@@ -455,12 +455,24 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-        const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
-        await axios_1.default.post(sendUrl, {
-            chatId: toWaId(phone),
-            message: message
-        }, { timeout: 10000 });
-        console.log(`[Green API] Message sent to ${phone}`);
+        if (fileUrl) {
+            const sendFileUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
+            await axios_1.default.post(sendFileUrl, {
+                chatId: toWaId(phone),
+                urlFile: fileUrl,
+                fileName: fileName || 'file',
+                caption: message
+            }, { timeout: 20000 });
+            console.log(`[Green API] File message sent to ${phone}`);
+        }
+        else {
+            const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+            await axios_1.default.post(sendUrl, {
+                chatId: toWaId(phone),
+                message: message
+            }, { timeout: 10000 });
+            console.log(`[Green API] Message sent to ${phone}`);
+        }
         return { success: true };
     }
     throw new https_1.HttpsError('failed-precondition', 'Session not found.');

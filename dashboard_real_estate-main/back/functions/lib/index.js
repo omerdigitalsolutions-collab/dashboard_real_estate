@@ -26,7 +26,6 @@ const getLiveProperties_1 = require("./properties/getLiveProperties");
 const addProperty_1 = require("./properties/addProperty");
 const updateProperty_1 = require("./properties/updateProperty");
 const deleteProperty_1 = require("./properties/deleteProperty");
-const importProperty_1 = require("./properties/importProperty");
 const geocode_1 = require("./properties/geocode");
 const matchmaking_1 = require("./properties/matchmaking");
 // ── Leads Module ──────────────────────────────────────────────────────────────
@@ -75,7 +74,7 @@ const manual_requests_1 = require("./billing/manual_requests");
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, checkPhoneAvailable: onboarding_1.checkPhoneAvailable, captureLead: onboarding_1.captureLead };
 exports.users = { inviteAgent: team_1.inviteAgent, getInviteInfo: team_1.getInviteInfo, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
-exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, importPropertyFromUrl: importProperty_1.importPropertyFromUrl, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking };
+exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
@@ -92,7 +91,10 @@ exports.superadmin = {
     superAdminGetAgencyUsage: superadmin_1.superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan: superadmin_1.superAdminUpdateAgencyPlan,
     superAdminSetPlan: setAgencyPlan_1.superAdminSetPlan,
-    superAdminListAuthUsers: superadmin_1.superAdminListAuthUsers
+    superAdminListAuthUsers: superadmin_1.superAdminListAuthUsers,
+    superAdminSetAgencyStatus: superadmin_1.superAdminSetAgencyStatus,
+    superAdminSetUserStatus: superadmin_1.superAdminSetUserStatus,
+    superAdminApproveAgency: superadmin_1.superAdminApproveAgency
 };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts };

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.geocodeNewProperty = exports.getAddressSuggestions = exports.getCoordinates = void 0;
+exports.geocodeNewProperty = exports.getPlaceDetails = exports.getAddressSuggestions = exports.getCoordinates = void 0;
 /**
  * geocode.ts — Address to Coordinates via Nominatim
  *
@@ -91,6 +91,44 @@ exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true, secrets: [goog
     catch (error) {
         console.error('[geocode] Google Places failed:', error.message);
         throw new https_1.HttpsError('internal', 'Suggestions failed.');
+    }
+});
+/**
+ * Fetch detailed address components (city, street, etc.) from Google Places
+ */
+exports.getPlaceDetails = (0, https_1.onCall)({ cors: true, secrets: [googleMapsKey] }, async (request) => {
+    var _a, _b, _c, _d;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const { placeId } = request.data;
+    if (!placeId) {
+        throw new https_1.HttpsError('invalid-argument', 'placeId is required.');
+    }
+    const apiKey = googleMapsKey.value();
+    if (!apiKey) {
+        throw new https_1.HttpsError('failed-precondition', 'Google Maps API key is missing.');
+    }
+    try {
+        const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}&language=he&fields=address_components,geometry,formatted_address`;
+        const response = await axios_1.default.get(url);
+        const result = response.data.result;
+        if (!result)
+            return null;
+        const components = result.address_components || [];
+        const getComp = (types) => { var _a; return ((_a = components.find((c) => types.some(t => c.types.includes(t)))) === null || _a === void 0 ? void 0 : _a.long_name) || ''; };
+        return {
+            street: getComp(['route']),
+            houseNumber: getComp(['street_number']),
+            city: getComp(['locality', 'postal_town', 'administrative_area_level_2']),
+            lat: (_b = (_a = result.geometry) === null || _a === void 0 ? void 0 : _a.location) === null || _b === void 0 ? void 0 : _b.lat,
+            lng: (_d = (_c = result.geometry) === null || _c === void 0 ? void 0 : _c.location) === null || _d === void 0 ? void 0 : _d.lng,
+            formattedAddress: result.formatted_address
+        };
+    }
+    catch (error) {
+        console.error('[geocode] getPlaceDetails failed:', error.message);
+        throw new https_1.HttpsError('internal', 'Failed to fetch place details.');
     }
 });
 /**

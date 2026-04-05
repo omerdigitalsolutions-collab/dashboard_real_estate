@@ -142,18 +142,18 @@ export function useGlobalStats(): GlobalStats {
                     });
 
                 // Subscription breakdown
-                const tierCounts: Record<string, number> = { starter: 0, pro: 0, enterprise: 0 };
+                const tierCounts: Record<string, number> = { basic: 0, advanced: 0, premium: 0 };
                 for (const ag of allAgencies) {
-                    const plan = ag.planId?.toLowerCase() || 'starter';
-                    let bucket = 'starter';
-                    if (plan === 'pro' || plan === 'boutique') bucket = 'pro';
-                    else if (plan === 'enterprise') bucket = 'enterprise';
+                    const plan = ag.planId?.toLowerCase() || 'basic';
+                    let bucket = 'basic';
+                    if (plan === 'advanced' || plan === 'pro' || plan === 'boutique') bucket = 'advanced';
+                    else if (plan === 'premium' || plan === 'enterprise') bucket = 'premium';
                     tierCounts[bucket] = (tierCounts[bucket] ?? 0) + 1;
                 }
                 const subscriptionBreakdown: SubscriptionBreakdown[] = [
-                    { name: 'Starter', value: tierCounts.starter, color: '#06b6d4' },
-                    { name: 'Pro', value: tierCounts.pro, color: '#a855f7' },
-                    { name: 'Enterprise', value: tierCounts.enterprise, color: '#f97316' },
+                    { name: 'בסיסי', value: tierCounts.basic, color: '#06b6d4' },
+                    { name: 'Advanced', value: tierCounts.advanced, color: '#a855f7' },
+                    { name: 'Premium', value: tierCounts.premium, color: '#f97316' },
                 ];
 
                 // (Users data already fetched in step 2)

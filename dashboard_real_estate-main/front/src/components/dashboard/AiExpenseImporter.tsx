@@ -8,6 +8,7 @@ import { functions, db } from '../../config/firebase';
 import { useExpenses } from '../../hooks/useExpenses';
 import { useAuth } from '../../context/AuthContext';
 import { Timestamp } from 'firebase/firestore';
+import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,31 +38,13 @@ export default function AiExpenseImporter({ onImported }: { onImported?: () => v
     const [aiResults, setAiResults] = useState<ParsedRow[]>([]);
     const { userData } = useAuth();
 
-    // Feature gating
-    const [userPlan, setUserPlan] = useState<string>('starter');
+    const { features } = useSubscriptionGuard();
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-    useEffect(() => {
-        const fetchPlan = async () => {
-            if (userData?.agencyId) {
-                try {
-                    const { getDoc, doc: fsDoc } = await import('firebase/firestore');
-                    const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
-                    if (snap.exists()) {
-                        setUserPlan(snap.data()?.planId || 'starter');
-                    }
-                } catch (err) {
-                    console.error('Error fetching plan:', err);
-                }
-            }
-        };
-        fetchPlan();
-    }, [userData]);
 
     // ── File Selection ────────────────────────────────────────────────────────
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (userPlan === 'starter') {
+        if (!features.canAccessAiImport) {
             setIsUpgradeModalOpen(true);
             // Reset input so they can click it again later
             if (fileInputRef.current) fileInputRef.current.value = '';

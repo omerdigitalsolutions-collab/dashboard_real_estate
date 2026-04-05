@@ -28,8 +28,7 @@ import { getLiveProperties } from './properties/getLiveProperties';
 import { addProperty } from './properties/addProperty';
 import { updateProperty } from './properties/updateProperty';
 import { deleteProperty } from './properties/deleteProperty';
-import { importPropertyFromUrl } from './properties/importProperty';
-import { getCoordinates, getAddressSuggestions, geocodeNewProperty } from './properties/geocode';
+import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty } from './properties/geocode';
 import { onPropertyCreatedMatchmaking } from './properties/matchmaking';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
@@ -63,7 +62,7 @@ import { getAuthUrl, handleOAuthCallback, createEvent, disconnect, listEvents } 
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
-import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan, superAdminListAuthUsers } from './superadmin';
+import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan, superAdminListAuthUsers, superAdminSetAgencyStatus, superAdminSetUserStatus, superAdminApproveAgency } from './superadmin';
 import { superAdminSetPlan } from './superadmin/setAgencyPlan';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
@@ -88,7 +87,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
 export const users = { inviteAgent, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, importPropertyFromUrl, getCoordinates, getAddressSuggestions, geocodeNewProperty, onPropertyCreatedMatchmaking };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
@@ -105,7 +104,10 @@ export const superadmin = {
     superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan,
     superAdminSetPlan,
-    superAdminListAuthUsers
+    superAdminListAuthUsers,
+    superAdminSetAgencyStatus,
+    superAdminSetUserStatus,
+    superAdminApproveAgency
 };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };

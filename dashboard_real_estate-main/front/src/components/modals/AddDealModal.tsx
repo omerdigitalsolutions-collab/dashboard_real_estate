@@ -42,6 +42,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
     const [commissionPercentage, setCommissionPercentage] = useState('2');
     const [manualCommission, setManualCommission] = useState('');
     const [assignedAgentId, setAssignedAgentId] = useState('');
+    const [includeVat, setIncludeVat] = useState(false);
 
     useEffect(() => {
         if (isOpen && prefilledLead) {
@@ -74,9 +75,11 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
         ? (properties.find(p => p.id === propertyId)?.price || 0)
         : (parseFloat(newPropertyPrice) || 0);
 
-    const calculatedCommission = propertyMode === 'none' 
+    const base = propertyMode === 'none' 
         ? (parseFloat(manualCommission) || 0)
         : ((displayPrice * (parseFloat(commissionPercentage) || 0)) / 100);
+    const calculatedCommission = includeVat ? base : base * 1.18;
+    const netCommission = includeVat ? base / 1.18 : base;
 
     // Inline duplicate checks
     const propertyDeals = propertyId ? allDeals.filter(d => d.propertyId === propertyId && d.stage !== 'won') : [];
@@ -95,6 +98,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
         setNewSellerName(''); setNewSellerPhone('');
         setNewPropertyCity(''); setNewPropertyAddress(''); setNewPropertyPrice(''); setNewPropertyType('sale');
         setCommissionPercentage('2'); setManualCommission(''); setAssignedAgentId('');
+        setIncludeVat(false);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -178,6 +182,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                 ...(assignedAgentId ? { agentId: assignedAgentId } : {}),
                 stage: firstStageId,
                 projectedCommission: calculatedCommission,
+                isVatIncluded: includeVat,
                 createdBy: userData.name || userData.email || 'Agent',
             });
 
@@ -368,10 +373,10 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                         </div>
 
                         {/* Projected Commission */}
-                        <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                        <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                             {propertyMode === 'none' ? (
-                                <>
-                                    <div className="flex justify-between items-end mb-1.5">
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-end">
                                         <label className="block text-xs font-semibold text-blue-900">
                                             עמלה משוערת (₪) <span className="text-red-500">*</span>
                                         </label>
@@ -383,16 +388,16 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                                         className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
                                         dir="ltr"
                                     />
-                                </>
+                                </div>
                             ) : (
-                                <>
-                                    <div className="flex justify-between items-end mb-1.5">
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-end">
                                         <label className="block text-xs font-semibold text-blue-900">
                                             אחוז עמלה משוער (%) <span className="text-red-500">*</span>
                                         </label>
                                         {displayPrice > 0 && (
-                                            <span className="text-sm font-bold text-blue-700 px-2 py-0.5 rounded-md">
-                                                צפי הכנסה: ₪{calculatedCommission.toLocaleString()}
+                                            <span className="text-sm font-bold text-blue-700">
+                                                צפי הכנסה: ₪{Math.round(calculatedCommission).toLocaleString()}
                                             </span>
                                         )}
                                     </div>
@@ -403,8 +408,25 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                                         className={`${inputCls} border-blue-200 focus:ring-blue-500/50`}
                                         dir="ltr"
                                     />
-                                </>
+                                </div>
                             )}
+
+                            {/* VAT Toggle - Shared for both modes */}
+                            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-blue-100/50">
+                                <button
+                                    type="button"
+                                    onClick={() => setIncludeVat(!includeVat)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[11px] font-bold ${includeVat ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}
+                                >
+                                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${includeVat ? 'bg-white border-white' : 'border-slate-300'}`}>
+                                        {includeVat && <div className="w-2 h-2 bg-blue-600 rounded-sm" />}
+                                    </div>
+                                    כולל מע"מ (18%)
+                                </button>
+                                <span className="text-[10px] text-slate-400 font-medium italic">
+                                    {includeVat ? `(נטו: ₪${Math.round(netCommission).toLocaleString()})` : `(סופי: ₪${Math.round(calculatedCommission).toLocaleString()})`}
+                                </span>
+                            </div>
                         </div>
                     </div>
 

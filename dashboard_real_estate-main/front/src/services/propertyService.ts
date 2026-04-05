@@ -37,6 +37,8 @@ export interface NewPropertyData {
     listingType?: 'private' | 'exclusive' | 'external';
     imageFiles?: File[];
     leadId?: string;
+    originalSource?: string;
+    externalLink?: string;
 }
 
 /**

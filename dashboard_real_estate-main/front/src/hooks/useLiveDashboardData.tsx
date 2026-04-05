@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Property, Deal, AppTask, Alert, Lead, Agency } from '../types';
+import { getPlanFeatures } from '../config/plans';
 
 interface LiveDashboardData {
     properties: Property[];
@@ -255,9 +256,15 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                         setAgencyName(rawName);
                     }
 
-                    // Dynamically subscribe to global city's properties if set
-                    const loadedCities = settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []);
-                    console.log('[DEBUG cities] loadedCities from agency settings:', loadedCities);
+                    // Dynamically subscribe to global city's properties if set AND user has sourcing permission
+                    const planFeatures = getPlanFeatures(data?.planId);
+                    const canAccessSourcing = planFeatures.canAccessSourcing;
+
+                    const loadedCities = canAccessSourcing 
+                        ? (settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []))
+                        : [];
+
+                    console.log('[DEBUG cities] loadedCities from agency settings (gated):', loadedCities);
                     const citiesChanged = loadedCities.length !== activeCities.length || !loadedCities.every((c: string) => activeCities.includes(c));
 
                     if (citiesChanged) {

@@ -17,19 +17,15 @@ interface SubscriptionRequest {
 }
 
 const PLAN_LABELS: Record<string, string> = {
-    solo: 'Starter',
-    starter: 'Starter',
-    pro: 'Pro',
-    boutique: 'Pro',
-    enterprise: 'Enterprise',
+    basic: 'בסיסי',
+    advanced: 'Advanced',
+    premium: 'Premium',
 };
 
 const PLAN_COLORS: Record<string, string> = {
-    solo: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
-    starter: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
-    pro: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
-    boutique: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
-    enterprise: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
+    basic: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    advanced: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    premium: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
 };
 
 export default function SubscriptionRequestsManager() {
@@ -69,7 +65,7 @@ export default function SubscriptionRequestsManager() {
             const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminSetPlan');
             await fn({
                 agencyId,
-                planId: req.plan === 'solo' ? 'starter' : req.plan,
+                planId: req.plan === 'solo' || req.plan === 'starter' ? 'basic' : (req.plan === 'pro' || req.plan === 'boutique' ? 'advanced' : (req.plan === 'premium' || req.plan === 'enterprise' ? 'premium' : 'basic')),
                 durationDays: duration,
                 requestId: req.id,
             });

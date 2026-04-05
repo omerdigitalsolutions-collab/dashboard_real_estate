@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
 import UpgradeModal from '../ui/UpgradeModal';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable, getFunctions } from 'firebase/functions';
-import { functions } from '../../config/firebase';
+// import { functions } from '../../config/firebase'; // Removed unused import
 import toast from 'react-hot-toast';
 interface AddPropertyModalProps {
     isOpen: boolean;
@@ -39,9 +39,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>('exclusive');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+    const [originalSource, setOriginalSource] = useState('');
+    const [externalLink, setExternalLink] = useState('');
 
-    const [importUrl, setImportUrl] = useState('');
-    const [isImporting, setIsImporting] = useState(false);
+
 
     // AI Extraction State
     const [rawText, setRawText] = useState('');
@@ -100,31 +101,45 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         }
     };
 
-    let searchTimeout: any;
+    const searchTimeout = useRef<any>(null);
     const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setAddressQuery(val);
         setSelectedAddress(null);
-        if (searchTimeout) clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => fetchSuggestions(val), 600);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 600);
     };
 
-    const handleSelectSuggestion = (place: any) => {
-        const addrDetails = place.address;
-        const autoCity = addrDetails?.city || addrDetails?.town || addrDetails?.village || '';
-        const street = addrDetails?.road || place.display_name.split(',')[0];
-        const num = addrDetails?.house_number || '';
+    const handleSelectSuggestion = async (place: any) => {
+        setIsSearching(true);
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const getDetails = httpsCallable(fns, 'properties-getPlaceDetails');
+            const res = await getDetails({ placeId: place.place_id });
+            const details = res.data as { street: string, houseNumber: string, city: string, lat: number, lng: number, formattedAddress: string } | null;
 
-        const finalAddress = `${street}${num ? ` ${num}` : ''}`;
-        setAddressQuery(place.display_name);
-        setCity(autoCity);
-        setSelectedAddress({
-            address: finalAddress,
-            city: autoCity,
-            lat: parseFloat(place.lat),
-            lng: parseFloat(place.lon)
-        });
-        setSuggestions([]);
+            if (details) {
+                const finalAddress = `${details.street}${details.houseNumber ? ` ${details.houseNumber}` : ''}`;
+                setAddressQuery(finalAddress || details.formattedAddress);
+                setCity(details.city);
+                setSelectedAddress({
+                    address: finalAddress || details.formattedAddress,
+                    city: details.city,
+                    lat: details.lat,
+                    lng: details.lng
+                });
+            } else {
+                // Fallback to simple display name if details failed
+                setAddressQuery(place.display_name);
+                setCity('');
+            }
+        } catch (error) {
+            console.error('Error fetching place details', error);
+            setAddressQuery(place.display_name);
+        } finally {
+            setIsSearching(false);
+            setSuggestions([]);
+        }
     };
 
     if (!isOpen) return null;
@@ -134,8 +149,9 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const resetForm = () => {
         setAddressQuery(''); setCity(''); setType('sale'); setKind('דירה');
         setPrice(''); setRooms(''); setSqm(''); setFloor(''); setSelectedAddress(null); setSuggestions([]);
-        setImportUrl(''); setDescription(''); setImportedImages([]);
+        setDescription(''); setImportedImages([]);
         setListingType('private'); setImageFiles([]); setPreviewUrls([]);
+        setOriginalSource(''); setExternalLink('');
     };
 
     const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,48 +179,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         setPreviewUrls(newUrls);
     };
 
-    const handleMagicImport = async () => {
-        if (userPlan === 'starter') {
-            setAttemptedFeature('יבוא חכם מלינק (AI)');
-            setIsUpgradeModalOpen(true);
-            return;
-        }
-
-        if (!importUrl || !importUrl.startsWith('http')) {
-            showToast('יש להזין לינק תקין (URL)', false);
-            return;
-        }
-
-        setIsImporting(true);
-        try {
-            const importFunction = httpsCallable<{ url: string }, { success: boolean; data?: any; reason?: string }>(functions, 'properties-importPropertyFromUrl');
-            const result = await importFunction({ url: importUrl.trim() });
-
-            if (result.data.success && result.data.data) {
-                const d = result.data.data;
-                if (d.address) setAddressQuery(d.address);
-                if (d.city) setCity(d.city);
-                if (d.price) setPrice(d.price.toString());
-                if (d.rooms) setRooms(d.rooms.toString());
-                if (d.sqm) setSqm(d.sqm.toString());
-                if (d.floor) setFloor(d.floor.toString());
-                if (d.kind) setKind(d.kind);
-                if (d.type) setType(d.type);
-                if (d.description) setDescription(d.description);
-                if (d.imageUrls && Array.isArray(d.imageUrls)) {
-                    setImportedImages(d.imageUrls.filter((url: string) => url && typeof url === 'string'));
-                }
-                showToast('✅ הנתונים יובאו בהצלחה');
-            } else {
-                showToast(result.data.reason || 'לא הצלחנו למשוך נתונים מהלינק הזה, אנא הכנס פרטים ידנית', false);
-            }
-        } catch (error) {
-            console.error('Magic Import Error:', error);
-            showToast('לא הצלחנו למשוך נתונים מהלינק הזה, אנא הכנס פרטים ידנית', false);
-        } finally {
-            setIsImporting(false);
-        }
-    };
 
     const handleAIExtract = async () => {
         if (userPlan === 'starter') {
@@ -295,6 +269,8 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 ...(listingType === 'exclusive' && imageFiles.length > 0 ? { imageFiles } : {}),
                 ...(leadId ? { leadId } : {}),
                 agentId: userData.uid || '',
+                originalSource: originalSource.trim(),
+                externalLink: externalLink.trim(),
             });
             showToast('הנכס נוסף בהצלחה ✓');
             resetForm();
@@ -368,31 +344,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                         </div>
                     </div>
 
-                    {/* --- Magic Import Section --- */}
-                    <div className="p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden">
-                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-                            <Building2 size={14} />
-                            ייבוא מהיר מלינק (yad2 / madlan)
-                        </label>
-                        <div className="flex gap-2 relative z-10">
-                            <input
-                                value={importUrl}
-                                onChange={e => setImportUrl(e.target.value)}
-                                placeholder="https://www.yad2.co.il/item/..."
-                                className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
-                                dir="ltr"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleMagicImport}
-                                disabled={isImporting || !importUrl.startsWith('http')}
-                                className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
-                            >
-                                {isImporting ? <Loader2 size={16} className="animate-spin" /> : 'ייבוא לינק'}
-                            </button>
-                        </div>
-                    </div>
-
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Address Autocomplete */}
                         <div className="relative">
@@ -412,7 +363,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                     {suggestions.map((s, i) => (
                                         <li
                                             key={i}
-                                            onClick={() => handleSelectSuggestion(s)}
+                                            onMouseDown={() => handleSelectSuggestion(s)}
                                             className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
                                         >
                                             {s.display_name}
@@ -476,6 +427,31 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                 placeholder="תיאור הנכס כפי שיופיע באתר ובמאגר..."
                                 className={inputCls + " min-h-[80px] resize-y"}
                             />
+                        </div>
+
+                        {/* Source + Link */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className={labelCls}>מקור הנכס</label>
+                                <select value={originalSource} onChange={e => setOriginalSource(e.target.value)} className={inputCls}>
+                                    <option value="">פרטי</option>
+                                    <option value="Yad2">יד 2</option>
+                                    <option value="Madlan">מדלן</option>
+                                    <option value="Facebook">פייסבוק</option>
+                                    <option value="Other">אחר</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className={labelCls}>קישור למודעה</label>
+                                <input
+                                    type="url"
+                                    value={externalLink}
+                                    onChange={e => setExternalLink(e.target.value)}
+                                    placeholder="https://..."
+                                    className={inputCls}
+                                    dir="ltr"
+                                />
+                            </div>
                         </div>
 
                         {/* Image Previews */}

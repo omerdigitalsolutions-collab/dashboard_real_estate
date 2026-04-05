@@ -13,6 +13,8 @@ import ImportModal from '../components/modals/ImportModal';
 import MergePropertiesModal from '../components/modals/MergePropertiesModal';
 import CreateDealFromPropertyModal from '../components/modals/CreateDealFromPropertyModal';
 import KpiCard from '../components/dashboard/KpiCard';
+import UpgradeModal from '../components/ui/UpgradeModal';
+import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
 import { Property, AppUser, Lead, TimeRange } from '../types';
 import { deleteProperty } from '../services/propertyService';
 
@@ -32,6 +34,7 @@ export default function Properties() {
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [showMergeModal, setShowMergeModal] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
@@ -41,6 +44,7 @@ export default function Properties() {
 
     const location = useLocation();
     const navigate = useNavigate();
+    const { features } = useSubscriptionGuard();
 
     const params = new URLSearchParams(location.search);
     const rawRange = params.get('range') as TimeRange | null;
@@ -130,7 +134,9 @@ export default function Properties() {
             (prop.address && prop.address.toLowerCase().includes(search.toLowerCase())) || '';
         const matchesFilter =
             filter === 'All' ||
-            (filter === 'commercial' ? prop.kind === 'מסחרי' : prop.type === filter && prop.kind !== 'מסחרי');
+            (filter === 'commercial' ? prop.kind === 'מסחרי' : 
+             filter === 'sourcing' ? prop.isGlobalCityProperty :
+             prop.type === filter && prop.kind !== 'מסחרי');
         return matchesSearch && matchesFilter;
     });
 
@@ -184,6 +190,7 @@ export default function Properties() {
         rent: filteredPropertiesByTime.filter((p: Property) => p.type === 'rent' && p.kind !== 'מסחרי').length,
         commercial: filteredPropertiesByTime.filter((p: Property) => p.kind === 'מסחרי').length,
         draft: filteredPropertiesByTime.filter((p: Property) => p.status === 'draft').length,
+        sourcing: filteredPropertiesByTime.filter((p: Property) => p.isGlobalCityProperty).length,
     }), [filteredPropertiesByTime]);
 
     // Helper functions for Grid View
@@ -221,13 +228,18 @@ export default function Properties() {
         badgeEmoji: string;
     } => {
         if (prop.isGlobalCityProperty) {
+            let label = 'נכס שהמערכת איתרה';
+            const source = (prop.originalSource || '').toLowerCase();
+            if (source.includes('yad2')) label = 'יד 2';
+            else if (source.includes('madlan')) label = 'מדלן';
+
             return {
                 borderColor: 'border-l-4 border-l-cyan-400',
                 iconBg: 'bg-cyan-50',
                 iconText: 'text-cyan-600',
                 badgeBg: 'bg-cyan-50 border-cyan-200 text-cyan-700',
                 badgeText: 'text-cyan-700',
-                badgeLabel: 'נכס שהמערת איתרה',
+                badgeLabel: label,
                 badgeEmoji: '🔍',
             };
         }
@@ -389,20 +401,33 @@ export default function Properties() {
                             { key: 'rent', label: 'להשכרה' },
                             { key: 'commercial', label: 'מסחרי' },
                             { key: 'draft', label: 'טיוטות' },
-                        ].map(({ key, label }) => (
+                            { key: 'sourcing', label: 'מאגר ציבורי', icon: '🔍' },
+                        ].map(({ key, label, icon }) => (
                             <button
                                 key={key}
-                                onClick={() => setFilter(key)}
+                                onClick={() => {
+                                    if (key === 'sourcing' && !features.canAccessSourcing) {
+                                        setShowUpgradeModal(true);
+                                        return;
+                                    }
+                                    setFilter(key);
+                                }}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap snap-start border ${
                                     filter === key 
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' 
                                     : 'bg-white text-slate-600 border-slate-200'
                                 }`}
                             >
+                                {icon && <span className="ml-1">{icon}</span>}
                                 {label}
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                    {tabCounts[key as keyof typeof tabCounts]}
-                                </span>
+                                {key !== 'sourcing' && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        {tabCounts[key as keyof typeof tabCounts]}
+                                    </span>
+                                )}
+                                {key === 'sourcing' && !features.canAccessSourcing && (
+                                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full mr-1">Premium</span>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -541,16 +566,27 @@ export default function Properties() {
                                 { key: 'rent', label: 'להשכרה' },
                                 { key: 'commercial', label: 'מסחרי' },
                                 { key: 'draft', label: 'טיוטות (WhatsApp)' },
-                            ].map(({ key, label }) => (
+                                { key: 'sourcing', label: 'מאגר ציבורי', premium: true },
+                            ].map(({ key, label, premium }) => (
                                 <button
                                     key={key}
-                                    onClick={() => setFilter(key)}
+                                    onClick={() => {
+                                        if (key === 'sourcing' && !features.canAccessSourcing) {
+                                            setShowUpgradeModal(true);
+                                            return;
+                                        }
+                                        setFilter(key);
+                                    }}
                                     className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (filter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
                                 >
                                     {label}
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                        {tabCounts[key as keyof typeof tabCounts]}
-                                    </span>
+                                    {premium && !features.canAccessSourcing ? (
+                                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Premium</span>
+                                    ) : (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                            {tabCounts[key as keyof typeof tabCounts]}
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -740,17 +776,6 @@ export default function Properties() {
                                                     <MessageCircle size={14} />
                                                 </a>
                                             )}
-                                            {isAdmin && prop.yad2Link && (
-                                                <a
-                                                    href={prop.yad2Link}
-                                                    target="_blank" rel="noreferrer"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="p-1.5 bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-600 border border-slate-200 rounded-lg transition-colors text-[10px] font-bold"
-                                                    title="מודעה ביד2"
-                                                >
-                                                    🔗
-                                                </a>
-                                            )}
                                         </div>
                                     </div>
                                 );
@@ -849,11 +874,6 @@ export default function Properties() {
                                                         </span>
                                                     ) : (
                                                         <span className="text-xs text-slate-400 block">-</span>
-                                                    )}
-                                                    {isAdmin && prop.yad2Link && (
-                                                        <a href={prop.yad2Link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="block mt-2 text-[10px] text-orange-500 hover:text-orange-600 font-semibold underline">
-                                                            לצפייה במודעה ביד2
-                                                        </a>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
@@ -1003,6 +1023,12 @@ export default function Properties() {
                     }}
                 />
             )}
+
+            <UpgradeModal 
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                featureName="מאגר הנכסים הציבורי"
+            />
 
             {toast && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50">

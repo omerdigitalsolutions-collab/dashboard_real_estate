@@ -95,6 +95,7 @@ export interface AppUser {
         error?: string;
     };
     createdAt?: Timestamp;
+    inviteToken?: string; // Random token for secure invitations
     hasSeenTour?: boolean;
     hasSeenWelcome?: boolean;
 }
@@ -177,6 +178,7 @@ export interface Property {
     groupId?: string;
     externalAgentPhone?: string;
     originalSource?: string;
+    externalLink?: string;
 
     images?: string[];
     imageUrls?: string[];
@@ -232,6 +234,7 @@ export interface Deal {
     probability?: number;
     projectedCommission: number;
     actualCommission?: number;
+    isVatIncluded?: boolean;
     createdAt: Timestamp;
     updatedAt?: Timestamp;
 }

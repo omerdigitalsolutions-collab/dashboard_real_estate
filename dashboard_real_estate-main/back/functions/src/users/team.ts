@@ -10,6 +10,7 @@ const resendApiKey = defineSecret('RESEND_API_KEY');
 const db = getFirestore();
 
 type Role = 'admin' | 'agent';
+const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 
 /**
@@ -281,6 +282,8 @@ export const inviteAgent = onCall(
     const agencyDoc = await db.doc(`agencies/${authData.agencyId}`).get();
     const agencyName = (agencyDoc.data() as { name?: string })?.name || 'הסוכנות שלנו';
 
+    const inviteToken = generateToken();
+
     // ── Create Stub Document ─────────────────────────────────────────────────────
     const stubRef = await db.collection('users').add({
       uid: null, // linked when the agent first signs in
@@ -291,15 +294,14 @@ export const inviteAgent = onCall(
       phone: phone?.trim() || null,
       isActive: true,
       createdAt: FieldValue.serverTimestamp(),
+      inviteToken,
     });
 
     const stubId = stubRef.id;
 
     // ── Compute Join URL ─────────────────────────────────────────────────────────
-    const baseUrl = appUrl?.trim()
-      ? appUrl.trim().replace(/\/$/, '')
-      : 'https://your-app.web.app'; // fallback — frontend passes real origin
-    const joinLink = `${baseUrl}/join?token=${stubId}`;
+    const baseUrl = 'https://homer.management';
+    const joinLink = `${baseUrl}/join?token=${inviteToken}`;
 
     // ── Send Invite Email ────────────────────────────────────────────────────────
     const apiKey = resendApiKey.value();
@@ -333,7 +335,7 @@ export const inviteAgent = onCall(
       whatsappUrl = `https://wa.me/${intl}?text=${msg}`;
     }
 
-    return { success: true, stubId, whatsappUrl };
+    return { success: true, stubId, inviteToken, whatsappUrl };
   });
 
 /**
@@ -350,11 +352,25 @@ export const getInviteInfo = onCall({ cors: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'token is required.');
   }
 
-  const stubDoc = await db.doc(`users/${token.trim()}`).get();
-  if (!stubDoc.exists) {
-    throw new HttpsError('not-found', 'Invite token not found or already used.');
+  let stubsSnap = await db.collection('users')
+    .where('inviteToken', '==', token.trim())
+    .limit(1)
+    .get();
+
+  let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+
+  // Fallback for legacy invitations (token was docId)
+  if (!stubDoc && token.trim().length >= 20) {
+    const legacyDoc = await db.collection('users').doc(token.trim()).get();
+    const legacyData = legacyDoc.data();
+    if (legacyDoc.exists && !legacyData?.inviteToken) {
+      stubDoc = legacyDoc as any;
+    }
   }
 
+  if (!stubDoc) {
+    throw new HttpsError('not-found', 'Invite token not found or already used.');
+  }
   const stub = stubDoc.data() as {
     name: string;
     email: string;
@@ -408,12 +424,27 @@ export const completeAgentSetup = onCall({ cors: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'token is required.');
   }
 
-  const stubRef = db.doc(`users/${token.trim()}`);
-  const stubDoc = await stubRef.get();
+  let stubsSnap = await db.collection('users')
+    .where('inviteToken', '==', token.trim())
+    .limit(1)
+    .get();
 
-  if (!stubDoc.exists) {
+  let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+
+  // Fallback for legacy invitations (token was docId)
+  if (!stubDoc && token.trim().length >= 20) {
+    const legacyDoc = await db.collection('users').doc(token.trim()).get();
+    const legacyData = legacyDoc.data();
+    if (legacyDoc.exists && !legacyData?.inviteToken) {
+      stubDoc = legacyDoc as any;
+    }
+  }
+
+  if (!stubDoc) {
     throw new HttpsError('not-found', 'Invite token not found.');
   }
+
+  const stubRef = stubDoc.ref;
 
   const stub = stubDoc.data() as {
     uid?: string | null;
@@ -483,7 +514,11 @@ export const addAgentManually = onCall({ cors: true }, async (request) => {
     phone: phone?.trim() || null,
     isActive: true,
     createdAt: FieldValue.serverTimestamp(),
+    inviteToken: generateToken(),
   });
 
-  return { success: true, stubId: stubRef.id };
+  const stubDoc = await stubRef.get();
+  const inviteToken = stubDoc.data()?.inviteToken;
+
+  return { success: true, stubId: stubRef.id, inviteToken };
 });

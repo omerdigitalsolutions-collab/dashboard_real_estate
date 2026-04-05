@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
-import { X, Send, Loader2, Trash2, Plus, MessageSquare } from 'lucide-react';
+import { useState } from 'react';
+import { X, Send, Loader2, Trash2, Plus, MessageSquare, Paperclip, FileText, Image as ImageIcon } from 'lucide-react';
 import { Lead } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
 import { updateUserWhatsAppTemplates } from '../../services/userService';
+import { db, storage } from '../../config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import UpgradeModal from '../ui/UpgradeModal';
-import { db } from '../../config/firebase';
+import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
 
 interface BulkWhatsAppModalProps {
     isOpen: boolean;
@@ -16,9 +18,12 @@ interface BulkWhatsAppModalProps {
 
 export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSuccess }: BulkWhatsAppModalProps) {
     const { userData } = useAuth();
+    const { features, loading: billingLoading } = useSubscriptionGuard();
 
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
+    const [file, setFile] = useState<File | null>(null);
+    const [uploadingFile, setUploadingFile] = useState(false);
 
     // Templates logic
     const templates = userData?.whatsappTemplates || [];
@@ -26,46 +31,13 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
     const [newTemplateName, setNewTemplateName] = useState('');
     const [showTemplateForm, setShowTemplateForm] = useState(false);
 
-    // Feature gating — null means "still loading"
-    const [userPlan, setUserPlan] = useState<string | null>(null);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-
-    useEffect(() => {
-        if (!isOpen) {
-            setMessage('');
-            setShowTemplateForm(false);
-            setNewTemplateName('');
-            setUserPlan(null);
-        } else {
-            // Fetch plan when modal opens
-            const fetchPlan = async () => {
-                if (userData?.agencyId) {
-                    try {
-                        const { getDoc, doc: fsDoc } = await import('firebase/firestore');
-                        const snap = await getDoc(fsDoc(db, 'agencies', userData.agencyId));
-                        if (snap.exists()) {
-                            setUserPlan(snap.data()?.planId || 'starter');
-                        } else {
-                            setUserPlan('starter');
-                        }
-                    } catch (err) {
-                        console.error('Error fetching plan:', err);
-                        setUserPlan('starter'); // fail-safe
-                    }
-                } else {
-                    setUserPlan('starter');
-                }
-            };
-            fetchPlan();
-        }
-    }, [isOpen, userData]);
 
     if (!isOpen) return null;
 
     const handleSend = async () => {
-        // Gating: wait for plan to load; block starter plans
-        if (userPlan === null) return; // still loading
-        if (userPlan === 'starter') {
+        // Enforce Feature Gating
+        if (!features.canAccessBroadcast) {
             setIsUpgradeModalOpen(true);
             return;
         }
@@ -75,11 +47,33 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
 
         const selectedLeadsPayload = selectedLeads.map(l => ({ phone: l.phone, name: l.name }));
 
+        let fileUrl = undefined;
+        let fileName = undefined;
+
+        if (file) {
+            setUploadingFile(true);
+            try {
+                const storageRef = ref(storage, `agencies/${userData?.agencyId}/broadcasts/${Date.now()}_${file.name}`);
+                await uploadBytes(storageRef, file);
+                fileUrl = await getDownloadURL(storageRef);
+                fileName = file.name;
+            } catch (err) {
+                console.error('Error uploading file:', err);
+                alert('שגיאה בהעלאת הקובץ');
+                setUploadingFile(false);
+                setSending(false);
+                return;
+            }
+            setUploadingFile(false);
+        }
+
         try {
             const result = await sendWhatsAppWebhook({
                 action: 'bulk_broadcast',
                 message: message.trim(),
-                leads: selectedLeadsPayload
+                leads: selectedLeadsPayload,
+                fileUrl,
+                fileName
             });
 
             // result is { sent, failed } for bulk, or boolean for single
@@ -267,6 +261,46 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
                             </p>
                         </div>
 
+                        {/* File Attachment */}
+                        <div className="mt-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-bold text-slate-700">קובץ מצורף (אופציונלי):</label>
+                                {!file && (
+                                    <label className="cursor-pointer text-xs font-semibold bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1.5">
+                                        <Paperclip size={12} />
+                                        צרף קובץ
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                                            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                                        />
+                                    </label>
+                                )}
+                            </div>
+
+                            {file && (
+                                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                            {file.type.startsWith('image/') ? <ImageIcon size={16} /> : <FileText size={16} />}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                                            <span className="text-[10px] text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setFile(null)}
+                                        className="p-1.5 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-colors"
+                                        title="הסר קובץ"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-5">
                             <button
                                 onClick={onClose}
@@ -274,13 +308,13 @@ export default function BulkWhatsAppModal({ isOpen, onClose, selectedLeads, onSu
                             >
                                 ביטול
                             </button>
-                            <button
+                             <button
                                 onClick={handleSend}
-                                disabled={sending || !message.trim() || userPlan === null}
+                                disabled={sending || uploadingFile || !message.trim() || billingLoading}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm shadow-emerald-600/20"
                             >
-                                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                                {sending ? 'שולח...' : userPlan === null ? 'טוען...' : 'שגר הודעות'}
+                                {(sending || uploadingFile) ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                {uploadingFile ? 'מעלה קובץ...' : sending ? 'שולח...' : billingLoading ? 'טוען...' : 'שגר הודעות'}
                             </button>
                         </div>
                     </div>

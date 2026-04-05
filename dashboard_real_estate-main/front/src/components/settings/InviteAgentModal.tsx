@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, UserPlus, Phone } from 'lucide-react';
+import { X, UserPlus, Phone, Copy, Check, ExternalLink } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +22,7 @@ interface InvitePayload {
 interface InviteResult {
     success: boolean;
     stubId: string;
+    inviteToken: string;
     whatsappUrl?: string;
 }
 
@@ -33,6 +34,8 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
     const [role, setRole] = useState<UserRole>('agent');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [invitationResult, setInvitationResult] = useState<InviteResult | null>(null);
+    const [copied, setCopied] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,15 +68,15 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
                 name: name.trim(),
                 role,
                 phone: phone.trim() || undefined,
-                appUrl: 'https://homer.management', // Passes the real deployed URL to the CF
+                appUrl: window.location.origin,
             });
 
-            // If phone was provided and CF returned a WhatsApp URL, open it
+            setInvitationResult(result.data);
+
+            // If phone was provided and CF returned a WhatsApp URL, open it automatically
             if (result.data.whatsappUrl) {
                 window.open(result.data.whatsappUrl, '_blank', 'noopener,noreferrer');
             }
-
-            onSuccess();
         } catch (err: any) {
             console.error('Failed to invite agent:', err);
             if (err?.code === 'functions/already-exists') {
@@ -85,6 +88,67 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
             setLoading(false);
         }
     };
+
+    if (invitationResult) {
+        const joinLink = `https://homer.management/join?token=${invitationResult.inviteToken || invitationResult.stubId}`;
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div
+                    className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                    onClick={() => { onSuccess(); onClose(); }}
+                />
+                <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" dir="rtl">
+                    <div className="p-8 text-center">
+                        <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <UserPlus size={32} className="text-emerald-600" />
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-2">ההזמנה נשלחה בהצלחה! 🎉</h2>
+                        <p className="text-sm text-slate-500 mb-8">
+                            שלחנו מייל ל-{email}. באפשרותך גם להעתיק את הקישור הישיר ולשלוח אותו ידנית.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-right">קישור הצטרפות</p>
+                                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-2 pr-3">
+                                    <span className="text-xs text-slate-500 truncate flex-1 block text-left" dir="ltr">{joinLink}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(joinLink);
+                                            setCopied(true);
+                                            setTimeout(() => setCopied(false), 2000);
+                                        }}
+                                        className={`p-2 rounded-lg transition-all ${copied ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600'}`}
+                                    >
+                                        {copied ? <Check size={16} /> : <Copy size={16} />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                {invitationResult.whatsappUrl && (
+                                    <button
+                                        onClick={() => window.open(invitationResult.whatsappUrl, '_blank')}
+                                        className="flex-1 py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm flex items-center justify-center gap-2"
+                                    >
+                                        <ExternalLink size={18} />
+                                        שלח בוואטסאפ
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => { onSuccess(); onClose(); }}
+                                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white transition-colors shadow-sm"
+                                >
+                                    סגור
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
