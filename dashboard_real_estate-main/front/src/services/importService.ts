@@ -12,9 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { inviteAgent } from './teamService';
-import axios from 'axios';
-
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -515,21 +513,22 @@ async function getBatchChunks<T>(items: T[]): Promise<T[][]> {
 }
 
 async function geocodeAddress(address?: string, city?: string): Promise<{ lat: number, lng: number, formatted: string } | null> {
-    if (!GOOGLE_MAPS_API_KEY || !address) return null;
+    if (!address) return null;
     try {
-        const fullAddress = `${address}${city ? `, ${city}` : ''}, Israel`;
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${GOOGLE_MAPS_API_KEY}&language=he`;
-        const response = await axios.get(url);
-        if (response.data.status === 'OK' && response.data.results[0]) {
-            const loc = response.data.results[0].geometry.location;
+        const fullAddress = `${address}${city ? `, ${city}` : ''}`;
+        const functions = getFunctions(undefined, 'europe-west1');
+        const getCoords = httpsCallable<{ address: string }, { lat: number, lng: number, formattedAddress: string }>(functions, 'properties-getCoordinates');
+        
+        const result = await getCoords({ address: fullAddress });
+        if (result.data) {
             return {
-                lat: loc.lat,
-                lng: loc.lng,
-                formatted: response.data.results[0].formatted_address
+                lat: result.data.lat,
+                lng: result.data.lng,
+                formatted: result.data.formattedAddress
             };
         }
     } catch (error) {
-        console.error('Geocoding error:', error);
+        console.error('Geocoding error via Cloud Function:', error);
     }
     return null;
 }

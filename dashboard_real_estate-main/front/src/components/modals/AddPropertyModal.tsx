@@ -146,21 +146,34 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const handleSelectSuggestion = async (place: any) => {
         setSuggestions([]); // ← סגור מיד
 
-        // ← תיקון: תמיכה בשדות שם שונים (display_name / description / structured_formatting)
         const displayName =
             place.display_name ||
             place.description ||
             place.structured_formatting?.main_text ||
             '';
-        setAddressQuery(displayName);
+        
+        // If the suggestion already contains the details (from our fallback)
+        if (place.lat && place.lng) {
+            console.log('[Autocomplete] Using pre-populated details from fallback:', place);
+            setAddressQuery(place.display_name);
+            setCity(place.city || '');
+            setSelectedAddress({
+                address: place.display_name,
+                city: place.city || '',
+                lat: place.lat,
+                lng: place.lng
+            });
+            return;
+        }
 
+        setAddressQuery(displayName);
         setIsSearching(true);
         try {
-            const fns = getFunctions(app, 'europe-west1'); // ← תיקון עיקרי
+            const fns = getFunctions(app, 'europe-west1');
             const getDetails = httpsCallable(fns, 'properties-getPlaceDetails');
             const res = await getDetails({ placeId: place.place_id });
 
-            console.log('Place details response:', res.data); // ← לדיבוג, ניתן להסיר אחרי בדיקה
+            console.log('Place details response:', res.data);
 
             const details = res.data as {
                 street: string,

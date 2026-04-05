@@ -16,6 +16,73 @@ const params_1 = require("firebase-functions/params");
 const axios_1 = __importDefault(require("axios"));
 const db = (0, firestore_2.getFirestore)();
 const googleMapsKey = (0, params_1.defineSecret)('VITE_GOOGLE_MAPS_API_KEY');
+/**
+ * Internal helper to geocode an address string with triple fallback.
+ *   1. Google Maps Geocoding (Primary, with Referer)
+ *   2. Photon (Komoot) (Secondary)
+ *   3. Nominatim (OpenStreetMap) (Tertiary)
+ */
+async function internalGeocode(address, apiKey) {
+    var _a, _b;
+    const fullSearch = address.includes('Israel') || address.includes('ישראל') ? address : `${address}, Israel`;
+    // 1. Google Maps (if API key provided)
+    if (apiKey) {
+        try {
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullSearch)}&key=${apiKey}&language=he`;
+            const response = await axios_1.default.get(url, {
+                headers: { 'Referer': 'https://homer.management/' }
+            });
+            const data = response.data;
+            if (data.status === 'OK' && data.results && data.results[0]) {
+                const loc = data.results[0].geometry.location;
+                return {
+                    lat: loc.lat,
+                    lng: loc.lng,
+                    formattedAddress: data.results[0].formatted_address
+                };
+            }
+            console.warn(`[internalGeocode] Google status: ${data.status}`);
+        }
+        catch (error) {
+            console.error(`[internalGeocode] Google failed: ${error.message}`);
+        }
+    }
+    // 2. Fallback: Photon (Komoot)
+    try {
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(fullSearch)}&limit=1&lang=he`;
+        const res = await axios_1.default.get(photonUrl);
+        const feature = (_a = res.data.features) === null || _a === void 0 ? void 0 : _a[0];
+        if (feature) {
+            const p = feature.properties;
+            const display = [p.name || p.street, p.housenumber, p.city].filter(Boolean).join(', ');
+            return {
+                lat: feature.geometry.coordinates[1],
+                lng: feature.geometry.coordinates[0],
+                formattedAddress: display || address
+            };
+        }
+    }
+    catch (e) {
+        console.error(`[internalGeocode] Photon failed: ${e.message}`);
+    }
+    // 3. Last resort: Nominatim
+    try {
+        const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullSearch)}&limit=1&addressdetails=1&accept-language=he`;
+        const res = await axios_1.default.get(nomUrl, { headers: { 'User-Agent': 'HomerCRM/2.0' } });
+        const p = (_b = res.data) === null || _b === void 0 ? void 0 : _b[0];
+        if (p) {
+            return {
+                lat: parseFloat(p.lat),
+                lng: parseFloat(p.lon),
+                formattedAddress: p.display_name
+            };
+        }
+    }
+    catch (e) {
+        console.error(`[internalGeocode] Nominatim failed: ${e.message}`);
+    }
+    return null;
+}
 exports.getCoordinates = (0, https_1.onCall)({ cors: true, secrets: [googleMapsKey] }, async (request) => {
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
@@ -24,44 +91,7 @@ exports.getCoordinates = (0, https_1.onCall)({ cors: true, secrets: [googleMapsK
     if (!address || typeof address !== 'string') {
         throw new https_1.HttpsError('invalid-argument', 'A valid address string is required.');
     }
-    const apiKey = googleMapsKey.value();
-    if (!apiKey) {
-        // Fallback to nominatim if key is missing (optional, but safer to just fail if we want "real" ones)
-        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Nominatim.');
-        try {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Israel')}&limit=1`;
-            const response = await axios_1.default.get(url, {
-                headers: { 'User-Agent': 'OmerDigitalCRM/1.0' },
-                timeout: 5000
-            });
-            const data = response.data;
-            if (data && data[0]) {
-                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-            }
-            return null;
-        }
-        catch (e) {
-            throw new https_1.HttpsError('internal', 'Geocoding failed.');
-        }
-    }
-    try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address + ', Israel')}&key=${apiKey}&language=he`;
-        const response = await axios_1.default.get(url);
-        const data = response.data;
-        if (data.status === 'OK' && data.results && data.results[0]) {
-            const loc = data.results[0].geometry.location;
-            return {
-                lat: loc.lat,
-                lng: loc.lng,
-                formattedAddress: data.results[0].formatted_address
-            };
-        }
-        return null; // Not found
-    }
-    catch (error) {
-        console.error('[geocode] Google Geocoding failed:', error.message);
-        throw new https_1.HttpsError('internal', 'Geocoding service unavailable.');
-    }
+    return await internalGeocode(address, googleMapsKey.value());
 });
 exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true, secrets: [googleMapsKey] }, async (request) => {
     if (!request.auth) {
@@ -119,7 +149,12 @@ exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true, secrets: [goog
             if (display) {
                 finalResults.push({
                     display_name: display,
-                    place_id: `photon_${f.properties.osm_id || Math.random()}`
+                    place_id: `photon_${f.properties.osm_id || Math.random()}`,
+                    lat: f.geometry.coordinates[1],
+                    lng: f.geometry.coordinates[0],
+                    city: city,
+                    street: street,
+                    houseNumber: house
                 });
             }
         });
@@ -140,7 +175,12 @@ exports.getAddressSuggestions = (0, https_1.onCall)({ cors: true, secrets: [goog
                 if (display) {
                     finalResults.push({
                         display_name: display,
-                        place_id: `nom_${p.place_id}`
+                        place_id: `nom_${p.place_id}`,
+                        lat: parseFloat(p.lat),
+                        lng: parseFloat(p.lon),
+                        city: city,
+                        street: street,
+                        houseNumber: house
                     });
                 }
             });
@@ -222,30 +262,11 @@ exports.geocodeNewProperty = (0, firestore_1.onDocumentCreated)({
         return;
     const fullSearch = `${address}, ${city}, Israel`;
     const apiKey = googleMapsKey.value();
+    console.log(`[geocodeNewProperty] Triggered for: ${event.params.propertyId} -> "${fullSearch}"`);
     try {
-        let lat, lng, formatted;
-        if (apiKey) {
-            const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullSearch)}&key=${apiKey}&language=he`;
-            const response = await axios_1.default.get(url);
-            const data = response.data;
-            if (data.status === 'OK' && data.results[0]) {
-                const loc = data.results[0].geometry.location;
-                lat = loc.lat;
-                lng = loc.lng;
-                formatted = data.results[0].formatted_address;
-            }
-        }
-        else {
-            // Fallback to nominatim
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullSearch)}&limit=1`;
-            const response = await axios_1.default.get(url, { headers: { 'User-Agent': 'OmerDigitalCRM/1.0' } });
-            if (response.data[0]) {
-                lat = parseFloat(response.data[0].lat);
-                lng = parseFloat(response.data[0].lon);
-                formatted = response.data[0].display_name;
-            }
-        }
-        if (lat && lng) {
+        const geo = await internalGeocode(fullSearch, apiKey);
+        if (geo) {
+            const { lat, lng, formattedAddress } = geo;
             await db.doc(`properties/${event.params.propertyId}`).update({
                 lat,
                 lng,
@@ -253,16 +274,19 @@ exports.geocodeNewProperty = (0, firestore_1.onDocumentCreated)({
                 geocode: {
                     lat,
                     lng,
-                    formattedAddress: formatted,
+                    formattedAddress,
                     lastUpdated: firestore_2.FieldValue.serverTimestamp(),
-                    source: apiKey ? 'google' : 'nominatim'
+                    source: apiKey ? 'google_trigger' : 'fallback_trigger'
                 }
             });
-            console.log(`[geocodeNewProperty] Geocoded property ${event.params.propertyId} to [${lat}, ${lng}]`);
+            console.log(`[geocodeNewProperty] SUCCESS for ${event.params.propertyId}: [${lat}, ${lng}]`);
+        }
+        else {
+            console.warn(`[geocodeNewProperty] FAILED to geocode address: "${fullSearch}"`);
         }
     }
     catch (error) {
-        console.error(`[geocodeNewProperty] Geocoding failed for ${fullSearch}:`, error.message);
+        console.error(`[geocodeNewProperty] EXCEPTION for ${event.params.propertyId}:`, error.message);
     }
 });
 //# sourceMappingURL=geocode.js.map
