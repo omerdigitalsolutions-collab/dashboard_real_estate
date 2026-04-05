@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Building2, Loader2 } from 'lucide-react';
 import { updateProperty } from '../../services/propertyService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Property } from '../../types';
 import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from '../../config/firebase';
 import toast from 'react-hot-toast';
 import { ISRAEL_CITIES } from '../../utils/constants';
 
@@ -52,6 +53,17 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [cityFocus, setCityFocus] = useState(false);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+                setSuggestions([]);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     if (!isOpen) return null;
 
@@ -62,13 +74,24 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
         }
         setIsSearching(true);
         try {
-            const fns = getFunctions(undefined, 'europe-west1');
+            const fns = getFunctions(app, 'europe-west1');
             const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
             const res = await getSuggestions({ query });
-            const data = res.data as any[];
-            setSuggestions(data.slice(0, 5));
+            
+            const data = res.data;
+            let results: any[] = [];
+            if (Array.isArray(data)) {
+                results = data;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).predictions)) {
+                results = (data as any).predictions;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).results)) {
+                results = (data as any).results;
+            }
+
+            setSuggestions(results.slice(0, 5));
         } catch (error) {
             console.error('Error fetching suggestions', error);
+            setSuggestions([]);
         } finally {
             setIsSearching(false);
         }
@@ -84,9 +107,13 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     };
 
     const handleSelectSuggestion = async (place: any) => {
+        setSuggestions([]);
+        const displayName = place.display_name || place.description || place.structured_formatting?.main_text || '';
+        setAddress(displayName);
+
         setIsSearching(true);
         try {
-            const fns = getFunctions(undefined, 'europe-west1');
+            const fns = getFunctions(app, 'europe-west1');
             const getDetails = httpsCallable(fns, 'properties-getPlaceDetails');
             const res = await getDetails({ placeId: place.place_id });
             const details = res.data as { street: string, houseNumber: string, city: string, lat: number, lng: number, formattedAddress: string } | null;
@@ -101,15 +128,12 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                     lat: details.lat,
                     lng: details.lng
                 });
-            } else {
-                setAddress(place.display_name);
             }
         } catch (error) {
             console.error('Error fetching place details', error);
-            setAddress(place.display_name);
+            setAddress(displayName);
         } finally {
             setIsSearching(false);
-            setSuggestions([]);
         }
     };
 

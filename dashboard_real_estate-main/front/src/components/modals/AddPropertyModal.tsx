@@ -4,8 +4,9 @@ import UpgradeModal from '../ui/UpgradeModal';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable, getFunctions } from 'firebase/functions';
-// import { functions } from '../../config/firebase'; // Removed unused import
+import { app } from '../../config/firebase'; // ← תיקון: import של firebase app
 import toast from 'react-hot-toast';
+
 interface AddPropertyModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -42,8 +43,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [originalSource, setOriginalSource] = useState('');
     const [externalLink, setExternalLink] = useState('');
 
-
-
     // AI Extraction State
     const [rawText, setRawText] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
@@ -55,8 +54,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     const [attemptedFeature, setAttemptedFeature] = useState('');
 
+    // ← תיקון: ref לסגירת ה-dropdown בלחיצה מחוץ לאזור
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
-        // Fetch the user's plan to determine feature access
         const fetchPlan = async () => {
             const user = userData;
             if (user?.agencyId) {
@@ -77,11 +78,23 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         }
     }, [userData, isOpen]);
 
+    // ← תיקון: סגירת dropdown בלחיצה מחוץ לאזור
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+                setSuggestions([]);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const showToast = (message: string, isOk: boolean = true) => {
         if (isOk) toast.success(message);
         else toast.error(message);
     };
 
+    // ← תיקון: שימוש ב-app במקום undefined + טיפול בפורמט תגובה שונה
     const fetchSuggestions = async (query: string) => {
         if (!query || query.length < 3) {
             setSuggestions([]);
@@ -89,13 +102,28 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         }
         setIsSearching(true);
         try {
-            const fns = getFunctions(undefined, 'europe-west1');
+            const fns = getFunctions(app, 'europe-west1'); // ← תיקון עיקרי
             const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
             const res = await getSuggestions({ query });
-            const data = res.data as any[];
-            setSuggestions(data.slice(0, 5));
+
+            console.log('Suggestions raw response:', res.data); // ← לדיבוג, ניתן להסיר אחרי בדיקה
+
+            const data = res.data;
+            console.log(`[Autocomplete] Received response:`, data);
+
+            let results: any[] = [];
+            if (Array.isArray(data)) {
+                results = data;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).predictions)) {
+                results = (data as any).predictions;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).results)) {
+                results = (data as any).results;
+            }
+
+            setSuggestions(results.slice(0, 5));
         } catch (error) {
-            console.error('Error fetching suggestions', error);
+            console.error('[Autocomplete] Error fetching suggestions:', error);
+            setSuggestions([]);
         } finally {
             setIsSearching(false);
         }
@@ -107,16 +135,41 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         setAddressQuery(val);
         setSelectedAddress(null);
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
-        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 600);
+        if (!val || val.length < 3) {
+            setSuggestions([]);
+            return;
+        }
+        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 400); // ← הקטנו ל-400ms לתגובה מהירה יותר
     };
 
+    // ← תיקון: סגירת suggestions מיידית + שימוש ב-app
     const handleSelectSuggestion = async (place: any) => {
+        setSuggestions([]); // ← סגור מיד
+
+        // ← תיקון: תמיכה בשדות שם שונים (display_name / description / structured_formatting)
+        const displayName =
+            place.display_name ||
+            place.description ||
+            place.structured_formatting?.main_text ||
+            '';
+        setAddressQuery(displayName);
+
         setIsSearching(true);
         try {
-            const fns = getFunctions(undefined, 'europe-west1');
+            const fns = getFunctions(app, 'europe-west1'); // ← תיקון עיקרי
             const getDetails = httpsCallable(fns, 'properties-getPlaceDetails');
             const res = await getDetails({ placeId: place.place_id });
-            const details = res.data as { street: string, houseNumber: string, city: string, lat: number, lng: number, formattedAddress: string } | null;
+
+            console.log('Place details response:', res.data); // ← לדיבוג, ניתן להסיר אחרי בדיקה
+
+            const details = res.data as {
+                street: string,
+                houseNumber: string,
+                city: string,
+                lat: number,
+                lng: number,
+                formattedAddress: string
+            } | null;
 
             if (details) {
                 const finalAddress = `${details.street}${details.houseNumber ? ` ${details.houseNumber}` : ''}`;
@@ -129,22 +182,18 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                     lng: details.lng
                 });
             } else {
-                // Fallback to simple display name if details failed
-                setAddressQuery(place.display_name);
+                setAddressQuery(displayName);
                 setCity('');
             }
         } catch (error) {
-            console.error('Error fetching place details', error);
-            setAddressQuery(place.display_name);
+            console.error('Error fetching place details:', error);
+            setAddressQuery(displayName);
         } finally {
             setIsSearching(false);
-            setSuggestions([]);
         }
     };
 
     if (!isOpen) return null;
-
-
 
     const resetForm = () => {
         setAddressQuery(''); setCity(''); setType('sale'); setKind('דירה');
@@ -179,7 +228,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         setPreviewUrls(newUrls);
     };
 
-
     const handleAIExtract = async () => {
         if (userPlan === 'starter') {
             setAttemptedFeature('חילוץ אוטומטי מטקסט (AI)');
@@ -194,7 +242,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
         setIsExtracting(true);
         try {
-            const fns = getFunctions(undefined, 'europe-west1');
+            const fns = getFunctions(app, 'europe-west1'); // ← תיקון
             const extractFunction = httpsCallable<{ payload: string, mode: string, entityType: string }, { success: boolean, data: any }>(fns, 'ai-extractAiData');
             const result = await extractFunction({ payload: rawText.trim(), mode: 'single', entityType: 'properties' });
 
@@ -210,7 +258,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 if (d.description) setDescription(d.description);
 
                 showToast('✅ הנתונים חולצו בהצלחה בעזרת AI');
-                setRawText(''); // Clear the textarea
+                setRawText('');
             } else {
                 showToast('לא הצלחנו לחלץ נתונים מהטקסט, נא לנסות שוב', false);
             }
@@ -238,9 +286,8 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
             let lat = selectedAddress?.lat;
             let lng = selectedAddress?.lng;
 
-            // Fallback: If no suggestion was selected, or it's missing coords, geocode on backend
             if (!lat || !lng) {
-                const fns = getFunctions(undefined, 'europe-west1');
+                const fns = getFunctions(app, 'europe-west1'); // ← תיקון
                 const getCoords = httpsCallable(fns, 'properties-getCoordinates');
                 const addrToGeocode = [addressQuery, city].filter(Boolean).join(', ');
                 const geoRes = await getCoords({ address: addrToGeocode });
@@ -262,7 +309,6 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 ...(floor ? { floor: parseFloat(floor) } : {}),
                 ...(lat && lng ? { lat, lng } : {}),
                 ...(description ? { description: description.trim() } : {}),
-                // Normalize: magic import images become the base image list
                 ...(importedImages.length > 0 ? { images: importedImages } : {}),
                 isExclusive: listingType === 'exclusive',
                 listingType,
@@ -309,7 +355,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
 
                 <div className="p-6 space-y-5">
 
-                    {/* --- AI Text Extraction Section --- */}
+                    {/* AI Text Extraction Section */}
                     <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
                             <Wand2 size={64} className="text-purple-600" />
@@ -345,30 +391,56 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Address Autocomplete */}
-                        <div className="relative">
+
+                        {/* ← תיקון: Address Autocomplete עם ref לסגירה חיצונית */}
+                        <div className="relative" ref={suggestionsRef}>
                             <label className={labelCls}>כתובת <span className="text-red-500">*</span></label>
-                            <input
-                                value={addressQuery}
-                                onChange={handleAddressChange}
-                                required
-                                placeholder="הקלד כתובת לחיפוש..."
-                                className={inputCls}
-                            />
-                            {isSearching && (
-                                <div className="absolute left-3 top-[34px] text-xs text-slate-400">מחפש...</div>
-                            )}
+                            <div className="relative">
+                                <input
+                                    value={addressQuery}
+                                    onChange={handleAddressChange}
+                                    required
+                                    placeholder="הקלד כתובת לחיפוש..."
+                                    className={inputCls}
+                                    autoComplete="off"
+                                />
+                                {/* ← תיקון: spinner בתוך השדה */}
+                                {isSearching && (
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                        <Loader2 size={14} className="animate-spin text-slate-400" />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ← תיקון: dropdown עם z-index גבוה ותמיכה בפורמטי display שונים */}
                             {suggestions.length > 0 && (
-                                <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                                    {suggestions.map((s, i) => (
-                                        <li
-                                            key={i}
-                                            onMouseDown={() => handleSelectSuggestion(s)}
-                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0"
-                                        >
-                                            {s.display_name}
-                                        </li>
-                                    ))}
+                                <ul className="absolute z-[100] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                    {suggestions.map((s, i) => {
+                                        // ← תיקון: תמיכה בפורמטי תגובה שונים של Google Places
+                                        const mainText =
+                                            s.structured_formatting?.main_text ||
+                                            s.display_name ||
+                                            s.description ||
+                                            '';
+                                        const secondaryText =
+                                            s.structured_formatting?.secondary_text || '';
+
+                                        return (
+                                            <li
+                                                key={i}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault(); // ← מונע blur לפני הלחיצה
+                                                    handleSelectSuggestion(s);
+                                                }}
+                                                className="px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors"
+                                            >
+                                                <div className="font-medium">{mainText}</div>
+                                                {secondaryText && (
+                                                    <div className="text-xs text-slate-400 mt-0.5">{secondaryText}</div>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -454,7 +526,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                             </div>
                         </div>
 
-                        {/* Image Previews */}
+                        {/* Image Previews (imported) */}
                         {importedImages.length > 0 && (
                             <div>
                                 <label className={labelCls}>תמונות שחולצו ({importedImages.length})</label>

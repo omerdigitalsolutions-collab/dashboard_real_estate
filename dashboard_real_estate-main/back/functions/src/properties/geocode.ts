@@ -74,27 +74,92 @@ export const getAddressSuggestions = onCall({ cors: true, secrets: [googleMapsKe
     }
 
     const apiKey = googleMapsKey.value();
-    if (!apiKey) {
-        console.warn('[geocode] VITE_GOOGLE_MAPS_API_KEY is not set. Falling back to Photon.');
-        // Original Photon fallback logic... (omitted for brevity in this replace, but I'll keep it functional)
-        return []; // Simplified for now since we have the key
+    console.log(`[getAddressSuggestions] Searching for: "${query}" (Key provided: ${apiKey ? 'Yes' : 'No'})`);
+
+    // Extract potential house number from query for fallback
+    const queryParts = query.split(/\s+/);
+    const potentialHouse = queryParts.find(p => /^\d+[a-zA-Z]?$/.test(p));
+
+    if (apiKey) {
+        try {
+            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=he&components=country:il`;
+            const response = await axios.get(url, {
+                headers: { 'Referer': 'https://homer.management/', 'Accept-Language': 'he' }
+            });
+            
+            const data = response.data;
+            if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
+                const predictions = data.predictions || [];
+                // Limit to 1 and return
+                if (predictions.length > 0) {
+                    return predictions.slice(0, 1).map((p: any) => ({
+                        display_name: p.description,
+                        place_id: p.place_id,
+                        structured_formatting: p.structured_formatting
+                    }));
+                }
+            } else {
+                console.warn(`[getAddressSuggestions] Google API denied or errored: ${data.status}. Msg: ${data.error_message}`);
+            }
+        } catch (error: any) {
+            console.error(`[getAddressSuggestions] Google request failed: ${error.message}`);
+        }
     }
 
+    // --- FALLBACK LOGIC ---
+    let finalResults: any[] = [];
+
+    // Fallback 1: Photon
     try {
-        // Use Google Places Autocomplete API
-        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=he&components=country:il&types=address`;
-        const response = await axios.get(url);
-        const predictions = response.data.predictions || [];
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=he`;
+        const res = await axios.get(photonUrl);
+        const features = res.data.features || [];
+        features.forEach((f: any) => {
+            const p = f.properties;
+            const street = p.street || p.name;
+            const house = p.housenumber || potentialHouse || '';
+            const city = p.city || p.town || '';
+            
+            const main = [street, house].filter(Boolean).join(' ');
+            const display = [main, city].filter(Boolean).join(', ');
+            
+            if (display) {
+                finalResults.push({
+                    display_name: display,
+                    place_id: `photon_${f.properties.osm_id || Math.random()}`
+                });
+            }
+        });
+    } catch (e: any) {}
 
-        return predictions.map((p: any) => ({
-            display_name: p.description,
-            place_id: p.place_id,
-            // To get lat/lng for these, the frontend will need to call getCoordinates or we can enhance this
-        }));
-    } catch (error: any) {
-        console.error('[geocode] Google Places failed:', error.message);
-        throw new HttpsError('internal', 'Suggestions failed.');
+    // Fallback 2: Nominatim
+    if (finalResults.length === 0) {
+        try {
+            const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Israel')}&limit=10&addressdetails=1&accept-language=he`;
+            const res = await axios.get(nomUrl, { headers: { 'User-Agent': 'HomerCRM/2.0' } });
+            (res.data || []).forEach((p: any) => {
+                const addr = p.address || {};
+                const street = addr.road || addr.pedestrian || addr.cycleway || '';
+                const house = addr.house_number || potentialHouse || '';
+                const city = addr.city || addr.town || addr.village || addr.suburb || '';
+                
+                const main = [street, house].filter(Boolean).join(' ');
+                const display = [main, city].filter(Boolean).join(', ');
+                
+                if (display) {
+                    finalResults.push({
+                        display_name: display,
+                        place_id: `nom_${p.place_id}`
+                    });
+                }
+            });
+        } catch (e: any) {}
     }
+
+    // Deduplicate and limit to 1
+    const unique = Array.from(new Map(finalResults.map(item => [item.display_name, item])).values());
+    console.log(`[getAddressSuggestions] Returning ${unique.length > 0 ? 1 : 0} results after deduplication.`);
+    return unique.slice(0, 1);
 });
 
 /**
@@ -110,6 +175,13 @@ export const getPlaceDetails = onCall({ cors: true, secrets: [googleMapsKey] }, 
         throw new HttpsError('invalid-argument', 'placeId is required.');
     }
 
+    console.log(`[getPlaceDetails] Fetching details for ID: ${placeId}`);
+
+    // If it's a fallback ID (photon or nom), we handle it differently
+    if (placeId.startsWith('photon_') || placeId.startsWith('nom_')) {
+        return null; // The frontend will just use the display_name for now
+    }
+
     const apiKey = googleMapsKey.value();
     if (!apiKey) {
         throw new HttpsError('failed-precondition', 'Google Maps API key is missing.');
@@ -117,13 +189,17 @@ export const getPlaceDetails = onCall({ cors: true, secrets: [googleMapsKey] }, 
 
     try {
         const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}&language=he&fields=address_components,geometry,formatted_address`;
-        const response = await axios.get(url);
+        const response = await axios.get(url, {
+            headers: { 'Referer': 'https://homer.management/', 'Accept-Language': 'he' }
+        });
         const result = response.data.result;
 
-        if (!result) return null;
+        if (!result) {
+            console.warn(`[getPlaceDetails] Google returned no results for ID ${placeId}. Status: ${response.data.status}`);
+            return null;
+        }
 
         const components = result.address_components || [];
-        
         const getComp = (types: string[]) => components.find((c: any) => types.some(t => c.types.includes(t)))?.long_name || '';
 
         return {
@@ -135,7 +211,7 @@ export const getPlaceDetails = onCall({ cors: true, secrets: [googleMapsKey] }, 
             formattedAddress: result.formatted_address
         };
     } catch (error: any) {
-        console.error('[geocode] getPlaceDetails failed:', error.message);
+        console.error('[getPlaceDetails] Google request failed:', error.message);
         throw new HttpsError('internal', 'Failed to fetch place details.');
     }
 });

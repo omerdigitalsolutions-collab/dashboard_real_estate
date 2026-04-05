@@ -18,7 +18,7 @@ const firebaseConfig = {
 };
 
 // Initialize the Firebase app (singleton — safe to import anywhere)
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Export pre-initialized service instances
 export const auth = getAuth(app);

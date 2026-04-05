@@ -24,6 +24,10 @@ import { functions } from '../../config/firebase';
 
 // ─── Tier badge ──────────────────────────────────────────────────────────────
 const TIER_STYLES: Record<string, string> = {
+    basic: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    advanced: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    premium: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
+    // Fallback for migration
     free: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
     starter: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
     pro: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
@@ -31,15 +35,19 @@ const TIER_STYLES: Record<string, string> = {
     enterprise: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
 };
 const TIER_LABELS: Record<string, string> = {
-    free: 'Starter',
-    starter: 'Starter',
-    pro: 'Pro',
-    boutique: 'Pro',
-    enterprise: 'Enterprise'
+    basic: 'בסיסי',
+    advanced: 'Advanced',
+    premium: 'Premium',
+    // Fallback for migration
+    free: 'בסיסי',
+    starter: 'בסיסי',
+    pro: 'Advanced',
+    boutique: 'Advanced',
+    enterprise: 'Premium'
 };
 
 function TierBadge({ plan }: { plan?: string }) {
-    const t = (plan ?? 'starter').toLowerCase();
+    const t = (plan ?? 'basic').toLowerCase();
     return (
         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${TIER_STYLES[t] ?? TIER_STYLES.starter}`}>
             {TIER_LABELS[t] ?? plan}
@@ -178,13 +186,13 @@ export default function AgencyDrillDown() {
         if (!newPlan) return;
 
         if (!window.confirm(`האם אתה בטוח שברצונך לשנות את מנוי הסוכנות למסלול ${newPlan}?`)) {
-            e.target.value = agency.planId || 'starter';
+            e.target.value = agency.planId || 'basic';
             return;
         }
 
-        const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
+        const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise', 'basic', 'advanced', 'premium'];
         if (!validPlans.includes(newPlan.toLowerCase())) {
-            alert("מסלול שגוי. יש להזין starter, pro או enterprise.");
+            alert("מסלול שגוי. יש להזין basic, advanced או premium.");
             return;
         }
 
@@ -237,14 +245,14 @@ export default function AgencyDrillDown() {
                                 <span className="text-slate-600">|</span>
                                 <TierBadge plan={agency.planId} />
                                 <select
-                                    defaultValue={agency.planId || 'starter'}
+                                    defaultValue={agency.planId || 'basic'}
                                     onChange={handleUpdatePlan}
                                     className="ml-2 bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 outline-none cursor-pointer hover:border-cyan-500/50 transition-colors"
                                     title="שנה מסלול מנוי"
                                 >
-                                    <option value="starter">Starter</option>
-                                    <option value="pro">Pro</option>
-                                    <option value="enterprise">Enterprise</option>
+                                    <option value="basic">בסיסי</option>
+                                    <option value="advanced">Advanced</option>
+                                    <option value="premium">Premium</option>
                                 </select>
                             </>
                         )}

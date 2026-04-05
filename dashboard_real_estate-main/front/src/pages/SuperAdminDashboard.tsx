@@ -143,11 +143,23 @@ const TIER_STYLES: Record<string, string> = {
     basic: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
     advanced: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
     premium: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
+    // Fallback for migration
+    free: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    starter: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30',
+    pro: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    boutique: 'bg-purple-900/40 text-purple-400 border-purple-500/30',
+    enterprise: 'bg-orange-900/40 text-orange-400 border-orange-500/30',
 };
 const TIER_LABELS: Record<string, string> = {
     basic: 'בסיסי',
     advanced: 'Advanced',
-    premium: 'Premium'
+    premium: 'Premium',
+    // Fallback for migration
+    free: 'בסיסי',
+    starter: 'בסיסי',
+    pro: 'Advanced',
+    boutique: 'Advanced',
+    enterprise: 'Premium'
 };
 
 function TierBadge({ plan }: { plan?: string }) {

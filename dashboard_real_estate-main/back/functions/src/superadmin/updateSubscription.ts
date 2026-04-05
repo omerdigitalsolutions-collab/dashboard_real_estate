@@ -19,7 +19,7 @@ export const superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true },
         );
     }
 
-    const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
+    const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise', 'basic', 'advanced', 'premium'];
     if (!validPlans.includes(newPlanId.toLowerCase())) {
         throw new functions.https.HttpsError(
             'invalid-argument',

@@ -45,7 +45,7 @@ exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, asyn
     if (!agencyId || !newPlanId) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: agencyId and newPlanId.');
     }
-    const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise'];
+    const validPlans = ['free', 'starter', 'pro', 'boutique', 'enterprise', 'basic', 'advanced', 'premium'];
     if (!validPlans.includes(newPlanId.toLowerCase())) {
         throw new functions.https.HttpsError('invalid-argument', 'Invalid plan ID provided.');
     }
