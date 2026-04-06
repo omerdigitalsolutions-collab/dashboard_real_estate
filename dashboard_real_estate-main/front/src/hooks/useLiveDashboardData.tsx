@@ -283,12 +283,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                                 const qCityProps = collection(db, 'cities', city, 'properties');
                                 const unsub = onSnapshot(qCityProps, (citySnap) => {
                                     console.log('[DEBUG cities] Snapshot for city', city, '- docs count:', citySnap.docs.length);
-                                    cityPropsMap[city] = citySnap.docs.map(doc => ({
-                                        id: doc.id,
-                                        ...doc.data(),
-                                        isGlobalCityProperty: true,
-                                        readonly: true
-                                    } as Property));
+                                    cityPropsMap[city] = citySnap.docs.map(doc => {
+                                        const data = doc.data();
+                                        return {
+                                            id: doc.id,
+                                            address: data.street || data.address || 'כתובת חסויה',
+                                            ...data,
+                                            isGlobalCityProperty: true,
+                                            readonly: true
+                                        } as Property;
+                                    });
 
                                     currentCityProperties = Object.values(cityPropsMap).flat();
                                     updatePropertiesState();

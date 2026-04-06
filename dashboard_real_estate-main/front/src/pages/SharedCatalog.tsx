@@ -8,7 +8,7 @@ import { auth } from '../config/firebase';
 
 // ─── Address privacy helper ────────────────────────────────────────────────────
 function toStreetOnly(address: string): string {
-    return address.replace(/\s+\d+[א-תA-Za-z]?\s*$/, '').trim();
+    return address.trim();
 }
 
 // ─── Urgency label helper ─────────────────────────────────────────────────────
@@ -209,8 +209,6 @@ export default function SharedCatalogPage() {
 
     const sortedProperties = useMemo(() => {
         return [...liveProperties].sort((a, b) => {
-            if (a.listingType === 'exclusive' && b.listingType !== 'exclusive') return -1;
-            if (b.listingType === 'exclusive' && a.listingType !== 'exclusive') return 1;
             const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ?? 0) * 1000;
             const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ?? 0) * 1000;
             return timeB - timeA;
@@ -383,7 +381,6 @@ export default function SharedCatalogPage() {
                         const streetName = toStreetOnly(property.address || '');
                         const displayLocation = [streetName, property.city].filter(Boolean).join(', ');
                         const isNew = isPropertyNew(property.createdAt);
-                        const isExclusive = property.listingType === 'exclusive';
 
                         return (
                             <div
@@ -396,11 +393,6 @@ export default function SharedCatalogPage() {
 
                                     {/* Top badges */}
                                     <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
-                                        {isExclusive && (
-                                            <div className="bg-amber-400/95 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1">
-                                                <span className="text-[10px] font-black text-amber-900">👑 בלעדיות</span>
-                                            </div>
-                                        )}
                                         {isNew && (
                                             <div className="bg-blue-500/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1">
                                                 <span className="text-[10px] font-black text-white">✨ חדש</span>

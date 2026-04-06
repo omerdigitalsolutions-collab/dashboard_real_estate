@@ -13,7 +13,7 @@ const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059e
 export const getLiveProperties = onCall({ cors: true }, async (request) => {
     const { catalogId, propertyIds } = request.data as {
         catalogId?: string;
-        propertyIds?: string[];
+        propertyIds?: any[];
     };
 
     if (!catalogId) throw new HttpsError('invalid-argument', 'catalogId is required.');
@@ -33,46 +33,67 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
     }
 
     // 2. Security Check: Only allow fetching properties that are actually in this catalog
-    const allowedPropertyIdsStr = new Set<string>((catalogData.propertyIds || []).map(String));
-    const requestedIds = propertyIds.filter(id => allowedPropertyIdsStr.has(String(id)));
+    // We Map IDs to their collection paths as stored in the catalog document
+    const allowedMap = new Map<string, string>();
+    (catalogData.propertyIds || []).forEach((p: any) => {
+        if (typeof p === 'string') {
+            allowedMap.set(p, 'properties');
+        } else if (p && p.id) {
+            allowedMap.set(p.id, p.collectionPath || 'properties');
+        }
+    });
 
-    if (requestedIds.length === 0) {
+    const requestedItems = propertyIds.filter(p => {
+        const id = typeof p === 'string' ? p : p?.id;
+        return id && allowedMap.has(id);
+    }).map(p => {
+        const id = typeof p === 'string' ? p : p.id;
+        return { id, collectionPath: allowedMap.get(id)! };
+    });
+
+    if (requestedItems.length === 0) {
         return { success: true, properties: [] };
     }
 
-    const liveProperties = [];
-    const chunks = [];
-    for (let i = 0; i < requestedIds.length; i += 10) {
-        chunks.push(requestedIds.slice(i, i + 10));
-    }
+    // 3. Fetch properties grouped by collection path
+    const grouped = requestedItems.reduce((acc, item) => {
+        if (!acc[item.collectionPath]) acc[item.collectionPath] = [];
+        acc[item.collectionPath].push(item.id);
+        return acc;
+    }, {} as Record<string, string[]>);
 
-    for (const chunk of chunks) {
-        const snap = await db.collection('properties')
-            .where('__name__', 'in', chunk)
-            .get();
+    const liveProperties: any[] = [];
+    
+    for (const [path, ids] of Object.entries(grouped)) {
+        // Fetch in chunks of 10 for the 'in' query limitation
+        for (let i = 0; i < ids.length; i += 10) {
+            const chunk = ids.slice(i, i + 10);
+            const snap = await db.collection(path).where('__name__', 'in', chunk).get();
 
-        for (const doc of snap.docs) {
-            const data = doc.data();
+            for (const doc of snap.docs) {
+                const data = doc.data();
+                const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
+                const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
 
-            const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
-            const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
-
-            liveProperties.push({
-                id: doc.id,
-                address: data.address || 'כתובת חסויה',
-                city: data.city || '',
-                price: data.price || 0,
-                rooms: data.rooms || null,
-                sqm: data.sqm || null,
-                floor: data.floor || null,
-                images: finalImages,
-                type: data.type || 'sale',
-                kind: data.kind || null,
-                listingType: data.listingType || null,
-                description: data.description || null,
-                createdAt: data.createdAt || null,
-                agentName: '', // Strip agent info for strict privacy
-            });
+                liveProperties.push({
+                    ...data,
+                    id: doc.id,
+                    address: data.street || data.address || 'כתובת חסויה',
+                    city: data.city || '',
+                    price: data.price || 0,
+                    rooms: data.rooms || null,
+                    sqm: data.sqm || null,
+                    floor: data.floor || null,
+                    images: finalImages,
+                    type: data.type || 'sale',
+                    kind: data.kind || null,
+                    listingType: data.listingType || null,
+                    description: data.description || null,
+                    createdAt: data.createdAt || null,
+                    agentName: '', // Strip agent info for strict privacy
+                    agentPhone: '', // Strip agent phone
+                });
+            }
         }
     }
 

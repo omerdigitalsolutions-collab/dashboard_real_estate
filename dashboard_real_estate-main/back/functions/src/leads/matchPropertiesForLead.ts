@@ -59,24 +59,55 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
         throw new HttpsError('permission-denied', 'Access denied to this agency.');
     }
 
-    // ── Fetch active properties ─────────────────────────────────────────────────
-    const snapshot = await db
+    // ── Fetch active properties from Agency ──────────────────────────────────────
+    const agencySnapshot = await db
         .collection('properties')
         .where('agencyId', '==', agencyId)
         .where('status', '==', 'active')
         .get();
 
-    const allActiveProperties = snapshot.docs.map(doc => ({
+    const agencyProperties = agencySnapshot.docs.map(doc => ({
         id: doc.id,
+        isExclusivity: true,
+        collectionPath: 'properties',
         ...doc.data(),
     })) as Array<Record<string, any>>;
 
+    // ── Fetch global properties from 'cities' collections ───────────────────────
+    let globalProperties: any[] = [];
     const req = requirements ?? {};
-    const desiredCities = req.desiredCity?.map((c: string) => c.trim().toLowerCase()) ?? [];
+    if (req.desiredCity && req.desiredCity.length > 0) {
+        // We limit to fetching from up to 5 cities to avoid excessive round-trips
+        const citiesToFetch = req.desiredCity.slice(0, 5);
+        const globalPromises = citiesToFetch.map(async (cityName) => {
+            try {
+                const citySnap = await db.collection('cities').doc(cityName).collection('properties')
+                    .limit(50)
+                    .get();
+                return citySnap.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        isExclusivity: false,
+                        collectionPath: `cities/${cityName}/properties`,
+                        address: data.street || data.address || 'כתובת חסויה',
+                        ...data,
+                    };
+                });
+            } catch (err) {
+                console.warn(`Could not fetch global properties for city: ${cityName}`, err);
+                return [];
+            }
+        });
+        const results = await Promise.all(globalPromises);
+        globalProperties = results.flat();
+    }
+
+    const allCandidateProperties = [...agencyProperties, ...globalProperties];
     const propertyTypes = req.propertyType ?? [];
 
     // ── Deterministic Matching Engine ───────────────────────────────────────────
-    const matches = allActiveProperties.filter(property => {
+    const matches = allCandidateProperties.filter(property => {
         // 1. City filter (skip if no cities specified)
         if (!isCityMatch(req.desiredCity || [], property.city || '')) {
             return false;
@@ -102,6 +133,6 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
 
     return {
         matches,
-        totalScanned: allActiveProperties.length,
+        totalScanned: allCandidateProperties.length,
     };
 });

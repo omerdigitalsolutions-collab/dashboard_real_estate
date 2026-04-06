@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Sparkles, MapPin, BedDouble, X, CheckSquare, MessageCircle, AlertCircle, Link, Copy, Check, Send, Plus, Trash2, ExternalLink, Search, Heart } from 'lucide-react';
 
 import { createCatalog, getCatalogsByLeadId, updateCatalog } from '../../services/catalogService';
-import { matchPropertiesForLead, updateLead } from '../../services/leadService';
+import { updateLead } from '../../services/leadService';
 import { Lead, Property } from '../../types';
 import { sendWhatsAppWebhook } from '../../utils/webhookClient';
 import { useAuth } from '../../context/AuthContext';
@@ -18,7 +18,7 @@ interface PropertyMatcherModalProps {
 
 // ── Helper: property card thumbnail ──────────────────────────────────────────
 function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, onQuickAddToCatalog, isInCatalog }: {
-    property: Property & { isLiked?: boolean };
+    property: Property & { isLiked?: boolean; isExclusivity?: boolean };
     selected: boolean;
     onToggle: () => void;
     onRemove?: () => void;
@@ -26,6 +26,8 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
     onQuickAddToCatalog?: () => void;
     isInCatalog?: boolean;
 }) {
+    const isExclusivity = (property as any).isExclusivity !== false; // Default to true if not specified (legacy)
+
     return (
         <div
             onClick={onToggle}
@@ -95,7 +97,7 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
 
             <div className="flex-1 flex flex-col justify-center">
                 <h3 className="font-bold text-slate-800 leading-tight mb-1 pr-6 text-sm">
-                    {property.address.replace(/\s+\d+[א-ת]?\s*$/, '').trim()}{property.city ? `, ${property.city}` : ''}
+                    {(property.address || 'כתובת חסויה')}{property.city ? `, ${property.city}` : ''}
                 </h3>
                 <p className="text-sm font-semibold text-blue-600 mb-2">₪{property.price.toLocaleString()}</p>
                 <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
@@ -110,6 +112,11 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
                     ) : (
                         <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">למכירה</span>
                     )}
+                    {isExclusivity ? (
+                        <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100 font-bold">בלעדיות</span>
+                    ) : (
+                        <span className="bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded border border-slate-100">מאגר חיצוני</span>
+                    )}
                 </div>
             </div>
         </div>
@@ -119,13 +126,33 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function PropertyMatcherModal({ lead, allProperties, onClose, onSuccess }: PropertyMatcherModalProps) {
     const { userData } = useAuth();
-    const matchedProperties = matchPropertiesForLead(lead.requirements, allProperties);
+    const [matchedProperties, setMatchedProperties] = useState<any[]>([]);
+    const [loadingMatches, setLoadingMatches] = useState(false);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
 
     // Feature gating
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
+
+
     useEffect(() => {
+        const fetchMatches = async () => {
+            if (!lead.id || !userData?.agencyId) return;
+            setLoadingMatches(true);
+            try {
+                const { matchPropertiesForLeadCF } = await import('../../services/leadService');
+                const result = await matchPropertiesForLeadCF(userData.agencyId, lead.requirements);
+                setMatchedProperties(result.matches || []);
+            } catch (err) {
+                console.error('Error fetching matches from CF:', err);
+                // Fallback to local matching if CF fails or for legacy
+                const { matchPropertiesForLead } = await import('../../services/leadService');
+                setMatchedProperties(matchPropertiesForLead(lead.requirements, allProperties));
+            } finally {
+                setLoadingMatches(false);
+            }
+        };
+
         const fetchPlan = async () => {
             if (userData?.agencyId) {
                 try {
@@ -142,8 +169,9 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                 }
             }
         };
+        fetchMatches();
         fetchPlan();
-    }, [userData]);
+    }, [userData, lead.id]);
 
     // Liked properties
     const [likedPropertyIds, setLikedPropertyIds] = useState<Set<string>>(new Set());
@@ -164,7 +192,10 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                         catalog.likedPropertyIds.forEach(id => liked.add(id));
                     }
                     if (catalog.propertyIds) {
-                        catalog.propertyIds.forEach(id => inCatalog.add(id));
+                        catalog.propertyIds.forEach(p => {
+                            const id = typeof p === 'string' ? p : p.id;
+                            inCatalog.add(id);
+                        });
                     }
                 });
 
@@ -174,9 +205,11 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                 if (lead.catalogId) {
                     const currentCatalog = catalogs.find(c => c.id === lead.catalogId);
                     if (currentCatalog?.propertyIds) {
-                        setSelectedPropertyIds(new Set(currentCatalog.propertyIds));
+                        const ids = currentCatalog.propertyIds.map(p => typeof p === 'string' ? p : p.id);
+                        setSelectedPropertyIds(new Set(ids));
                     }
                 } else if (inCatalog.size > 0) {
+
                     // Fallback to any properties found in catalogs if lead.catalogId is missing
                     setSelectedPropertyIds(inCatalog);
                 }
@@ -264,25 +297,41 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
     const handleQuickAddToCatalog = async (prop: Property) => {
         setIsGenerating(true);
         try {
-            // New set of IDs: Existing selection + the new property
-            const nextIds = Array.from(new Set([...Array.from(selectedPropertyIds), prop.id]));
+            const nextPropertyItems = Array.from(selectedPropertyIds).map(id => {
+                const p = [...matchedProperties, ...allProperties].find(item => item.id === id);
+                return {
+                    id,
+                    collectionPath: (p as any)?.collectionPath || 'properties'
+                };
+            });
+
+            // Add the new one if not already there
+            if (!nextPropertyItems.find(p => p.id === prop.id)) {
+                nextPropertyItems.push({
+                    id: prop.id,
+                    collectionPath: (prop as any).collectionPath || 'properties'
+                });
+            }
+
+            const nextIdsOnly = nextPropertyItems.map(p => p.id);
 
             let token = lead.catalogId;
             let url = token ? `https://homer.management/catalog/${token}` : lead.catalogUrl;
 
             if (token) {
                 // Update existing
-                await updateCatalog(token, nextIds);
+                await updateCatalog(token, nextPropertyItems);
             } else {
                 // Create new
-                token = await createCatalog(lead.agencyId, lead.id, lead.name, nextIds);
+                token = await createCatalog(lead.agencyId, lead.id, lead.name, nextPropertyItems);
                 url = `https://homer.management/catalog/${token}`;
                 await updateLead(lead.id, { catalogId: token, catalogUrl: url } as any);
             }
 
             // Re-select it so UI updates visually
-            setSelectedPropertyIds(new Set(nextIds));
+            setSelectedPropertyIds(new Set(nextIdsOnly));
             setCatalogUrl(url || `https://homer.management/catalog/${token}`);
+
 
             const waMsg = encodeURIComponent(`היי ${lead.name}, יש למשרד שלנו נכס חדש שכרגע יצא לשוק ונראה שהוא בול מה שחיפשת! הוספתי לך אותו לקטלוג האישי שלך. כנס לראות: ${url || `https://homer.management/catalog/${token}`}`);
             window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
@@ -299,20 +348,27 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
         if (selectedPropertyIds.size === 0) return;
         setIsGenerating(true);
         try {
-            const nextIds = Array.from(selectedPropertyIds);
+            const nextPropertyItems = Array.from(selectedPropertyIds).map(id => {
+                const p = [...matchedProperties, ...allProperties].find(item => item.id === id);
+                return {
+                    id,
+                    collectionPath: (p as any)?.collectionPath || 'properties'
+                };
+            });
+
             let token = lead.catalogId;
             let url = token ? `https://homer.management/catalog/${token}` : lead.catalogUrl;
 
             if (token) {
                 // Persistent Update
-                await updateCatalog(token, nextIds);
+                await updateCatalog(token, nextPropertyItems);
             } else {
                 // Initial Creation
                 token = await createCatalog(
                     lead.agencyId,
                     lead.id,
                     lead.name,
-                    nextIds
+                    nextPropertyItems
                 );
                 url = `https://homer.management/catalog/${token}`;
                 // Save to lead document
@@ -321,6 +377,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                     catalogUrl: url
                 } as any);
             }
+
 
             setCatalogUrl(url || `https://homer.management/catalog/${token}`);
             if (openTab) window.open(url || `https://homer.management/catalog/${token}`, '_blank', 'noopener,noreferrer');
@@ -428,6 +485,16 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+                    {loadingMatches && (
+                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                             <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mb-3" />
+                             <p className="text-xs font-medium">סורק נכסים מתאימים במאגר...</p>
+                        </div>
+                    )}
+
+                    {!loadingMatches && (
+                        <>
+
                     {/* Existing catalog banner (only if we haven't generated a new one yet) */}
                     {!catalogUrl && lead.catalogUrl && (
                         <div className="mb-6 flex items-center justify-between text-sm bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
@@ -571,7 +638,10 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                             </div>
                         </div>
                     )}
+                        </>
+                    )}
                 </div>
+
 
                 {/* Footer */}
                 <div className="p-5 border-t border-slate-100 bg-white shrink-0">

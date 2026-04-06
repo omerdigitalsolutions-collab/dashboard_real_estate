@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, PenLine, MapPin, DollarSign, Home, Zap, Car, Wind, Shield, Layers, Clock, Loader2 } from 'lucide-react';
 import { updateLead } from '../../services/leadService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Lead } from '../../types';
 import { isValidPhone } from '../../utils/validation';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from '../../config/firebase';
 import toast from 'react-hot-toast';
 
 interface EditLeadModalProps {
@@ -36,7 +38,12 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
     const leadType = lead.type || 'buyer';
 
     // Buyer requirements
-    const [desiredCity, setDesiredCity] = useState(lead.requirements?.desiredCity?.join(', ') ?? '');
+    const [desiredCities, setDesiredCities] = useState<string[]>(lead.requirements?.desiredCity ?? []);
+    const [cityQuery, setCityQuery] = useState('');
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+    const searchTimeout = useRef<any>(null);
     const [maxBudget, setMaxBudget] = useState(lead.requirements?.maxBudget?.toString() ?? '');
     const [transactionType, setTransactionType] = useState<'sale' | 'rent'>(
         lead.requirements?.propertyType?.includes('rent') ? 'rent' : 'sale'
@@ -65,6 +72,67 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Google Places Logic
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+                setSuggestions([]);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const fetchSuggestions = async (query: string) => {
+        if (!query || query.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const fns = getFunctions(app, 'europe-west1');
+            const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
+            const res = await getSuggestions({ query, types: '(cities)' });
+
+            const data = res.data;
+            let results: any[] = [];
+            if (Array.isArray(data)) {
+                results = data;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).predictions)) {
+                results = (data as any).predictions;
+            }
+            setSuggestions(results.slice(0, 5));
+        } catch (error) {
+            console.error('Error fetching city suggestions:', error);
+            setSuggestions([]);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleCityQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setCityQuery(val);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        if (!val || val.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 400);
+    };
+
+    const addCityTag = (city: string) => {
+        if (city && !desiredCities.includes(city)) {
+            setDesiredCities(prev => [...prev, city]);
+        }
+        setCityQuery('');
+        setSuggestions([]);
+    };
+
+    const removeCityTag = (city: string) => {
+        setDesiredCities(prev => prev.filter(c => c !== city));
+    };
+
     if (!isOpen) return null;
 
     const togglePropertyKind = (kind: string) =>
@@ -92,7 +160,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
 
             if (leadType === 'buyer') {
                 updates.requirements = {
-                    desiredCity: desiredCity ? desiredCity.split(',').map(c => c.trim()).filter(Boolean) : [],
+                    desiredCity: desiredCities,
                     maxBudget: maxBudget ? parseFloat(maxBudget) : null,
                     minRooms: minRooms ? parseInt(minRooms) : null,
                     maxRooms: maxRooms ? parseInt(maxRooms) : null,
@@ -226,9 +294,54 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                             <div className="space-y-3">
                                 <div className={sectionCls}>
                                     <div className={sectionTitleCls}><MapPin size={12} className="text-blue-500" />מיקום ותקציב</div>
-                                    <div>
-                                        <label className={labelCls}>אזורים מבוקשים (מופרד בפסיקים)</label>
-                                        <input value={desiredCity} onChange={e => setDesiredCity(e.target.value)} placeholder="תל אביב, רמת גן" className={inputCls} />
+                                    <div className="relative" ref={suggestionsRef}>
+                                        <label className={labelCls}>אזורים מבוקשים (חפש והוסף)</label>
+                                        <div className="relative">
+                                            <input
+                                                value={cityQuery}
+                                                onChange={handleCityQueryChange}
+                                                placeholder="חפש עיר... (למשל: תל אביב)"
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                            {isSearching && (
+                                                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                                    <Loader2 size={14} className="animate-spin text-slate-400" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Suggestions Dropdown */}
+                                        {suggestions.length > 0 && (
+                                            <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                {suggestions.map((s, i) => {
+                                                    const mainText = s.structured_formatting?.main_text || s.display_name || s.description || '';
+                                                    return (
+                                                        <li
+                                                            key={i}
+                                                            onClick={() => addCityTag(mainText)}
+                                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                                                        >
+                                                            {mainText}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+
+                                        {/* Activity Chips */}
+                                        {desiredCities.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                {desiredCities.map(city => (
+                                                    <span key={city} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100 animate-in zoom-in-95">
+                                                        {city}
+                                                        <button type="button" onClick={() => removeCityTag(city)} className="hover:text-red-500 transition-colors">
+                                                            <X size={12} />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>

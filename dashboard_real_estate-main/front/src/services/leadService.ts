@@ -12,6 +12,15 @@ import { db } from '../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead, Property } from '../types';
 import { isCityMatch } from '../utils/stringUtils';
+export const matchPropertiesForLeadCF = async (agencyId: string, requirements: Lead['requirements']): Promise<{ matches: any[], totalScanned: number }> => {
+    const functions = getFunctions(undefined, 'europe-west1');
+    const matchCallable = httpsCallable(functions, 'leads-matchPropertiesForLead');
+    const result = await matchCallable({
+        agencyId,
+        requirements
+    });
+    return result.data as { matches: any[], totalScanned: number };
+};
 
 export const addLead = async (_agencyId: string, data: Partial<Lead>) => {
     const functions = getFunctions(undefined, 'europe-west1');

@@ -421,6 +421,57 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                             </div>
                         </div>
 
+                        {/* Global Property Specific Data */}
+                        {property.isGlobalCityProperty && (
+                            <div className="mb-8 p-5 bg-cyan-50/30 rounded-2xl border border-cyan-100/50">
+                                <h3 className="text-xs font-bold text-cyan-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Tag size={14} />
+                                    פרטים מהמאגר הציבורי (Full Public Data)
+                                </h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    {property.street && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">כתובת מדויקת (Street)</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.street}</span>
+                                        </div>
+                                    )}
+                                    {property.neighborhood && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">שכונה</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.neighborhood}</span>
+                                        </div>
+                                    )}
+                                    {property.propertyType && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">תת-סוג נכס</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.propertyType}</span>
+                                        </div>
+                                    )}
+                                    {property.ingestedAt && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">נקלט במערכת</span>
+                                            <span className="text-sm font-semibold text-slate-700">
+                                                {property.ingestedAt.toDate ? property.ingestedAt.toDate().toLocaleDateString('he-IL') : new Date(property.ingestedAt).toLocaleDateString('he-IL')}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {property.source && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">קוד מקור</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.source}</span>
+                                        </div>
+                                    )}
+                                    {property.sqm && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">שטח (מ"ר)</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.sqm}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+
                         {/* Description */}
                         <div className="mb-6">
                             <div className="flex items-center justify-between mb-3">

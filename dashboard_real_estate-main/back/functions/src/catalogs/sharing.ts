@@ -12,7 +12,7 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
         agencyId?: string;
         leadId?: string;
         leadName?: string;
-        propertyIds?: string[];
+        propertyIds?: Array<{ id: string; collectionPath: string }>;
     };
 
     if (!agencyId?.trim()) throw new HttpsError('invalid-argument', 'agencyId is required.');

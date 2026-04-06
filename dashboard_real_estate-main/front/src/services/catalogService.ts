@@ -11,11 +11,14 @@ const COLLECTION = 'shared_catalogs';
 export async function createCatalog(
     agencyId: string,
     leadId: string,
-    leadName: string | undefined, // Not used in the CF directly, but you can pass it if you update the CF
-    propertyIds: string[]
+    leadName: string | undefined,
+    propertyIds: Array<string | { id: string; collectionPath: string }>
 ): Promise<string> {
     const fns = getFunctions(undefined, 'europe-west1');
-    const generateCatalogCF = httpsCallable<{ agencyId: string, leadId: string, leadName: string | undefined, propertyIds: string[] }, { success: boolean, catalogId: string, url: string }>(fns, 'catalogs-generateCatalog');
+    const generateCatalogCF = httpsCallable<
+        { agencyId: string, leadId: string, leadName: string | undefined, propertyIds: Array<string | { id: string; collectionPath: string }> },
+        { success: boolean, catalogId: string, url: string }
+    >(fns, 'catalogs-generateCatalog');
 
     // Call the Cloud Function
     const result = await generateCatalogCF({
@@ -76,7 +79,7 @@ export async function saveCatalogLikes(token: string, likedPropertyIds: string[]
 /**
  * Updates an existing catalog's property IDs.
  */
-export async function updateCatalog(token: string, propertyIds: string[]): Promise<void> {
+export async function updateCatalog(token: string, propertyIds: Array<string | { id: string; collectionPath: string }>): Promise<void> {
     const docRef = doc(db, COLLECTION, token);
     await updateDoc(docRef, {
         propertyIds,
@@ -98,12 +101,12 @@ export async function getCatalogsByLeadId(leadId: string, agencyId: string): Pro
 /**
  * Fetch live property data for the given propertyIds from the secure Cloud Function.
  */
-export async function getLiveCatalogProperties(catalogId: string, propertyIds: string[]): Promise<any[]> {
+export async function getLiveCatalogProperties(catalogId: string, propertyIds: Array<string | { id: string; collectionPath: string }>): Promise<any[]> {
     if (!catalogId || !propertyIds || propertyIds.length === 0) return [];
     try {
         const fns = getFunctions(undefined, 'europe-west1');
         const getLivePropsFn = httpsCallable<
-            { catalogId: string, propertyIds: string[] },
+            { catalogId: string, propertyIds: Array<string | { id: string; collectionPath: string }> },
             { success: boolean, properties: any[] }
         >(fns, 'catalogs-getLiveProperties');
 

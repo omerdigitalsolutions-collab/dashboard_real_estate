@@ -172,6 +172,13 @@ export interface Property {
     isExclusive?: boolean;
     daysOnMarket: number;
     description?: string;
+    street?: string;
+    neighborhood?: string;
+    propertyType?: string;
+    ingestedAt?: any;
+    source?: string;
+    floor?: number | null;
+
 
     // Draft properties (WhatsApp parsing)
     rawDescription?: string;
@@ -269,7 +276,7 @@ export interface SharedCatalog {
     agentId: string;
     leadId: string | null;
     leadName?: string;
-    propertyIds: string[];
+    propertyIds: Array<string | { id: string; collectionPath: string }>;
     viewCount: number;
     likedPropertyIds?: string[];
     leadRequirements?: {
