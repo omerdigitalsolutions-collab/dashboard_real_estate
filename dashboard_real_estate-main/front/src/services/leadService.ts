@@ -11,6 +11,7 @@ import {
 import { db } from '../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead, Property } from '../types';
+import { isCityMatch } from '../utils/stringUtils';
 
 export const addLead = async (_agencyId: string, data: Partial<Lead>) => {
     const functions = getFunctions(undefined, 'europe-west1');
@@ -54,10 +55,8 @@ export const matchPropertiesForLead = (leadRequirements: Lead['requirements'], a
     return allProperties.filter(property => {
         if (property.status !== 'active') return false;
 
-        const desiredCities = leadRequirements.desiredCity?.map(c => c.trim().toLowerCase()) ?? [];
-        if (desiredCities.length > 0) {
-            const propCity = (property.city ?? '').trim().toLowerCase();
-            if (!desiredCities.includes(propCity)) return false;
+        if (!isCityMatch(leadRequirements.desiredCity || [], property.city || '')) {
+            return false;
         }
 
         if (leadRequirements.maxBudget != null && leadRequirements.maxBudget > 0) {

@@ -28,6 +28,7 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
+import { isCityMatch } from './stringUtils';
 
 const db = getFirestore();
 
@@ -77,9 +78,8 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     // ── Deterministic Matching Engine ───────────────────────────────────────────
     const matches = allActiveProperties.filter(property => {
         // 1. City filter (skip if no cities specified)
-        if (desiredCities.length > 0) {
-            const propCity = (property.city ?? '').trim().toLowerCase();
-            if (!desiredCities.includes(propCity)) return false;
+        if (!isCityMatch(req.desiredCity || [], property.city || '')) {
+            return false;
         }
 
         // 2. Budget filter (skip if no max budget)

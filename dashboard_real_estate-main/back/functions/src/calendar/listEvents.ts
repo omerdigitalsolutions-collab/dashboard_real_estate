@@ -15,7 +15,7 @@ import { getOAuthClient } from './oauthClient';
  * Returns a list of upcoming events from the user's primary Google Calendar.
  */
 export const listEvents = onCall({ 
-    cors: ['https://homer.management', 'http://localhost:5173'],
+    cors: true,
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

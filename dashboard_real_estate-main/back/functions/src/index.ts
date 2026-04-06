@@ -56,7 +56,7 @@ import { textToActionAgent } from './ai/textToAction';
 import { homerChatBot } from './ai/homerChatBot';
 
 // ── Calendar Module ────────────────────────────────────────────────────────────
-import { getAuthUrl, handleOAuthCallback, createEvent, disconnect, listEvents } from './calendar';
+import { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, listEvents } from './calendar';
 
 // ── Automation Module ──────────────────────────────────────────────────────────
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
@@ -93,7 +93,7 @@ export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLivePro
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
 export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot };
-export const calendar = { getAuthUrl, handleOAuthCallback, createEvent, disconnect, listEvents };
+export const calendar = { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, listEvents };
 export const automation = { webhookProcessGlobalYad2Email };
 export const superadmin = {
     superAdminUpdateExpenses,

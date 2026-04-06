@@ -2,7 +2,6 @@ import {
     collection,
     addDoc,
     updateDoc,
-    deleteDoc,
     doc,
     getDocs,
     query,
@@ -13,6 +12,7 @@ import {
     onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage } from '../config/firebase';
 import { Property, PropertyStatus } from '../types';
 
@@ -206,9 +206,14 @@ export async function mergeProperties(
  * Permanently deletes a property document.
  * Prefer soft-deletes (status = 'withdrawn') in production.
  */
+/**
+ * Permanently deletes a property document.
+ * Calls the backend Cloud Function for security and data integrity.
+ */
 export async function deleteProperty(propertyId: string): Promise<void> {
-    const ref = doc(db, COLLECTION, propertyId);
-    await deleteDoc(ref);
+    const functions = getFunctions(undefined, 'europe-west1');
+    const deleteFn = httpsCallable<{ propertyId: string }, { success: boolean }>(functions, 'properties-deleteProperty');
+    await deleteFn({ propertyId });
 }
 
 /**

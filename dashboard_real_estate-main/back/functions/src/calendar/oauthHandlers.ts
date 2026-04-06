@@ -53,7 +53,7 @@ function buildBaseOAuth2Client() {
  * with a `code` query parameter, which is then passed to handleOAuthCallback.
  */
 export const getAuthUrl = onCall({ 
-    cors: ['https://homer.management', 'http://localhost:5173'],
+    cors: true,
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

@@ -18,24 +18,29 @@ const db = (0, firestore_1.getFirestore)();
  * 2. Updates the user's profile to disable Google Calendar integration.
  */
 exports.disconnect = (0, https_1.onCall)({
-    cors: ['https://homer.management', 'http://localhost:5173'],
+    cors: true,
     invoker: 'public',
 }, async (request) => {
     // 1. Authenticate user
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     try {
+        console.log(`[calendar] Starting disconnect for user: ${authData.uid}`);
         // 2. Clear tokens from Firestore
         await (0, tokenStore_1.deleteUserTokens)(authData.uid);
-        // 3. Update user profile to disable integration
+        // 3. Update user profile to mark calendar as disabled
+        const db = (0, firestore_1.getFirestore)();
         await db.collection('users').doc(authData.uid).update({
             'googleCalendar.enabled': false,
             'googleCalendar.lastDisconnected': new Date().toISOString(),
         });
+        console.log(`[calendar] Successfully disconnected for user: ${authData.uid}`);
         return { success: true };
     }
     catch (error) {
         console.error(`[calendar] disconnect error for user ${authData.uid}:`, error);
-        throw new https_1.HttpsError('internal', 'תיקון: נכשל ניתוק החיבור ליומן גוגל.');
+        if (error instanceof https_1.HttpsError)
+            throw error;
+        throw new https_1.HttpsError('internal', 'נכשל ניתוק החיבור ליומן גוגל. אנא נסה שוב מאוחר יותר.');
     }
 });
 //# sourceMappingURL=disconnect.js.map

@@ -14,6 +14,7 @@
  */
 
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { isCityMatch } from './stringUtils';
 
 const db = getFirestore();
 
@@ -172,11 +173,12 @@ function evaluateLead(property: IngestedProperty, lead: any): MatchedLead | null
     let scorePossible = 0;
 
     // ── City filter ───────────────────────────────────────────────────────────
-    const desiredCities: string[] = (req.desiredCity ?? []).map((c: string) => c.trim().toLowerCase());
-    if (desiredCities.length > 0) {
+    if (!isCityMatch(req.desiredCity || [], property.city || '')) {
+        return null; // Hard reject
+    }
+    const desiredCitiesCount = (req.desiredCity ?? []).length;
+    if (desiredCitiesCount > 0) {
         scorePossible += 25;
-        const propCity = property.city.trim().toLowerCase();
-        if (!desiredCities.includes(propCity)) return null; // Hard reject
         scorePoints += 25;
     }
 

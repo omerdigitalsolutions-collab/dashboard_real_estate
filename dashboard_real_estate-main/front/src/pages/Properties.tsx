@@ -118,13 +118,62 @@ export default function Properties() {
     };
 
     const handleBulkDelete = async () => {
-        if (!window.confirm(`למחוק ${selectedPropertyIds.size} נכסים? הפעולה אינה הפיכה.`)) return;
+        const selectedCount = selectedPropertyIds.size;
+        if (!selectedCount) return;
+
+        // Filter out sourcing properties - They cannot be deleted from here per user requirement
+        const allSelected = properties.filter(p => selectedPropertyIds.has(p.id));
+        const toDeleteIds = allSelected
+            .filter(p => !p.isGlobalCityProperty)
+            .map(p => p.id);
+        
+        const sourcingCount = selectedCount - toDeleteIds.length;
+
+        if (sourcingCount > 0 && toDeleteIds.length === 0) {
+            alert('לא ניתן למחוק נכסים ממאגר ציבורי.');
+            return;
+        }
+
+        const confirmMsg = sourcingCount > 0 
+            ? `למחוק ${toDeleteIds.length} נכסים? (${sourcingCount} נכסי מאגר ציבורי יושמטו). הפעולה אינה הפיכה.`
+            : `למחוק ${selectedPropertyIds.size} נכסים? הפעולה אינה הפיכה.`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        setToast('מוחק נכסים...');
+        let successCount = 0;
+        let failMsgs: string[] = [];
+
         try {
-            await Promise.all([...selectedPropertyIds].map(id => deleteProperty(id)));
+            // Run all deletions in parallel for much better performance
+            const results = await Promise.all(toDeleteIds.map(async (id) => {
+                try {
+                    await deleteProperty(id);
+                    return { id, success: true };
+                } catch (err: any) {
+                    return { id, success: false, error: err.message || 'שגיאה לא ידועה' };
+                }
+            }));
+
+            results.forEach(res => {
+                if (res.success) {
+                    successCount++;
+                } else if (res.error && !failMsgs.includes(res.error)) {
+                    failMsgs.push(res.error);
+                }
+            });
+            
             setSelectedPropertyIds(new Set());
+            setToast(successCount > 0 ? `${successCount} נכסים נמחקו בהצלחה.` : '');
+            
+            if (failMsgs.length > 0) {
+                alert(`חלק מהנכסים לא נמחקו:\n${failMsgs.join('\n')}`);
+            }
         } catch (err) {
             console.error('Failed to bulk delete properties', err);
-            alert('שגיאה במחיקה. נסה שוב.');
+            alert('שגיאה בתהליך המחיקה.');
+        } finally {
+            setTimeout(() => setToast(''), 3000);
         }
     };
 
@@ -919,10 +968,14 @@ export default function Properties() {
                                                                     e.stopPropagation();
                                                                     if (window.confirm('האם אתה בטוח שברצונך למחוק את הנכס?')) {
                                                                         try {
+                                                                            setToast('מוחק נכס...');
                                                                             await deleteProperty(prop.id);
-                                                                        } catch (err) {
+                                                                            setToast('נכס נמחק בהצלחה');
+                                                                        } catch (err: any) {
                                                                             console.error('Failed to delete property', err);
-                                                                            alert('שגיאה במחיקת הנכס. נסה שוב.');
+                                                                            alert(err.message || 'שגיאה במחיקת הנכס. נסה שוב.');
+                                                                        } finally {
+                                                                            setTimeout(() => setToast(''), 3000);
                                                                         }
                                                                     }
                                                                 }}

@@ -31,6 +31,7 @@ exports.matchPropertiesForLead = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
+const stringUtils_1 = require("./stringUtils");
 const db = (0, firestore_1.getFirestore)();
 exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a, _b, _c, _d;
@@ -58,21 +59,19 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     const propertyTypes = (_d = req.propertyType) !== null && _d !== void 0 ? _d : [];
     // ── Deterministic Matching Engine ───────────────────────────────────────────
     const matches = allActiveProperties.filter(property => {
-        var _a, _b, _c;
+        var _a, _b;
         // 1. City filter (skip if no cities specified)
-        if (desiredCities.length > 0) {
-            const propCity = ((_a = property.city) !== null && _a !== void 0 ? _a : '').trim().toLowerCase();
-            if (!desiredCities.includes(propCity))
-                return false;
+        if (!(0, stringUtils_1.isCityMatch)(req.desiredCity || [], property.city || '')) {
+            return false;
         }
         // 2. Budget filter (skip if no max budget)
         if (req.maxBudget != null && req.maxBudget > 0) {
-            if (((_b = property.price) !== null && _b !== void 0 ? _b : Infinity) > req.maxBudget)
+            if (((_a = property.price) !== null && _a !== void 0 ? _a : Infinity) > req.maxBudget)
                 return false;
         }
         // 3. Rooms filter (skip if no minimum rooms)
         if (req.minRooms != null && req.minRooms > 0) {
-            if (((_c = property.rooms) !== null && _c !== void 0 ? _c : 0) < req.minRooms)
+            if (((_b = property.rooms) !== null && _b !== void 0 ? _b : 0) < req.minRooms)
                 return false;
         }
         // 4. Property type filter (skip if no types specified)

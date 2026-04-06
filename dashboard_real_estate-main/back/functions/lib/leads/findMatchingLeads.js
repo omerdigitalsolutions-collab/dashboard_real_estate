@@ -16,6 +16,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findMatchingLeads = findMatchingLeads;
 const firestore_1 = require("firebase-admin/firestore");
+const stringUtils_1 = require("./stringUtils");
 const db = (0, firestore_1.getFirestore)();
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRICE_MARGIN = 1.07; // Allow +7% over maxBudget
@@ -121,12 +122,12 @@ function evaluateLead(property, lead) {
     let scorePoints = 0;
     let scorePossible = 0;
     // ── City filter ───────────────────────────────────────────────────────────
-    const desiredCities = ((_b = req.desiredCity) !== null && _b !== void 0 ? _b : []).map((c) => c.trim().toLowerCase());
-    if (desiredCities.length > 0) {
+    if (!(0, stringUtils_1.isCityMatch)(req.desiredCity || [], property.city || '')) {
+        return null; // Hard reject
+    }
+    const desiredCitiesCount = ((_b = req.desiredCity) !== null && _b !== void 0 ? _b : []).length;
+    if (desiredCitiesCount > 0) {
         scorePossible += 25;
-        const propCity = property.city.trim().toLowerCase();
-        if (!desiredCities.includes(propCity))
-            return null; // Hard reject
         scorePoints += 25;
     }
     // ── Property type filter (sale vs rent) ───────────────────────────────────

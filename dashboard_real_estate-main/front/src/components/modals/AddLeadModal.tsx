@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { X, UserPlus, MapPin, DollarSign, Home, Zap, Car, Wind, Shield, Layers, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, UserPlus, MapPin, DollarSign, Home, Zap, Car, Wind, Shield, Layers, Clock, Loader2 } from 'lucide-react';
 import { addLead } from '../../services/leadService';
 import { useAuth } from '../../context/AuthContext';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidPhone } from '../../utils/validation';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from '../../config/firebase';
 import toast from 'react-hot-toast';
 
 interface AddLeadModalProps {
@@ -34,7 +36,12 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [activeFormTab, setActiveFormTab] = useState<'personal' | 'property'>('personal');
 
     // ── Requirements (Buyer) ──────────────────────────────────────────
-    const [desiredCity, setDesiredCity] = useState('');
+    const [desiredCities, setDesiredCities] = useState<string[]>([]);
+    const [cityQuery, setCityQuery] = useState('');
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+
     const [maxBudget, setMaxBudget] = useState('');
     const [transactionType, setTransactionType] = useState<'sale' | 'rent'>('sale');
     const [urgency, setUrgency] = useState<'immediate' | '1-3_months' | '3-6_months' | 'flexible'>('flexible');
@@ -68,12 +75,74 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
 
     const resetForm = () => {
         setName(''); setPhone(''); setSource('אחר'); setLeadType('buyer'); setActiveFormTab('personal');
-        setDesiredCity(''); setMaxBudget(''); setTransactionType('sale'); setUrgency('flexible');
+        setDesiredCities([]); setCityQuery(''); setSuggestions([]); setMaxBudget(''); setTransactionType('sale'); setUrgency('flexible');
         setMinRooms(''); setMaxRooms(''); setMinSizeSqf(''); setFloorMin(''); setFloorMax(''); setPropertyKind([]);
         setMustHaveElevator(false); setMustHaveParking(false); setMustHaveBalcony(false); setMustHaveSafeRoom(false);
         setCondition('any');
         setSellerAddress(''); setSellerPrice('');
         setAssignedTo('');
+    };
+
+    // Google Places Logic
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+                setSuggestions([]);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const fetchSuggestions = async (query: string) => {
+        if (!query || query.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const fns = getFunctions(app, 'europe-west1');
+            const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
+            const res = await getSuggestions({ query, types: '(cities)' }); // Filter for cities
+
+            const data = res.data;
+            let results: any[] = [];
+            if (Array.isArray(data)) {
+                results = data;
+            } else if (data && typeof data === 'object' && Array.isArray((data as any).predictions)) {
+                results = (data as any).predictions;
+            }
+            setSuggestions(results.slice(0, 5));
+        } catch (error) {
+            console.error('Error fetching city suggestions:', error);
+            setSuggestions([]);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const searchTimeout = useRef<any>(null);
+    const handleCityQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setCityQuery(val);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        if (!val || val.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+        searchTimeout.current = setTimeout(() => fetchSuggestions(val), 400);
+    };
+
+    const addCityTag = (city: string) => {
+        if (city && !desiredCities.includes(city)) {
+            setDesiredCities(prev => [...prev, city]);
+        }
+        setCityQuery('');
+        setSuggestions([]);
+    };
+
+    const removeCityTag = (city: string) => {
+        setDesiredCities(prev => prev.filter(c => c !== city));
     };
 
     const togglePropertyKind = (kind: string) => {
@@ -99,7 +168,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                     type: leadType,
                     assignedAgentId: assignedTo === '' ? null : assignedTo,
                     requirements: {
-                        desiredCity: desiredCity ? desiredCity.trim().split(',').map(c => c.trim()).filter(Boolean) : [],
+                        desiredCity: desiredCities.length > 0 ? desiredCities : [],
                         maxBudget: maxBudget ? parseFloat(maxBudget) : null,
                         minRooms: minRooms ? parseInt(minRooms) : null,
                         maxRooms: maxRooms ? parseInt(maxRooms) : null,
@@ -245,7 +314,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         {(() => {
                                             const scoredAgents = agents.map(agent => {
                                                 let score = 0;
-                                                const leadCityArr = desiredCity.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+                                                const leadCityArr = desiredCities.map(c => c.toLowerCase());
 
                                                 // 1. Transaction Type Match
                                                 if (agent.specializations?.includes(transactionType)) score += 2;
@@ -298,9 +367,54 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         <MapPin size={12} className="text-blue-500" />
                                         מיקום ותקציב
                                     </div>
-                                    <div>
-                                        <label className={labelCls}>אזורים מבוקשים (מופרד בפסיקים)</label>
-                                        <input value={desiredCity} onChange={e => setDesiredCity(e.target.value)} placeholder="תל אביב, רמת גן, גבעתיים" className={inputCls} />
+                                    <div className="relative" ref={suggestionsRef}>
+                                        <label className={labelCls}>אזורים מבוקשים (חפש והוסף)</label>
+                                        <div className="relative">
+                                            <input
+                                                value={cityQuery}
+                                                onChange={handleCityQueryChange}
+                                                placeholder="חפש עיר... (למשל: תל אביב)"
+                                                className={inputCls}
+                                                autoComplete="off"
+                                            />
+                                            {isSearching && (
+                                                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                                    <Loader2 size={14} className="animate-spin text-slate-400" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Suggestions Dropdown */}
+                                        {suggestions.length > 0 && (
+                                            <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                                {suggestions.map((s, i) => {
+                                                    const mainText = s.structured_formatting?.main_text || s.display_name || s.description || '';
+                                                    return (
+                                                        <li
+                                                            key={i}
+                                                            onClick={() => addCityTag(mainText)}
+                                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                                                        >
+                                                            {mainText}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+
+                                        {/* Activity Chips */}
+                                        {desiredCities.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                {desiredCities.map(city => (
+                                                    <span key={city} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100 animate-in zoom-in-95">
+                                                        {city}
+                                                        <button type="button" onClick={() => removeCityTag(city)} className="hover:text-red-500 transition-colors">
+                                                            <X size={12} />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>

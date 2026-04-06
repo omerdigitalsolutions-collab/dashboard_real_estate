@@ -8,7 +8,7 @@
  */
 
 export { getAuthUrl, handleOAuthCallback } from './oauthHandlers';
-export { createEvent } from './eventManager';
+export { createEvent, deleteEvent } from './eventManager';
 export { listEvents } from './listEvents';
 export { disconnect } from './disconnect';
 
