@@ -133,8 +133,6 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
         setDesiredCities(prev => prev.filter(c => c !== city));
     };
 
-    if (!isOpen) return null;
-
     const togglePropertyKind = (kind: string) =>
         setPropertyKind(prev => prev.includes(kind) ? prev.filter(k => k !== kind) : [...prev, kind]);
 
@@ -215,6 +213,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
         { val: 'won', label: 'נסגר הדיל' },
         { val: 'lost', label: 'אבוד' },
     ];
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

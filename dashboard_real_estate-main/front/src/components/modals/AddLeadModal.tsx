@@ -66,8 +66,6 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
 
     const [loading, setLoading] = useState(false);
 
-    if (!isOpen) return null;
-
     const showToast = (msg: string, ok = true) => {
         if (ok) toast.success(msg);
         else toast.error(msg);
@@ -237,6 +235,8 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
         </button>
     );
 
+    if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
@@ -312,7 +312,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                     <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className={inputCls}>
                                         <option value="">ללא שיוך (כללי)</option>
                                         {(() => {
-                                            const scoredAgents = agents.map(agent => {
+                                            const scoredAgents = (agents || []).map(agent => {
                                                 let score = 0;
                                                 const leadCityArr = desiredCities.map(c => c.toLowerCase());
 

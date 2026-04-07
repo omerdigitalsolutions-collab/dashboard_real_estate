@@ -29,7 +29,8 @@ export default function Properties() {
     const isMobile = useMediaQuery('(max-width: 768px)');
 
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState('All');
+    const [mainFilter, setMainFilter] = useState<'my' | 'general'>('my');
+    const [subFilter, setSubFilter] = useState('all');
     const [sortConfig, setSortConfig] = useState<{ key: 'price' | 'createdAt', direction: 'asc' | 'desc' } | null>({ key: 'createdAt', direction: 'desc' });
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [showAddModal, setShowAddModal] = useState(false);
@@ -181,12 +182,23 @@ export default function Properties() {
         const matchesSearch =
             (prop.city && prop.city.toLowerCase().includes(search.toLowerCase())) ||
             (prop.address && prop.address.toLowerCase().includes(search.toLowerCase())) || '';
-        const matchesFilter =
-            filter === 'All' ||
-            (filter === 'commercial' ? prop.kind === 'מסחרי' : 
-             filter === 'sourcing' ? prop.isGlobalCityProperty :
-             prop.type === filter && prop.kind !== 'מסחרי');
-        return matchesSearch && matchesFilter;
+        
+        const isMyProperty = !prop.isGlobalCityProperty && prop.status !== 'draft';
+        const isGeneralPool = prop.isGlobalCityProperty;
+        const isDraft = prop.status === 'draft';
+
+        // Filter by Main Tab
+        const matchesMain = mainFilter === 'my' ? (isMyProperty || isDraft) : isGeneralPool;
+        if (!matchesMain) return false;
+
+        // Filter by Sub Tab
+        const matchesSub = 
+            subFilter === 'all' ||
+            (subFilter === 'commercial' ? (prop.kind === 'מסחרי' || prop.type === 'commercial') : 
+             subFilter === 'draft' ? prop.status === 'draft' :
+             prop.type === subFilter && prop.kind !== 'מסחרי' && prop.status !== 'draft');
+
+        return matchesSearch && matchesSub;
     });
 
     const sorted = useMemo(() => {
@@ -233,14 +245,23 @@ export default function Properties() {
     }, [filteredPropertiesByTime]);
 
     // Count per filter tab (calculated from filteredPropertiesByTime, not filtered)
-    const tabCounts = useMemo(() => ({
-        All: filteredPropertiesByTime.length,
-        sale: filteredPropertiesByTime.filter((p: Property) => p.type === 'sale' && p.kind !== 'מסחרי').length,
-        rent: filteredPropertiesByTime.filter((p: Property) => p.type === 'rent' && p.kind !== 'מסחרי').length,
-        commercial: filteredPropertiesByTime.filter((p: Property) => p.kind === 'מסחרי').length,
-        draft: filteredPropertiesByTime.filter((p: Property) => p.status === 'draft').length,
-        sourcing: filteredPropertiesByTime.filter((p: Property) => p.isGlobalCityProperty).length,
-    }), [filteredPropertiesByTime]);
+    const tabCounts = useMemo(() => {
+        const myProps = filteredPropertiesByTime.filter(p => !p.isGlobalCityProperty || p.status === 'draft');
+        const generalProps = filteredPropertiesByTime.filter(p => p.isGlobalCityProperty);
+        
+        const currentMainSet = mainFilter === 'my' ? myProps : generalProps;
+
+        return {
+            all: currentMainSet.length,
+            sale: currentMainSet.filter(p => p.type === 'sale' && p.kind !== 'מסחרי' && p.status !== 'draft').length,
+            rent: currentMainSet.filter(p => p.type === 'rent' && p.kind !== 'מסחרי' && p.status !== 'draft').length,
+            commercial: currentMainSet.filter(p => (p.kind === 'מסחרי' || p.type === 'commercial') && p.status !== 'draft').length,
+            draft: currentMainSet.filter(p => p.status === 'draft').length,
+            // Global totals for main tabs
+            myTotal: myProps.length,
+            generalTotal: generalProps.length,
+        };
+    }, [filteredPropertiesByTime, mainFilter]);
 
     // Helper functions for Grid View
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
@@ -442,41 +463,64 @@ export default function Properties() {
                         </div>
                     </div>
 
-                    {/* Mobile Filter Tabs */}
+                    {/* Main Tabs (Mobile) */}
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
+                        <button
+                            onClick={() => setMainFilter('my')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                mainFilter === 'my' 
+                                ? 'bg-white text-blue-600 shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Building size={16} />
+                            הנכסים שלי
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!features.canAccessSourcing) {
+                                    setShowUpgradeModal(true);
+                                    return;
+                                }
+                                setMainFilter('general');
+                                setSubFilter('all');
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                mainFilter === 'general' 
+                                ? 'bg-white text-cyan-600 shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Search size={16} />
+                            מאגר כללי
+                            {!features.canAccessSourcing && (
+                                <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-lg border border-amber-200">Pro</span>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Sub Filter Tabs (Mobile) */}
                     <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x touch-pan-x">
                         {[
-                            { key: 'All', label: 'הכל' },
+                            { key: 'all', label: 'הכל' },
                             { key: 'sale', label: 'למכירה' },
                             { key: 'rent', label: 'להשכרה' },
                             { key: 'commercial', label: 'מסחרי' },
-                            { key: 'draft', label: 'טיוטות' },
-                            { key: 'sourcing', label: 'מאגר ציבורי', icon: '🔍' },
-                        ].map(({ key, label, icon }) => (
+                            ...(mainFilter === 'my' ? [{ key: 'draft', label: 'טיוטות' }] : []),
+                        ].map(({ key, label }) => (
                             <button
                                 key={key}
-                                onClick={() => {
-                                    if (key === 'sourcing' && !features.canAccessSourcing) {
-                                        setShowUpgradeModal(true);
-                                        return;
-                                    }
-                                    setFilter(key);
-                                }}
+                                onClick={() => setSubFilter(key)}
                                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap snap-start border ${
-                                    filter === key 
+                                    subFilter === key 
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' 
                                     : 'bg-white text-slate-600 border-slate-200'
                                 }`}
                             >
-                                {icon && <span className="ml-1">{icon}</span>}
                                 {label}
-                                {key !== 'sourcing' && (
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                        {tabCounts[key as keyof typeof tabCounts]}
-                                    </span>
-                                )}
-                                {key === 'sourcing' && !features.canAccessSourcing && (
-                                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full mr-1">Premium</span>
-                                )}
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${subFilter === key ? 'bg-white/30 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                    {tabCounts[key as keyof typeof tabCounts]}
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -572,6 +616,45 @@ export default function Properties() {
                             </div>
                         )}
                         {!isMobile && (
+                            <div className="flex bg-slate-100 p-1 rounded-xl">
+                                <button
+                                    onClick={() => setMainFilter('my')}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        mainFilter === 'my' 
+                                        ? 'bg-white shadow-md text-blue-600' 
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                    }`}
+                                >
+                                    <Building size={16} />
+                                    הנכסים שלי
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${mainFilter === 'my' ? 'bg-blue-50 text-blue-600' : 'bg-slate-200 text-slate-500'}`}>
+                                        {tabCounts.myTotal}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!features.canAccessSourcing) {
+                                            setShowUpgradeModal(true);
+                                            return;
+                                        }
+                                        setMainFilter('general');
+                                        setSubFilter('all');
+                                    }}
+                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                        mainFilter === 'general' 
+                                        ? 'bg-white shadow-md text-cyan-600' 
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                    }`}
+                                >
+                                    <Search size={16} />
+                                    מאגר כללי
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${mainFilter === 'general' ? 'bg-cyan-50 text-cyan-500' : 'bg-slate-200 text-slate-500'}`}>
+                                        {tabCounts.generalTotal}
+                                    </span>
+                                </button>
+                            </div>
+                        )}
+                        {!isMobile && (
                             <div className="flex bg-slate-100 p-1 rounded-lg">
                                 <button
                                     onClick={() => setViewMode('grid')}
@@ -607,39 +690,28 @@ export default function Properties() {
                             </div>
                         )}
                     </div>
-                    {!isMobile && (
-                        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                            {[
-                                { key: 'All', label: 'הכל' },
-                                { key: 'sale', label: 'למכירה' },
-                                { key: 'rent', label: 'להשכרה' },
-                                { key: 'commercial', label: 'מסחרי' },
-                                { key: 'draft', label: 'טיוטות (WhatsApp)' },
-                                { key: 'sourcing', label: 'מאגר ציבורי', premium: true },
-                            ].map(({ key, label, premium }) => (
-                                <button
-                                    key={key}
-                                    onClick={() => {
-                                        if (key === 'sourcing' && !features.canAccessSourcing) {
-                                            setShowUpgradeModal(true);
-                                            return;
-                                        }
-                                        setFilter(key);
-                                    }}
-                                    className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (filter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
-                                >
-                                    {label}
-                                    {premium && !features.canAccessSourcing ? (
-                                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Premium</span>
-                                    ) : (
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${filter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        {!isMobile && (
+                            <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                                {[
+                                    { key: 'all', label: 'הכל' },
+                                    { key: 'sale', label: 'למכירה' },
+                                    { key: 'rent', label: 'להשכרה' },
+                                    { key: 'commercial', label: 'מסחרי' },
+                                    ...(mainFilter === 'my' ? [{ key: 'draft', label: 'טיוטות (WhatsApp)' }] : []),
+                                ].map(({ key, label }) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setSubFilter(key)}
+                                        className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ' + (subFilter === key ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200')}
+                                    >
+                                        {label}
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${subFilter === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-500'}`}>
                                             {tabCounts[key as keyof typeof tabCounts]}
                                         </span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                 </div>
 
                 {/* Content Area */}

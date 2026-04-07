@@ -8,7 +8,7 @@
  */
 
 import { doc, updateDoc } from 'firebase/firestore';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../../config/firebase';
 import { Bot, BotMessageSquare, Loader2 } from 'lucide-react';
 import UpgradeModal from '../ui/UpgradeModal';
@@ -24,6 +24,11 @@ export default function BotToggle({ leadId, isBotActive }: BotToggleProps) {
     const [loading, setLoading] = useState(false);
     const [localActive, setLocalActive] = useState(isBotActive);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+    // Sync with prop if it changes externally (e.g. from lead list update)
+    useEffect(() => {
+        setLocalActive(isBotActive);
+    }, [isBotActive]);
 
     const handleToggle = async () => {
         // Enforce Feature Gating

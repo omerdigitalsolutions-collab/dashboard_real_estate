@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -329,8 +329,11 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     }, [userData?.agencyId, userData?.uid]);
 
     // Keep max 10 completed tasks, delete completed ones older than 48 hours
+    // --- Task Cleanup Hook ---
+    // Periodically removes old/excess completed tasks.
+    const isDeletingRef = useRef(false);
     useEffect(() => {
-        if (!tasks || tasks.length === 0) return;
+        if (!tasks || tasks.length === 0 || isDeletingRef.current) return;
 
         const completed = tasks.filter(t => t.isCompleted);
         if (completed.length === 0) return;
@@ -359,14 +362,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         });
 
         if (toDelete.length > 0) {
+            isDeletingRef.current = true;
             import('../services/taskService').then(({ deleteTask }) => {
-                toDelete.forEach(id => {
+                Promise.all(toDelete.map(id => {
                     const taskToDelete = tasks.find(t => t.id === id);
-                    if (taskToDelete) {
-                        deleteTask(taskToDelete).catch(console.error);
-                    }
+                    return taskToDelete ? deleteTask(taskToDelete) : Promise.resolve();
+                })).finally(() => {
+                    // Release the lock after a short delay to allow Firestore to sync
+                    setTimeout(() => { isDeletingRef.current = false; }, 2000);
                 });
-            });
+            }).catch(() => { isDeletingRef.current = false; });
         }
     }, [tasks]);
 

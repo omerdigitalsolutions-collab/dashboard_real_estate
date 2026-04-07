@@ -76,7 +76,10 @@ function useAgencyCollection<T>(
 export const useProperties = () => useAgencyCollection<Property>('properties');
 export const useDeals = () => useAgencyCollection<Deal>('deals');
 export const useLeads = () => useAgencyCollection<Lead>('leads');   // sorted client-side below
-export const useAgents = () => useAgencyCollection<AppUser>('users', [where('role', 'in', ['admin', 'agent'])]);
+export const useAgents = () => {
+    const constraints = useState(() => [where('role', 'in', ['admin', 'agent'])])[0];
+    return useAgencyCollection<AppUser>('users', constraints);
+};
 export const useTasks = () => useAgencyCollection<AppTask>('tasks');   // sorted client-side below
 export const useAlerts = () => useAgencyCollection<Alert>('alerts');
 export const usePendingLeads = () => useAgencyCollection<PendingLead>('pending_leads');

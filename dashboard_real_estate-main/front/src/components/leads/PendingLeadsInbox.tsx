@@ -16,6 +16,9 @@ export default function PendingLeadsInbox() {
     );
 
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [approveModal, setApproveModal] = useState<PendingLead | null>(null);
+    const [newName, setNewName] = useState('');
+    const [newType, setNewType] = useState<'buyer' | 'seller'>('buyer');
 
     const handleReject = async (id: string) => {
         if (!window.confirm('למחוק הודעה זו? הפעולה בלתי הפיכה.')) return;

@@ -234,53 +234,8 @@ export default function Leads() {
           <p className="text-slate-400 text-sm mt-1 font-medium">ניהול ומעקב אחר לקוחות פוטנציאליים ושליחת קטלוגים</p>
         </div>
 
-        {/* Desktop actions */}
-        <div className="hidden md:flex items-center gap-4">
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2.5 px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl hover:bg-slate-50 transition-all font-bold shadow-sm hover:shadow-md active:scale-95"
-          >
-            <Upload size={18} className="text-slate-400" />
-            ייבוא לידים
-          </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2.5 px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:from-blue-700 hover:to-indigo-700 transition-all font-black shadow-xl shadow-blue-500/25 active:scale-95 group"
-          >
-            <Plus size={22} className="group-hover:rotate-90 transition-transform duration-300" />
-            ליד חדש
-          </button>
-        </div>
+        {/* Desktop actions replaced by relocated buttons below */}
 
-        {/* Selected Items Bulk Actions */}
-        {selectedLeadIds.size > 0 && (
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap px-1">
-             <button
-                onClick={handleBroadcast}
-                className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm animate-in fade-in zoom-in duration-200"
-              >
-                <MessageCircle size={16} />
-                <span>וואטסאפ ({selectedLeadIds.size})</span>
-              </button>
-              <button
-                onClick={async () => {
-                  if (!window.confirm(`למחוק ${selectedLeadIds.size} לידים? הפעולה אינה הפיכה.`)) return;
-                  const count = selectedLeadIds.size;
-                  try {
-                    await Promise.all([...selectedLeadIds].map(id => deleteLead(id)));
-                    setSelectedLeadIds(new Set());
-                    setToast({ show: true, message: `${count} לידים נמחקו`, type: 'success' });
-                  } catch {
-                    setToast({ show: true, message: 'שגיאה במחיקה', type: 'error' });
-                  }
-                }}
-                className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm animate-in fade-in zoom-in duration-200"
-              >
-                <Trash2 size={16} />
-                <span>מחק ({selectedLeadIds.size})</span>
-              </button>
-          </div>
-        )}
       </div>
 
       <div className="px-4 md:px-0">
@@ -322,7 +277,10 @@ export default function Leads() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" dir="rtl">
+        {/* KPI Cards and Actions */}
+        <div className="flex flex-col lg:flex-row gap-6 mb-8 items-stretch" dir="rtl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+
           <KpiCard
             title="סה״כ לידים פעילים"
             value={filteredLeadsByTime.filter(l => ['new', 'contacted', 'meeting_set'].includes(l.status)).length.toString()}
@@ -345,6 +303,56 @@ export default function Leads() {
             icon="Calendar"
             color="purple"
           />
+          </div>
+
+          {/* Action Buttons Aligned with KPI +10% line */}
+          <div className="flex lg:flex-col items-center lg:items-end justify-between lg:justify-start gap-4 lg:w-[320px] pt-4 lg:pt-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center gap-2 px-5 py-3.5 bg-slate-800/50 border border-slate-700 text-slate-300 rounded-2xl hover:bg-slate-800 hover:text-white transition-all font-bold shadow-lg"
+              >
+                <Upload size={18} className="text-slate-400" />
+                ייבוא לידים
+              </button>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl transition-all font-black shadow-xl shadow-blue-500/20 active:scale-95 group"
+              >
+                <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                ליד חדש
+              </button>
+            </div>
+
+            {selectedLeadIds.size > 0 && (
+              <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right duration-300">
+                <button
+                  onClick={handleBroadcast}
+                  className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-5 py-3.5 rounded-2xl font-bold hover:bg-emerald-500/20 transition-all shadow-lg"
+                >
+                  <MessageCircle size={18} />
+                  <span>וואטסאפ ({selectedLeadIds.size})</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!window.confirm(`למחוק ${selectedLeadIds.size} לידים? הפעולה אינה הפיכה.`)) return;
+                    const count = selectedLeadIds.size;
+                    try {
+                      await Promise.all([...selectedLeadIds].map(id => deleteLead(id)));
+                      setSelectedLeadIds(new Set());
+                      setToast({ show: true, message: `${count} לידים נמחקו`, type: 'success' });
+                    } catch {
+                      setToast({ show: true, message: 'שגיאה במחיקה', type: 'error' });
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 px-5 py-3.5 rounded-2xl font-bold hover:bg-red-500/20 transition-all shadow-lg"
+                >
+                  <Trash2 size={18} />
+                  <span>מחק ({selectedLeadIds.size})</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <PendingLeadsInbox />
@@ -471,7 +479,7 @@ export default function Leads() {
                         className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
                         onClick={() => setProfileLeadId(lead.id)}
                       >
-                        <td className="px-4 py-4 w-12 text-center">
+                        <td className="px-4 py-4 w-12 text-center" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selectedLeadIds.has(lead.id)}

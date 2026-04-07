@@ -34,7 +34,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const stringUtils_1 = require("./stringUtils");
 const db = (0, firestore_1.getFirestore)();
 exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b, _c, _d;
+    var _a, _b;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -47,18 +47,41 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     if (!callerDoc.exists || ((_a = callerDoc.data()) === null || _a === void 0 ? void 0 : _a.agencyId) !== agencyId) {
         throw new https_1.HttpsError('permission-denied', 'Access denied to this agency.');
     }
-    // ── Fetch active properties ─────────────────────────────────────────────────
-    const snapshot = await db
+    // ── Fetch active properties from Agency ──────────────────────────────────────
+    const agencySnapshot = await db
         .collection('properties')
         .where('agencyId', '==', agencyId)
         .where('status', '==', 'active')
         .get();
-    const allActiveProperties = snapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+    const agencyProperties = agencySnapshot.docs.map(doc => (Object.assign({ id: doc.id, isExclusivity: true, collectionPath: 'properties' }, doc.data())));
+    // ── Fetch global properties from 'cities' collections ───────────────────────
+    let globalProperties = [];
     const req = requirements !== null && requirements !== void 0 ? requirements : {};
-    const desiredCities = (_c = (_b = req.desiredCity) === null || _b === void 0 ? void 0 : _b.map((c) => c.trim().toLowerCase())) !== null && _c !== void 0 ? _c : [];
-    const propertyTypes = (_d = req.propertyType) !== null && _d !== void 0 ? _d : [];
+    if (req.desiredCity && req.desiredCity.length > 0) {
+        // We limit to fetching from up to 5 cities to avoid excessive round-trips
+        const citiesToFetch = req.desiredCity.slice(0, 5);
+        const globalPromises = citiesToFetch.map(async (cityName) => {
+            try {
+                const citySnap = await db.collection('cities').doc(cityName).collection('properties')
+                    .limit(50)
+                    .get();
+                return citySnap.docs.map(doc => {
+                    const data = doc.data();
+                    return Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, address: data.street || data.address || 'כתובת חסויה' }, data);
+                });
+            }
+            catch (err) {
+                console.warn(`Could not fetch global properties for city: ${cityName}`, err);
+                return [];
+            }
+        });
+        const results = await Promise.all(globalPromises);
+        globalProperties = results.flat();
+    }
+    const allCandidateProperties = [...agencyProperties, ...globalProperties];
+    const propertyTypes = (_b = req.propertyType) !== null && _b !== void 0 ? _b : [];
     // ── Deterministic Matching Engine ───────────────────────────────────────────
-    const matches = allActiveProperties.filter(property => {
+    const matches = allCandidateProperties.filter(property => {
         var _a, _b;
         // 1. City filter (skip if no cities specified)
         if (!(0, stringUtils_1.isCityMatch)(req.desiredCity || [], property.city || '')) {
@@ -83,7 +106,7 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     });
     return {
         matches,
-        totalScanned: allActiveProperties.length,
+        totalScanned: allCandidateProperties.length,
     };
 });
 //# sourceMappingURL=matchPropertiesForLead.js.map
