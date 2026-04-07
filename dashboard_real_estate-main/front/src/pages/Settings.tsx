@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building } from 'lucide-react';
+import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
+import WeBotSettings from '../components/settings/WeBotSettings';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
@@ -14,6 +15,7 @@ import { ISRAEL_CITIES } from '../utils/constants';
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
+  { id: 'webot', label: 'עוזר חכם (WeBot)', icon: Bot },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
   { id: 'integrations', label: 'אינטגרציות', icon: Globe },
@@ -427,6 +429,10 @@ export default function Settings() {
             <TeamManagement />
           )}
 
+          {activeSection === 'webot' && (
+            <WeBotSettings />
+          )}
+
           {activeSection === 'goals' && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-8 animate-in fade-in duration-300">
               <div>
@@ -591,7 +597,7 @@ export default function Settings() {
 
           {activeSection === 'integrations' && (
             <div className="space-y-6">
-              <WhatsAppSettings />
+              <WhatsAppSettings onConnected={() => setActiveSection('webot')} />
               <GoogleCalendarSettings />
             </div>
           )}

@@ -65,6 +65,17 @@ export async function updateAgencySettings(
 }
 
 /**
+ * Updates WeBot (AI bot) configuration.
+ */
+export async function updateWeBotConfig(
+    agencyId: string,
+    weBotConfig: any
+): Promise<void> {
+    const docRef = doc(db, 'agencies', agencyId);
+    await updateDoc(docRef, { weBotConfig });
+}
+
+/**
  * Updates the agency's display name shown in the header.
  */
 export async function updateAgencyName(

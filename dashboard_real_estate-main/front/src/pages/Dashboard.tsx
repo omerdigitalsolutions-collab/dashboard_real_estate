@@ -53,7 +53,7 @@ const DEFAULT_LAYOUT_OFFICE: LayoutItem[] = [
 ];
 
 export default function Dashboard() {
-  const { deals, tasks, leads, properties, loading, agencySettings } = useLiveDashboardData();
+  const { deals, tasks, leads, properties, loading, agencySettings, rawAgency } = useLiveDashboardData();
   const { userData } = useAuth();
   const { preferences, saveTabLayout, updatePreferences } = usePreferences();
   const navigate = useNavigate();
@@ -147,6 +147,37 @@ export default function Dashboard() {
       setIsResetting(false);
       setIsEditing(false);
     }, 500);
+  };
+
+  const getGoalValue = (type: 'commissions' | 'deals' | 'leads') => {
+    // Default Fallbacks
+    const defaults = {
+      commissions: 1000000,
+      deals: 20,
+      leads: 50
+    };
+
+    if (!rawAgency) return defaults[type];
+
+    // Yearly Goal Logic
+    if (timeRange === '1y') {
+      const yearlyVal = rawAgency.yearlyGoals?.[type];
+      if (yearlyVal && yearlyVal > 0) return yearlyVal;
+      // Fallback to monthly * 12
+      const monthlyVal = rawAgency.monthlyGoals?.[type];
+      if (monthlyVal && monthlyVal > 0) return monthlyVal * 12;
+      return defaults[type] * 12;
+    }
+
+    // Monthly-based scaling (1m, 3m, 6m)
+    const baseMonthly = rawAgency.monthlyGoals?.[type];
+    if (!baseMonthly || baseMonthly <= 0) return defaults[type];
+
+    if (timeRange === '1m') return baseMonthly;
+    if (timeRange === '3m') return baseMonthly * 3;
+    if (timeRange === '6m') return baseMonthly * 6;
+
+    return baseMonthly;
   };
 
   if (loading) {
@@ -293,7 +324,7 @@ export default function Dashboard() {
                   title="סה״כ פוטנציאל עמלות"
                   value={`₪${pipelineStats.totalValue.toLocaleString()}`}
                   rawValue={pipelineStats.totalValue}
-                  target={1000000}
+                  target={getGoalValue('commissions')}
                   change={`${pipelineStats.successRate.toFixed(1)}% אחוז הצלחה`}
                   positive
                   subtitle="בכל השלבים הפעילים"
@@ -312,7 +343,7 @@ export default function Dashboard() {
                   title="עסקאות פעילות"
                   value={pipelineStats.activeCount.toString()}
                   rawValue={pipelineStats.activeCount}
-                  target={20}
+                  target={getGoalValue('deals')}
                   change={`${pipelineStats.wonCount} נסגרו החודש`}
                   positive
                   subtitle="עסקאות בתהליך"
@@ -331,7 +362,7 @@ export default function Dashboard() {
                   title="סה״כ לידים פעילים"
                   value={filteredLeads.filter(l => ['new', 'contacted', 'meeting_set'].includes(l.status)).length.toString()}
                   rawValue={filteredLeads.filter(l => ['new', 'contacted', 'meeting_set'].includes(l.status)).length}
-                  target={50}
+                  target={getGoalValue('leads')}
                   change="+10%"
                   positive
                   subtitle="לידים חמים"

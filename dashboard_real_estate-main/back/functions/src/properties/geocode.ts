@@ -120,9 +120,9 @@ export const getAddressSuggestions = onCall({ cors: true, secrets: [googleMapsKe
             const data = response.data;
             if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
                 const predictions = data.predictions || [];
-                // Limit to 1 and return
+                // Return up to 5 suggestions
                 if (predictions.length > 0) {
-                    return predictions.slice(0, 1).map((p: any) => ({
+                    return predictions.slice(0, 5).map((p: any) => ({
                         display_name: p.description,
                         place_id: p.place_id,
                         structured_formatting: p.structured_formatting
@@ -196,10 +196,10 @@ export const getAddressSuggestions = onCall({ cors: true, secrets: [googleMapsKe
         } catch (e: any) {}
     }
 
-    // Deduplicate and limit to 1
+    // Deduplicate and limit to 5
     const unique = Array.from(new Map(finalResults.map(item => [item.display_name, item])).values());
-    console.log(`[getAddressSuggestions] Returning ${unique.length > 0 ? 1 : 0} results after deduplication.`);
-    return unique.slice(0, 1);
+    console.log(`[getAddressSuggestions] Returning ${unique.length} results after deduplication.`);
+    return unique.slice(0, 5);
 });
 
 /**

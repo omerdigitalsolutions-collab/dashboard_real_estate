@@ -15,14 +15,14 @@ import {
     WifiOff,
     AlertCircle,
     Users,
-    Check,
-    Search
+    Search,
+    X
 } from 'lucide-react';
 
 // ─── Cloud Function Callables ─────────────────────────────────────────────────
 const fns = getFunctions(undefined, 'europe-west1');
-const cfConnectInstance = httpsCallable<{}, { success: boolean; alreadyConnected: boolean; qrCode: string | null }>(fns, 'whatsapp-connectAgencyWhatsApp');
-const cfGenerateQR = httpsCallable<{}, { qrCode: string }>(fns, 'whatsapp-generateWhatsAppQR');
+const cfConnectInstance = httpsCallable<{}, { success: boolean; alreadyConnected: boolean; qrCode: string | null; fetchedAt: number }>(fns, 'whatsapp-connectAgencyWhatsApp');
+const cfGenerateQR = httpsCallable<{}, { qrCode: string; fetchedAt: number }>(fns, 'whatsapp-generateWhatsAppQR');
 const cfCheckStatus = httpsCallable<{}, { status: string }>(fns, 'whatsapp-checkWhatsAppStatus');
 const cfDisconnect = httpsCallable<{}, { success: boolean }>(fns, 'whatsapp-disconnectAgencyWhatsApp');
 const cfGetGroups = httpsCallable<{}, { success: boolean, groups: { id: string, name: string }[] }>(fns, 'whatsapp-getGroups');
@@ -38,7 +38,7 @@ const STEPS = [
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export const WhatsAppSettings = () => {
+export const WhatsAppSettings = ({ onConnected }: { onConnected?: () => void }) => {
     const { userData } = useAuth();
 
     // Live status from Firestore
@@ -48,9 +48,11 @@ export const WhatsAppSettings = () => {
     const [showModal, setShowModal] = useState(false);
     const [isTermsOpen, setIsTermsOpen] = useState(false);
     const [qrCode, setQrCode] = useState<string | null>(null);
+    const [qrFetchedAt, setQrFetchedAt] = useState<number | null>(null);
     const [loadingQR, setLoadingQR] = useState(false);
     const [error, setError] = useState('');
     const [disconnecting, setDisconnecting] = useState(false);
+    const [connectedPhone, setConnectedPhone] = useState<string | null>(null);
 
     // B2B Groups State
     const [monitoredGroups, setMonitoredGroups] = useState<{ id: string, name: string }[]>([]);
@@ -59,14 +61,22 @@ export const WhatsAppSettings = () => {
     const [isFetchingGroups, setIsFetchingGroups] = useState(false);
     const [savingGroups, setSavingGroups] = useState(false);
     const [fetchError, setFetchError] = useState('');
+    const [isCredentialsMissing, setIsCredentialsMissing] = useState(false);
 
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Filtered groups based on search
-    const filteredGroups = availableGroups.filter(g =>
+    const pinnedGroups = monitoredGroups.filter(g =>
         g.name.toLowerCase().includes(groupSearch.toLowerCase()) ||
         g.id.split('@')[0].includes(groupSearch)
     );
+
+    const unpinnedGroups = availableGroups
+        .filter(g =>
+            g.name.toLowerCase().includes(groupSearch.toLowerCase()) ||
+            g.id.split('@')[0].includes(groupSearch)
+        )
+        .filter(group => !monitoredGroups.some(g => g.id === group.id));
 
     // ── Real-time agency status listener ─────────────────────────────────────
     useEffect(() => {
@@ -82,6 +92,7 @@ export const WhatsAppSettings = () => {
                 setMonitoredGroups(normalized);
 
                 const currentStatus = data.whatsappIntegration?.status?.toUpperCase();
+                setConnectedPhone(data.whatsappIntegration?.connectedPhone || null);
                 if (data.isWhatsappConnected || currentStatus === 'CONNECTED') {
                     setStatus('connected');
                 } else if (currentStatus === 'PENDING_SCAN') {
@@ -104,6 +115,7 @@ export const WhatsAppSettings = () => {
     const fetchAvailableGroups = async () => {
         setIsFetchingGroups(true);
         setFetchError('');
+        setIsCredentialsMissing(false);
         try {
             const result = await cfGetGroups({});
             if (result.data.success) {
@@ -113,11 +125,43 @@ export const WhatsAppSettings = () => {
             }
         } catch (err: any) {
             console.error('Failed to fetch WhatsApp groups:', err);
-            setFetchError(err?.message || 'שגיאת תקשורת בטעינת הקבוצות.');
+            // Detect stale-credentials state: backend is connected in Firestore
+            // but the actual integration credentials are missing
+            const msg: string = err?.message || '';
+            const isStale =
+                msg.includes('connection details not found') ||
+                msg.includes('WhatsApp connection details') ||
+                err?.code === 'failed-precondition';
+            if (isStale) {
+                setIsCredentialsMissing(true);
+                setFetchError('פרטי חיבור הוואטסאפ לא נמצאו בשרת. יש לנתק ולחבר מחדש.');
+            } else {
+                setFetchError(err?.message || 'שגיאת תקשורת בטעינת הקבוצות.');
+            }
         } finally {
             setIsFetchingGroups(false);
         }
     };
+
+    // ── QR Auto-Refresh (TTL) ────────────────────────────────────────────────
+    useEffect(() => {
+        if (!qrCode || !qrFetchedAt || !showModal) return;
+
+        const QR_TTL_MS = 18_000; // Green API QR expires in ~20s. We refresh at 18s.
+        const age = Date.now() - qrFetchedAt;
+        const remaining = QR_TTL_MS - age;
+
+        if (remaining <= 0) {
+            handleRefreshQR();
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            handleRefreshQR();
+        }, remaining);
+
+        return () => clearTimeout(timer);
+    }, [qrCode, qrFetchedAt, showModal]);
 
     // ── Stop polling when connected or modal closed ───────────────────────────
     const stopPoll = () => {
@@ -136,6 +180,7 @@ export const WhatsAppSettings = () => {
                     stopPoll();
                     setShowModal(false);
                     setQrCode(null);
+                    onConnected?.();
                 }
             } catch (_) { /* ignore transient errors */ }
         }, POLL_INTERVAL_MS);
@@ -164,6 +209,7 @@ export const WhatsAppSettings = () => {
 
             if (result.data.qrCode) {
                 setQrCode(result.data.qrCode);
+                setQrFetchedAt(result.data.fetchedAt || Date.now());
                 startPolling();
             } else {
                 setError('לא התקבל קוד QR מהשרת. נסה שוב.');
@@ -204,6 +250,7 @@ export const WhatsAppSettings = () => {
         try {
             const result = await cfGenerateQR({});
             setQrCode(result.data.qrCode);
+            setQrFetchedAt(result.data.fetchedAt || Date.now());
             startPolling();
         } catch (err: any) {
             if (err?.code === 'already-exists' || err?.message?.includes('WhatsApp is already connected')) {
@@ -267,7 +314,14 @@ export const WhatsAppSettings = () => {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-4">
                     <CheckCircle size={26} className="text-emerald-600 mt-0.5 shrink-0" />
                     <div className="flex-1">
-                        <p className="font-bold text-emerald-800 text-base">ווצאפ מחובר ופעיל ✓</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-bold text-emerald-800 text-base">ווצאפ מחובר ופעיל ✓</p>
+                            {connectedPhone && (
+                                <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200" dir="ltr">
+                                    +{connectedPhone}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-sm text-emerald-700 mt-1">
                             המערכת מקבלת הודעות מהלקוחות ומפנה אותן אוטומטית לכרטיסי הלידים.
                         </p>
@@ -304,7 +358,39 @@ export const WhatsAppSettings = () => {
                         בחר עד 5 קבוצות ווצאפ לסריקה אוטומטית של נכסים חדשים.
                     </p>
 
-                    {/* ── Search Input (Always Visible) ── */}
+                    {/* ── Stale Credentials Banner ── */}
+                    {isCredentialsMissing && (
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                            <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-sm font-bold text-red-700 mb-1">חיבור הוואטסאפ לא תקין</p>
+                                <p className="text-xs text-red-600 mb-3">
+                                    פרטי ההתחברות לא נמצאו בשרת. ייתכן שהחיבור נותק או שפג תוקפו. יש לנתק ולחבר מחדש.
+                                </p>
+                                <button
+                                    onClick={handleDisconnect}
+                                    disabled={disconnecting}
+                                    className="inline-flex items-center gap-1.5 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                                >
+                                    {disconnecting
+                                        ? <Loader2 size={12} className="animate-spin" />
+                                        : <Unlink size={12} />}
+                                    נתק וחבר מחדש
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Generic fetch error (non-credentials) ── */}
+                    {fetchError && !isCredentialsMissing && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-2">
+                            <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                            <p className="text-xs text-amber-800 font-medium">{fetchError}</p>
+                        </div>
+                    )}
+
+                    {/* ── Search Input (hide when credentials are missing) ── */}
+                    {!isCredentialsMissing && (
                     <div className="relative mb-4">
                         <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
@@ -315,62 +401,83 @@ export const WhatsAppSettings = () => {
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pr-10 pl-4 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                         />
                     </div>
-
-                    {fetchError && (
-                        <div className="mb-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-2">
-                            <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
-                            <p className="text-xs text-amber-800 font-medium">{fetchError}</p>
-                        </div>
                     )}
 
-                    {isFetchingGroups && availableGroups.length === 0 ? (
+                    {!isCredentialsMissing && isFetchingGroups && availableGroups.length === 0 ? (
                         <div className="flex flex-col items-center py-6 gap-2 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                             <Loader2 size={24} className="animate-spin text-slate-400" />
                             <p className="text-xs text-slate-400">טוען קבוצות מהוואטסאפ...</p>
                         </div>
-                    ) : (
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                            {filteredGroups.length > 0 ? (
-                                filteredGroups.map((group) => {
-                                    const isSelected = monitoredGroups.some(g => g.id === group.id);
-                                    const isDisabled = !isSelected && monitoredGroups.length >= 5;
-
-                                    return (
-                                        <label
+                    ) : !isCredentialsMissing ? (
+                        <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                            {/* Pinned Groups */}
+                            {pinnedGroups.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="text-xs font-semibold text-slate-500 mb-1">קבוצות במעקב (מוצמד לראש הרשימה)</div>
+                                    {pinnedGroups.map((group) => (
+                                        <div
                                             key={group.id}
-                                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-slate-100 hover:border-slate-200'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className="flex items-center justify-between p-3 rounded-xl border bg-indigo-50 border-indigo-200 transition-all"
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
-                                                    {isSelected && <Check size={14} className="text-white" />}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold text-slate-700">{group.name}</span>
-                                                    <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{group.id.split('@')[0]}</span>
-                                                </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-indigo-900">{group.name}</span>
+                                                <span className="text-[10px] text-indigo-500 font-mono" dir="ltr">{group.id.split('@')[0]}</span>
                                             </div>
-                                            <input
-                                                type="checkbox"
-                                                className="hidden"
-                                                checked={isSelected}
-                                                disabled={isDisabled || savingGroups}
-                                                onChange={() => handleToggleGroup(group)}
-                                            />
-                                        </label>
-                                    );
-                                })
-                            ) : (
+                                            <button
+                                                onClick={() => handleToggleGroup(group)}
+                                                disabled={savingGroups}
+                                                className="text-indigo-400 hover:text-red-500 transition-colors p-1"
+                                                title="הסר קבוצה"
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Unpinned Groups */}
+                            {unpinnedGroups.length > 0 ? (
+                                <div className="space-y-2">
+                                    {pinnedGroups.length > 0 && <div className="text-xs font-semibold text-slate-500 mb-1">קבוצות נוספות</div>}
+                                    {unpinnedGroups.map((group) => {
+                                        const isDisabled = monitoredGroups.length >= 5;
+                                        return (
+                                            <label
+                                                key={group.id}
+                                                className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white border-slate-100 hover:border-slate-200 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-5 h-5 rounded flex items-center justify-center border transition-colors bg-white border-slate-300">
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-slate-700">{group.name}</span>
+                                                        <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{group.id.split('@')[0]}</span>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    className="hidden"
+                                                    checked={false}
+                                                    disabled={isDisabled || savingGroups}
+                                                    onChange={() => handleToggleGroup(group)}
+                                                />
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            ) : pinnedGroups.length === 0 ? (
                                 <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
                                     <p className="text-sm text-slate-500 font-medium">לא נמצאו קבוצות התואמות לחיפוש.</p>
                                     <p className="text-[11px] text-slate-400">
                                         אם קבוצה חסרה, נסה לשלוח בה הודעה ואז ללחוץ על "רענן רשימה".
                                     </p>
                                 </div>
-                            )}
+                            ) : null}
                         </div>
-                    )}
+                    ) : null}
 
-                    {monitoredGroups.length >= 5 && (
+                    {monitoredGroups.length >= 5 && !isCredentialsMissing && (
                         <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                             <AlertCircle size={12} />
                             הגעת למגבלה המקסימלית של 5 קבוצות.

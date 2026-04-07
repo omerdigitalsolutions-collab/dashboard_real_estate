@@ -92,7 +92,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
         try {
             const fns = getFunctions(app, 'europe-west1');
             const getSuggestions = httpsCallable(fns, 'properties-getAddressSuggestions');
-            const res = await getSuggestions({ query, types: '(cities)' });
+            const res = await getSuggestions({ query });
 
             const data = res.data;
             let results: any[] = [];
@@ -294,12 +294,12 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                                 <div className={sectionCls}>
                                     <div className={sectionTitleCls}><MapPin size={12} className="text-blue-500" />מיקום ותקציב</div>
                                     <div className="relative" ref={suggestionsRef}>
-                                        <label className={labelCls}>אזורים מבוקשים (חפש והוסף)</label>
+                                        <label className={labelCls}>אזורים מבוקשים (עיר, שכונה או רחוב)</label>
                                         <div className="relative">
                                             <input
                                                 value={cityQuery}
                                                 onChange={handleCityQueryChange}
-                                                placeholder="חפש עיר... (למשל: תל אביב)"
+                                                placeholder="חפש עיר, שכונה או רחוב... (למשל: תל אביב צפון)"
                                                 className={inputCls}
                                                 autoComplete="off"
                                             />

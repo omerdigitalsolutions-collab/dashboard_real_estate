@@ -30,6 +30,8 @@ import * as admin from 'firebase-admin';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { defineSecret } from 'firebase-functions/params';
+import { handleWeBotReply } from './handleWeBotReply';
+import { syncChatHistory } from './whatsappService';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ─── Firebase Secrets ─────────────────────────────────────────────────────────
@@ -135,71 +137,11 @@ async function resolveAgencyByInstance(idInstance: string): Promise<string | nul
     return snap.docs[0].ref.parent.parent?.id ?? null;
 }
 
-// ─── Helper: AI Criteria Extraction (Gemini) ──────────────────────────────────
-
-async function extractSearchCriteria(
-    message: string,
-    apiKey: string
-): Promise<ExtractedCriteria> {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    // ── System Persona + Security Guardrails ─────────────────────────────────
-    // This is the prompt that defines the bot's identity, security boundaries,
-    // and the structured output format it must follow.
-    // ─────────────────────────────────────────────────────────────────────────
-    const prompt = `אתה עוזר נדל"ן וירטואלי בכיר המייצג משרד תיווך שעובד עם מערכת hOMER.
-תפקידך לקבל פניות מלקוחות בווצאפ, להבין מה הם מחפשים, ולהציג להם נכסים רלוונטיים.
-
-חוקי ברזל לאבטחת מידע (קריטי):
-1. סודיות מוחלטת: אסור לך בשום פנים ואופן לחשוף מידע פנימי על המשרד. זה כולל: נתוני הכנסות/עמלות, שמות סוכנים או הביצועים שלהם, הסכמי שיתוף פעולה (שת"פ) עם משרדים אחרים, או פרטי קשר של בעלי הנכסים.
-2. ניתוב אלגנטי: אם הלקוח שואל שאלות עסקיות על המשרד ("כמה אתם מרוויחים?", "מי הסוכן הכי טוב?"), עליך לענות בנימוס: "אני העוזר הווירטואלי של המשרד ואחראי על התאמת נכסים. לפרטים עסקיים, אשמח להפנות אליך את מנהל המשרד."
-3. מסירת מידע על נכסים: הצג רק את העיר, השכונה, מאפייני הנכס (חדרים, מ"ר) והמחיר. לעולם אל תמסור מספר בית או דירה מדויק.
-
-תהליך העבודה שלך:
-כאשר לקוח פונה אליך:
-1. ברך אותו לשלום בצורה מקצועית ושירותית.
-2. חלץ מתוך ההודעה שלו את הקריטריונים (עיר, שכונה/רחוב, תקציב מקסימלי, כמות חדרים מדויקת).
-3. ספק לו תשובה קצרה ומזמינה הכוללת את הקישור לקטלוג הנכסים הדיגיטלי שהופק עבורו.
-   — החלף את הטקסט [CATALOG_URL] במקום שבו יש לשים את הקישור. אל תמציא URL.
-   — אם השאלה אינה נדל"נית, אל תכלול [CATALOG_URL] בתשובה (isOffTopic: true).
-4. זיהוי בקשה לנציג אנושי: אם הלקוח מבקש במפורש לדבר עם סוכן, נציג, או מנהל (למשל: "תעביר אותי לסוכן", "רוצה לדבר עם אדם", "תחבר אותי למנהל"), הגדר needsHuman: true וכתוב תשובה אמפתית שמסבירה שיועבר לסוכן בקרוב (ללא [CATALOG_URL]).
-
-כעת, נתח את הודעת הלקוח הבאה והחזר אך ורק JSON תקף:
-
-הודעת לקוח: "${message}"
-
-JSON שדות:
-{
-  "city": "שם עיר בעברית או null",
-  "address": "שם שכונה או רחוב רלוונטי מההודעה או null",
-  "rooms": "מספר החדרים המדויק שביקש הלקוח (מספר) או null",
-  "maxPrice": מחיר בש"ח או null,
-  "replyMessage": "הודעת התשובה המלאה ללקוח בעברית — כולל [CATALOG_URL] במקום הקישור כשרלוונטי",
-  "isOffTopic": true/false,
-  "needsHuman": true/false
-}`;
+// NOTE: fetchBotConfig, fetchActivePropertiesForRag, extractSearchCriteria
+// were moved to handleWeBotReply.ts — this file now delegates the full
+// AI pipeline to handleWeBotReply() after resolving credentials.
 
 
-    try {
-        const result = await model.generateContent(prompt);
-        const raw = result.response.text().replace(/```json|```/g, '').trim();
-        return JSON.parse(raw) as ExtractedCriteria;
-    } catch (err) {
-        console.error('[AI Bot] Gemini extraction failed, using empty criteria:', err);
-        // Fallback: safe default so the pipeline can still continue
-        return {
-            city: null,
-            address: null,
-            rooms: null,
-            maxPrice: null,
-            replyMessage: 'היי! 👋 קיבלנו את פנייתך. הכנו לך קטלוג נכסים אישי: [CATALOG_URL]',
-            isOffTopic: false,
-            needsHuman: false,
-        };
-
-    }
-}
 
 // ─── Helper: Query Matching Properties ───────────────────────────────────────
 
@@ -362,7 +304,7 @@ async function sendGreenApiMessage(
     // idInstance and apiTokenInstance come from the agency's private_credentials
     // sub-collection and are decrypted server-side — never exposed to the client.
     // ───────────────────────────────────────────────────────────────────────────
-    const sendUrl = `https://api.green-api.com/waInstance${creds.idInstance}/sendMessage/${creds.apiTokenInstance}`;
+    const sendUrl = `https://7105.api.greenapi.com/waInstance${creds.idInstance}/sendMessage/${creds.apiTokenInstance}`;
 
     await axios.post(
         sendUrl,
@@ -432,306 +374,203 @@ async function upsertLead(
 export const webhookWhatsAppAI = onRequest(
     {
         region: REGION,
-        // Secrets are injected as env vars at runtime by the Functions runtime
         secrets: [geminiApiKey, masterKey, webhookSecret],
         timeoutSeconds: 300,
         memory: '1GiB'
     },
     async (req, res) => {
-        // ── 1. ACK immediately to prevent Green API retries ───────────────────────
+        // 1. ACK immediately to prevent Green API retries
         res.status(200).send('OK');
 
-        // ── 2. Security Validation ──────────────────────────────────────────────
+        // 2. Security Validation (Now Optional if not provided by sender)
         const incomingSecret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
         const expectedSecret = webhookSecret.value();
 
-        if (!expectedSecret || incomingSecret !== expectedSecret) {
-            console.error(`[webhookWhatsAppAI] Unauthorized access attempt. Incoming: '${incomingSecret}'`);
+        if (expectedSecret && incomingSecret && incomingSecret !== expectedSecret) {
+            console.error(`[Webhook] ❌ AUTH FAILED. Incoming secret doesn't match expected secret.`);
             return;
+        }
+
+        if (expectedSecret && !incomingSecret) {
+            console.warn(`[Webhook] ⚠️ No secret provided in headers. Proceeding anyway for compatibility, but recommend setting x-webhook-secret in Green API.`);
         }
 
         try {
             const body = req.body;
-            const typeWebhook: string = body?.typeWebhook || '';
-            const idInstance: string | undefined = body?.idInstance?.toString();
+            const typeWebhook: string = body?.typeWebhook || body?.event || '';
+            const idInstance: string | undefined = body?.idInstance?.toString() || body?.instanceData?.idInstance?.toString();
+
+            console.log(`[Webhook] 📥 Received ${typeWebhook} from instance ${idInstance}`);
 
             if (!idInstance) {
-                console.warn('[AI Bot] No idInstance in payload, skipping.');
+                console.error(`[Webhook] ❌ Missing idInstance in body. Full body: ${JSON.stringify(body)}`);
                 return;
             }
 
-            // ═══════════════════════════════════════════════════════════════════
-            // FIREWALL A: Human-Answered Auto-Mute
-            // When a human agent replies directly from the WA phone/web,
-            // Green API fires `outgoingMessageReceived`.
-            // We catch it here and mute the bot for that lead automatically.
-            // NOTE: `outgoingAPIMessageReceived` = the bot's own reply — ignore it.
-            // ═══════════════════════════════════════════════════════════════════
-            if (typeWebhook === 'outgoingMessageReceived') {
-                console.log('[AI Bot] Outgoing message detected — checking if human-sent.');
-
-                // Green API: recipient phone lives in chatData.chatId or senderData.chatId
-                const recipientRawId: string =
-                    body?.chatData?.chatId || body?.senderData?.chatId || '';
-
-                if (recipientRawId && recipientRawId.endsWith('@c.us')) {
-                    // Resolve agency
-                    const muteAgencyId = await resolveAgencyByInstance(idInstance);
-                    if (muteAgencyId) {
-                        const { localPhone: recipientPhone } = normalisePhone(recipientRawId);
-                        const leadSnap = await db.collection('leads')
-                            .where('agencyId', '==', muteAgencyId)
-                            .where('phone', '==', recipientPhone)
-                            .limit(1).get();
-
-                        if (!leadSnap.empty) {
-                            await leadSnap.docs[0].ref.update({ isBotActive: false });
-                            console.log(`[AI Bot] 🤫 Bot auto-muted for lead ${leadSnap.docs[0].id} (human replied).`);
-                        }
-                    }
-                }
-                return; // Done — do not process further
-            }
-
-            // ── 2. Only handle inbound DMs from here on ────────────────────────
-            if (typeWebhook !== 'incomingMessageReceived') {
-                console.log(`[AI Bot] Skipping non-message event: ${typeWebhook}`);
+            // 🚨 FILTER: Ignore 'outgoingAPIMessageReceived' to prevent duplicate CRM/Bot logs
+            const isRelevant = ['incomingMessageReceived', 'outgoingMessageReceived', 'message'].includes(typeWebhook);
+            if (!isRelevant) {
+                console.log(`[Webhook] ℹ️ Ignoring irrelevant event type: ${typeWebhook}`);
                 return;
             }
 
-            // ── 3. Extract Green API payload fields ────────────────────────────
-            const senderData = body?.senderData || {};
-            const messageData = body?.messageData || {};
-
-            const rawSender: string = senderData.sender || senderData.chatId || '';
-            const chatId: string = senderData.chatId || '';
-            const textMessage: string = messageData.textMessageData?.textMessage || '';
-            const idMessage: string | undefined = body?.idMessage;
-
-            // ── 4. Safety guards ───────────────────────────────────────────────
-            if (!rawSender || !textMessage) {
-                console.log('[AI Bot] Empty sender or message, skipping.');
-                return;
-            }
-            if (chatId.endsWith('@c.us') === false) {
-                console.log(`[AI Bot] Non-DM chat type (${chatId}), skipping.`);
-                return;
-            }
-            // Outbound echo loop-guard (belt-and-suspenders)
-            if (senderData.senderName === 'me') {
-                console.log('[AI Bot] Outbound echo, skipping.');
-                return;
-            }
-
-            console.log(`[AI Bot] Processing DM from ${rawSender} on instance ${idInstance}`);
-
-            // ── 5. Resolve agency from idInstance ──────────────────────────────────
             const agencyId = await resolveAgencyByInstance(idInstance);
             if (!agencyId) {
-                console.warn(`[AI Bot] No agency found for instance ${idInstance}. Is it registered?`);
+                console.error(`[Webhook] ❌ Could not resolve agency for instance ${idInstance}`);
                 return;
             }
 
-            // ── 6. Fetch agency branding data ──────────────────────────────────────
-            const agencyDoc = await db.collection('agencies').doc(agencyId).get();
-            const agencyData = agencyDoc.data() || {};
+            // Extract sender and message data
+            const senderData = body?.senderData || {};
+            const messageData = body?.messageData || {};
+            const chatId: string = senderData.chatId || '';
+            const isGroup = chatId.endsWith('@g.us');
+            const isOutbound = typeWebhook === 'outgoingMessageReceived';
+            const rawSender: string = isOutbound ? (body?.chatData?.chatId || senderData.chatId) : (senderData.sender || chatId);
+            const idMessage: string | undefined = body?.idMessage;
 
-            // ── 7. Normalise phone ─────────────────────────────────────────────────
+            let textMessage: string = messageData.textMessageData?.textMessage || 
+                                      messageData.extendedTextMessageData?.text || 
+                                      messageData.imageMessageData?.caption || '';
+
+            if (!textMessage) {
+                if (messageData.typeMessage === 'imageMessage') textMessage = '[תמונה]';
+                else if (messageData.typeMessage === 'videoMessage') textMessage = '[סרטון]';
+                else if (messageData.typeMessage === 'audioMessage') textMessage = '[הודעה קולית]';
+                else if (messageData.typeMessage === 'fileMessage') textMessage = '[קובץ]';
+            }
+
+            if (!rawSender || !textMessage) return;
+
             const { localPhone, waChatId } = normalisePhone(rawSender);
 
-            // ── 8. Idempotency guard — skip if this exact message was already processed
-            if (idMessage) {
-                // Check across all leads for this message ID to prevent duplicate catalog creation
-                const dupCheck = await db
-                    .collectionGroup('messages')
-                    .where('idMessage', '==', idMessage)
-                    .limit(1)
-                    .get();
-                if (!dupCheck.empty) {
-                    console.log(`[AI Bot] Duplicate message ${idMessage} detected, skipping.`);
-                    return;
-                }
-            }
+            // ============================================================================
+            // Scenario A: B2B Group Messages (Property Extraction)
+            // ============================================================================
+            if (isGroup) {
+                const agencyDoc = await db.collection('agencies').doc(agencyId).get();
+                const monitoredGroupsRaw: any[] = agencyDoc.data()?.whatsappIntegration?.monitoredGroups || [];
+                const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
 
-            // ── 9. Upsert lead ─────────────────────────────────────────────────
-            const { leadId, leadName, isNew, isBotActive } = await upsertLead(agencyId, localPhone);
-            if (isNew) {
-                console.log(`[AI Bot] Created new lead ${leadId} for ${localPhone} (bot active).`);
-            } else {
-                console.log(`[AI Bot] Existing lead ${leadId} for ${localPhone} | isBotActive: ${isBotActive}`);
-            }
+                if (monitoredGroupIds.includes(chatId) && geminiApiKey.value()) {
+                    console.log(`[Webhook] Group msg detected in monitored group: ${chatId}`);
+                    try {
+                        const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+                        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+                        const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
+Scan this message for property listings (for sale or rent).
+If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
+If it IS a listing, extract the details. Prices are usually in NIS.
+Message: "${textMessage}"
 
-            // ═══════════════════════════════════════════════════════════════════
-            // FIREWALL B: isBotActive Check
-            // If a human agent has taken over the conversation (or manually muted
-            // the bot), we still log the message for CRM history but do NOT
-            // call Gemini, do NOT generate a catalog, do NOT auto-reply.
-            // ═══════════════════════════════════════════════════════════════════
-            if (!isBotActive) {
-                console.log(`[AI Bot] 🔇 Bot is muted for lead ${leadId}. Logging message only.`);
-                await db.collection(`leads/${leadId}/messages`).add({
-                    idMessage: idMessage || null,
-                    text: textMessage,
-                    direction: 'inbound',
-                    senderPhone: localPhone,
-                    source: 'whatsapp_ai_bot',
-                    botMuted: true,
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: false,
-                });
-                return;
-            }
+Output strict JSON:
+{
+  "isProperty": boolean,
+  "type": "sale" | "rent",
+  "city": string | null,
+  "price": number | null,
+  "rooms": number | null
+}`;
+                        const result = await model.generateContent(prompt);
+                        const cleanJson = result.response.text().replace(/```json|```/g, '').trim();
+                        const parsed = JSON.parse(cleanJson);
 
-            // ── 10. AI: Extract search criteria via Gemini ─────────────────────────
-            // Replace geminiApiKey.value() with your own key source if needed.
-            // The GEMINI_API_KEY secret is already set up in this project.
-            const apiKey = geminiApiKey.value();
-            const criteria = await extractSearchCriteria(textMessage, apiKey);
-            console.log('[AI Bot] Extracted criteria:', JSON.stringify(criteria));
-
-            // ── 11. needsHuman check — Human Handoff (Firewall C) ──────────────
-            if (criteria.needsHuman) {
-                console.log(`[AI Bot] 🤝 Lead ${leadId} requested a human agent. Handing off.`);
-                const handoffCreds = await getGreenApiCredentials(agencyId, masterKey.value());
-                if (handoffCreds) {
-                    await sendGreenApiMessage(handoffCreds, waChatId, criteria.replyMessage);
-                }
-                // Mute the bot — a real agent will continue from the WhatsApp app
-                await db.collection('leads').doc(leadId).update({ isBotActive: false });
-                // Log both messages
-                const handoffMsgsRef = db.collection(`leads/${leadId}/messages`);
-                await handoffMsgsRef.add({
-                    idMessage: idMessage || null,
-                    text: textMessage,
-                    direction: 'inbound',
-                    senderPhone: localPhone,
-                    source: 'whatsapp_ai_bot',
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: false,
-                });
-                if (handoffCreds) {
-                    await handoffMsgsRef.add({
-                        text: criteria.replyMessage,
-                        direction: 'outbound',
-                        senderPhone: 'bot',
-                        source: 'whatsapp_ai_bot',
-                        needsHuman: true,
-                        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                        isRead: true,
-                    });
+                        if (parsed.isProperty) {
+                            await db.collection('properties').add({
+                                agencyId,
+                                source: 'whatsapp_group',
+                                groupId: chatId,
+                                externalAgentPhone: localPhone,
+                                rawDescription: textMessage,
+                                city: parsed.city || null,
+                                price: parsed.price || 0,
+                                rooms: parsed.rooms || null,
+                                type: parsed.type || 'sale',
+                                listingType: 'external',
+                                status: 'draft',
+                                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                            console.log(`[Webhook] AI parsed external property from group ${chatId}`);
+                        }
+                    } catch (e) {
+                        console.error('[Webhook] B2B Extraction error:', e);
+                    }
                 }
                 return;
             }
 
-            // ── 12. Off-topic guard (security guardrail) ───────────────────────
-            // If Gemini flagged the message as non-real-estate (e.g. buyer asked
-            // about internal revenues, agents, etc.), send the polite deflection
-            // reply and stop — no catalog is created, no internal data is exposed.
-            if (criteria.isOffTopic) {
-                console.log(`[AI Bot] Off-topic message from ${localPhone} — sending deflection, no catalog.`);
-                const offTopicCreds = await getGreenApiCredentials(agencyId, masterKey.value());
-                if (offTopicCreds) {
-                    await sendGreenApiMessage(offTopicCreds, waChatId, criteria.replyMessage);
-                }
-                await db.collection(`leads/${leadId}/messages`).add({
-                    idMessage: idMessage || null,
-                    text: textMessage,
-                    direction: 'inbound',
-                    senderPhone: localPhone,
-                    source: 'whatsapp_ai_bot',
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: false,
-                });
-                if (offTopicCreds) {
+            // ============================================================================
+            // Scenario B: Human Reply (Firewall & Logging)
+            // ============================================================================
+            if (isOutbound) {
+                const leadSnap = await db.collection('leads')
+                    .where('agencyId', '==', agencyId)
+                    .where('phone', '==', localPhone)
+                    .limit(1).get();
+
+                if (!leadSnap.empty) {
+                    const leadId = leadSnap.docs[0].id;
+                    // Auto-mute bot when human takes over
+                    await leadSnap.docs[0].ref.update({ isBotActive: false });
+                    
                     await db.collection(`leads/${leadId}/messages`).add({
-                        text: criteria.replyMessage,
+                        idMessage: idMessage || null,
+                        text: textMessage,
                         direction: 'outbound',
-                        senderPhone: 'bot',
-                        source: 'whatsapp_ai_bot',
-                        isOffTopic: true,
+                        senderPhone: 'human_outbound',
+                        source: 'whatsapp_human',
                         timestamp: admin.firestore.FieldValue.serverTimestamp(),
                         isRead: true,
                     });
+                    console.log(`[Webhook] Human reply logged for lead ${leadId}. Bot muted.`);
                 }
                 return;
             }
 
-            // ── 12. Find matching properties ───────────────────────────────────────
-            const propertyIds = await findMatchingProperties(agencyId, criteria);
-
-            if (propertyIds.length === 0) {
-                console.log('[AI Bot] No active properties found for this agency. Aborting reply.');
-                // Still log the inbound message even if we cannot build a catalog
-                await db.collection(`leads/${leadId}/messages`).add({
-                    idMessage: idMessage || null,
-                    text: textMessage,
-                    direction: 'inbound',
-                    senderPhone: localPhone,
-                    source: 'whatsapp_ai_bot',
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: false,
-                });
-                return;
+            // ============================================================================
+            // Scenario C: Inbound DM (AI Bot + Lead Processing)
+            // ============================================================================
+            
+            // Idempotency: Skip if message already processed
+            if (idMessage) {
+                const dupCheck = await db.collectionGroup('messages').where('idMessage', '==', idMessage).limit(1).get();
+                if (!dupCheck.empty) return;
             }
 
-            // ── 12. Create shared catalog ──────────────────────────────────────────
-            const catalogId = await createSharedCatalog(
-                agencyId,
-                agencyData,
-                leadId,
-                leadName,
-                propertyIds
-            );
-            const catalogUrl = `${CATALOG_BASE_URL}/${catalogId}`;
+            // Upsert lead
+            const { leadId, isNew, isBotActive } = await upsertLead(agencyId, localPhone);
 
-            // ── 13. Inject catalog URL into Gemini-generated reply ────────────────
-            // Gemini writes the personalised Hebrew reply and marks where the URL
-            // should go with the placeholder [CATALOG_URL].
-            const replyMessage = criteria.replyMessage.replace('[CATALOG_URL]', catalogUrl);
-
-            // ── 14. Retrieve agency Green API credentials & send reply ─────────────
-            // Credentials are decrypted server-side using the ENCRYPTION_MASTER_KEY secret.
-            // They are NEVER exposed to the client or logged.
-            const creds = await getGreenApiCredentials(agencyId, masterKey.value());
-            if (!creds) {
-                console.error(`[AI Bot] Could not retrieve Green API credentials for agency ${agencyId}. Cannot send reply.`);
-            } else {
-                await sendGreenApiMessage(creds, waChatId, replyMessage);
-                console.log(`[AI Bot] Reply sent to ${waChatId} with catalog ${catalogId}`);
+            // 🚨 FIX: Mandatory AWAIT for history sync to ensure it completes before function freezes
+            if (isNew) {
+                const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+                if (keys) {
+                    console.log(`[Webhook] New lead ${leadId}. Syncing last 10 messages...`);
+                    await syncChatHistory(db, agencyId, leadId, localPhone, keys).catch(e => console.error('Sync failed:', e));
+                }
             }
-
-            // ── 15. Log conversation to the lead's message thread ─────────────────
-            const messagesRef = db.collection(`leads/${leadId}/messages`);
 
             // Log inbound message
-            await messagesRef.add({
+            await db.collection(`leads/${leadId}/messages`).add({
                 idMessage: idMessage || null,
                 text: textMessage,
                 direction: 'inbound',
                 senderPhone: localPhone,
-                source: 'whatsapp_ai_bot',
+                source: 'whatsapp_web',
+                botMuted: !isBotActive,
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 isRead: false,
             });
 
-            // Log outbound bot reply
-            if (creds) {
-                await messagesRef.add({
-                    text: replyMessage,
-                    direction: 'outbound',
-                    senderPhone: 'bot',
-                    source: 'whatsapp_ai_bot',
-                    catalogId,
-                    catalogUrl,
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: true,
-                });
+            // Trigger AI Bot reply if active
+            if (isBotActive) {
+                const greenApiCreds = await getGreenApiCredentials(agencyId, masterKey.value());
+                if (greenApiCreds) {
+                    await handleWeBotReply(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), greenApiCreds, idMessage);
+                }
             }
 
-            console.log(`[AI Bot] ✅ Pipeline complete — Lead: ${leadId}, Catalog: ${catalogId}`);
         } catch (err) {
-            console.error('[AI Bot] Fatal error in pipeline:', err);
-            // res already sent 200, so we just log — Green API will NOT retry.
+            console.error('[Webhook] Fatal error in pipeline:', err);
         }
     }
 );

@@ -112,7 +112,7 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                     <div className="flex bg-blue-50 text-blue-800 p-3 rounded-xl gap-3 text-sm border border-blue-100">
                         <Info size={20} className="flex-shrink-0 text-blue-600" />
                         <p>
-                            כל קבוצה להלן מכילה נכסים בעלי נתונים זהים (אותה עיר, אותה כתובת הדירה, מספר חדרים וגודל).
+                            כל קבוצה להלן מכילה נכסים בעלי נתונים זהים (אותה עיר, אותה כתובת הדירה, מספר חדרים ומחיר).
                             לחץ על "מזג" בכל קבוצה כדי לאחד אותם לנכס אחד עם כל התמונות וההיסטוריה.
                         </p>
                     </div>

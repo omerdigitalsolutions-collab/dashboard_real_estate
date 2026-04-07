@@ -31,6 +31,7 @@ export default function Properties() {
     const [search, setSearch] = useState('');
     const [mainFilter, setMainFilter] = useState<'my' | 'general'>('my');
     const [subFilter, setSubFilter] = useState('all');
+    const [roomsFilter, setRoomsFilter] = useState<string>('all');
     const [sortConfig, setSortConfig] = useState<{ key: 'price' | 'createdAt', direction: 'asc' | 'desc' } | null>({ key: 'createdAt', direction: 'desc' });
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [showAddModal, setShowAddModal] = useState(false);
@@ -198,7 +199,12 @@ export default function Properties() {
              subFilter === 'draft' ? prop.status === 'draft' :
              prop.type === subFilter && prop.kind !== 'מסחרי' && prop.status !== 'draft');
 
-        return matchesSearch && matchesSub;
+        // Filter by Rooms
+        const matchesRooms = 
+            roomsFilter === 'all' || 
+            (roomsFilter === '6+' ? (prop.rooms !== undefined && prop.rooms !== null && prop.rooms >= 6) : (prop.rooms?.toString() === roomsFilter));
+
+        return matchesSearch && matchesSub && matchesRooms;
     });
 
     const sorted = useMemo(() => {
@@ -228,9 +234,9 @@ export default function Properties() {
             const cityStr = p.city.trim().toLowerCase();
             const addrStr = p.address.trim().toLowerCase();
             const roomsStr = p.rooms ? p.rooms.toString() : 'no-rooms';
-            const sqmStr = p.sqm ? p.sqm.toString() : 'no-sqm';
+            const priceStr = p.price ? p.price.toString() : 'no-price';
 
-            const sig = `${cityStr}|${addrStr}|${roomsStr}|${sqmStr}`;
+            const sig = `${cityStr}|${addrStr}|${roomsStr}|${priceStr}`;
             const existing = groups.get(sig) || [];
             groups.set(sig, [...existing, p]);
         });
@@ -598,21 +604,43 @@ export default function Properties() {
                             />
                         </div>
                         {!isMobile && (
-                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg h-9">
-                                <ArrowUpDown size={14} className="text-slate-400" />
-                                <select
-                                    value={`${sortConfig?.key}-${sortConfig?.direction}`}
-                                    onChange={(e) => {
-                                        const [key, direction] = e.target.value.split('-') as [any, any];
-                                        setSortConfig({ key, direction });
-                                    }}
-                                    className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
-                                >
-                                    <option value="createdAt-desc">חדש קודם</option>
-                                    <option value="createdAt-asc">ישן קודם</option>
-                                    <option value="price-asc">מחיר (נמוך לגבוה)</option>
-                                    <option value="price-desc">מחיר (גבוה לנמוך)</option>
-                                </select>
+                            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 divide-x divide-slate-200 divide-x-reverse">
+                                <div className="flex items-center px-3 gap-2 h-full">
+                                    <ArrowUpDown size={14} className="text-slate-400" />
+                                    <select
+                                        value={`${sortConfig?.key}-${sortConfig?.direction}`}
+                                        onChange={(e) => {
+                                            const [key, direction] = e.target.value.split('-') as [any, any];
+                                            setSortConfig({ key, direction });
+                                        }}
+                                        className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="createdAt-desc">חדש קודם</option>
+                                        <option value="createdAt-asc">ישן קודם</option>
+                                        <option value="price-asc">מחיר (נמוך לגבוה)</option>
+                                        <option value="price-desc">מחיר (גבוה לנמוך)</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center px-3 h-full">
+                                    <select
+                                        value={roomsFilter}
+                                        onChange={(e) => setRoomsFilter(e.target.value)}
+                                        className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
+                                    >
+                                        <option value="all">חדרים</option>
+                                        <option value="1">1</option>
+                                        <option value="1.5">1.5</option>
+                                        <option value="2">2</option>
+                                        <option value="2.5">2.5</option>
+                                        <option value="3">3</option>
+                                        <option value="3.5">3.5</option>
+                                        <option value="4">4</option>
+                                        <option value="4.5">4.5</option>
+                                        <option value="5">5</option>
+                                        <option value="5.5">5.5</option>
+                                        <option value="6+">6+</option>
+                                    </select>
+                                </div>
                             </div>
                         )}
                         {!isMobile && (
@@ -673,20 +701,43 @@ export default function Properties() {
                             </div>
                         )}
                         {isMobile && (
-                             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl h-10">
-                                <ArrowUpDown size={14} className="text-slate-400" />
-                                <select
-                                    value={`${sortConfig?.key}-${sortConfig?.direction}`}
-                                    onChange={(e) => {
-                                        const [key, direction] = e.target.value.split('-') as [any, any];
-                                        setSortConfig({ key, direction });
-                                    }}
-                                    className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer"
-                                >
-                                    <option value="createdAt-desc">חדש</option>
-                                    <option value="price-asc">מחיר ↑</option>
-                                    <option value="price-desc">מחיר ↓</option>
-                                </select>
+                             <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl h-10 w-full divide-x divide-slate-200 divide-x-reverse">
+                                <div className="flex items-center gap-1.5 px-3 flex-1 h-full">
+                                    <ArrowUpDown size={14} className="text-slate-400 flex-shrink-0" />
+                                    <select
+                                        value={`${sortConfig?.key}-${sortConfig?.direction}`}
+                                        onChange={(e) => {
+                                            const [key, direction] = e.target.value.split('-') as [any, any];
+                                            setSortConfig({ key, direction });
+                                        }}
+                                        className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer w-full"
+                                    >
+                                        <option value="createdAt-desc">חדש קודם</option>
+                                        <option value="createdAt-asc">ישן קודם</option>
+                                        <option value="price-asc">מחיר (נמוך לגבוה)</option>
+                                        <option value="price-desc">מחיר (גבוה לנמוך)</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center px-3 flex-1 h-full">
+                                    <select
+                                        value={roomsFilter}
+                                        onChange={(e) => setRoomsFilter(e.target.value)}
+                                        className="bg-transparent text-xs font-semibold text-slate-600 focus:outline-none appearance-none cursor-pointer w-full"
+                                    >
+                                        <option value="all">חדרים</option>
+                                        <option value="1">1</option>
+                                        <option value="1.5">1.5</option>
+                                        <option value="2">2</option>
+                                        <option value="2.5">2.5</option>
+                                        <option value="3">3</option>
+                                        <option value="3.5">3.5</option>
+                                        <option value="4">4</option>
+                                        <option value="4.5">4.5</option>
+                                        <option value="5">5</option>
+                                        <option value="5.5">5.5</option>
+                                        <option value="6+">6+</option>
+                                    </select>
+                                </div>
                             </div>
                         )}
                     </div>
