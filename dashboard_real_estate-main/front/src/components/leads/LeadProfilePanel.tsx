@@ -181,15 +181,21 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
         return () => unsub();
     }, [lead.id]);
 
-    // Trigger history sync when opening WhatsApp tab
+    // Trigger history sync when opening the Lead Profile panel
     useEffect(() => {
-        if (activeSection === 'whatsapp' && lead.id && lead.phone) {
+        if (lead.id && lead.phone) {
+            console.log('[LeadProfilePanel] Initializing WhatsApp sync for lead:', lead.id);
             const fns = getFunctions(undefined, 'europe-west1');
             const syncFn = httpsCallable<any, any>(fns, 'whatsapp-syncLeadChat');
             syncFn({ agencyId: lead.agencyId, leadId: lead.id, phone: lead.phone })
-                .catch(e => console.warn('[LeadProfilePanel] Failed to manually sync chat:', e));
+                .then(res => {
+                    console.log('[LeadProfilePanel] Sync calling success:', res.data);
+                })
+                .catch(e => {
+                    console.error('[LeadProfilePanel] Failed to manually sync chat:', e);
+                });
         }
-    }, [activeSection, lead.id, lead.phone, lead.agencyId]);
+    }, [lead.id, lead.phone, lead.agencyId]);
 
     // Format WhatsApp phone number (unused for now, kept logic inside if needed later)
 
