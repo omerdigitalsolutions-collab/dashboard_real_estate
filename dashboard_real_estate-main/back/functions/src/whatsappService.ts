@@ -142,9 +142,25 @@ export async function sendWhatsAppMessage(
   }
 }
 
+async function writeSystemError(db: FirebaseFirestore.Firestore, leadId: string, text: string) {
+  try {
+    await db.collection(`leads/${leadId}/messages`).add({
+      idMessage: `sys-err-${Date.now()}`,
+      text,
+      direction: 'system',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: true,
+      source: 'system_error'
+    });
+  } catch (err: any) {
+    console.error(`Failed to write system error to Firestore: ${err.message}`);
+  }
+}
+
 /**
  * ─── 4. Sync Chat History ──────────────────────────────────────────────────
- * Fetches the last N messages from Green API and persists them.
+ * Fetches the last N messages from Green API and persists them to Firestore.
+ * Contains detailed diagnostic logging to identify payment/quota/API issues.
  */
 export async function syncChatHistory(
   db: FirebaseFirestore.Firestore,
@@ -158,47 +174,119 @@ export async function syncChatHistory(
     const chatId = formatPhoneForGreenAPI(phone);
     const url = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/getChatHistory/${keys.apiTokenInstance}`;
 
+    console.log(`[History Sync] 🔄 Starting for lead=${leadId} phone=${phone} chatId=${chatId} instance=${keys.idInstance} count=${count}`);
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chatId, count }),
     });
 
-    if (!res.ok) throw new Error(`API returned ${res.status}`);
-    const history: any[] = await res.json();
+    // ── Detailed HTTP error handling ──────────────────────────────────────
+    if (!res.ok) {
+      let responseText = '';
+      try { responseText = await res.text(); } catch (_) {}
 
-    if (!Array.isArray(history)) return;
+      const errMsg401 = `🚨 שגיאת התחברות ל-Green API (שגיאה ${res.status}): הטוקן פג תוקף או שגוי. יש להתחבר מחדש בהגדרות המערכת.`;
+      const errMsg402 = `🚨 התראת תשלום (שגיאה 402): המנוי ב-Green API פג או שנגמרה המכסה. יש להיכנס לאזור האישי ב-Green API ולחדש את המנוי.`;
+      const errMsg429 = `🚨 חריגה מכמות הבקשות (429): נשלחו יותר מדי בקשות ל-Green API בזמן קצר. הסנכרון יתחדש בקרוב.`;
+      const errMsg466 = `🚨 חריגה ממכסת שותפים (466): הגעת למקסימום המותר במנוי Green API הנוכחי. יש לשדרג או לחדש תשלום.`;
 
+      if (res.status === 401 || res.status === 403) {
+        console.error(`[History Sync] ❌ AUTH ERROR (${res.status}) - Token invalid or expired for instance ${keys.idInstance}. Response: ${responseText}`);
+        await writeSystemError(db, leadId, errMsg401);
+      } else if (res.status === 402) {
+        console.error(`[History Sync] ❌ PAYMENT REQUIRED (402) - Green API subscription expired for instance ${keys.idInstance}. Check billing at https://green-api.com`);
+        await writeSystemError(db, leadId, errMsg402);
+      } else if (res.status === 429) {
+        console.error(`[History Sync] ❌ RATE LIMIT (429) - Too many requests to Green API. Response: ${responseText}`);
+        await writeSystemError(db, leadId, errMsg429);
+      } else if (res.status === 466) {
+        console.error(`[History Sync] ❌ QUOTA EXCEEDED (466) - Partner quota limit reached for instance ${keys.idInstance}. Upgrade your Green API plan.`);
+        await writeSystemError(db, leadId, errMsg466);
+      } else {
+        console.error(`[History Sync] ❌ HTTP ${res.status} from Green API for instance ${keys.idInstance}. Body: ${responseText}`);
+        await writeSystemError(db, leadId, `🚨 שגיאה ${res.status} מספק הווצאפ: לא ניתן לסנכרן הודעות ברגע זה.`);
+      }
+      return;
+    }
+
+    // ── Parse response ────────────────────────────────────────────────────
+    let history: any[];
+    try {
+      history = await res.json();
+    } catch (parseErr) {
+      console.error(`[History Sync] ❌ JSON parse error for lead ${leadId}: ${parseErr}`);
+      return;
+    }
+
+    if (!Array.isArray(history)) {
+      console.error(`[History Sync] ❌ Non-array response for lead ${leadId}. Got: ${JSON.stringify(history).substring(0, 300)}`);
+      return;
+    }
+
+    console.log(`[History Sync] ✅ Green API returned ${history.length} messages for lead ${leadId} (chatId=${chatId})`);
+
+    if (history.length === 0) {
+      console.log(`[History Sync] ℹ️ Empty history for chatId=${chatId}. Chat may be new or phone number format may not match what Green API has stored.`);
+      return;
+    }
+
+    // ── Save to Firestore ─────────────────────────────────────────────────
     const msgsRef = db.collection(`leads/${leadId}/messages`);
+    let saved = 0;
+    let skipped = 0;
+    let errored = 0;
 
     for (const msg of history) {
-      if (msg.type !== 'outgoing' && msg.type !== 'incoming') continue;
+      if (msg.type !== 'outgoing' && msg.type !== 'incoming') {
+        console.log(`[History Sync] ⏭️ Skipping msg type="${msg.type}" idMessage=${msg.idMessage}`);
+        continue;
+      }
       const msgId = msg.idMessage;
-      if (!msgId) continue;
+      if (!msgId) {
+        console.log(`[History Sync] ⏭️ Skipping msg with no idMessage. Raw: ${JSON.stringify(msg).substring(0, 100)}`);
+        continue;
+      }
 
+      // Idempotency check
       const dup = await msgsRef.where('idMessage', '==', msgId).limit(1).get();
-      if (!dup.empty) continue;
+      if (!dup.empty) {
+        skipped++;
+        continue;
+      }
 
       let text = msg.textMessage || msg.caption || '';
       if (!text) {
         if (msg.typeMessage === 'imageMessage') text = '[תמונה]';
         else if (msg.typeMessage === 'videoMessage') text = '[סרטון]';
         else if (msg.typeMessage === 'fileMessage') text = '[קובץ]';
-        else continue;
+        else {
+          console.log(`[History Sync] ⏭️ Skipping unsupported typeMessage="${msg.typeMessage}" idMessage=${msgId}`);
+          continue;
+        }
       }
 
-      await msgsRef.add({
-        idMessage: msgId,
-        text,
-        direction: msg.type === 'outgoing' ? 'outbound' : 'inbound',
-        senderPhone: msg.senderId?.replace('@c.us', '') || '',
-        timestamp: admin.firestore.Timestamp.fromMillis(msg.timestamp * 1000),
-        isRead: true,
-        source: 'whatsapp_history_sync'
-      });
+      try {
+        await msgsRef.add({
+          idMessage: msgId,
+          text,
+          direction: msg.type === 'outgoing' ? 'outbound' : 'inbound',
+          senderPhone: msg.senderId?.replace('@c.us', '') || '',
+          timestamp: admin.firestore.Timestamp.fromMillis(msg.timestamp * 1000),
+          isRead: true,
+          source: 'whatsapp_history_sync'
+        });
+        saved++;
+      } catch (saveErr: any) {
+        console.error(`[History Sync] ❌ Firestore save failed for msgId=${msgId}: ${saveErr.message}`);
+        errored++;
+      }
     }
-    console.log(`[WhatsApp] Sync complete for lead ${leadId} (${history.length} msgs)`);
+
+    console.log(`[History Sync] ✅ Done for lead=${leadId} | saved=${saved} skipped=${skipped} errors=${errored} total=${history.length}`);
+
   } catch (err: any) {
-    console.error(`[WhatsApp] syncChatHistory error: ${err.message}`);
+    console.error(`[History Sync] ❌ Fatal error for lead=${leadId}: ${err.message}`, err.stack);
   }
 }

@@ -15,7 +15,8 @@
 | **Auth** | Firebase Authentication + Custom Claims (role, agencyId) |
 | **Storage** | Firebase Storage (property images, profile photos) |
 | **Payments** | Stripe (webhook → Cloud Function → Firestore provisioning) |
-| **WhatsApp** | WAHA self-hosted *or* Green API, fully managed server-side |
+| **WhatsApp** | Green API (Instance 7105) + History Sync + AI Firewall |
+
 | **Maps** | React Leaflet + Nominatim geocoding via Cloud Function |
 | **Charts** | Recharts |
 | **Kanban** | @dnd-kit |
@@ -64,8 +65,11 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
     ├── calendar/       Google Calendar OAuth API and Event Manager
     ├── tasks/          Firestore trigger cleanups
     ├── alerts/         System alert triggers
-    ├── whatsapp.ts     WhatsApp managed integration (WAHA / Green API)
-    ├── ai/             AI Agent (RAG) & shared extraction logic
+    ├── whatsappService.ts WhatsApp utilities, Green API wrappers, history sync logic
+    ├── webhookWhatsAppAI.ts Primary webhook for AI-powered chat & triage
+    ├── whatsapp.ts     Legacy/Secondary WhatsApp integration (WAHA / Green API)
+    ├── ai/             AI Agent (RAG), extraction prompts (Properties, Leads, Deals, Agents)
+
     ├── stripeWebhook.ts Stripe payment processing & agency provisioning
     └── config/admin.ts Firebase Admin SDK init
 ```
@@ -171,8 +175,10 @@ Lead / Property / Deal / Task / Alert → belongs to Agency (N:1)
 ✅ Idempotency check via `idMessage` deduplication  
 ✅ Phone normalisation (international → local Israeli format)  
 ✅ Supports both WAHA session format and Green API instance format
-✅ **AI Triage (1-on-1):** Uses Gemini to analyze unknown inbound messages and create "pending leads" with summaries and intents.
-✅ **AI B2B Agent (Groups):** Scans up to 5 designated B2B WhatsApp groups for property listings, auto-extracts them as `external` properties via Gemini, and flags matchmaking opportunities to managers.
+✅ **AI Triage (1-on-1):** Uses Gemini 1.5 Flash to analyze unknown inbound messages and create "pending leads".
+✅ **History Sync:** Background job that fetches last 10-20 messages from Green API to maintain CDM integrity. 
+✅ **AI B2B Agent (Groups):** Scans shared groups, extracts property data, and triggers matchmaking alerts.
+
 
 ### `stripeWebhook` *(onRequest — public)*
 ✅ Stripe signature verification (`stripe.webhooks.constructEvent`)  
@@ -229,8 +235,9 @@ Direct Firestore SDK calls (in `/services/`) rely on **Firestore Security Rules*
 ```
 agencies/{agencyId}
   ├── settings: { customDealStages: [], ... }
-  ├── monthlyGoals / yearlyGoals
-  └── whatsappIntegration: { status, sessionName, idInstance?, apiTokenInstance? }
+  ├── monthlyGoals / yearlyGoals: { deals, revenue, scalingFactor }
+  └── whatsappIntegration: { status, idInstance, apiTokenInstance, lastSyncTimestamp }
+
 
 users/{uid}
   ├── agencyId, role, name, email, phone

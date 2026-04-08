@@ -592,6 +592,25 @@ export async function sendSystemWhatsappMessage(phone: string, message: string, 
     return false;
   }
 }
+export const syncLeadChat = onCall({
+  region: REGION,
+  secrets: [masterKey]
+}, async (request) => {
+  const { agencyId, leadId, phone } = request.data;
+  if (!agencyId || !leadId || !phone) {
+    throw new HttpsError('invalid-argument', 'Missing parameters');
+  }
+
+  const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+  if (!keys?.idInstance || !keys?.apiTokenInstance) {
+    throw new HttpsError('failed-precondition', 'WhatsApp is not connected.');
+  }
+
+  // Import locally to avoid circular dependencies if any
+  const { syncChatHistory } = require('./whatsappService');
+  await syncChatHistory(db, agencyId, leadId, phone, keys, 15);
+  return { success: true };
+});
 
 /**
  * 5. getGroups:

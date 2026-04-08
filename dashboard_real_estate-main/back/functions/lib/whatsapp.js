@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsappWebhook = exports.disconnectWhatsApp = exports.getGroups = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
+exports.whatsappWebhook = exports.disconnectWhatsApp = exports.getGroups = exports.syncLeadChat = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
 exports.sendSystemWhatsappMessage = sendSystemWhatsappMessage;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -193,7 +193,8 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
         instanceToken = instanceData.apiTokenInstance;
         // Encrypt the token
         const { encryptedToken, iv } = encryptToken(instanceToken, masterKey.value());
-        // Save credentials and update agency status atomically
+        // ✅ FIX 1: FieldValue.delete() is NOT allowed inside set({}, {merge:true}).
+        //           We use set() for new fields, then update() separately for deletions.
         await db.runTransaction(async (t) => {
             t.set(credsRef, {
                 idInstance: instanceId,
@@ -201,19 +202,23 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
                 iv,
                 assignedAt: admin.firestore.FieldValue.serverTimestamp()
             });
+            // Set only new/updated fields — no FieldValue.delete() here
             t.set(agencyRef, {
-                greenApiKeys: admin.firestore.FieldValue.delete(),
                 whatsappIntegration: {
                     status: 'PENDING_SCAN',
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }
             }, { merge: true });
+            // Separate update() call to safely delete legacy greenApiKeys field
+            t.update(agencyRef, {
+                greenApiKeys: admin.firestore.FieldValue.delete()
+            });
             t.delete(instanceDoc.ref);
         });
         console.log(`[WhatsApp] Allocated new instance ${instanceId} to agency ${agencyId}`);
     }
     // Now fetch the QR code immediately so the frontend only needs ONE call
-    const qrUrl = `https://api.green-api.com/waInstance${instanceId}/qr/${instanceToken}`;
+    const qrUrl = `https://7105.api.greenapi.com/waInstance${instanceId}/qr/${instanceToken}`;
     try {
         console.log(`[WhatsApp] Fetching QR for instance ${instanceId}...`);
         const resp = await axios_1.default.get(qrUrl, { timeout: 40000 });
@@ -231,7 +236,14 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
         if (((_g = resp.data) === null || _g === void 0 ? void 0 : _g.type) !== 'qrCode' || !((_h = resp.data) === null || _h === void 0 ? void 0 : _h.message)) {
             throw new https_1.HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
         }
-        return { success: true, alreadyConnected: false, qrCode: resp.data.message };
+        // ✅ FIX 3: Return fetchedAt so the frontend can calculate QR TTL (~20s)
+        //           and trigger a refresh before it expires.
+        return {
+            success: true,
+            alreadyConnected: false,
+            qrCode: resp.data.message,
+            fetchedAt: Date.now(),
+        };
     }
     catch (err) {
         if (err instanceof https_1.HttpsError)
@@ -281,7 +293,7 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     }
     // 1. Send LogOut to Green API to clear the current WhatsApp session
     try {
-        await axios_1.default.get(`https://api.green-api.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`, { timeout: 10000 });
+        await axios_1.default.get(`https://7105.api.greenapi.com/waInstance${keys.idInstance}/LogOut/${keys.apiTokenInstance}`, { timeout: 10000 });
         console.log(`[WhatsApp] Logged out instance ${keys.idInstance}`);
     }
     catch (err) {
@@ -289,29 +301,32 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
         // Continue anyway to recycle it
     }
     // 2. Transaction: Return to pool, remove from private subcollection and agency doc
+    // NOTE: FieldValue.delete() is NOT allowed inside set({}, {merge:true}).
+    //       We must use update() for fields we want to delete, and set() only for new data.
     try {
         await db.runTransaction(async (t) => {
-            // Put plain-text back in pool, using idInstance as the doc ID for uniqueness
+            // Return plain-text keys to the pool (idInstance as doc ID ensures uniqueness)
             const poolRef = db.collection('available_instances').doc(keys.idInstance);
             t.set(poolRef, {
                 idInstance: keys.idInstance,
                 apiTokenInstance: keys.apiTokenInstance,
                 returnedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            // Delete from private subcollection
+            // Delete the private credentials sub-document
             t.delete(credsRef);
-            // Wipe status and legacy keys from agency doc
-            t.set(agencyRef, {
+            // Clear the agency doc: update() correctly supports FieldValue.delete()
+            t.update(agencyRef, {
                 isWhatsappConnected: false,
                 whatsappIntegration: admin.firestore.FieldValue.delete(),
                 greenApiKeys: admin.firestore.FieldValue.delete()
-            }, { merge: true });
+            });
         });
+        console.log(`[WhatsApp] Instance ${keys.idInstance} successfully returned to pool for agency ${agencyId}`);
         return { success: true, message: 'Disconnected and safely returned instance to pool.' };
     }
     catch (err) {
-        console.error('Failed to disconnect/recycle instance:', err);
-        throw new https_1.HttpsError('internal', 'Internal error while recycling instance.');
+        console.error('[WhatsApp] Failed to disconnect/recycle instance:', err);
+        throw new https_1.HttpsError('internal', `Internal error while recycling instance: ${(err === null || err === void 0 ? void 0 : err.message) || 'unknown'}`);
     }
 });
 // ─── 1. generateWhatsAppQR ───────────────────────────────────────────────────
@@ -331,18 +346,32 @@ exports.generateWhatsAppQR = (0, https_1.onCall)({
     // 1. Try Green API Credentials first
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-        const qrUrl = `https://api.green-api.com/waInstance${keys.idInstance}/qr/${keys.apiTokenInstance}`;
+        const qrUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/qr/${keys.apiTokenInstance}`;
         try {
             console.log(`[WhatsApp] Fetching Green API QR for instance ${keys.idInstance}...`);
             const resp = await axios_1.default.get(qrUrl, { timeout: 40000 });
+            // ✅ FIX 2: Instead of throwing, gracefully handle alreadyLogged
+            //           and return a success response — consistent with connectAgencyWhatsApp.
             if (((_a = resp.data) === null || _a === void 0 ? void 0 : _a.type) === 'alreadyLogged') {
-                throw new https_1.HttpsError('already-exists', 'WhatsApp is already connected. Disconnect first.');
+                await db.collection('agencies').doc(agencyId).set({
+                    isWhatsappConnected: true,
+                    whatsappIntegration: {
+                        status: 'CONNECTED',
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    },
+                }, { merge: true });
+                return { qrCode: null, alreadyConnected: true };
             }
             if (((_b = resp.data) === null || _b === void 0 ? void 0 : _b.type) !== 'qrCode' || !((_c = resp.data) === null || _c === void 0 ? void 0 : _c.message)) {
                 throw new https_1.HttpsError('internal', `Green API unexpected response: ${JSON.stringify(resp.data)}`);
             }
             await updateStatus(agencyId, 'PENDING_SCAN');
-            return { qrCode: resp.data.message };
+            // ✅ FIX 3: Return fetchedAt timestamp so frontend can manage QR TTL
+            return {
+                qrCode: resp.data.message,
+                alreadyConnected: false,
+                fetchedAt: Date.now(),
+            };
         }
         catch (err) {
             console.error('[WhatsApp] Green API QR fetch failed:', err.message);
@@ -365,7 +394,8 @@ exports.generateWhatsAppQR = (0, https_1.onCall)({
             const base64 = Buffer.from(resp.data, 'binary').toString('base64');
             const dataUrl = `data:image/png;base64,${base64}`;
             await updateStatus(agencyId, 'PENDING_SCAN');
-            return { qrCode: dataUrl };
+            // ✅ FIX 3: Include fetchedAt for WAHA too
+            return { qrCode: dataUrl, alreadyConnected: false, fetchedAt: Date.now() };
         }
         catch (err) {
             console.error('[WhatsApp] WAHA QR fetch failed:', err.message);
@@ -391,7 +421,7 @@ exports.checkWhatsAppStatus = (0, https_1.onCall)({
     cors: true,
     secrets: [masterKey],
 }, async (request) => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const agencyId = await getAgencyId(request.auth.uid);
@@ -400,34 +430,65 @@ exports.checkWhatsAppStatus = (0, https_1.onCall)({
     if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
         return { status: 'DISCONNECTED' };
     }
-    const statusUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getStateInstance/${keys.apiTokenInstance}`;
+    const statusUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/getStateInstance/${keys.apiTokenInstance}`;
+    console.log(`[WhatsApp Status Check] Agency: ${agencyId}, Instance: ${keys.idInstance}`);
     try {
         const resp = await axios_1.default.get(statusUrl, { timeout: 10000 });
         const state = (_a = resp.data) === null || _a === void 0 ? void 0 : _a.stateInstance;
+        console.log(`[WhatsApp Status Check] Green API response state: ${state}`);
         let mappedStatus = 'DISCONNECTED';
         if (state === 'authorized')
             mappedStatus = 'CONNECTED';
-        else if (state === 'notAuthorized')
+        else if (state === 'notAuthorized' || state === 'starting' || state === 'online')
             mappedStatus = 'PENDING_SCAN';
+        else if (state === 'blocked')
+            mappedStatus = 'BLOCKED';
         // Update the agency doc if status changed
         const currentStatus = (_c = (_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.whatsappIntegration) === null || _c === void 0 ? void 0 : _c.status;
         if (currentStatus !== mappedStatus) {
-            await db.collection('agencies').doc(agencyId).set({
-                isWhatsappConnected: mappedStatus === 'CONNECTED',
-                whatsappIntegration: {
-                    status: mappedStatus,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                },
-            }, { merge: true });
+            console.log(`[WhatsApp Status Check] Status changing from ${currentStatus} to ${mappedStatus}`);
+            if (mappedStatus === 'CONNECTED') {
+                // ✅ FIX 4: Fetch and persist the connected phone number when status becomes CONNECTED
+                let connectedPhone = null;
+                try {
+                    const infoUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/getWaSettings/${keys.apiTokenInstance}`;
+                    const infoResp = await axios_1.default.get(infoUrl, { timeout: 8000 });
+                    // Green API returns the phone in wid field e.g. "972501234567@c.us"
+                    const rawWid = ((_d = infoResp.data) === null || _d === void 0 ? void 0 : _d.wid) || '';
+                    connectedPhone = rawWid.replace('@c.us', '') || null;
+                    console.log(`[WhatsApp Status Check] Connected phone: ${connectedPhone}`);
+                }
+                catch (e) {
+                    console.warn('[WhatsApp Status Check] Could not fetch connected phone number:', e);
+                }
+                await db.collection('agencies').doc(agencyId).set({
+                    isWhatsappConnected: true,
+                    whatsappIntegration: {
+                        status: 'CONNECTED',
+                        connectedPhone, // ← stored for UI display e.g. "+972501234567"
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    },
+                }, { merge: true });
+            }
+            else {
+                await db.collection('agencies').doc(agencyId).set({
+                    isWhatsappConnected: mappedStatus === 'CONNECTED',
+                    whatsappIntegration: {
+                        status: mappedStatus,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    },
+                }, { merge: true });
+            }
         }
         return { status: mappedStatus, greenApiState: state };
     }
     catch (err) {
-        console.warn('Status check network/timeout issue, returning stored state.');
-        return { status: ((_e = (_d = agencyDoc.data()) === null || _d === void 0 ? void 0 : _d.whatsappIntegration) === null || _e === void 0 ? void 0 : _e.status) || 'PENDING_SCAN' };
+        console.warn(`[WhatsApp Status Check] Network/timeout issue: ${err.message}`, (_e = err.response) === null || _e === void 0 ? void 0 : _e.data);
+        return { status: ((_g = (_f = agencyDoc.data()) === null || _f === void 0 ? void 0 : _f.whatsappIntegration) === null || _g === void 0 ? void 0 : _g.status) || 'PENDING_SCAN' };
     }
 });
 // ─── 3. sendWhatsappMessage ──────────────────────────────────────────────────
+const whatsappService_1 = require("./whatsappService");
 /**
  * Secure message dispatch. Frontend sends only { phone, message } — never any tokens.
  * The function resolves the agency's WAHA credentials server-side.
@@ -456,7 +517,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
         if (fileUrl) {
-            const sendFileUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
+            const sendFileUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
             await axios_1.default.post(sendFileUrl, {
                 chatId: toWaId(phone),
                 urlFile: fileUrl,
@@ -466,7 +527,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
             console.log(`[Green API] File message sent to ${phone}`);
         }
         else {
-            const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+            const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
             await axios_1.default.post(sendUrl, {
                 chatId: toWaId(phone),
                 message: message
@@ -499,7 +560,7 @@ async function sendSystemWhatsappMessage(phone, message, masterSecret) {
             return false;
         }
         // 3. Send the message
-        const sendUrl = `https://api.green-api.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+        const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
         await axios_1.default.post(sendUrl, {
             chatId: toWaId(phone),
             message: message
@@ -511,6 +572,23 @@ async function sendSystemWhatsappMessage(phone, message, masterSecret) {
         return false;
     }
 }
+exports.syncLeadChat = (0, https_1.onCall)({
+    region: REGION,
+    secrets: [masterKey]
+}, async (request) => {
+    const { agencyId, leadId, phone } = request.data;
+    if (!agencyId || !leadId || !phone) {
+        throw new https_1.HttpsError('invalid-argument', 'Missing parameters');
+    }
+    const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+    if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+        throw new https_1.HttpsError('failed-precondition', 'WhatsApp is not connected.');
+    }
+    // Import locally to avoid circular dependencies if any
+    const { syncChatHistory } = require('./whatsappService');
+    await syncChatHistory(db, agencyId, leadId, phone, keys, 15);
+    return { success: true };
+});
 /**
  * 5. getGroups:
  * Fetches the list of all contacts (including groups) and filters for groups.
@@ -527,8 +605,8 @@ exports.getGroups = (0, https_1.onCall)({
     // 1. Try Green API Credentials first (Instance mode)
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-        const contactsUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getContacts/${keys.apiTokenInstance}`;
-        const chatsUrl = `https://api.green-api.com/waInstance${keys.idInstance}/getChats/${keys.apiTokenInstance}`;
+        const contactsUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/getContacts/${keys.apiTokenInstance}`;
+        const chatsUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/getChats/${keys.apiTokenInstance}`;
         try {
             console.log(`[WhatsApp] Fetching contacts & chats for agency ${agencyId}...`);
             // Parallel fetch for speed
@@ -541,9 +619,10 @@ exports.getGroups = (0, https_1.onCall)({
             if (contactsResp.status === 'fulfilled' && Array.isArray(contactsResp.value.data)) {
                 console.log(`[WhatsApp] Contacts fetched: ${contactsResp.value.data.length}`);
                 contactsResp.value.data.forEach((c) => {
-                    const isGroup = c.type === 'group' || (c.id && c.id.endsWith('@g.us'));
-                    if (isGroup && c.id) {
-                        allGroupsMap.set(c.id, { id: c.id, name: c.name || c.id.split('@')[0] });
+                    const rawId = c.id || c.chatId;
+                    const isGroup = c.type === 'group' || (rawId && rawId.endsWith('@g.us'));
+                    if (isGroup && rawId) {
+                        allGroupsMap.set(rawId, { id: rawId, name: c.name || rawId.split('@')[0] });
                     }
                 });
             }
@@ -636,25 +715,30 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
     region: REGION,
     secrets: ['WAHA_WEBHOOK_SECRET', geminiApiKey]
 }, async (req, res) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     // Always ACK first to prevent retries
+    const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
+    const expected = process.env.WAHA_WEBHOOK_SECRET || '';
+    if (!expected || secret !== expected) {
+        console.error(`Webhook: Unauthorized access attempt. Incoming secret: '${secret}'.`);
+        res.status(401).send('Unauthorized');
+        return;
+    }
+    // ACK only after authorization check
     res.status(200).send('OK');
+    console.log(`Webhook: Authorized request.`);
     try {
-        const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
-        const expected = process.env.WAHA_WEBHOOK_SECRET || '';
-        if (!expected || secret !== expected) {
-            console.error(`Webhook: Unauthorized access attempt. Incoming secret: '${secret}'.`);
-            res.status(401).send('Unauthorized');
-            return;
-        }
-        console.log(`Webhook: Authorized request.`);
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
+        const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
         // Support both Green API and WAHA event formats
-        const isInboundMessage = typeWebhook === 'incomingMessageReceived' || // Green API
+        // We now ALSO handle outgoing messages so human replies from phone/web show up in CRM.
+        const isRelevantEvent = typeWebhook === 'incomingMessageReceived' || // Green API Inbound
+            typeWebhook === 'outgoingMessageReceived' || // Green API Human Outbound
+            typeWebhook === 'outgoingAPIMessageReceived' || // Green API Bot Outbound (for idempotency)
             typeWebhook === 'message'; // WAHA
-        console.log(`Webhook: Received event type '${typeWebhook}'. isInboundMessage: ${isInboundMessage}`);
-        if (!isInboundMessage)
+        console.log(`Webhook: Received event type '${typeWebhook}'. isRelevantEvent: ${isRelevantEvent}`);
+        if (!isRelevantEvent)
             return;
         // ── Extract idInstance (Green API) or sessionName (WAHA) ─────────────
         const idInstance = body === null || body === void 0 ? void 0 : body.idInstance;
@@ -692,15 +776,40 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
         const chatId = senderData.chatId || '';
         const isGroup = chatId.endsWith('@g.us');
         const isDirect = chatId.endsWith('@c.us');
-        // Real sender is the person who sent the message (in a group, it's senderData.sender. In direct, it's the chatId itself)
-        const rawSender = senderData.sender || chatId || '';
-        const textMessage = ((_c = messageData.textMessageData) === null || _c === void 0 ? void 0 : _c.textMessage) || '';
-        const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
+        // For outgoing messages, the recipient is the chatId
+        const isOutbound = typeWebhook === 'outgoingMessageReceived' || typeWebhook === 'outgoingAPIMessageReceived';
+        const rawSender = isOutbound ? (((_c = body === null || body === void 0 ? void 0 : body.chatData) === null || _c === void 0 ? void 0 : _c.chatId) || ((_d = body === null || body === void 0 ? void 0 : body.senderData) === null || _d === void 0 ? void 0 : _d.chatId)) : (senderData.sender || chatId);
+        // Support various content types for Green API
+        let textMessage = ((_e = messageData.textMessageData) === null || _e === void 0 ? void 0 : _e.textMessage) || '';
+        const caption = ((_f = messageData.extendedTextMessageData) === null || _f === void 0 ? void 0 : _f.text) ||
+            ((_g = messageData.imageMessageData) === null || _g === void 0 ? void 0 : _g.caption) ||
+            ((_h = messageData.videoMessageData) === null || _h === void 0 ? void 0 : _h.caption) ||
+            ((_j = messageData.fileMessageData) === null || _j === void 0 ? void 0 : _j.caption) || '';
+        // If it's a media message without text, use a generic label
+        if (!textMessage && !caption) {
+            if (messageData.typeMessage === 'imageMessage')
+                textMessage = '[תמונה]';
+            else if (messageData.typeMessage === 'videoMessage')
+                textMessage = '[סרטון]';
+            else if (messageData.typeMessage === 'audioMessage')
+                textMessage = '[הודעה קולית]';
+            else if (messageData.typeMessage === 'fileMessage')
+                textMessage = '[קובץ]';
+            else if (messageData.typeMessage === 'locationMessage')
+                textMessage = '[מיקום]';
+            else if (messageData.typeMessage === 'contactMessage')
+                textMessage = '[איש קשר]';
+        }
+        else {
+            textMessage = textMessage || caption;
+        }
         console.log(`Webhook: Agency ${agencyId} | ChatId: ${chatId} | isGroup: ${isGroup} | Sender: ${rawSender}`);
         if (textMessage)
             console.log(`Webhook: Message text preview: ${textMessage.substring(0, 50)}...`);
-        if (!rawSender || !textMessage)
+        if (!rawSender || !textMessage) {
+            console.log('Webhook: No text content or sender, skipping.');
             return;
+        }
         // ── Normalise phone ─────────────────────────────────────────────────────
         let cleanPhone = rawSender.replace('@c.us', '');
         if (cleanPhone.startsWith('972'))
@@ -857,12 +966,21 @@ Output strict JSON:
             await db.collection(`leads/${leadId}/messages`).add({
                 idMessage: idMessage || null,
                 text: textMessage,
-                direction: 'inbound',
-                senderPhone: cleanPhone,
+                direction: isOutbound ? 'outbound' : 'inbound',
+                senderPhone: isOutbound ? 'human_outbound' : cleanPhone,
+                source: isOutbound ? 'whatsapp_human' : 'whatsapp_web',
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                isRead: false,
+                isRead: isOutbound,
             });
-            console.log(`Webhook: message routed to lead ${leadId}`);
+            // ── Trigger history sync for new/active interaction ─────────────────────
+            if (isDirect && !isOutbound) {
+                // Run in background
+                const keys = await getGreenApiCredentials(agencyId, masterKey.value());
+                if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
+                    (0, whatsappService_1.syncChatHistory)(db, agencyId, leadId, cleanPhone, keys).catch(e => console.error('Sync failed:', e));
+                }
+            }
+            console.log(`Webhook: message routed to lead ${leadId} | direction: ${isOutbound ? 'outbound' : 'inbound'}`);
         }
     }
     catch (err) {

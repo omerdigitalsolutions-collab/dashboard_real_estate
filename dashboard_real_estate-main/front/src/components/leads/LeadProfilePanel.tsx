@@ -100,7 +100,7 @@ interface LeadProfilePanelProps {
 interface Message {
     id: string;
     text: string;
-    direction: 'inbound' | 'outbound';
+    direction: 'inbound' | 'outbound' | 'system';
     timestamp: any;
 }
 
@@ -180,6 +180,16 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
         });
         return () => unsub();
     }, [lead.id]);
+
+    // Trigger history sync when opening WhatsApp tab
+    useEffect(() => {
+        if (activeSection === 'whatsapp' && lead.id && lead.phone) {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const syncFn = httpsCallable<any, any>(fns, 'whatsapp-syncLeadChat');
+            syncFn({ agencyId: lead.agencyId, leadId: lead.id, phone: lead.phone })
+                .catch(e => console.warn('[LeadProfilePanel] Failed to manually sync chat:', e));
+        }
+    }, [activeSection, lead.id, lead.phone, lead.agencyId]);
 
     // Format WhatsApp phone number (unused for now, kept logic inside if needed later)
 
@@ -306,13 +316,16 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 </div>
                             ) : (
                                 messages.map(msg => (
-                                    <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
-                                        <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${msg.direction === 'outbound'
+                                    <div key={msg.id} className={`flex ${msg.direction === 'system' ? 'justify-center' : msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-[13px] leading-relaxed ${
+                                            msg.direction === 'system'
+                                            ? 'bg-rose-500/10 border border-rose-500/20 text-rose-600 font-bold text-center'
+                                            : msg.direction === 'outbound'
                                             ? 'bg-white border border-slate-200 text-slate-800 rounded-tr-sm'
                                             : 'bg-emerald-500 text-white rounded-tl-sm'
                                             }`}>
                                             <p>{msg.text}</p>
-                                            {msg.timestamp?.toDate && (
+                                            {msg.timestamp?.toDate && msg.direction !== 'system' && (
                                                 <p className={`text-[10px] mt-1 ${msg.direction === 'outbound' ? 'text-slate-400' : 'text-emerald-100'}`} dir="ltr">
                                                     {msg.timestamp.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
@@ -665,13 +678,16 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                 </div>
                             ) : (
                                 messages.map(msg => (
-                                    <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
-                                        <div className={`max-w-[85%] px-4 py-3 rounded-[1.25rem] text-sm leading-relaxed shadow-xl ${msg.direction === 'outbound'
+                                    <div key={msg.id} className={`flex ${msg.direction === 'system' ? 'justify-center' : msg.direction === 'outbound' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[85%] px-4 py-3 rounded-[1.25rem] text-sm leading-relaxed shadow-xl ${
+                                            msg.direction === 'system'
+                                            ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold text-center'
+                                            : msg.direction === 'outbound'
                                             ? 'bg-slate-800 border border-slate-700 text-slate-100 rounded-tr-none'
                                             : 'bg-emerald-600 text-white rounded-tl-none shadow-emerald-900/20'
                                             }`}>
                                             <p className="font-medium">{msg.text}</p>
-                                            {msg.timestamp?.toDate && (
+                                            {msg.timestamp?.toDate && msg.direction !== 'system' && (
                                                 <p className={`text-[10px] mt-2 font-bold flex items-center gap-1.5 ${msg.direction === 'outbound' ? 'text-slate-500 justify-end' : 'text-emerald-200 justify-end'}`} dir="ltr">
                                                     {msg.timestamp.toDate().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                                                     {msg.direction === 'inbound' && <Check size={10} />}
