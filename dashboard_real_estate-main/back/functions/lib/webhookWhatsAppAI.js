@@ -245,29 +245,6 @@ async function findMatchingProperties(agencyId, criteria) {
         .get();
     return fallbackSnap.docs.map((d) => d.id);
 }
-// ─── Helper: Create Shared Catalog ───────────────────────────────────────────
-async function createSharedCatalog(agencyId, agencyData, leadId, leadName, propertyIds) {
-    var _a, _b;
-    const catalogRef = db.collection('shared_catalogs').doc();
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(now.getDate() + 7); // 7-day expiry
-    await catalogRef.set({
-        agencyId,
-        agencyName: agencyData.agencyName || agencyData.name || '',
-        agencyLogoUrl: ((_a = agencyData.settings) === null || _a === void 0 ? void 0 : _a.logoUrl) || '',
-        agencyPhone: agencyData.officePhone || ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.phoneNumber) || '',
-        leadId,
-        leadName,
-        propertyIds,
-        source: 'whatsapp_ai_bot',
-        viewCount: 0,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt,
-    });
-    console.log(`[AI Bot] Catalog created: ${catalogRef.id} with ${propertyIds.length} properties`);
-    return catalogRef.id;
-}
 // ─── Helper: Send Green API Message ──────────────────────────────────────────
 async function sendGreenApiMessage(creds, waChatId, message) {
     // ── INJECT YOUR GREEN API CREDENTIALS HERE (loaded from Firestore secrets) ─

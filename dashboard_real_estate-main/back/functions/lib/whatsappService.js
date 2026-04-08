@@ -49,6 +49,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildWeBotPrompt = buildWeBotPrompt;
 exports.formatPhoneForGreenAPI = formatPhoneForGreenAPI;
 exports.sendWhatsAppMessage = sendWhatsAppMessage;
+exports.createSharedCatalog = createSharedCatalog;
 exports.syncChatHistory = syncChatHistory;
 const admin = __importStar(require("firebase-admin"));
 // ─── 1. Prompt Builder ────────────────────────────────────────────────────────
@@ -134,6 +135,29 @@ async function sendWhatsAppMessage(integration, customerPhone, messageText) {
         console.error('[Green API] sendWhatsAppMessage failed:', err);
         return false;
     }
+}
+// ─── 4. Create Shared Catalog ─────────────────────────────────────────────────
+async function createSharedCatalog(db, agencyId, agencyData, leadId, leadName, propertyIds) {
+    var _a, _b;
+    const catalogRef = db.collection('shared_catalogs').doc();
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(now.getDate() + 7); // 7-day expiry
+    await catalogRef.set({
+        agencyId,
+        agencyName: agencyData.agencyName || agencyData.name || '',
+        agencyLogoUrl: ((_a = agencyData.settings) === null || _a === void 0 ? void 0 : _a.logoUrl) || '',
+        agencyPhone: agencyData.officePhone || ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.phoneNumber) || '',
+        leadId,
+        leadName,
+        propertyIds,
+        source: 'whatsapp_ai_bot',
+        viewCount: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+    });
+    console.log(`[AI Bot] Catalog created: ${catalogRef.id} with ${propertyIds.length} properties`);
+    return `https://homer.management/catalog/${catalogRef.id}`;
 }
 async function writeSystemError(db, leadId, text) {
     try {

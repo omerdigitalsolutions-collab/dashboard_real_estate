@@ -260,38 +260,6 @@ async function findMatchingProperties(
     return fallbackSnap.docs.map((d) => d.id);
 }
 
-// ─── Helper: Create Shared Catalog ───────────────────────────────────────────
-
-async function createSharedCatalog(
-    agencyId: string,
-    agencyData: admin.firestore.DocumentData,
-    leadId: string,
-    leadName: string,
-    propertyIds: string[]
-): Promise<string> {
-    const catalogRef = db.collection('shared_catalogs').doc();
-
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(now.getDate() + 7); // 7-day expiry
-
-    await catalogRef.set({
-        agencyId,
-        agencyName: agencyData.agencyName || agencyData.name || '',
-        agencyLogoUrl: agencyData.settings?.logoUrl || '',
-        agencyPhone: agencyData.officePhone || agencyData.whatsappIntegration?.phoneNumber || '',
-        leadId,
-        leadName,
-        propertyIds,
-        source: 'whatsapp_ai_bot',
-        viewCount: 0,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt,
-    });
-
-    console.log(`[AI Bot] Catalog created: ${catalogRef.id} with ${propertyIds.length} properties`);
-    return catalogRef.id;
-}
 
 // ─── Helper: Send Green API Message ──────────────────────────────────────────
 

@@ -20,7 +20,7 @@
 
 import * as admin from 'firebase-admin';
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
-import { buildWeBotPrompt, sendWhatsAppMessage, BotConfig, WhatsappIntegration } from './whatsappService';
+import { buildWeBotPrompt, sendWhatsAppMessage, BotConfig, WhatsappIntegration, createSharedCatalog } from './whatsappService';
 
 const db = admin.firestore();
 
@@ -37,6 +37,24 @@ const scheduleMeetingDeclaration: FunctionDeclaration = {
       propertyId: { type: SchemaType.STRING, description: 'מזהה הנכס מרשימת ה-RAG' },
     },
     required: ['date', 'time', 'propertyId'],
+  },
+};
+
+// ─── Gemini Function Calling: create_catalog ──────────────────────────────────
+
+const createCatalogDeclaration: FunctionDeclaration = {
+  name: 'create_catalog',
+  description: 'יוצר קטלוג נכסים וירטואלי שניתן לשתף עם הלקוח (URL) בהתאם למזהי הנכסים שבחרת מהרשימה.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      propertyIds: { 
+        type: SchemaType.ARRAY, 
+        items: { type: SchemaType.STRING },
+        description: 'רשימת מזהי הנכסים (ID) להוספה לקטלוג'
+      },
+    },
+    required: ['propertyIds'],
   },
 };
 
@@ -148,7 +166,7 @@ export async function handleWeBotReply(
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      tools: [{ functionDeclarations: [scheduleMeetingDeclaration] }],
+      tools: [{ functionDeclarations: [scheduleMeetingDeclaration, createCatalogDeclaration] }],
       systemInstruction: systemPrompt,
     });
 
@@ -187,6 +205,41 @@ export async function handleWeBotReply(
           },
         }]);
         finalReply = confirmResult.response.text();
+      } else if (call.name === 'create_catalog') {
+        const { propertyIds } = call.args as Record<string, any>;
+        const idsArray = Array.isArray(propertyIds) ? propertyIds : [];
+
+        if (idsArray.length === 0) {
+          console.warn(`[WeBot] Gemini attempted to create catalog with 0 properties.`);
+          const failResult = await chat.sendMessage([{
+            functionResponse: {
+              name: 'create_catalog',
+              response: { success: false, message: 'לא נבחרו נכסים.' },
+            },
+          }]);
+          finalReply = failResult.response.text();
+        } else {
+          // Create catalog
+          const catalogUrl = await createSharedCatalog(
+            db, 
+            agencyId, 
+            agencyData, 
+            leadId, 
+            leadData.name || 'לקוח', 
+            idsArray
+          );
+
+          console.log(`[WeBot] 📄 Catalog created via AI: lead=${leadId} URL=${catalogUrl} properties=${idsArray.length}`);
+
+          // Send function result back to Gemini so it can craft the message with the URL
+          const confirmResult = await chat.sendMessage([{
+            functionResponse: {
+              name: 'create_catalog',
+              response: { success: true, url: catalogUrl },
+            },
+          }]);
+          finalReply = confirmResult.response.text();
+        }
       }
     } else {
       finalReply = resp.text();
