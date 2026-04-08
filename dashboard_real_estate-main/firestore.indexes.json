@@ -35,6 +35,16 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "private_credentials",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "idInstance",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
