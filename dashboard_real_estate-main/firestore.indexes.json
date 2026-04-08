@@ -45,6 +45,16 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "idMessage",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -46,7 +46,7 @@ import { getLiveProperties as catalogsGetLiveProperties } from './catalogs/getLi
 import { triggerSystemAlert } from './alerts/triggers';
 
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
-import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook } from './whatsapp';
+import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook, syncLeadChat } from './whatsapp';
 
 // ── AI Module ──────────────────────────────────────────────────────────────────
 import { askAgencyAgent } from './ai/agent';
@@ -91,7 +91,7 @@ export const properties = { getLiveProperties, addProperty, updateProperty, dele
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
-export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook };
+export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, syncLeadChat, getGroups, disconnectWhatsApp, whatsappWebhook };
 export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot };
 export const calendar = { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, listEvents };
 export const automation = { webhookProcessGlobalYad2Email };

@@ -161,7 +161,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         // ── 6. Initialise Gemini with Function Calling ──────────────────────────
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash',
             tools: [{ functionDeclarations: [scheduleMeetingDeclaration] }],
             systemInstruction: systemPrompt,
         });
@@ -211,21 +211,11 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         };
         const isSent = await (0, whatsappService_1.sendWhatsAppMessage)(integration, customerPhone, finalReply);
         console.log(`[WeBot] Reply ${isSent ? 'sent ✅' : 'FAILED ❌'} to ${customerPhone} for lead ${leadId}`);
-        // ── 9. Log conversation to CRM ──────────────────────────────────────────
-        const msgsRef = db.collection(`leads/${leadId}/messages`);
-        // Inbound message
-        await msgsRef.add({
-            idMessage: idMessage !== null && idMessage !== void 0 ? idMessage : null,
-            text: incomingMessage,
-            direction: 'inbound',
-            senderPhone: customerPhone,
-            source: 'whatsapp_ai_bot',
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            isRead: false,
-        });
-        // Outbound bot reply
+        // ── 9. Log bot reply to CRM ─────────────────────────────────────────────
+        // NOTE: The inbound message is already logged in webhookWhatsAppAI.ts
+        // before calling handleWeBotReply. We only log the BOT's outbound reply here.
         if (isSent) {
-            await msgsRef.add({
+            await db.collection(`leads/${leadId}/messages`).add({
                 text: finalReply,
                 direction: 'outbound',
                 senderPhone: 'bot',
