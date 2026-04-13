@@ -3,7 +3,7 @@ import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, 
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
-import WhatsAppBotSettings from '../components/settings/WhatsAppBotSettings';
+import WhatsAppBotSettings from '../components/settings/WeBotSettings';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
