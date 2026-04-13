@@ -15,7 +15,7 @@ import { ISRAEL_CITIES } from '../utils/constants';
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
-  { id: 'webot', label: 'עוזר חכם (WeBot)', icon: Bot },
+  { id: 'Bot AI', label: 'Bot ', icon: Bot },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
   { id: 'integrations', label: 'אינטגרציות', icon: Globe },
