@@ -46,12 +46,51 @@ export function getLiveTasks(
             orderBy('dueDate', 'asc')
         );
     } else {
-        q = query(
+        // Agents see tasks they created OR tasks explicitly assigned to them by an admin.
+        // Firestore doesn't support OR queries on different fields in one query,
+        // so we run two queries in parallel and merge the results.
+        const qCreated = query(
             collection(db, COLLECTION),
             where('agencyId', '==', agencyId),
             where('createdBy', '==', userId),
             orderBy('dueDate', 'asc')
         );
+
+        const qAssigned = query(
+            collection(db, COLLECTION),
+            where('agencyId', '==', agencyId),
+            where('assignedToAgentId', '==', userId),
+            orderBy('dueDate', 'asc')
+        );
+
+        let createdTasks: AppTask[] = [];
+        let assignedTasks: AppTask[] = [];
+
+        const mergeAndCallback = () => {
+            const seen = new Set<string>();
+            const merged = [...createdTasks, ...assignedTasks].filter(t => {
+                if (seen.has(t.id)) return false;
+                seen.add(t.id);
+                return true;
+            });
+            merged.sort((a: any, b: any) => {
+                const aTime = a.dueDate?.toMillis ? a.dueDate.toMillis() : 0;
+                const bTime = b.dueDate?.toMillis ? b.dueDate.toMillis() : 0;
+                return aTime - bTime;
+            });
+            callback(merged);
+        };
+
+        const unsubCreated = onSnapshot(qCreated,
+            (snap) => { createdTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeAndCallback(); },
+            onError
+        );
+        const unsubAssigned = onSnapshot(qAssigned,
+            (snap) => { assignedTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeAndCallback(); },
+            onError
+        );
+
+        return () => { unsubCreated(); unsubAssigned(); };
     }
 
     return onSnapshot(

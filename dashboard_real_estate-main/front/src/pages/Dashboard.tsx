@@ -194,6 +194,13 @@ export default function Dashboard() {
     : '';
   const innerWrap = isEditing ? 'pointer-events-none select-none h-full' : 'h-full';
 
+  const memoizedLayout = useMemo(() => {
+    return currentLayout.map(item => ({
+      ...item,
+      static: !isEditing
+    }));
+  }, [currentLayout, isEditing]);
+
   return (
     <div className="tour-dashboard max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 overflow-x-hidden" dir="rtl">
 
@@ -304,15 +311,19 @@ export default function Dashboard() {
       <div dir="ltr" ref={gridWrapperRef} className="w-full">
         <ResponsiveGridLayout
           width={gridWidth}
-          layouts={{ lg: currentLayout, md: currentLayout, sm: currentLayout, xs: currentLayout, xxs: currentLayout }}
+          layouts={{
+            lg: memoizedLayout,
+            md: memoizedLayout,
+            sm: memoizedLayout,
+            xs: memoizedLayout,
+            xxs: memoizedLayout
+          }}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
           cols={{ lg: 12, md: 12, sm: 12, xs: 1, xxs: 1 }}
           rowHeight={80}
           margin={[16, 16]}
           containerPadding={[0, 0]}
-          // @ts-ignore
           isDraggable={isEditing && !isMobile}
-          // @ts-ignore
           isResizable={isEditing && !isMobile}
           onLayoutChange={(layout: any) => handleLayoutChange(layout)}
         >

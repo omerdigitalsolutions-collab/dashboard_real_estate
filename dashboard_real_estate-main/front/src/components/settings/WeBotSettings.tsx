@@ -246,7 +246,7 @@ export default function WeBotSettings() {
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 3000);
     } catch(err) {
-        console.error('Failed to save WeBot config', err);
+        console.error('Failed to save WhatsApp Bot config', err);
     } finally {
         setIsSaving(false);
     }
@@ -272,7 +272,7 @@ export default function WeBotSettings() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white leading-tight">
-              הגדרות WeBot — עוזר ה-AI של המשרד
+              הגדרות WhatsApp Bot — עוזר ה-AI של המשרד
             </h1>
             <p className="text-sm text-slate-400 mt-1">
               הגדירו את סגנון הדיבור וגבולות הגזרה של הבוט שלכם.

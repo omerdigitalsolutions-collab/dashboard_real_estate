@@ -26,6 +26,8 @@ export default function Properties() {
     const { agency } = useAgency();
     const { userData } = useAuth();
     const isAdmin = userData?.role === 'admin';
+    const isAgent = userData?.role === 'agent';
+    const currentUid = userData?.uid;
     const isMobile = useMediaQuery('(max-width: 768px)');
 
     const [search, setSearch] = useState('');
@@ -387,6 +389,7 @@ export default function Properties() {
                     <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
                         {selectedPropertyIds.size > 0 && (
                             <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                                {/* Create deal from selection — everyone can */}
                                 <button
                                     onClick={() => {
                                         const selected = properties.filter(p => selectedPropertyIds.has(p.id));
@@ -397,13 +400,16 @@ export default function Properties() {
                                     <Handshake size={16} />
                                     צור עסקה ({selectedPropertyIds.size})
                                 </button>
-                                <button
-                                    onClick={handleBulkDelete}
-                                    className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-                                >
-                                    <Trash2 size={16} />
-                                    מחק ({selectedPropertyIds.size})
-                                </button>
+                                {/* Bulk delete — admin only */}
+                                {!isAgent && (
+                                    <button
+                                        onClick={handleBulkDelete}
+                                        className="inline-flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                    >
+                                        <Trash2 size={16} />
+                                        מחק ({selectedPropertyIds.size})
+                                    </button>
+                                )}
                             </div>
                         )}
                         <button
@@ -928,7 +934,7 @@ export default function Properties() {
                                                     צור עסקה
                                                 </button>
                                             )}
-                                            {!prop.readonly && !prop.isGlobalCityProperty && (
+                                            {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.agentId === currentUid) && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
                                                     className="p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded-lg transition-colors shrink-0"
@@ -1067,7 +1073,7 @@ export default function Properties() {
                                                                 <MessageCircle size={14} /> שת״פ
                                                             </a>
                                                         )}
-                                                        {!prop.readonly && !prop.isGlobalCityProperty && (
+                                                        {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.agentId === currentUid) && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
                                                                 className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
@@ -1085,7 +1091,7 @@ export default function Properties() {
                                                                 <Handshake size={16} />
                                                             </button>
                                                         )}
-                                                        {!prop.readonly && !prop.isGlobalCityProperty && (
+                                                        {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.agentId === currentUid) && (
                                                             <button
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();
@@ -1108,6 +1114,7 @@ export default function Properties() {
                                                                 <Trash2 size={16} />
                                                             </button>
                                                         )}
+
                                                     </div>
                                                 </td>
                                             </tr>

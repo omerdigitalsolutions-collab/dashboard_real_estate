@@ -25,6 +25,7 @@ import { updateDealStage, deleteDeal } from '../../services/dealService';
 import { Deal, DealStage, CustomDealStage, Property, Lead } from '../../types';
 import { Link } from 'react-router-dom';
 import { triggerWonConfetti } from '../../utils/effects';
+import { useAuth } from '../../context/AuthContext';
 
 // ─── Constants & Types ────────────────────────────────────────────────────────
 export const MANDATORY_STAGES: { id: DealStage; label: string; color: string; bg: string; border: string; headerBg: string }[] = [
@@ -45,6 +46,7 @@ function DealCard({
     seller?: Lead;
     property?: Property;
     isOverlay?: boolean;
+    canEdit?: boolean;
     onDelete: (id: string) => void;
     onClick?: (deal: Deal) => void;
 }) {
@@ -55,7 +57,7 @@ function DealCard({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: deal.id, data: { deal } });
+    } = useSortable({ id: deal.id, data: { deal }, disabled: !canEdit });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -102,12 +104,16 @@ function DealCard({
                 </div>
 
                 <div className="flex items-center gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onDelete(deal.id)} className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors" title="מחק עסקה">
-                        <Trash2 size={16} />
-                    </button>
-                    <div {...attributes} {...listeners} className="text-slate-300 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-50">
-                        <GripVertical size={16} />
-                    </div>
+                    {canEdit && (
+                        <>
+                            <button onClick={() => onDelete(deal.id)} className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors" title="מחק עסקה">
+                                <Trash2 size={16} />
+                            </button>
+                            <div {...attributes} {...listeners} className="text-slate-300 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-50">
+                                <GripVertical size={16} />
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -146,6 +152,8 @@ function DealsColumn({
     properties: Property[];
     onDelete: (id: string) => void;
     onOpenProfile: (deal: Deal) => void;
+    currentUid: string | undefined;
+    isAgent: boolean;
 }) {
     const { setNodeRef } = useDroppable({ id: stage.id });
     const totalCommission = deals.reduce((sum, d) => sum + (d.actualCommission ?? d.projectedCommission ?? 0), 0);
@@ -166,17 +174,21 @@ function DealsColumn({
 
             <div className="flex-1 overflow-y-auto p-3 space-y-3 pretty-scroll">
                 <SortableContext items={deals.map(d => d.id)} strategy={verticalListSortingStrategy}>
-                    {deals.map(deal => (
-                        <DealCard
-                            key={deal.id}
-                            deal={deal}
-                            buyer={deals.map(d => d.buyerId ? leads.find(l => l.id === d.buyerId) : undefined).find((_, i) => deals[i].id === deal.id)}
-                            seller={deals.map(d => d.sellerId ? leads.find(l => l.id === d.sellerId) : undefined).find((_, i) => deals[i].id === deal.id)}
-                            property={properties.find(p => p.id === deal.propertyId)}
-                            onDelete={onDelete}
-                            onClick={onOpenProfile}
-                        />
-                    ))}
+                    {deals.map(deal => {
+                        const canEdit = !isAgent || deal.createdBy === currentUid || deal.agentId === currentUid;
+                        return (
+                            <DealCard
+                                key={deal.id}
+                                deal={deal}
+                                buyer={deals.map(d => d.buyerId ? leads.find(l => l.id === d.buyerId) : undefined).find((_, i) => deals[i].id === deal.id)}
+                                seller={deals.map(d => d.sellerId ? leads.find(l => l.id === d.sellerId) : undefined).find((_, i) => deals[i].id === deal.id)}
+                                property={properties.find(p => p.id === deal.propertyId)}
+                                canEdit={canEdit}
+                                onDelete={onDelete}
+                                onClick={onOpenProfile}
+                            />
+                        );
+                    })}
                 </SortableContext>
             </div>
         </div>
@@ -189,6 +201,10 @@ import DealStagesModal from '../modals/DealStagesModal';
 import DealProfileModal from '../modals/DealProfileModal';
 
 export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
+    const { userData } = useAuth();
+    const isAgent = userData?.role === 'agent';
+    const currentUid = userData?.uid;
+
     const { deals: liveDealsHook, leads, properties, agencySettings } = useLiveDashboardData();
     const liveDeals = dealsProps ?? liveDealsHook;
     const [deals, setDeals] = useState<Deal[]>([]);
@@ -328,13 +344,15 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                     <h2 className="text-xl font-bold text-slate-900">לוח עסקאות דינמי</h2>
                     <p className="text-sm font-medium text-slate-500 mt-1">גרור עסקאות בין השלבים השונים למעקב חכם אחריהן</p>
                 </div>
-                <button
-                    onClick={() => setIsSettingsModalOpen(true)}
-                    className="p-2 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200"
-                    title="הגדרות סטטוסים"
-                >
-                    <Settings size={20} />
-                </button>
+                {!isAgent && (
+                    <button
+                        onClick={() => setIsSettingsModalOpen(true)}
+                        className="p-2 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors border border-slate-200"
+                        title="הגדרות סטטוסים"
+                    >
+                        <Settings size={20} />
+                    </button>
+                )}
             </div>
 
             <div className="p-4 sm:p-6 flex-grow overflow-x-hidden sm:overflow-x-auto overflow-y-auto bg-slate-50/30">
@@ -356,14 +374,16 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                                 items={deals.filter(d => d.stage === stage.id).map(d => d.id)}
                                 strategy={verticalListSortingStrategy}
                             >
-                                <DealsColumn
-                                    stage={stage}
-                                    deals={deals.filter(d => d.stage === stage.id)}
-                                    leads={leads}
-                                    properties={properties}
-                                    onDelete={handleDelete}
-                                    onOpenProfile={setProfileModalDeal}
-                                />
+                                    <DealsColumn
+                                        stage={stage}
+                                        deals={deals.filter(d => d.stage === stage.id)}
+                                        leads={leads}
+                                        properties={properties}
+                                        onDelete={handleDelete}
+                                        onOpenProfile={setProfileModalDeal}
+                                        currentUid={currentUid}
+                                        isAgent={isAgent}
+                                    />
                             </SortableContext>
                         ))}
 
@@ -387,6 +407,8 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                                         properties={properties}
                                         onDelete={handleDelete}
                                         onOpenProfile={setProfileModalDeal}
+                                        currentUid={currentUid}
+                                        isAgent={isAgent}
                                     />
                                 </SortableContext>
                             );

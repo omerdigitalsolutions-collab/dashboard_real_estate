@@ -36,7 +36,7 @@ const steps = [
     {
         id: 'automation',
         title: 'אוטומציות ושיווק חכם ✨',
-        subtitle: 'WeBot והקטלוג הדיגיטלי',
+        subtitle: 'WhatsApp Bot והקטלוג הדיגיטלי',
         description: 'לידים מקבלים מענה בשניות, נכסים מותאמים אישית לכל לקוח, והכל מסתנכרן אוטומטית ל-CRM.',
         icon: <Zap className="w-12 h-12 text-purple-400" />,
         color: 'from-purple-600 to-indigo-600'

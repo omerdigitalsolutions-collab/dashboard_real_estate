@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
+import { useAuth } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import PropertyMatcherModal from '../components/leads/PropertyMatcherModal';
@@ -46,6 +47,9 @@ type SortConfig = {
 export default function Leads() {
   const { leads = [], properties = [], loading } = useLiveDashboardData();
   const { data: agents } = useAgents();
+  const { userData } = useAuth();
+  const isAgent = userData?.role === 'agent';
+  const currentUid = userData?.uid;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller'>('buyer');
@@ -333,23 +337,26 @@ export default function Leads() {
                   <MessageCircle size={18} />
                   <span>וואטסאפ ({selectedLeadIds.size})</span>
                 </button>
-                <button
-                  onClick={async () => {
-                    if (!window.confirm(`למחוק ${selectedLeadIds.size} לידים? הפעולה אינה הפיכה.`)) return;
-                    const count = selectedLeadIds.size;
-                    try {
-                      await Promise.all([...selectedLeadIds].map(id => deleteLead(id)));
-                      setSelectedLeadIds(new Set());
-                      setToast({ show: true, message: `${count} לידים נמחקו`, type: 'success' });
-                    } catch {
-                      setToast({ show: true, message: 'שגיאה במחיקה', type: 'error' });
-                    }
-                  }}
-                  className="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 px-5 py-3.5 rounded-2xl font-bold hover:bg-red-500/20 transition-all shadow-lg"
-                >
-                  <Trash2 size={18} />
-                  <span>מחק ({selectedLeadIds.size})</span>
-                </button>
+                {/* Bulk delete: admin only */}
+                {!isAgent && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`למחוק ${selectedLeadIds.size} לידים? הפעולה אינה הפיכה.`)) return;
+                      const count = selectedLeadIds.size;
+                      try {
+                        await Promise.all([...selectedLeadIds].map(id => deleteLead(id)));
+                        setSelectedLeadIds(new Set());
+                        setToast({ show: true, message: `${count} לידים נמחקו`, type: 'success' });
+                      } catch {
+                        setToast({ show: true, message: 'שגיאה במחיקה', type: 'error' });
+                      }
+                    }}
+                    className="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 px-5 py-3.5 rounded-2xl font-bold hover:bg-red-500/20 transition-all shadow-lg"
+                  >
+                    <Trash2 size={18} />
+                    <span>מחק ({selectedLeadIds.size})</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -587,20 +594,26 @@ export default function Leads() {
                                 <MessageSquare size={18} />
                               </a>
                             )}
-                             <button
-                               onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
-                               className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all hover:scale-110"
-                               title="ערוך ליד"
-                             >
-                               <Pencil size={18} />
-                             </button>
-                             <button
-                               onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
-                               className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all hover:scale-110"
-                               title="מחק ליד"
-                             >
-                               <Trash2 size={18} />
-                             </button>
+                             {/* Edit — only for admin or assigned agent */}
+                             {(!isAgent || lead.assignedAgentId === currentUid) && (
+                               <button
+                                 onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
+                                 className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all hover:scale-110"
+                                 title="ערוך ליד"
+                               >
+                                 <Pencil size={18} />
+                               </button>
+                             )}
+                             {/* Delete — only for admin or assigned agent */}
+                             {(!isAgent || lead.assignedAgentId === currentUid) && (
+                               <button
+                                 onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead.id); }}
+                                 className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all hover:scale-110"
+                                 title="מחק ליד"
+                               >
+                                 <Trash2 size={18} />
+                               </button>
+                             )}
                           </div>
                         </td>
                       </tr>

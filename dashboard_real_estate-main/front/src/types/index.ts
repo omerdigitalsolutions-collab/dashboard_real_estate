@@ -250,7 +250,8 @@ export interface Deal {
 export interface AppTask {
     id: string;
     agencyId: string;
-    createdBy: string; // agentId
+    createdBy: string; // agentId of who created the task
+    assignedToAgentId?: string; // agentId of who the task is assigned to (may differ from createdBy)
     title: string;
     description?: string;
     dueDate: Timestamp;
@@ -265,6 +266,7 @@ export interface AppTask {
     googleEventId?: string;
     createdAt?: Timestamp;
 }
+
 
 // ─── Shared Catalogs ──────────────────────────────────────────────────────────
 export interface SharedCatalog {

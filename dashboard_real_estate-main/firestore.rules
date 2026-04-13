@@ -184,12 +184,18 @@ service cloud.firestore {
           && inAgency(request.resource.data.agencyId)
           && isBillingActiveForCaller();
 
+      // Admins can update any property. Agents can only update properties they own.
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
-          && isBillingActiveForCaller();
+          && isBillingActiveForCaller()
+          && (isAdmin() || resource.data.agentId == request.auth.uid);
 
-      allow delete: if false; // Must go through deleteProperty Cloud Function
+      // Admins can delete any property. Agents can only delete properties they own.
+      // Note: normally goes through deleteProperty Cloud Function, but this allows direct deletes for owned properties.
+      allow delete: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && (isAdmin() || resource.data.agentId == request.auth.uid);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -205,16 +211,17 @@ service cloud.firestore {
           && inAgency(request.resource.data.agencyId)
           && isBillingActiveForCaller();
 
-      // Updates allowed directly (e.g., status changes from the board)
-      // but agencyId must not change and billing must be active
+      // Updates: admins can update any lead. Agents can only update leads assigned to them.
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
           && isBillingActiveForCaller()
-          && (request.resource.data.get('createdBy', null) == resource.data.get('createdBy', null) || isAgencyAdmin(resource.data.agencyId))
-          && (request.resource.data.get('assignedTo', null) == resource.data.get('assignedTo', null) || isAgencyAdmin(resource.data.agencyId));
+          && (isAdmin() || resource.data.assignedAgentId == request.auth.uid);
 
-      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+      // Deletes: admins can delete any lead. Agents can only delete leads assigned to them.
+      allow delete: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && (isAdmin() || resource.data.assignedAgentId == request.auth.uid);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -240,30 +247,45 @@ service cloud.firestore {
           && isPositiveNumber(request.resource.data.projectedCommission)
           && isBillingActiveForCaller();
 
-      // Prevent regular agents from marking as Won or inflating commissions
+      // Admins can update any deal.
+      // Agents can only update deals they created — but cannot inflate commissions or force a 'won' stage.
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
+          && (isAdmin() || resource.data.createdBy == request.auth.uid)
           && (request.resource.data.stage == resource.data.stage || request.resource.data.stage != 'Won' || isAgencyAdmin(resource.data.agencyId))
           && (request.resource.data.projectedCommission == resource.data.projectedCommission || isAgencyAdmin(resource.data.agencyId))
           && (request.resource.data.actualCommission == resource.data.actualCommission || isAgencyAdmin(resource.data.agencyId));
 
-      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+      // Admins can delete any deal. Agents can only delete deals they created.
+      allow delete: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // TASKS
     // ══════════════════════════════════════════════════════════════════════════
     match /tasks/{taskId} {
-      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+      // Agents can read their own tasks or tasks assigned to them.
+      // Admins can read all tasks in their agency.
+      allow read: if isAuthed() && inAgency(resource.data.agencyId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
+
       allow create: if isAuthed()
           && inAgency(request.resource.data.agencyId)
           && isNonEmptyString(request.resource.data.title);
+
+      // Agents can update tasks they created OR tasks assigned to them (e.g. task completion).
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
-          && agencyIdUnchanged();
+          && agencyIdUnchanged()
+          && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
 
-      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+      // Agents can delete tasks they created. Admins can delete any task.
+      allow delete: if isAuthed()
+          && inAgency(resource.data.agencyId)
+          && (isAdmin() || resource.data.createdBy == request.auth.uid);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -272,19 +294,24 @@ service cloud.firestore {
     // from clients. Only allow reading and marking as read.
     // ══════════════════════════════════════════════════════════════════════════
     match /alerts/{alertId} {
+      // Agents can read their own personal alerts or agency-wide broadcasts.
       allow read: if isAuthed()
           && inAgency(resource.data.agencyId)
-          && resource.data.userId == request.auth.uid;
+          && (resource.data.targetAgentId == request.auth.uid || resource.data.targetAgentId == 'all');
 
       // Agents can only mark their own alerts as read
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
-          && resource.data.userId == request.auth.uid
+          && (resource.data.targetAgentId == request.auth.uid || resource.data.targetAgentId == 'all')
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
           && request.resource.data.isRead == true;
 
-      // Create/delete: Cloud Functions only (Admin SDK bypasses rules)
-      allow create, delete: if false;
+      // Alerts can be created by authenticated agency members (for task assignment notifications from the client).
+      // Agency admins can also create alerts.
+      allow create: if isAuthed() && inAgency(request.resource.data.agencyId);
+
+      // Delete: admin only
+      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

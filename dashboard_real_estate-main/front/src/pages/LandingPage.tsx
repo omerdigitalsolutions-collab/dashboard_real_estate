@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     CheckCircle2,
@@ -16,7 +16,12 @@ import {
     Mail,
     Clock,
     Loader2,
-    Sparkles
+    Sparkles,
+    CalendarDays,
+    Users,
+    GraduationCap,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -45,12 +50,149 @@ export default function LandingPage() {
     const [contactStatus, setContactStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [billingInterval, setBillingInterval] = useState<'monthly' | '6m' | '1year'>('monthly');
 
+    // Training Form State
+    const [trainingName, setTrainingName] = useState('');
+    const [trainingPhone, setTrainingPhone] = useState('');
+    const [trainingGoal, setTrainingGoal] = useState('');
+    const [trainingStatus, setTrainingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    // Calendar state
+    const today = new Date();
+    const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
+    const [calendarYear, setCalendarYear] = useState(today.getFullYear());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+
+    const TRAINING_SHEET_URL = 'https://script.google.com/macros/s/AKfycbycAFPIz7J4FC0gyVnBUStM1JkdtspCYkrndLzNFlP8pP-QnvIDCoIS_J4fPGT88zZ5UA/exec';
+
+    const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    
+    // Dynamic time slots based on selected date
+    const getTimeSlots = (date: Date | null) => {
+        if (!date) return [];
+        const slots = [];
+        const isFriday = date.getDay() === 5;
+        if (isFriday) {
+            // Friday: 08:00 to 17:00
+            for (let h = 8; h <= 16; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                }
+            }
+            slots.push('17:00');
+        } else {
+            // Weekdays (Sun-Thu): 18:00 to 21:00
+            for (let h = 18; h <= 20; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                }
+            }
+            slots.push('21:00');
+        }
+        return slots;
+    };
+    const timeSlots = getTimeSlots(selectedDate);
+
+    // Fetch booked slots when date changes
+    useEffect(() => {
+        if (!selectedDate) {
+            setBookedSlots([]);
+            return;
+        }
+
+        const fetchBookedSlots = async () => {
+            setIsLoadingSlots(true);
+            const dateStr = `${selectedDate.getDate()}/${selectedDate.getMonth() + 1}/${selectedDate.getFullYear()}`;
+            try {
+                // We add a cache buster to avoid getting old data
+                const response = await fetch(`${TRAINING_SHEET_URL}?date=${dateStr}&t=${Date.now()}`);
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    setBookedSlots(data);
+                }
+            } catch (err) {
+                console.error('Error fetching booked slots:', err);
+                setBookedSlots([]);
+            } finally {
+                setIsLoadingSlots(false);
+            }
+        };
+
+        fetchBookedSlots();
+        setSelectedTime(""); // Reset time when date changes to empty string for manual input
+    }, [selectedDate]);
+
+    const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (month: number, year: number) => {
+        const day = new Date(year, month, 1).getDay();
+        // Convert Sunday=0 to Saturday=6 system to Sunday=0
+        return day;
+    };
+
+    const handleTrainingSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Form Validation
+        const phoneRegex = /^05\d[- ]?\d{7}$/; 
+        const isPhoneValid = phoneRegex.test(trainingPhone);
+        const isTimeBooked = selectedTime && bookedSlots.includes(selectedTime);
+
+        if (!selectedDate || !selectedTime) {
+            alert('אנא בחרו תאריך ושעה להדרכה');
+            return;
+        }
+
+        if (!isPhoneValid) {
+            alert('אנא הזינו מספר טלפון ישראלי תקין (למשל: 050-0000000)');
+            return;
+        }
+
+        if (isTimeBooked) {
+            alert('מצטערים, השעה הזו כבר נתפסה. אנא בחרו שעה אחרת.');
+            return;
+        }
+
+        setTrainingStatus('loading');
+        const dateStr = `${selectedDate.getDate()}/${selectedDate.getMonth()+1}/${selectedDate.getFullYear()}`;
+        try {
+            await fetch(TRAINING_SHEET_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'training',
+                    name: trainingName,
+                    phone: trainingPhone,
+                    date: dateStr,
+                    time: selectedTime,
+                    goal: trainingGoal,
+                }),
+            });
+            setTrainingStatus('success');
+            setTrainingName('');
+            setTrainingPhone('');
+            setTrainingGoal('');
+            setSelectedDate(null);
+            setSelectedTime(null);
+        } catch (err) {
+            console.error(err);
+            setTrainingStatus('error');
+        }
+    };
+
+    const handleScrollToTraining = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const el = document.getElementById('training');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
     const handleContactSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setContactStatus('loading');
 
         // TODO: Replace this URL with the deployed Google Apps Script Web App URL
-        const GOOGLE_SCRIPT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz2XVMpUrISGf6TwoHOb9LFw_Q5AuGVpd7ZEbJBf0V9681fpbjSB9BDrvEMUUqrdelu/exec';
+        const GOOGLE_SCRIPT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbycAFPIz7J4FC0gyVnBUStM1JkdtspCYkrndLzNFlP8pP-QnvIDCoIS_J4fPGT88zZ5UA/exec';
 
         if (!GOOGLE_SCRIPT_WEBHOOK_URL) {
             console.warn('Google Apps Script URL is missing. Cannot submit form.');
@@ -104,7 +246,16 @@ export default function LandingPage() {
                 <div className="flex items-center" dir="ltr">
                     <img src="/homer-logo.png" alt="Homer CRM" className="h-14 md:h-20 w-auto" />
                 </div>
-                <div className="flex items-center gap-4 md:gap-6">
+                <div className="flex items-center gap-2 md:gap-4">
+                    {/* Training CTA - always visible */}
+                    <a
+                        href="#training"
+                        onClick={handleScrollToTraining}
+                        className="hidden sm:flex items-center gap-2 text-sm md:text-base font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-4 py-2 md:px-5 md:py-2 rounded-full transition-all hover:-translate-y-0.5 cursor-pointer"
+                    >
+                        <GraduationCap className="w-4 h-4" />
+                        הדרכה ללא עלות
+                    </a>
                     {userData ? (
                         <Link to="/dashboard" className="text-sm md:text-base font-bold bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 md:px-6 md:py-2.5 rounded-full shadow-lg shadow-blue-500/25 transition-all hover:-translate-y-0.5 flex items-center gap-2">
                             אל המערכת
@@ -670,7 +821,7 @@ export default function LandingPage() {
                                 איך עובדת ה"התאמה בין ליד לדירה"?
                             </h3>
                             <p className="text-slate-400 leading-relaxed pr-8">
-                                המערכת מצליבה נתונים בזמן אמת. כשנכנס לקוח שמחפש 4 חדרים עד 3 מיליון, המערכת סורקת את כל הנכסים ומציגה לכם מיד את ההתאמות המדויקות. הקליק הבא שלכם הוא כבר לשלוח לו וובוט (Webot) של הנכס.
+                                המערכת מצליבה נתונים בזמן אמת. כשנכנס לקוח שמחפש 4 חדרים עד 3 מיליון, המערכת סורקת את כל הנכסים ומציגה לכם מיד את ההתאמות המדויקות. הקליק הבא שלכם הוא כבר לשלוח לו WhatsApp Bot של הנכס.
                             </p>
                         </div>
 
@@ -710,6 +861,272 @@ export default function LandingPage() {
                 </div>
             </section>
             {/* --- FAQ SECTION END --- */}
+
+            {/* ── Training Scheduling Section ── */}
+            <section id="training" className="py-24 bg-gradient-to-br from-emerald-50 via-white to-teal-50 border-t border-emerald-100/80" dir="rtl">
+                <div className="max-w-5xl mx-auto px-6 lg:px-8">
+                    {/* Section Header */}
+                    <div className="text-center mb-12">
+                        <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-5 py-2 rounded-full text-sm font-black mb-6 border border-emerald-200">
+                            <GraduationCap className="w-4 h-4" />
+                            ללא עלות • ללא התחייבות
+                        </div>
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-4 tracking-tight">
+                            קבעו הדרכה על המערכת 🎓
+                        </h2>
+                        <p className="text-slate-600 text-lg max-w-2xl mx-auto">
+                            צוות hOMER מזמין אתכם להדרכה אישית ומקצועית, ללא עלות וללא התחייבות.
+                            נראה לכם בדיוק איך המערכת תחסוך לכם זמן ותייצר עסקאות.
+                        </p>
+                    </div>
+
+                    {trainingStatus === 'success' ? (
+                        <div className="bg-white rounded-[2rem] border border-emerald-200 shadow-xl p-12 flex flex-col items-center justify-center text-center max-w-xl mx-auto">
+                            <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                                <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-3">ההדרכה נקבעה! 🎉</h3>
+                            <p className="text-slate-600 text-lg mb-2">פרטיכם התקבלו בהצלחה.</p>
+                            <p className="text-slate-500">נחזור אליכם בהקדם לאישור מועד ההדרכה.</p>
+                            <button
+                                onClick={() => setTrainingStatus('idle')}
+                                className="mt-8 text-emerald-600 font-bold hover:text-emerald-700 transition"
+                            >
+                                חזור לטופס
+                            </button>
+                        </div>
+                    ) : (
+                        <form onSubmit={handleTrainingSubmit} className="bg-white rounded-[2rem] border border-slate-200 shadow-2xl shadow-emerald-500/5 overflow-hidden">
+                            <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x md:divide-x-reverse divide-slate-100">
+
+                                {/* LEFT: Calendar & Time */}
+                                <div className="p-8 md:p-10">
+                                    <div className="flex items-center gap-2 mb-6">
+                                        <CalendarDays className="w-5 h-5 text-emerald-500" />
+                                        <h3 className="text-lg font-black text-slate-800">בחרו מועד להדרכה</h3>
+                                    </div>
+
+                                    {/* Calendar Header */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); }
+                                                else setCalendarMonth(m => m - 1);
+                                            }}
+                                            className="p-2 rounded-xl hover:bg-slate-100 transition text-slate-500"
+                                        >
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                        <span className="font-black text-slate-800 text-base">
+                                            {hebrewMonths[calendarMonth]} {calendarYear}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); }
+                                                else setCalendarMonth(m => m + 1);
+                                            }}
+                                            className="p-2 rounded-xl hover:bg-slate-100 transition text-slate-500"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    {/* Day names */}
+                                    <div className="grid grid-cols-7 mb-1">
+                                        {['א','ב','ג','ד','ה','ו','ש'].map(d => (
+                                            <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
+                                        ))}
+                                    </div>
+
+                                    {/* Day cells */}
+                                    <div className="grid grid-cols-7 gap-0.5">
+                                        {Array.from({ length: getFirstDayOfMonth(calendarMonth, calendarYear) }).map((_, i) => (
+                                            <div key={`empty-${i}`} />
+                                        ))}
+                                        {Array.from({ length: getDaysInMonth(calendarMonth, calendarYear) }, (_, i) => i + 1).map(day => {
+                                            const date = new Date(calendarYear, calendarMonth, day);
+                                            const isToday = date.toDateString() === today.toDateString();
+                                            const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                            const isWeekend = date.getDay() === 6; // Saturday
+                                            const isSelected = selectedDate?.toDateString() === date.toDateString();
+                                            const disabled = isPast || isWeekend;
+                                            return (
+                                                <button
+                                                    key={day}
+                                                    type="button"
+                                                    disabled={disabled}
+                                                    onClick={() => setSelectedDate(date)}
+                                                    className={`aspect-square flex items-center justify-center rounded-xl text-sm font-bold transition-all
+                                                        ${isSelected ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-110' : ''}
+                                                        ${!isSelected && isToday ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-400' : ''}
+                                                        ${!isSelected && !isToday && !disabled ? 'hover:bg-emerald-50 hover:text-emerald-700 text-slate-700' : ''}
+                                                        ${disabled ? 'text-slate-300 cursor-not-allowed' : 'cursor-pointer'}
+                                                    `}
+                                                >
+                                                    {day}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Manual Time Input */}
+                                    <div className="mt-6">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <label htmlFor="training-time" className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                                                <Clock className="w-4 h-4 text-emerald-500" />
+                                                בחרו שעה למפגש:
+                                            </label>
+                                            {isLoadingSlots && <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />}
+                                        </div>
+                                        
+                                        {selectedDate ? (
+                                            <div className="space-y-3">
+                                                <div className="relative">
+                                                    <select
+                                                        id="training-time"
+                                                        value={selectedTime || ''}
+                                                        onChange={(e) => setSelectedTime(e.target.value)}
+                                                        className={`w-full bg-slate-50 border-2 rounded-xl px-5 py-4 text-lg font-black transition-all outline-none appearance-none cursor-pointer focus:ring-4
+                                                            ${bookedSlots.includes(selectedTime || '') 
+                                                                ? 'border-rose-300 bg-rose-50 text-rose-700 focus:ring-rose-500/10' 
+                                                                : 'border-slate-100 focus:border-emerald-500 focus:ring-emerald-500/10 text-slate-800'
+                                                            }`}
+                                                    >
+                                                        <option value="">בחרו שעה...</option>
+                                                        {(() => {
+                                                            const options = [];
+                                                            for (let h = 8; h <= 20; h++) {
+                                                                for (let m = 0; m < 60; m += 15) {
+                                                                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                                                                    options.push(<option key={time} value={time}>{time}</option>);
+                                                                }
+                                                            }
+                                                            options.push(<option key="21:00" value="21:00">21:00</option>);
+                                                            return options;
+                                                        })()}
+                                                    </select>
+                                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                                        <ChevronLeft className="w-5 h-5" />
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Messages & Validation */}
+                                                <div className="flex flex-col gap-2">
+                                                    {selectedTime && bookedSlots.includes(selectedTime) && (
+                                                        <div className="flex items-center gap-2 text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100 animate-in fade-in slide-in-from-top-1">
+                                                            <XCircle className="w-4 h-4" />
+                                                            <span className="text-sm font-bold">מצטערים, השעה הזו כבר תפוסה. אנא בחרו שעה אחרת.</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                                                <p className="text-sm text-slate-400 font-medium">אנא בחרו תאריך בלוח השנה תחילה</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {selectedDate && selectedTime && (
+                                        <div className="mt-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                                            <p className="text-emerald-700 font-black text-sm">
+                                                ✅ {selectedDate.getDate()}/{selectedDate.getMonth()+1}/{selectedDate.getFullYear()} בשעה {selectedTime}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* RIGHT: Personal Details */}
+                                <div className="p-8 md:p-10 flex flex-col gap-5">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Users className="w-5 h-5 text-emerald-500" />
+                                        <h3 className="text-lg font-black text-slate-800">פרטים אישיים</h3>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">שם מלא *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={trainingName}
+                                            onChange={e => setTrainingName(e.target.value)}
+                                            placeholder="ישראל ישראלי"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">טלפון *</label>
+                                        <input
+                                            type="tel"
+                                            required
+                                            value={trainingPhone}
+                                            onChange={e => setTrainingPhone(e.target.value)}
+                                            placeholder="050-0000000"
+                                            dir="ltr"
+                                            className={`w-full bg-slate-50 border-2 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none transition-all text-right
+                                                ${trainingPhone && !/^05\d[- ]?\d{7}$/.test(trainingPhone) 
+                                                    ? 'border-rose-200 focus:border-rose-500 bg-rose-50' 
+                                                    : 'border-slate-200 focus:border-emerald-500'
+                                                }`}
+                                        />
+                                        {trainingPhone && !/^05\d[- ]?\d{7}$/.test(trainingPhone) && (
+                                            <p className="text-xs text-rose-500 font-bold mt-1.5 flex items-center gap-1">
+                                                <XCircle className="w-3.5 h-3.5" />
+                                                מספר טלפון לא תקין
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">טקסט חופשי</label>
+                                        <textarea
+                                            value={trainingGoal}
+                                            onChange={e => setTrainingGoal(e.target.value)}
+                                            placeholder="למשל: להבין איך לנהל לידים, להגדיר בוט וואטסאפ..."
+                                            rows={3}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
+                                        />
+                                    </div>
+
+                                    {trainingStatus === 'error' && (
+                                        <p className="text-rose-500 text-sm font-bold text-center bg-rose-50 p-3 rounded-xl border border-rose-100">
+                                            אירעה שגיאה. אנא נסו שוב או פנו אלינו בוואטסאפ.
+                                        </p>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={
+                                            trainingStatus === 'loading' || 
+                                            !trainingName || 
+                                            !trainingPhone || 
+                                            !/^05\d[- ]?\d{7}$/.test(trainingPhone) ||
+                                            !selectedDate || 
+                                            !selectedTime || 
+                                            bookedSlots.includes(selectedTime)
+                                        }
+                                        className="w-full py-4 bg-gradient-to-l from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-lg text-center rounded-xl shadow-xl shadow-emerald-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {trainingStatus === 'loading' ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <GraduationCap className="w-5 h-5" />
+                                                קבע הדרכה ב-hOMER
+                                            </>
+                                        )}
+                                    </button>
+
+                                    <p className="text-xs text-slate-400 text-center">לאחר הגשת הטופס, הצוות שלנו יאשר את המועד בהקדם</p>
+                                </div>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </section>
 
             {/* Contact Form Section */}
             <section id="contact" className="py-24 bg-white border-t border-slate-200" dir="rtl">

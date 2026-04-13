@@ -32,7 +32,7 @@ const tourSteps: Step[] = [
     target: '.tour-webot',
     content: (
       <div className="text-right" dir="rtl">
-        <h3 className="text-lg font-bold text-slate-800 mb-2">WeBot והתאמות קסם ✨</h3>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">WhatsApp Bot והתאמות קסם ✨</h3>
         <p className="text-sm text-slate-600 leading-relaxed">
           צרו קטלוג דיגיטלי אישי (מיני-סייט) לכל לקוח בקליק אחד. כשלקוחות 'לייקקו' נכס, זה מסתנכרן חזרה ישירות לכאן, ל-CRM שלכם.
         </p>

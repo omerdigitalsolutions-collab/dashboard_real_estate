@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { addTask } from '../../services/taskService';
-import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target, CalendarDays } from 'lucide-react';
+import { addAlert } from '../../services/alertService';
+import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target, CalendarDays, UserCheck } from 'lucide-react';
 import { createCalendarEvent } from '../../services/calendarService';
+import { AppUser } from '../../types';
 
 interface AddTaskModalProps {
     isOpen: boolean;
     onClose: () => void;
-    // In a real scenario we might pass pre-fetched leads and properties here, 
-    // or fetch them internally. For now we will accept them as optional lists.
-    // If not provided, the entity selector won't show or will show a placeholder.
     leads?: { id: string, name: string }[];
     properties?: { id: string, address: string }[];
+    agents?: AppUser[];
 }
 
-export default function AddTaskModal({ isOpen, onClose, leads = [], properties = [] }: AddTaskModalProps) {
+export default function AddTaskModal({ isOpen, onClose, leads = [], properties = [], agents = [] }: AddTaskModalProps) {
     const { userData } = useAuth();
+    const isAdmin = userData?.role === 'admin';
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -23,6 +24,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
     const [dueDate, setDueDate] = useState('');
     const [relatedEntityType, setRelatedEntityType] = useState<'none' | 'lead' | 'property'>('none');
     const [relatedEntityId, setRelatedEntityId] = useState('');
+    const [assignedToAgentId, setAssignedToAgentId] = useState('');
     const [syncToGoogle, setSyncToGoogle] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,10 +35,10 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
             setTitle('');
             setDescription('');
             setPriority('Medium');
-            // Default due date to today
             setDueDate(new Date().toISOString().split('T')[0]);
             setRelatedEntityType('none');
             setRelatedEntityId('');
+            setAssignedToAgentId('');
             setSyncToGoogle(userData?.googleCalendar?.enabled || false);
             setError('');
         }
@@ -55,7 +57,6 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
 
         setIsSubmitting(true);
         try {
-            // Build task payload
             const taskData: any = {
                 title: title.trim(),
                 createdBy: userData.uid,
@@ -63,6 +64,10 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                 isCompleted: false,
                 dueDate: new Date(dueDate),
             };
+
+            if (assignedToAgentId) {
+                taskData.assignedToAgentId = assignedToAgentId;
+            }
 
             if (description.trim()) {
                 taskData.description = description.trim();
@@ -84,14 +89,27 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
             }
 
             const taskId = await addTask(userData.agencyId, taskData);
-            
+
+            // Send notification alert to the assigned agent (if different from creator)
+            if (assignedToAgentId && assignedToAgentId !== userData.uid) {
+                const assignedAgent = agents.find(a => a.uid === assignedToAgentId || a.id === assignedToAgentId);
+                const agentName = userData.name || 'המנהל';
+                await addAlert(userData.agencyId, {
+                    agencyId: userData.agencyId,
+                    targetAgentId: assignedToAgentId,
+                    title: 'משימה חדשה הוקצתה אליך',
+                    message: `${agentName} הקצה לך את המשימה: "${title.trim()}"${assignedAgent ? '' : ''}`,
+                    type: 'info',
+                    isRead: false,
+                    relatedTo: { id: taskId, type: 'task' },
+                });
+            }
+
             if (syncToGoogle) {
                 try {
                     await createCalendarEvent(taskId);
                 } catch (calErr) {
                     console.error('Failed to sync to Google Calendar:', calErr);
-                    // We don't block the modal close on calendar error, but maybe show a toast?
-                    // For now, just log it. The task is created successfully anyway.
                 }
             }
 
@@ -106,6 +124,9 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
 
     const inputClasses = "w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none bg-slate-50 focus:bg-white text-slate-700";
     const labelClasses = "block text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1.5";
+
+    // Filter agents list — show all agents in the agency for assignment
+    const assignableAgents = agents.filter(a => a.uid != null);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
@@ -188,6 +209,28 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                             />
                         </div>
 
+                        {/* Agent Assignment — Admin only */}
+                        {isAdmin && assignableAgents.length > 0 && (
+                            <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/50">
+                                <label className="block text-xs font-semibold text-emerald-700 mb-1.5 flex items-center gap-1.5">
+                                    <UserCheck size={14} /> שיוך משימה לסוכן
+                                </label>
+                                <p className="text-xs text-emerald-600/80 mb-3">הסוכן שנבחר יקבל התראה ויוכל לראות את המשימה בדאשבורד שלו.</p>
+                                <select
+                                    value={assignedToAgentId}
+                                    onChange={e => setAssignedToAgentId(e.target.value)}
+                                    className={inputClasses}
+                                >
+                                    <option value="">ללא שיוך (משימה אישית)</option>
+                                    {assignableAgents.map(agent => (
+                                        <option key={agent.uid || agent.id} value={agent.uid || agent.id}>
+                                            {agent.name} {agent.role === 'admin' ? '(מנהל)' : '(סוכן)'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         {/* Entity Selector */}
                         <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50">
                             <label className={`${labelClasses} text-blue-800`}><Target size={14} /> קישור לנכס או ליד</label>
@@ -247,8 +290,8 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                                     </div>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
+                                    <input
+                                        type="checkbox"
                                         className="sr-only peer"
                                         checked={syncToGoogle}
                                         onChange={e => setSyncToGoogle(e.target.checked)}

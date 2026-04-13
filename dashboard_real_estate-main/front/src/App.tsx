@@ -12,6 +12,7 @@ import VerifyPhonePage from './pages/VerifyPhonePage';
 import AgentJoin from './pages/AgentJoin';
 import AgentSetup from './pages/AgentSetup';
 import Dashboard from './pages/Dashboard';
+import AgentDashboard from './pages/AgentDashboard';
 import Leads from './pages/Leads';
 import Properties from './pages/Properties';
 import Transactions from './pages/Transactions';
@@ -46,8 +47,10 @@ function DashboardIndex() {
 
   if (loading) return null;
 
+  // Agents get their own personal dashboard (filtered to their own data).
+  // Admins get the full agency-wide dashboard.
   if (userData?.role === 'agent') {
-    return <Navigate to="/dashboard/transactions" replace />;
+    return <AgentDashboard />;
   }
 
   return <Dashboard />;

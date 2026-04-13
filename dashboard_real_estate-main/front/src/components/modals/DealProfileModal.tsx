@@ -3,6 +3,7 @@ import { X, Calendar, DollarSign, User, MapPin, Building2, TrendingUp, Clock, Fi
 import { Link } from 'react-router-dom';
 import { Deal, Lead, Property, CustomDealStage } from '../../types';
 import EditDealModal from './EditDealModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface DealProfileModalProps {
     deal: Deal;
@@ -16,6 +17,10 @@ interface DealProfileModalProps {
 
 export default function DealProfileModal({ deal, buyer, seller, property, stages, isOpen, onClose }: DealProfileModalProps) {
     const [isEditing, setIsEditing] = useState(false);
+    const { userData } = useAuth();
+    const isAgent = userData?.role === 'agent';
+    const currentUid = userData?.uid;
+    const canEdit = !isAgent || deal.createdBy === currentUid || deal.agentId === currentUid;
 
     if (!isOpen) return null;
 
@@ -45,13 +50,15 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
                     )}
 
                     <div className="absolute top-4 left-4 flex gap-2">
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-sm"
-                            title="ערוך עסקה"
-                        >
-                            <Edit2 size={20} />
-                        </button>
+                        {canEdit && (
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all shadow-sm"
+                                title="ערוך עסקה"
+                            >
+                                <Edit2 size={20} />
+                            </button>
+                        )}
                         <button
                             onClick={onClose}
                             className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all"

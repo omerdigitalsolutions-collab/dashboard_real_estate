@@ -67,7 +67,7 @@ export default function Header({ onMenuClick, onAskAI }: HeaderProps) {
           className="flex items-center gap-2 bg-gradient-to-l from-indigo-500 to-violet-600 text-white px-3 sm:px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity shadow-md shadow-indigo-200/50 flex-shrink-0"
         >
           <Sparkles size={15} />
-          <span className="hidden sm:inline">שאל את העוזר החכם</span>
+          <span className="hidden sm:inline">שאל את ה-AI</span>
         </button>
 
         {/* Import Excel Button */}

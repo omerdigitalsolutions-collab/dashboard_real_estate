@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 const navigation = [
-    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
+    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
     { name: 'לידים', href: '/dashboard/leads', icon: Contact },
     { name: 'עסקאות', href: '/dashboard/transactions', icon: Handshake },
     { name: 'נכסים', href: '/dashboard/properties', icon: Building2 },
@@ -35,6 +35,7 @@ const navigation = [
     { name: 'סוכנים', href: '/dashboard/agents', icon: Users, roles: ['admin'] },
     { name: 'הגדרות', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
 ];
+
 
 export default function DashboardLayout() {
     const { userData } = useAuth();
