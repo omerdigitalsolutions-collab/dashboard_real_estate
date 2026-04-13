@@ -3,7 +3,7 @@ import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, 
 import TeamManagement from '../components/settings/TeamManagement';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
-import WeBotSettings from '../components/settings/WeBotSettings';
+import WhatsAppBotSettings from '../components/settings/WhatsAppBotSettings';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
@@ -15,7 +15,7 @@ import { ISRAEL_CITIES } from '../utils/constants';
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
-  { id: 'Bot AI', label: 'Bot ', icon: Bot },
+  { id: 'whatsapp-bot', label: 'WhatsApp Bot', icon: Bot },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
   { id: 'integrations', label: 'אינטגרציות', icon: Globe },
@@ -46,7 +46,7 @@ export default function Settings() {
   const [agencyLogoUploading, setAgencyLogoUploading] = useState(false);
   const agencyLogoInputRef = useRef<HTMLInputElement>(null);
   const [agencyLogoUrl, setAgencyLogoUrl] = useState<string>('');
-  const [currentAgencySettings, setCurrentAgencySettings] = useState<any>(null); // To keep old settings intact
+  const [currentAgencySettings, setCurrentAgencySettings] = useState<any>(null);
 
   // Form states for goals
   const [monthlyRevenue, setMonthlyRevenue] = useState(0);
@@ -72,7 +72,6 @@ export default function Settings() {
     else toast.error(message);
   };
 
-  // Fetch Agency Data for goals and user data for profile
   useEffect(() => {
     if (userData?.name) setProfileName(userData.name);
     if (userData?.phone) setProfilePhone(userData.phone);
@@ -127,12 +126,9 @@ export default function Settings() {
 
     try {
       setIsUploading(true);
-      // Upload to storage (use auth uid for the storage path)
       const photoURL = await uploadProfilePicture(userData!.uid!, file);
-      // Update the Firestore doc using the actual document ID
       await updateUserProfile(docId!, { photoURL });
-      // The auth context listener should automatically pick up the new photoURL and update the UI
-      await refreshUserData(); // Force instant refresh 
+      await refreshUserData();
       showToast('תמונת הפרופיל עודכנה בהצלחה 🎉');
     } catch (err) {
       console.error('Failed to upload profile picture:', err);
@@ -182,7 +178,7 @@ export default function Settings() {
         name: profileName,
         phone: profilePhone
       });
-      await refreshUserData(); // Update UI immediately without refresh
+      await refreshUserData();
       showToast('הפרופיל עודכן בהצלחה! ✅');
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -224,10 +220,11 @@ export default function Settings() {
               <button
                 key={id}
                 onClick={() => setActiveSection(id)}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === id
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeSection === id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                }`}
               >
                 <Icon size={16} />
                 {label}
@@ -423,14 +420,12 @@ export default function Settings() {
             </div>
           )}
 
-
-
           {activeSection === 'team' && (
             <TeamManagement />
           )}
 
-          {activeSection === 'webot' && (
-            <WeBotSettings />
+          {activeSection === 'whatsapp-bot' && (
+            <WhatsAppBotSettings />
           )}
 
           {activeSection === 'goals' && (
@@ -548,7 +543,7 @@ export default function Settings() {
                       <Plus size={18} />
                     </button>
 
-                    {/* Autocomplete Dropdown - searches across all Israeli cities and settlements */}
+                    {/* Autocomplete Dropdown */}
                     {newCityInput.trim().length > 0 && (
                       <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
                         {ISRAEL_CITIES
@@ -566,7 +561,6 @@ export default function Settings() {
                               {city}
                             </li>
                           ))}
-                        {/* Always show "add custom" option if no exact match found */}
                         {!ISRAEL_CITIES.includes(newCityInput.trim()) && newCityInput.trim().length >= 2 && (
                           <li
                             onClick={() => {
@@ -597,11 +591,10 @@ export default function Settings() {
 
           {activeSection === 'integrations' && (
             <div className="space-y-6">
-              <WhatsAppSettings onConnected={() => setActiveSection('webot')} />
+              <WhatsAppSettings onConnected={() => setActiveSection('whatsapp-bot')} />
               <GoogleCalendarSettings />
             </div>
           )}
-
 
         </div>
       </div>
