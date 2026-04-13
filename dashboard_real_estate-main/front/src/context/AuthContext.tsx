@@ -167,8 +167,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const email = (firebaseUser.email || '').toLowerCase();
                         try {
                             let stubDoc = null;
+                            const urlParams = new URLSearchParams(window.location.search);
+                            const urlToken = urlParams.get('token');
 
-                            if (email) {
+                            if (urlToken) {
+                                console.log('[AuthContext] Found token in URL, checking by inviteToken');
+                                const tokenSnap = await getDocs(
+                                    query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
+                                );
+                                if (!tokenSnap.empty && tokenSnap.docs[0].data().uid === null) {
+                                    stubDoc = tokenSnap.docs[0];
+                                } else if (!tokenSnap.empty) {
+                                    console.log('[AuthContext] Token exists but is already linked to a user.');
+                                }
+                            }
+
+                            if (!stubDoc && email) {
                                 try {
                                     // Primary: composite query (needs index)
                                     const stubsSnap = await getDocs(

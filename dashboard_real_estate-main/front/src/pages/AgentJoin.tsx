@@ -9,6 +9,7 @@ import { Building2 } from 'lucide-react';
 interface InviteInfo {
     agencyName: string;
     agentName: string;
+    logoUrl?: string;
 }
 
 /**
@@ -58,19 +59,27 @@ export default function AgentJoin() {
             setStatus('signing-in');
             await signInWithPopup(auth, new GoogleAuthProvider());
             // AuthContext will detect the stub + redirect to /agent-setup automatically
-        } catch {
+        } catch (err: any) {
             setStatus('ready');
+            if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
+                alert('שגיאה במהלך ההתחברות. נסה שוב.');
+            }
         }
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-6" dir="rtl">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
-                {/* Header gradient */}
                 <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-10 py-10 text-center">
-                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <Building2 size={30} className="text-white" />
-                    </div>
+                    {info?.logoUrl ? (
+                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 overflow-hidden border border-white/20 shadow-lg relative p-2">
+                            <img src={info.logoUrl} alt="Agency Logo" className="w-full h-full object-contain" />
+                        </div>
+                    ) : (
+                        <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Building2 size={30} className="text-white" />
+                        </div>
+                    )}
                     <h1 className="text-2xl font-bold text-white">הוזמנת להצטרף!</h1>
                 </div>
 

@@ -38,6 +38,7 @@ function DealCard({
     seller,
     property,
     isOverlay,
+    canEdit = true,
     onDelete,
     onClick
 }: {
@@ -144,7 +145,9 @@ function DealsColumn({
     leads,
     properties,
     onDelete,
-    onOpenProfile
+    onOpenProfile,
+    currentUid,
+    isAgent
 }: {
     stage: CustomDealStage;
     deals: Deal[];

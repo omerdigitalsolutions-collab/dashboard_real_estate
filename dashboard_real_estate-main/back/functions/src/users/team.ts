@@ -383,13 +383,16 @@ export const getInviteInfo = onCall({ cors: true }, async (request) => {
     throw new HttpsError('already-exists', 'This invite has already been used.');
   }
 
-  // Fetch agency name
+  // Fetch agency name and logo
   const agencyDoc = await db.doc(`agencies/${stub.agencyId}`).get();
-  const agencyName = (agencyDoc.data() as { name?: string })?.name || 'הסוכנות';
+  const agencyData = agencyDoc.data() as { name?: string; agencyName?: string; settings?: { logoUrl?: string } };
+  const agencyName = agencyData?.agencyName || agencyData?.name || 'הסוכנות שלנו';
+  const logoUrl = agencyData?.settings?.logoUrl || null;
 
   return {
     agencyName,
     agentName: stub.name,
+    logoUrl,
     // email intentionally omitted — client has it from Google Auth
   };
 });
