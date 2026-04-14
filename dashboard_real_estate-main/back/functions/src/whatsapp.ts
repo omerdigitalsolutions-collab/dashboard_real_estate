@@ -857,9 +857,9 @@ export const whatsappWebhook = onRequest({
     if (cleanPhone.startsWith('972')) cleanPhone = '0' + cleanPhone.substring(3);
 
     // ── Message handling handled by webhookWhatsAppAI ────────────────────────
-    }
   } catch (err) {
     console.error('Webhook fatal error:', err);
   }
 });
+
 
