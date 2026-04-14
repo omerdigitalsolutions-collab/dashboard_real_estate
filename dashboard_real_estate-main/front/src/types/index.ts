@@ -122,6 +122,7 @@ export interface Lead {
     status: LeadStatus;
     requirements: {
         desiredCity: string[];
+        desiredNeighborhoods?: string[];
         maxBudget: number | null;
         minRooms: number | null;
         maxRooms: number | null;
@@ -135,6 +136,12 @@ export interface Lead {
         mustHaveSafeRoom: boolean;
         condition: 'new' | 'renovated' | 'needs_renovation' | 'any';
         urgency: 'immediate' | '1-3_months' | '3-6_months' | 'flexible';
+        weights?: {
+            budget: number;
+            rooms: number;
+            location: number;
+            amenities: number;
+        };
     };
     catalogId?: string | null;
     catalogUrl?: string | null;
@@ -217,6 +224,7 @@ export interface PendingLead {
     id: string;
     agencyId: string;
     phone: string;
+    name?: string | null;
     initialMessage: string;
     aiSummary?: string;
     aiIntent?: 'buy' | 'rent' | 'sell' | 'inquiry';
@@ -283,6 +291,7 @@ export interface SharedCatalog {
     likedPropertyIds?: string[];
     leadRequirements?: {
         desiredCity?: string[];
+        desiredNeighborhoods?: string[];
         maxBudget?: number | null;
         minRooms?: number | null;
         maxRooms?: number | null;
@@ -296,6 +305,12 @@ export interface SharedCatalog {
         mustHaveSafeRoom?: boolean;
         condition?: string;
         urgency?: string;
+        weights?: {
+            budget: number;
+            rooms: number;
+            location: number;
+            amenities: number;
+        };
     } | null;
     createdAt: Timestamp;
     expiresAt: Timestamp;

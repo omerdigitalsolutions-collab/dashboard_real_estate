@@ -373,7 +373,15 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                             <input
                                                 value={cityQuery}
                                                 onChange={handleCityQueryChange}
-                                                placeholder="חפש עיר, שכונה או רחוב... (למשל: תל אביב צפון)"
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        if (cityQuery.trim()) {
+                                                            addCityTag(cityQuery.trim());
+                                                        }
+                                                    }
+                                                }}
+                                                placeholder="חפש עיר, שכונה... (לחץ Enter להוספה)"
                                                 className={inputCls}
                                                 autoComplete="off"
                                             />

@@ -17,6 +17,7 @@ interface WeBotFormData {
   isActive: boolean;
   toneOfVoice: 'professional' | 'friendly_emoji' | 'direct_sales' | 'custom';
   customToneOfVoice: string;
+  newLeadPolicy: 'auto' | 'manual';
   fallbackPolicy: 'apologize' | 'collect' | 'human_handoff' | 'collect_details' | 'custom';
   customFallbackPolicy: string;
   muteDuration: '1h' | '12h' | '24h';
@@ -182,6 +183,7 @@ import { updateWeBotConfig, getAgencyData } from '../../services/agencyService';
 
 const DEFAULT_FORM: WeBotFormData = {
   isActive: true,
+  newLeadPolicy: 'auto',
   toneOfVoice: 'professional',
   customToneOfVoice: '',
   fallbackPolicy: 'human_handoff',
@@ -210,6 +212,7 @@ export default function WeBotSettings() {
         setForm(prev => ({
             ...prev,
             isActive: savedConfig.isActive !== false,
+            newLeadPolicy: savedConfig.newLeadPolicy ?? 'auto',
             toneOfVoice: savedConfig.tone ?? 'professional',
             customToneOfVoice: savedConfig.customTone ?? '',
             fallbackPolicy: savedConfig.fallbackAction ?? 'human_handoff',
@@ -235,6 +238,7 @@ export default function WeBotSettings() {
     try {
         const payload = {
             isActive: form.isActive,
+            newLeadPolicy: form.newLeadPolicy,
             tone: form.toneOfVoice,
             customTone: form.customToneOfVoice,
             fallbackAction: form.fallbackPolicy,
@@ -378,6 +382,34 @@ export default function WeBotSettings() {
               </div>
             )}
           </Field>
+        </SectionCard>
+
+        {/* ── Group New: Lead Management ─────────────────────────────────── */}
+        <SectionCard
+          icon={<MessageSquare size={16} />}
+          title="ניהול לידים חדשים"
+          badge="D"
+        >
+          <Field
+            label="מדיניות לידים חדשים"
+            hint="כיצד לטפל בהודעות ממספרים לא מוכרים?"
+          >
+            <StyledSelect
+              value={form.newLeadPolicy}
+              onChange={(v) => update('newLeadPolicy', v as WeBotFormData['newLeadPolicy'])}
+              disabled={disabled}
+            >
+              <option value="auto">⚡ יצירה אוטומטית (כל מספר חדש = ליד)</option>
+              <option value="manual">🔍 סינון חכם (Gemini מזהה כוונת נדל״ן, דורש אישור מנהל)</option>
+            </StyledSelect>
+          </Field>
+          
+          <div className="flex items-start gap-2.5 bg-blue-500/8 border border-blue-500/20 rounded-xl p-3.5 mt-4">
+            <Info size={14} className="text-blue-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-400 leading-relaxed">
+              במצב <strong>סינון חכם</strong>, הבוט ינתח כל הודעה נכנסת. הודעות ספאם יסוננו, והודעות רלוונטיות יעברו לרשימת ׳לידים ממתינים׳ לאישור ידני לפני שיצטרפו ל-CRM.
+            </p>
+          </div>
         </SectionCard>
 
         {/* ── Group B: AI Firewall ──────────────────────────────────── */}

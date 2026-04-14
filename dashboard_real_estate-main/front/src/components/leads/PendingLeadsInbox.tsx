@@ -114,6 +114,12 @@ export default function PendingLeadsInbox() {
                                     </div>
                                 </div>
 
+                                {lead.name && (
+                                    <div className="mb-2">
+                                        <p className="text-white font-black text-sm">{lead.name}</p>
+                                    </div>
+                                )}
+
                                 <div className="bg-slate-900/50 rounded-lg p-3 text-sm text-slate-300 mb-4 flex-1 line-clamp-3 leading-relaxed border border-slate-800 relative group/msg">
                                     {lead.aiSummary && (
                                         <div className="flex items-center gap-1.5 mb-2 py-1 px-2 bg-blue-500/10 border border-blue-500/20 rounded-md">
@@ -147,7 +153,10 @@ export default function PendingLeadsInbox() {
                                         <X size={16} /> דחה
                                     </button>
                                     <button
-                                        onClick={() => { setApproveModal(lead); setNewName(''); }}
+                                        onClick={() => { 
+                                            setApproveModal(lead); 
+                                            setNewName(lead.name || ''); 
+                                        }}
                                         disabled={processingId === lead.id}
                                         className="flex-1 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-sm hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-1.5 border border-emerald-500/30 disabled:opacity-50 shadow-lg shadow-emerald-500/10"
                                     >

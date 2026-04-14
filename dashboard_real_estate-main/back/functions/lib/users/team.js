@@ -1,15 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendAgentInvite = exports.joinWithCode = exports.saveAgencyJoinCode = exports.generateAgencyJoinCode = exports.addAgentManually = exports.completeAgentSetup = exports.getInviteInfo = exports.inviteAgent = exports.deleteAgent = exports.toggleAgentStatus = exports.updateAgentRole = void 0;
+exports.claimInviteToken = exports.sendAgentInvite = exports.joinWithCode = exports.saveAgencyJoinCode = exports.generateAgencyJoinCode = exports.addAgentManually = exports.completeAgentSetup = exports.getInviteInfo = exports.inviteAgent = exports.deleteAgent = exports.toggleAgentStatus = exports.updateAgentRole = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const params_1 = require("firebase-functions/params");
 const resend_1 = require("resend");
 const authGuard_1 = require("../config/authGuard");
+const crypto_1 = require("crypto");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = (0, firestore_1.getFirestore)();
-const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// ── Cryptographically secure token generation ──────────────────────────────────
+// Uses Node's crypto module instead of Math.random() to produce
+// 24 bytes of randomness → 48-char hex string (entropy: ~144 bits).
+const generateToken = () => (0, crypto_1.randomBytes)(24).toString('hex');
 const generateRandomSuffix = (length = 5) => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No O, 0, I, 1 to avoid confusion
     let result = '';
@@ -539,6 +543,31 @@ exports.joinWithCode = (0, https_1.onCall)({ cors: true }, async (request) => {
     }
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedCode = joinCode.trim().toUpperCase();
+    // 0. Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+        throw new https_1.HttpsError('invalid-argument', 'Invalid email address.');
+    }
+    // 0b. Abuse prevention: rate-limit per email (max 5 attempts per 10 min)
+    const rateLimitRef = db.collection('_rate_limits').doc(`joinCode_${normalizedEmail.replace(/[^a-z0-9]/g, '_')}`);
+    const rateLimitSnap = await rateLimitRef.get();
+    const now = Date.now();
+    const windowMs = 10 * 60 * 1000; // 10 minutes
+    if (rateLimitSnap.exists) {
+        const rl = rateLimitSnap.data();
+        if (now - rl.firstAttemptMs < windowMs && rl.count >= 5) {
+            throw new https_1.HttpsError('resource-exhausted', 'Too many attempts. Please wait 10 minutes before trying again.');
+        }
+        if (now - rl.firstAttemptMs >= windowMs) {
+            await rateLimitRef.set({ count: 1, firstAttemptMs: now });
+        }
+        else {
+            await rateLimitRef.update({ count: rl.count + 1 });
+        }
+    }
+    else {
+        await rateLimitRef.set({ count: 1, firstAttemptMs: now });
+    }
     // 1. Validate Code
     const codeSnap = await db.collection('joinCodes').doc(normalizedCode).get();
     if (!codeSnap.exists) {
@@ -672,5 +701,102 @@ exports.sendAgentInvite = (0, https_1.onCall)({ secrets: [resendApiKey], cors: t
         }
     }
     return { success: true, message: `הזמנה נשלחה בהצלחה ל-${normalizedEmail}` };
+});
+/**
+ * claimInviteToken — Called by the client when they authenticate with an invite token.
+ * This function securely looks up the stub, merges it into the user's permanent document,
+ * sets custom claims, and deletes the stub.
+ *
+ * Target: `users/{request.auth.uid}`
+ */
+exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) => {
+    if (!request.auth || !request.auth.uid) {
+        throw new https_1.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+    const { token } = request.data;
+    if (!(token === null || token === void 0 ? void 0 : token.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'Invite token is required.');
+    }
+    // Find the stub matching the token
+    const stubsSnap = await db.collection('users')
+        .where('inviteToken', '==', token.trim())
+        .limit(1)
+        .get();
+    let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+    // Fallback for legacy invitations (token was docId)
+    if (!stubDoc && token.trim().length >= 20) {
+        const legacyDoc = await db.collection('users').doc(token.trim()).get();
+        const legacyData = legacyDoc.data();
+        if (legacyDoc.exists && !(legacyData === null || legacyData === void 0 ? void 0 : legacyData.inviteToken)) {
+            stubDoc = legacyDoc;
+        }
+    }
+    if (!stubDoc || !stubDoc.exists) {
+        throw new https_1.HttpsError('not-found', 'Invite token not found.');
+    }
+    const stubData = stubDoc.data();
+    // Ensure it's not already linked to another Google account
+    if (stubData.uid && stubData.uid !== request.auth.uid) {
+        throw new https_1.HttpsError('permission-denied', 'Token is already linked to another account.');
+    }
+    // ── Verify Target Agency is active ──────────────────────────────────────────
+    const agencySnap = await db.doc(`agencies/${stubData.agencyId}`).get();
+    if (!agencySnap.exists) {
+        throw new https_1.HttpsError('not-found', 'The agency you are trying to join no longer exists.');
+    }
+    const agencyData = agencySnap.data();
+    if (agencyData.isActive === false) {
+        throw new https_1.HttpsError('failed-precondition', 'This agency is currently inactive.');
+    }
+    // Check billing — allow joining if no billing field, billing is active/paid, or trial is not expired
+    const billing = agencyData.billing;
+    if (billing) {
+        const status = billing.status;
+        const trialEndsAt = billing.trialEndsAt;
+        const isTrialing = status === 'trialing';
+        const trialExpired = trialEndsAt && trialEndsAt.toDate() < new Date();
+        if (status && status !== 'active' && status !== 'paid' && !(isTrialing && !trialExpired)) {
+            throw new https_1.HttpsError('failed-precondition', 'This agency\'s subscription has expired. Contact the agency admin.');
+        }
+    }
+    const userUid = request.auth.uid;
+    const userRef = db.collection('users').doc(userUid);
+    await db.runTransaction(async (transaction) => {
+        var _a;
+        const userSnap = await transaction.get(userRef);
+        if (userSnap.exists) {
+            // Migrate existing user to the new agency
+            transaction.update(userRef, {
+                agencyId: stubData.agencyId,
+                role: stubData.role,
+                inviteToken: token.trim(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp()
+            });
+        }
+        else {
+            // Link: create the user document using the stub's data
+            transaction.set(userRef, {
+                uid: userUid,
+                email: ((_a = request.auth) === null || _a === void 0 ? void 0 : _a.token.email) || stubData.email,
+                name: stubData.name || null,
+                phone: stubData.phone || null,
+                role: stubData.role,
+                agencyId: stubData.agencyId,
+                isActive: true,
+                inviteToken: token.trim(),
+                createdAt: firestore_1.FieldValue.serverTimestamp()
+            });
+        }
+        // Delete the stub document if its ID isn't the user's UID
+        if (stubDoc && stubDoc.id !== userUid) {
+            transaction.delete(stubDoc.ref);
+        }
+    });
+    // Finally, set the custom claims securely
+    await (0, auth_1.getAuth)().setCustomUserClaims(userUid, {
+        agencyId: stubData.agencyId,
+        role: stubData.role
+    });
+    return { success: true, agencyId: stubData.agencyId };
 });
 //# sourceMappingURL=team.js.map

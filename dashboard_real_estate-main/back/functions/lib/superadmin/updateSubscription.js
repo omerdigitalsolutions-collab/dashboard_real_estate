@@ -87,7 +87,7 @@ exports.superAdminReactivateBilling = functions.https.onCall({ cors: true }, asy
             newTrialEnd.setDate(newTrialEnd.getDate() + 7);
             await agencyRef.update({
                 'billing.status': 'trialing',
-                'billing.trialEndsAt': Timestamp.fromDate(newTrialEnd),
+                'billing.trialEndsAt': firestore_1.Timestamp.fromDate(newTrialEnd),
                 'status': 'active' // Ensure the agency itself is active
             });
             return { success: true, message: `Trial extended by 7 days until ${newTrialEnd.toLocaleDateString()}.` };

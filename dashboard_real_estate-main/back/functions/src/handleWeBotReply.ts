@@ -124,17 +124,6 @@ export async function handleWeBotReply(
     const lastHumanReplyAt   = leadData.lastHumanReplyAt?.toMillis?.() ?? 0;
     if (Date.now() - lastHumanReplyAt < muteMs) {
       console.log(`[WeBot] 🔇 Firewall mute active for lead ${leadId} — human replied ${Math.floor((Date.now() - lastHumanReplyAt) / 60000)} min ago.`);
-      // Still log inbound message so agent sees it in CRM
-      await db.collection(`leads/${leadId}/messages`).add({
-        idMessage: idMessage ?? null,
-        text: incomingMessage,
-        direction: 'inbound',
-        senderPhone: customerPhone,
-        source: 'whatsapp_ai_bot',
-        botMuted: true,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        isRead: false,
-      });
       return;
     }
 
