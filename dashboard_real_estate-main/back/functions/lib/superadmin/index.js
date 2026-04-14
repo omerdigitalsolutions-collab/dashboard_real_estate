@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.superAdminApproveAgency = exports.superAdminListAuthUsers = exports.superAdminSetUserStatus = exports.superAdminSetAgencyStatus = exports.superAdminUpdateAgencyPlan = exports.superAdminGetAgencyUsage = exports.setupSuperAdmin = exports.superAdminGetDashboardStats = exports.superAdminUpdateExpenses = void 0;
+exports.superAdminApproveAgency = exports.superAdminListAuthUsers = exports.superAdminSetUserStatus = exports.superAdminSetAgencyStatus = exports.superAdminReactivateBilling = exports.superAdminUpdateAgencyPlan = exports.superAdminGetAgencyUsage = exports.setupSuperAdmin = exports.superAdminGetDashboardStats = exports.superAdminUpdateExpenses = void 0;
 var finances_1 = require("./finances");
 Object.defineProperty(exports, "superAdminUpdateExpenses", { enumerable: true, get: function () { return finances_1.superAdminUpdateExpenses; } });
 var dashboard_1 = require("./dashboard");
@@ -11,6 +11,7 @@ var usage_1 = require("./usage");
 Object.defineProperty(exports, "superAdminGetAgencyUsage", { enumerable: true, get: function () { return usage_1.superAdminGetAgencyUsage; } });
 var updateSubscription_1 = require("./updateSubscription");
 Object.defineProperty(exports, "superAdminUpdateAgencyPlan", { enumerable: true, get: function () { return updateSubscription_1.superAdminUpdateAgencyPlan; } });
+Object.defineProperty(exports, "superAdminReactivateBilling", { enumerable: true, get: function () { return updateSubscription_1.superAdminReactivateBilling; } });
 var status_1 = require("./status");
 Object.defineProperty(exports, "superAdminSetAgencyStatus", { enumerable: true, get: function () { return status_1.superAdminSetAgencyStatus; } });
 Object.defineProperty(exports, "superAdminSetUserStatus", { enumerable: true, get: function () { return status_1.superAdminSetUserStatus; } });

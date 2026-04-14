@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions/v2';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 export const superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true

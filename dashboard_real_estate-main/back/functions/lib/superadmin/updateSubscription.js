@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.superAdminUpdateAgencyPlan = void 0;
+exports.superAdminReactivateBilling = exports.superAdminUpdateAgencyPlan = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const firestore_1 = require("firebase-admin/firestore");
 exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, async (request) => {
@@ -61,6 +61,44 @@ exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, asyn
     catch (error) {
         console.error('[superAdminUpdateAgencyPlan] Error:', error);
         throw new functions.https.HttpsError('internal', 'Failed to update agency plan.');
+    }
+});
+exports.superAdminReactivateBilling = functions.https.onCall({ cors: true }, async (request) => {
+    if (!request.auth || request.auth.token.superAdmin !== true) {
+        throw new functions.https.HttpsError('permission-denied', 'You must be a Super Admin to perform this action.');
+    }
+    const { agencyId, action } = request.data;
+    if (!agencyId || !action) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing required parameters: agencyId and action.');
+    }
+    const db = (0, firestore_1.getFirestore)();
+    const agencyRef = db.collection('agencies').doc(agencyId);
+    try {
+        if (action === 'activate') {
+            await agencyRef.update({
+                'billing.status': 'active',
+                'status': 'active'
+            });
+            return { success: true, message: `Agency reactivated (Status: active).` };
+        }
+        else if (action === 'extend') {
+            // Extend trial by 7 days from NOW
+            const newTrialEnd = new Date();
+            newTrialEnd.setDate(newTrialEnd.getDate() + 7);
+            await agencyRef.update({
+                'billing.status': 'trialing',
+                'billing.trialEndsAt': Timestamp.fromDate(newTrialEnd),
+                'status': 'active' // Ensure the agency itself is active
+            });
+            return { success: true, message: `Trial extended by 7 days until ${newTrialEnd.toLocaleDateString()}.` };
+        }
+        else {
+            throw new functions.https.HttpsError('invalid-argument', 'Invalid action.');
+        }
+    }
+    catch (error) {
+        console.error('[superAdminReactivateBilling] Error:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to perform billing action.');
     }
 });
 //# sourceMappingURL=updateSubscription.js.map
