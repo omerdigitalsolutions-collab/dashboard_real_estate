@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { RecaptchaVerifier, linkWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,10 @@ import { updateUserProfile } from '../services/userService';
 export default function VerifyPhonePage() {
     const { currentUser, requireOnboarding, refreshUserData } = useAuth();
     const location = useLocation() as { state?: { phone?: string; fromOnboarding?: boolean } };
+    const [params] = useSearchParams();
     const navigate = useNavigate();
+    
+    const token = params.get('token');
 
     const [phone, setPhone] = useState(location.state?.phone || '');
     const [step, setStep] = useState<'input' | 'send' | 'verify'>('input');
@@ -114,7 +117,15 @@ export default function VerifyPhonePage() {
                 await auth.currentUser.getIdToken(true);
             }
 
-            // --- New Onboarding Finalization Logic ---
+            // --- Agent Flow (if token exists) ---
+            if (token) {
+                // If we have a token, it means an agent is joining via code/invite
+                // We just linked their phone to Firebase Auth. Now we send them to setup.
+                navigate(`/agent-setup?token=${token}`, { replace: true });
+                return;
+            }
+
+            // --- New Onboarding Finalization Logic (Admins) ---
             const rawData = sessionStorage.getItem('onboarding_pending_data');
             if (rawData) {
                 const data = JSON.parse(rawData);
@@ -211,7 +222,10 @@ export default function VerifyPhonePage() {
                         </div>
                         <h2 className="text-2xl font-black text-white mb-2">אימות מספר נייד</h2>
                         <p className="text-slate-400 text-sm">
-                            לפני שנתחיל להקים את המשרד שלך, עלינו לאמת את מספר הטלפון הראשי של הסוכנות לאבטחה מירבית.
+                            {token 
+                                ? 'לפני שנמשיך, עלינו לאמת את מספר הטלפון שלך לאבטחה מירבית.'
+                                : 'לפני שנתחיל להקים את המשרד שלך, עלינו לאמת את מספר הטלפון הראשי של הסוכנות לאבטחה מירבית.'
+                            }
                         </p>
                     </div>
 

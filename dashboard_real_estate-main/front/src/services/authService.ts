@@ -1,5 +1,5 @@
 import { signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, googleProvider, functions } from '../config/firebase';
 
@@ -157,4 +157,41 @@ export const findUserByEmail = async (email: string): Promise<{ docId: string } 
 export const linkStubUser = async (stubDocId: string, uid: string): Promise<void> => {
     const userRef = doc(db, 'users', stubDocId);
     await updateDoc(userRef, { uid });
+};
+
+/**
+ * Migrates an existing user document to a new agency based on a stub invite.
+ * Merges agencyId, role, and inviteToken into the user's permanent doc at /users/{uid}.
+ */
+export const migrateUserToInvite = async (uid: string, stubId: string): Promise<void> => {
+    const userRef = doc(db, 'users', uid);
+    const stubRef = doc(db, 'users', stubId);
+    
+    const stubSnap = await getDoc(stubRef);
+    if (!stubSnap.exists()) return;
+
+    const { agencyId, role, inviteToken } = stubSnap.data();
+    
+    // Update the permanent document with the new agency/role/token
+    await updateDoc(userRef, { agencyId, role, inviteToken });
+    
+    // Delete the stub document
+    await deleteDoc(stubRef);
+};
+
+/**
+ * Internal system join via code — validates the code and creates/updates a stub user.
+ * Returns the inviteToken.
+ */
+export const joinWithCode = async (email: string, joinCode: string): Promise<string> => {
+    try {
+        const fn = httpsCallable<{ email: string; joinCode: string }, { success: boolean; inviteToken: string }>(
+            functions, 'users-joinWithCode'
+        );
+        const result = await fn({ email, joinCode });
+        return result.data.inviteToken;
+    } catch (error) {
+        console.error('[authService] Error joining with code:', error);
+        throw error;
+    }
 };

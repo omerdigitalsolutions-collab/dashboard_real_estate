@@ -10,8 +10,10 @@ import {
     updateDoc,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, storage, functions } from '../config/firebase';
 import { Agency, AgencySpecialization } from '../types';
+
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
@@ -148,4 +150,21 @@ export async function uploadAndSaveAgencyLogo(
     });
 
     return url;
+}
+
+/**
+ * Generates a unique join code suggestion for the agency.
+ */
+export async function generateJoinCode(): Promise<string> {
+    const fn = httpsCallable<any, { joinCode: string }>(functions, 'users-generateAgencyJoinCode');
+    const res = await fn();
+    return res.data.joinCode;
+}
+
+/**
+ * Saves a join code for the agency and enables/disables it.
+ */
+export async function saveJoinCode(joinCode: string, isEnabled: boolean): Promise<void> {
+    const fn = httpsCallable<{ joinCode: string; isEnabled: boolean }, { success: boolean }>(functions, 'users-saveAgencyJoinCode');
+    await fn({ joinCode, isEnabled });
 }

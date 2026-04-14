@@ -310,12 +310,15 @@ exports.getInviteInfo = (0, https_1.onCall)({ cors: true }, async (request) => {
     if (stub.uid) {
         throw new https_1.HttpsError('already-exists', 'This invite has already been used.');
     }
-    // Fetch agency name
+    // Fetch agency name and logo
     const agencyDoc = await db.doc(`agencies/${stub.agencyId}`).get();
-    const agencyName = ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'הסוכנות';
+    const agencyData = agencyDoc.data();
+    const agencyName = (agencyData === null || agencyData === void 0 ? void 0 : agencyData.agencyName) || (agencyData === null || agencyData === void 0 ? void 0 : agencyData.name) || 'הסוכנות שלנו';
+    const logoUrl = ((_a = agencyData === null || agencyData === void 0 ? void 0 : agencyData.settings) === null || _a === void 0 ? void 0 : _a.logoUrl) || null;
     return {
         agencyName,
         agentName: stub.name,
+        logoUrl,
         // email intentionally omitted — client has it from Google Auth
     };
 });

@@ -25,10 +25,15 @@ export default function AgentSetup() {
     const [done, setDone] = useState(false);
     const [error, setError] = useState('');
 
-    // Pre-fill name from stub data if available
+    // Pre-fill name and phone from stub data or Firebase Auth if available
     useEffect(() => {
         if (userData?.name) setName(userData.name);
-        if (userData?.phone) setPhone(userData.phone);
+        if (userData?.phone) {
+            setPhone(userData.phone);
+        } else if (auth.currentUser?.phoneNumber) {
+            // Pre-fill from verified phone if userData (Firestore) doesn't have it yet
+            setPhone(auth.currentUser.phoneNumber);
+        }
     }, [userData]);
 
     // If no token, redirect away

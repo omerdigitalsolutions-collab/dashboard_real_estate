@@ -30,20 +30,10 @@ export default function AgentJoin() {
     const [errorMsg, setErrorMsg] = useState('');
     const { userData } = useAuth();
 
-    useEffect(() => {
-        let timeoutId: NodeJS.Timeout;
-        if (status === 'signing-in' && userData) {
-            // Wait a moment to ensure AuthContext didn't redirect us to agent-setup.
-            // If we are still here after 1.5s, it means the user was an existing 
-            // user and AuthContext just loaded their profile instead of linking a stub.
-            timeoutId = setTimeout(() => {
-                setStatus('error');
-                setErrorMsg('חשבון גוגל זה כבר רשום במערכת ולא ניתן לחברו להזמנה זו. כדי לקבל את ההזמנה, אנא התחבר מחדש עם חשבון גוגל אחר. במידה וזהו חשבונך, תוכל פשוט להיכנס למערכת.');
-                signOut(auth).catch(() => {});
-            }, 1000);
-        }
-        return () => clearTimeout(timeoutId);
-    }, [status, userData]);
+    // Since AuthContext now handles linking/migrating even for existing users
+    // and redirects to /agent-setup automatically, we no longer need to 
+    // block existing users here.
+
 
     useEffect(() => {
         if (!token) {

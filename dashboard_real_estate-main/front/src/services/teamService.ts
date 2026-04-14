@@ -47,6 +47,17 @@ export async function inviteAgent(
 }
 
 /**
+ * Sends a formal invitation email to an agent via Resend.
+ * Validates the caller is an admin server-side.
+ */
+export async function sendAgentInvite(email: string): Promise<void> {
+    const fn = httpsCallable<{ email: string }, { success: boolean }>(
+        functions, 'users-sendAgentInvite'
+    );
+    await fn({ email });
+}
+
+/**
  * [Cloud Function] Updates the role of a team member.
  * RBAC enforcement and same-agency verification are done server-side.
  */

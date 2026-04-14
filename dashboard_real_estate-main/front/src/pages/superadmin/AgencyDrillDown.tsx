@@ -16,7 +16,9 @@ import {
     Activity,
     MapPin,
     AlertCircle,
-    UserCircle2
+    UserCircle2,
+    Power,
+    CalendarPlus
 } from 'lucide-react';
 
 import { httpsCallable } from 'firebase/functions';
@@ -209,6 +211,26 @@ export default function AgencyDrillDown() {
         }
     };
 
+    const handleReactivateBilling = async (action: 'activate' | 'extend') => {
+        const confirmMsg = action === 'activate' 
+            ? 'האם אתה בטוח שברצונך להפעיל את המערכת לסוכנות זו באופן קבוע?' 
+            : 'האם אתה בטוח שברצונך להאריך את תקופת הניסיון ב-7 ימים נוספים?';
+        
+        if (!window.confirm(confirmMsg)) return;
+
+        try {
+            setLoading(true);
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminReactivateBilling');
+            await fn({ agencyId: agency.id, action });
+            alert(action === 'activate' ? "המערכת הופעלה בהצלחה!" : "תקופת הניסיון הוארכה בהצלחה!");
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Billing Action Error:', err);
+            alert("שגיאה בביצוע הפעולה: " + err.message);
+            setLoading(false);
+        }
+    };
+
     const primaryManager = managers.length > 0 ? managers[0] : null;
     const activeProperties = properties.filter(p => p.status === 'active');
 
@@ -236,10 +258,30 @@ export default function AgencyDrillDown() {
                 </button>
                 <div>
                     <h1 className="text-2xl font-black text-white">{agency.name || 'ללא שם'}</h1>
-                    <div className="flex items-center gap-3 mt-1.5 text-sm font-medium">
+                    <div className="flex items-center gap-3 mt-1.5 text-sm font-medium flex-wrap">
                         <span className="text-cyan-400 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> סוכנות רשומה</span>
                         <span className="text-slate-600">|</span>
                         <span className="text-slate-400">הוקם ב: {formatDate(agency.createdAt)}</span>
+                        
+                        {agency.billing?.status && (
+                            <>
+                                <span className="text-slate-600">|</span>
+                                <span className={`flex items-center gap-1.5 ${agency.billing.status === 'active' || agency.billing.status === 'paid' ? 'text-emerald-400' : 'text-orange-400'}`}>
+                                    {agency.billing.status === 'trialing' ? 'בתקופת ניסיון' : 
+                                     agency.billing.status === 'active' ? 'פעיל' :
+                                     agency.billing.status === 'past_due' ? 'חוב בפיגור' :
+                                     agency.billing.status === 'canceled' ? 'מבוטל' : agency.billing.status}
+                                </span>
+                            </>
+                        )}
+
+                        {agency.billing?.trialEndsAt && (
+                            <>
+                                <span className="text-slate-600">|</span>
+                                <span className="text-slate-400">סיום ניסיון: {formatDate(agency.billing.trialEndsAt)}</span>
+                            </>
+                        )}
+
                         {agency.planId && (
                             <>
                                 <span className="text-slate-600">|</span>
@@ -257,6 +299,26 @@ export default function AgencyDrillDown() {
                             </>
                         )}
                     </div>
+                </div>
+                
+                {/* Billing Actions */}
+                <div className="mr-auto flex items-center gap-3" dir="rtl">
+                    <button
+                        onClick={() => handleReactivateBilling('extend')}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 text-sm font-bold transition-all disabled:opacity-50"
+                    >
+                        <CalendarPlus className="w-4 h-4" />
+                        הארך ניסיון (7 ימים)
+                    </button>
+                    <button
+                        onClick={() => handleReactivateBilling('activate')}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-sm font-bold transition-all disabled:opacity-50"
+                    >
+                        <Power className="w-4 h-4" />
+                        הפעל מערכת
+                    </button>
                 </div>
             </div>
 

@@ -180,6 +180,13 @@ export default function Dashboard() {
     return baseMonthly;
   };
 
+  const memoizedLayout = useMemo(() => {
+    return currentLayout.map(item => ({
+      ...item,
+      static: !isEditing
+    }));
+  }, [currentLayout, isEditing]);
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center min-h-[500px]">
@@ -193,13 +200,6 @@ export default function Dashboard() {
     ? 'ring-2 ring-dashed ring-blue-400 ring-offset-1 cursor-grab active:cursor-grabbing rounded-2xl'
     : '';
   const innerWrap = isEditing ? 'pointer-events-none select-none h-full' : 'h-full';
-
-  const memoizedLayout = useMemo(() => {
-    return currentLayout.map(item => ({
-      ...item,
-      static: !isEditing
-    }));
-  }, [currentLayout, isEditing]);
 
   return (
     <div className="tour-dashboard max-w-screen-2xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 overflow-x-hidden" dir="rtl">

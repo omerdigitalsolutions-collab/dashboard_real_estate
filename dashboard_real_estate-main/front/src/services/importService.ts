@@ -264,12 +264,19 @@ export function validateAndTransform(
 
         // Apply mapping
         for (const [excelCol, firestoreField] of Object.entries(mapping)) {
-            if (firestoreField && rawRow[excelCol] !== undefined) {
+            const val = rawRow[excelCol];
+            if (firestoreField && val !== undefined && val !== null && val !== '') {
                 if (firestoreField.startsWith('__custom__')) {
                     const customKey = firestoreField.substring(10); // remove __custom__
-                    customData[customKey] = rawRow[excelCol];
+                    customData[customKey] = val;
+                } else if (firestoreField === 'address' && transformed[firestoreField]) {
+                    // Smart join for address parts (e.g. Street Name + House Number)
+                    transformed[firestoreField] = `${transformed[firestoreField]} ${val}`;
+                } else if ((firestoreField === 'description' || firestoreField === 'notes') && transformed[firestoreField]) {
+                    // Join multiple description/notes columns with newline
+                    transformed[firestoreField] = `${transformed[firestoreField]}\n${val}`;
                 } else {
-                    transformed[firestoreField] = rawRow[excelCol];
+                    transformed[firestoreField] = val;
                 }
             }
         }
@@ -547,9 +554,15 @@ async function buildAgentMap(agencyId: string): Promise<Map<string, string>> {
 }
 
 function resolveAgent(row: TransformedRow, agentMap: Map<string, string>, fallback: string): string {
+    // 1. Try resolving by email (most precise)
+    if (row.agentEmail) {
+        const email = String(row.agentEmail).trim().toLowerCase();
+        if (agentMap.has(email)) return agentMap.get(email)!;
+    }
+    // 2. Try resolving by name
     if (row.agentName) {
-        const key = String(row.agentName).trim().toLowerCase();
-        if (agentMap.has(key)) return agentMap.get(key)!;
+        const name = String(row.agentName).trim().toLowerCase();
+        if (agentMap.has(name)) return agentMap.get(name)!;
     }
     return fallback;
 }
@@ -605,6 +618,7 @@ function buildPropertyDefaults(
         hasSafeRoom: row.hasSafeRoom ?? null,
         hasBars: row.hasBars ?? null,
         hasAirCondition: row.hasAirCondition ?? null,
+        neighborhood: row.neighborhood || null,
         externalAgencyName: row.externalAgencyName || null,
         externalContactName: row.externalContactName || null,
         createdAt: serverTimestamp(),

@@ -11,6 +11,7 @@ import Onboarding from './pages/Onboarding';
 import VerifyPhonePage from './pages/VerifyPhonePage';
 import AgentJoin from './pages/AgentJoin';
 import AgentSetup from './pages/AgentSetup';
+import JoinByCode from './pages/JoinByCode';
 import Dashboard from './pages/Dashboard';
 import AgentDashboard from './pages/AgentDashboard';
 import Leads from './pages/Leads';
@@ -73,6 +74,7 @@ function App() {
           <Route path="/catalog/:token" element={<SharedCatalogPage />} />
           {/* Agent invite join page — token is Firestore stub ID */}
           <Route path="/join" element={<AgentJoin />} />
+          <Route path="/join-agency" element={<JoinByCode />} />
         </Route>
 
         {/* Onboarding (new agency admins) - Now public for Step 0 lead capture */}

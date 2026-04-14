@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings, updateAgencyName } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings, updateAgencyName, generateJoinCode, saveJoinCode } from '../services/agencyService';
+import { Copy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { isValidPhone } from '../utils/validation';
 import { ISRAEL_CITIES } from '../utils/constants';
 
@@ -66,6 +67,12 @@ export default function Settings() {
   // Global settings
   const [activeGlobalCities, setActiveGlobalCities] = useState<string[]>([]);
   const [newCityInput, setNewCityInput] = useState('');
+  
+  // Join code states
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [isJoinCodeEnabled, setIsJoinCodeEnabled] = useState(false);
+  const [isJoinCodeSaving, setIsJoinCodeSaving] = useState(false);
+  const [isJoinCodeGenerating, setIsJoinCodeGenerating] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'success') toast.success(message);
@@ -88,6 +95,9 @@ export default function Settings() {
 
       const loadedCities = agency.settings?.activeGlobalCities || (agency.mainServiceArea ? [agency.mainServiceArea] : []);
       setActiveGlobalCities(loadedCities);
+      
+      setJoinCodeInput(agency.joinCode || '');
+      setIsJoinCodeEnabled(agency.isJoinCodeEnabled ?? false);
     });
     return () => unsub();
   }, [userData?.agencyId]);
@@ -204,6 +214,38 @@ export default function Settings() {
     } finally {
       setAgencyNameSaving(false);
     }
+  };
+
+  const handleGenerateJoinCode = async () => {
+    try {
+      setIsJoinCodeGenerating(true);
+      const newCode = await generateJoinCode();
+      setJoinCodeInput(newCode);
+      showToast('הופק קוד רנדומלי חדש! אל תשכח לשמור ✨');
+    } catch (err: any) {
+      showToast(err.message || 'שגיאה בהפקת קוד.', 'error');
+    } finally {
+      setIsJoinCodeGenerating(false);
+    }
+  };
+
+  const handleSaveJoinCode = async () => {
+    if (!userData?.agencyId || !joinCodeInput.trim()) return;
+    try {
+      setIsJoinCodeSaving(true);
+      await saveJoinCode(joinCodeInput.trim().toUpperCase(), isJoinCodeEnabled);
+      showToast('קוד ההצטרפות עודכן בהצלחה! 🔐');
+    } catch (err: any) {
+      showToast(err.message || 'שגיאה בשמירת הקוד.', 'error');
+    } finally {
+      setIsJoinCodeSaving(false);
+    }
+  };
+
+  const copyJoinLink = () => {
+    const link = `${window.location.origin}/join-agency`;
+    navigator.clipboard.writeText(link);
+    showToast('קישור ההצטרפות הועתק ללוח! 📋');
   };
 
   return (
@@ -421,7 +463,86 @@ export default function Settings() {
           )}
 
           {activeSection === 'team' && (
-            <TeamManagement />
+            <div className="space-y-6">
+              <TeamManagement />
+              
+               {/* Join Code Section */}
+               {userData?.role === 'admin' && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mt-8 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-2 pb-2 mb-4 border-b border-slate-100">
+                    <ShieldCheck size={18} className="text-violet-500" />
+                    <h3 className="font-bold text-slate-800 text-sm">קוד הצטרפות לסוכנות</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    סוכנים יוכלו להצטרף למשרד שלך באופן עצמאי על ידי הזנת הקוד הזה בדף מיוחד. תוכל תמיד לשנות את הקוד או לכבות אפשרות זו.
+                  </p>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800">הפעלת הצטרפות בקוד</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">סוכנים יכולים להתחבר באמצעות הקוד</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={isJoinCodeEnabled}
+                          onChange={(e) => setIsJoinCodeEnabled(e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                    </div>
+
+                    {isJoinCodeEnabled && (
+                      <div className="space-y-4 pt-4 border-t border-slate-200">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1.5">הגדרת קוד (אותיות באנגלית ומספרים בלבד)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={joinCodeInput}
+                              onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                              placeholder="HOMER-12345"
+                              className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 font-bold tracking-widest"
+                              dir="ltr"
+                            />
+                            <button
+                              onClick={handleGenerateJoinCode}
+                              disabled={isJoinCodeGenerating}
+                              className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center title='צור קוד אקראי'"
+                              title="צור קוד רנדומלי"
+                            >
+                              <RefreshCw size={18} className={isJoinCodeGenerating ? 'animate-spin' : ''} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={handleSaveJoinCode}
+                            disabled={isJoinCodeSaving || !joinCodeInput.trim() || joinCodeInput.trim().length < 4}
+                            className="bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                          >
+                            {isJoinCodeSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            שמור קוד והגדרות
+                          </button>
+                          
+                          <button
+                            onClick={copyJoinLink}
+                            type="button"
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-semibold transition-all shadow-sm"
+                          >
+                            <Copy size={16} className="text-slate-400" />
+                            העתק קישור להצטרפות
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {activeSection === 'whatsapp-bot' && (
@@ -581,7 +702,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t border-slate-100">
+              <div className="flex justify-end pt-4 border-t border-slate-100 mt-8">
                 <button onClick={handleSaveAgencyGoals} disabled={agencyGoalsSaving} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
                   {agencyGoalsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור יעדים'}
                 </button>

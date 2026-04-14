@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAgentPerformance, useAgency } from '../hooks/useFirestoreData';
 import InviteAgentModal from '../components/settings/InviteAgentModal';
+import InviteAgentBlock from '../components/settings/InviteAgentBlock';
 import ShareInviteModal from '../components/modals/ShareInviteModal';
 import EditAgentGoalsModal from '../components/modals/EditAgentGoalsModal';
 import EditAgentModal from '../components/modals/EditAgentModal';
-import { Star, UserPlus, Pencil, UserCog, Trash2, Share2 } from 'lucide-react';
+import EmailInviteModal from '../components/modals/EmailInviteModal';
+import { Star, UserPlus, Pencil, UserCog, Trash2, Share2, Mail } from 'lucide-react';
 import { AppUser } from '../types';
 import { deleteAgent } from '../services/teamService';
 
@@ -14,6 +16,7 @@ export default function Agents() {
   const { data: agentsData, loading: agentsLoading } = useAgentPerformance();
   const { agency, loading: agencyLoading } = useAgency();
   const [showInvite, setShowInvite] = useState(false);
+  const [showEmailInvite, setShowEmailInvite] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AppUser | null>(null);
   const [editingAgentDetails, setEditingAgentDetails] = useState<AppUser | null>(null);
   const [sharingAgent, setSharingAgent] = useState<AppUser | null>(null);
@@ -52,14 +55,25 @@ export default function Agents() {
           <h1 className="text-xl font-bold text-slate-900">סוכנים</h1>
           <p className="text-sm text-slate-500 mt-0.5">{agentsData.length} סוכנים פעילים בצוות</p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
-        >
-          <UserPlus size={15} />
-          הזמן סוכן
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowEmailInvite(true)}
+            className="inline-flex items-center gap-2 bg-transparent border border-slate-300 hover:bg-slate-50 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+          >
+            <Mail size={15} />
+            שליחת הזמנה במייל
+          </button>
+          <button
+            onClick={() => setShowInvite(true)}
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+          >
+            <UserPlus size={15} />
+            הזמן סוכן
+          </button>
+        </div>
       </div>
+
+      <InviteAgentBlock />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {agentsData.length > 0 ? (
@@ -208,6 +222,17 @@ export default function Agents() {
           }}
         />
       )}
+
+      {showEmailInvite && (
+        <EmailInviteModal
+          isOpen={true}
+          onClose={() => setShowEmailInvite(false)}
+          onSuccess={() => {
+             // The modal handles its own toast, but we can do extra stuff here if needed
+          }}
+        />
+      )}
+
 
       {editingAgent && (
         <EditAgentGoalsModal

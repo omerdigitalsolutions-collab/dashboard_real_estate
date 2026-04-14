@@ -328,6 +328,13 @@ export default function Login() {
                                     הירשם עכשיו
                                 </Link>
                             </p>
+
+                            <p className="text-center text-slate-500 text-xs mt-2 border-t border-white/5 pt-4">
+                                קיבלת קוד ממנהל משרד?{' '}
+                                <Link to="/join-agency" className="text-slate-300 font-bold hover:text-white transition-all underline underline-offset-4">
+                                    הצטרף לסוכנות כאן
+                                </Link>
+                            </p>
                         </form>
                     )}
                 </div>

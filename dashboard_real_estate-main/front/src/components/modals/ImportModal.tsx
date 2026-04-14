@@ -45,6 +45,7 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
     property: [
         { key: 'address', label: 'כתובת רחוב', required: true },
         { key: 'city', label: 'עיר' },
+        { key: 'neighborhood', label: 'שכונה' },
         { key: 'type', label: 'סוג עסקה (למכירה/להשכרה/מסחרי)' },
         { key: 'price', label: 'מחיר', required: true },
         { key: 'rooms', label: 'מספר חדרים' },
@@ -52,7 +53,8 @@ const FIELD_OPTIONS: Record<EntityType, { key: string; label: string; required?:
         { key: 'sqm', label: 'שטח (מ"ר)' },
         { key: 'floor', label: 'קומה' },
         { key: 'description', label: 'תיאור נכס' },
-        { key: 'agentName', label: 'שם סוכן מטפל' },
+        { key: 'agentName', label: 'שם סוכן' },
+        { key: 'agentEmail', label: 'אימייל סוכן' },
         { key: 'isExclusive', label: 'בלעדיות (כן/לא)' },
         { key: 'listingType', label: 'סוג שיווק (exclusive/private)' },
         { key: 'exclusivityEndDate', label: 'סיום בלעדיות' },
@@ -138,10 +140,12 @@ const HEBREW_MAP: Record<string, string> = {
     'email': 'email', 'mail': 'email', 'e-mail': 'email', 'e mail': 'email',
     'כתובת מייל': 'email', 'כתובת דוא"ל': 'email',
     // ── City / Location ──────────────────────────────────────────────────────────
-    'עיר': 'city', 'יישוב': 'city', 'שכונה': 'city', 'מיקום': 'city',
+    'עיר': 'city', 'יישוב': 'city', 'מיקום': 'city',
     'city': 'city', 'location': 'city', 'area': 'city', 'אזור': 'city', 'ישוב': 'city',
     'עיר מבוקשת': 'city', 'עיר הנכס': 'city', 'מיקום הנכס': 'city', 'עיר / ישוב': 'city',
-    'neighborhood': 'city', 'area code': 'city', 'עד עיר': 'city',
+    'area code': 'city', 'עד עיר': 'city',
+    // ── Neighborhood ────────────────────────────────────────────────────────────
+    'שכונה': 'neighborhood', 'neighborhood': 'neighborhood', 'שכונת הנכס': 'neighborhood',
     // ── Address ──────────────────────────────────────────────────────────────────
     'כתובת': 'address', 'רחוב': 'address', 'כתובת הנכס': 'address', 'כתובת מלאה': 'address',
     'address': 'address', 'street': 'address', "רח'": 'address', 'כתובת רחוב': 'address',
@@ -203,7 +207,8 @@ const HEBREW_MAP: Record<string, string> = {
     // ── Description ──────────────────────────────────────────────────────────────
     'תיאור': 'description', 'תיאור נכס': 'description', 'תאור': 'description',
     'description': 'description', 'details': 'description', 'אודות': 'description',
-    'תיאור חופשי': 'description', 'פרטי הנכס': 'description',
+    'תיאור חופשי': 'description', 'פרטי הנכס': 'description', 'תיאור ומיד': 'description',
+    'תיאור ומידע': 'description', 'מידע נוסף': 'description',
     // ── Property name (for deals) ─────────────────────────────────────────────
     'נכס': 'propertyName', 'שם הנכס': 'propertyName', 'שם נכס': 'propertyName',
     'property name': 'propertyName', 'property': 'propertyName', 'כתובת נכס': 'propertyName',
@@ -227,6 +232,8 @@ const HEBREW_MAP: Record<string, string> = {
     'אחראי': 'agentName', 'מטפל': 'agentName', 'שם הסוכן': 'agentName',
     'איש קשר': 'agentName', 'responsible agent': 'agentName', 'broker': 'agentName',
     'sales agent': 'agentName', 'assigned agent': 'agentName',
+    'אימייל סוכן': 'agentEmail', 'מייל סוכן': 'agentEmail', 'דוא"ל סוכן': 'agentEmail',
+    'agent email': 'agentEmail', 'email סוכן': 'agentEmail',
     // ── Lead name/phone (for deal imports) ───────────────────────────────────────
     'שם לקוח': 'leadName', 'טלפון לקוח': 'leadPhone', 'מייל לקוח': 'leadEmail',
     'lead name': 'leadName', 'buyer name': 'leadName', 'client': 'leadName',

@@ -9,7 +9,7 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
-import { linkStubUser } from '../services/authService';
+import { linkStubUser, migrateUserToInvite } from '../services/authService';
 
 // ─── Context Shape ─────────────────────────────────────────────────────────────
 interface AuthContextType {
@@ -108,6 +108,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     console.log('[AuthContext] Checking user doc at /users/' + firebaseUser.uid);
                     let uidDocSnap = await getDoc(uidDocRef);
 
+                    // ── MIGRATION / INVITE PRIORITY ──────────────────────────────
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const urlToken = urlParams.get('token');
+
+                    if (urlToken) {
+                        console.log('[AuthContext] Token found in URL, prioritizing invite check.');
+                        const tokenSnap = await getDocs(
+                            query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
+                        );
+                        
+                        if (!tokenSnap.empty) {
+                            const stubDoc = tokenSnap.docs[0];
+                            const stubData = stubDoc.data();
+                            
+                            if (stubData.uid === null || stubData.uid === firebaseUser.uid) {
+                                console.log('[AuthContext] Valid stub found! Linking/Migrating...');
+                                if (uidDocSnap.exists()) {
+                                    await migrateUserToInvite(firebaseUser.uid, stubDoc.id);
+                                } else {
+                                    await linkStubUser(stubDoc.id, firebaseUser.uid);
+                                }
+
+                                // Forced SMS verification for agents joining via code/invite
+                                if (!firebaseUser.phoneNumber) {
+                                    console.log('[AuthContext] No phone verified. Redirecting to /verify-phone');
+                                    window.location.replace(`/verify-phone?token=${urlToken}`);
+                                } else {
+                                    window.location.replace(`/agent-setup?token=${urlToken}`);
+                                }
+                                return; // Stop here, redirecting
+                            } else {
+                                console.log('[AuthContext] Token already linked to another user.');
+                            }
+                        }
+                    }
+
                     if (!uidDocSnap.exists()) {
                         console.log('[AuthContext] User doc does not exist.');
                         const email = firebaseUser.email?.toLowerCase();
@@ -117,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             'omerasis4@gmail.com': { agencyId: '5QfL1fcRZ4CsZ8ZZmsUK', name: 'OMER ASIS' }
                         };
 
-                        if (email && knownAdmins[email]) {
+                        if (email && knownAdmins[email] && !urlToken) {
                             const info = knownAdmins[email];
                             console.log('[RECOVERY] Healing user record for:', email);
                             try {
@@ -151,9 +187,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         setRequireOnboarding(false);
 
                         // ── REAL-TIME LISTENER ──────────────────────────────────
-                        // When Super Admin approves a pending agency (flips isActive
-                        // to true), this listener fires and the PendingApproval screen
-                        // auto-transitions into the full CRM — no F5 required.
                         unsubUserDoc = onSnapshot(uidDocRef, (snap) => {
                             if (snap.exists()) {
                                 console.log('[AuthContext] onSnapshot: user doc updated.');
@@ -163,28 +196,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             console.warn('[AuthContext] onSnapshot error (non-fatal):', err);
                         });
                     } else {
-                        console.log('[AuthContext] Checking for stubs...');
+                        console.log('[AuthContext] Checking for email-based stubs...');
                         const email = (firebaseUser.email || '').toLowerCase();
                         try {
                             let stubDoc = null;
-                            const urlParams = new URLSearchParams(window.location.search);
-                            const urlToken = urlParams.get('token');
-
-                            if (urlToken) {
-                                console.log('[AuthContext] Found token in URL, checking by inviteToken');
-                                const tokenSnap = await getDocs(
-                                    query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
-                                );
-                                if (!tokenSnap.empty && tokenSnap.docs[0].data().uid === null) {
-                                    stubDoc = tokenSnap.docs[0];
-                                } else if (!tokenSnap.empty) {
-                                    console.log('[AuthContext] Token exists but is already linked to a user.');
-                                }
-                            }
-
-                            if (!stubDoc && email) {
+                            if (email) {
                                 try {
-                                    // Primary: composite query (needs index)
                                     const stubsSnap = await getDocs(
                                         query(
                                             collection(db, 'users'),
@@ -195,8 +212,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                                     );
                                     stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
                                 } catch (indexErr) {
-                                    // Fallback: query by email only, filter uid===null client-side
-                                    console.warn('[AuthContext] Composite index missing, falling back to email-only query:', indexErr);
                                     const emailSnap = await getDocs(
                                         query(
                                             collection(db, 'users'),
@@ -210,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             }
 
                             if (stubDoc) {
-                                console.log('[AuthContext] Stub found! Linking and redirecting to setup.');
+                                console.log('[AuthContext] Stub found by email! Linking and redirecting.');
                                 await linkStubUser(stubDoc.id, firebaseUser.uid);
                                 const stubData = stubDoc.data();
                                 setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubData } as AppUser);
