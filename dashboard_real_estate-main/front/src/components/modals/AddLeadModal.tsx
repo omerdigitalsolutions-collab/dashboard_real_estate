@@ -6,6 +6,7 @@ import { useAgents } from '../../hooks/useFirestoreData';
 import { isValidPhone } from '../../utils/validation';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { app } from '../../config/firebase';
+import { PrioritySelector } from '../common/PrioritySelector';
 import toast from 'react-hot-toast';
 
 interface AddLeadModalProps {
@@ -21,6 +22,7 @@ const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 
 const sectionCls = 'rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-3';
 const sectionTitleCls = 'flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2';
+
 
 export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const { userData } = useAuth();
@@ -57,8 +59,15 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [mustHaveParking, setMustHaveParking] = useState(false);
     const [mustHaveBalcony, setMustHaveBalcony] = useState(false);
     const [mustHaveSafeRoom, setMustHaveSafeRoom] = useState(false);
-
     const [condition, setCondition] = useState<'new' | 'renovated' | 'needs_renovation' | 'any'>('any');
+
+    // -- Weights / Priorities
+    const [weights, setWeights] = useState({
+        budget: 5,
+        rooms: 5,
+        location: 5,
+        amenities: 5
+    });
 
     // ── Seller fields ─────────────────────────────────────────────────
     const [sellerAddress, setSellerAddress] = useState('');
@@ -77,6 +86,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
         setMinRooms(''); setMaxRooms(''); setMinSizeSqf(''); setFloorMin(''); setFloorMax(''); setPropertyKind([]);
         setMustHaveElevator(false); setMustHaveParking(false); setMustHaveBalcony(false); setMustHaveSafeRoom(false);
         setCondition('any');
+        setWeights({ budget: 5, rooms: 5, location: 5, amenities: 5 });
         setSellerAddress(''); setSellerPrice('');
         setAssignedTo('');
     };
@@ -180,6 +190,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                         mustHaveSafeRoom,
                         condition,
                         urgency,
+                        weights,
                     },
                 });
             } else {
@@ -563,6 +574,35 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         <option value="">לא מוגדר</option>
                                         {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}{n === 6 ? '+' : ''} חדרים</option>)}
                                     </select>
+                                </div>
+                                {/* Section E: Priorities */}
+                                <div className={sectionCls}>
+                                    <div className={sectionTitleCls}>
+                                        <Layers size={12} className="text-blue-500" />
+                                        עדיפויות וחשיבות
+                                    </div>
+                                    <div className="space-y-3">
+                                        <PrioritySelector
+                                            label="תקציב"
+                                            value={weights.budget}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, budget: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="מספר חדרים"
+                                            value={weights.rooms}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, rooms: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="מיקום / שכונה"
+                                            value={weights.location}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, location: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="אבזור (מעלית, חניה וכו')"
+                                            value={weights.amenities}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, amenities: v }))}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}

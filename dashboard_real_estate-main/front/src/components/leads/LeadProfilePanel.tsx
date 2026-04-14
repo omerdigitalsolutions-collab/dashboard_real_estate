@@ -16,6 +16,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import BotToggle from './BotToggle';
 import AddDealModal from '../modals/AddDealModal';
 import { AddMeetingModal } from '../modals/AddMeetingModal';
+import { PrioritySelector } from '../common/PrioritySelector';
+import { Layers } from 'lucide-react';
 
 const conditionLabels: Record<string, string> = {
     new: 'חדש מקבלן',
@@ -226,6 +228,28 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
             onUpdated?.(userMsg);
         } finally {
             setSending(false);
+        }
+    };
+
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const [weights, setWeights] = useState(lead.requirements?.weights ?? { budget: 5, rooms: 5, location: 5, amenities: 5 });
+
+    useEffect(() => {
+        if (lead.requirements?.weights) {
+            setWeights(lead.requirements.weights);
+        }
+    }, [lead.requirements?.weights]);
+
+    const handleWeightChange = async (key: string, val: number) => {
+        const nextWeights = { ...weights, [key]: val };
+        setWeights(nextWeights);
+        try {
+            await updateLead(lead.id, { [`requirements.weights.${key}`]: val } as any);
+        } catch (err) {
+            console.error('Failed to update weight:', err);
+            onUpdated?.('שגיאה בעדכון חשיבות');
         }
     };
 
@@ -543,6 +567,40 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                                 </span>
                                             }
                                         />
+                                    </div>
+                                    
+                                    {/* Priorities / Weights */}
+                                    <div className="mt-6">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <Layers size={14} className="text-blue-400" />
+                                            תיעדוף וחשיבות פרמטרים
+                                        </p>
+                                        <div className="space-y-4 bg-slate-800/30 rounded-2xl p-5 border border-slate-800/50 shadow-inner">
+                                            <PrioritySelector
+                                                theme="dark"
+                                                label="תקציב"
+                                                value={weights.budget}
+                                                onChange={(v) => handleWeightChange('budget', v)}
+                                            />
+                                            <PrioritySelector
+                                                theme="dark"
+                                                label="מספר חדרים"
+                                                value={weights.rooms}
+                                                onChange={(v) => handleWeightChange('rooms', v)}
+                                            />
+                                            <PrioritySelector
+                                                theme="dark"
+                                                label="מיקום / שכונה"
+                                                value={weights.location}
+                                                onChange={(v) => handleWeightChange('location', v)}
+                                            />
+                                            <PrioritySelector
+                                                theme="dark"
+                                                label="אבזור (מעלית, חניה וכו')"
+                                                value={weights.amenities}
+                                                onChange={(v) => handleWeightChange('amenities', v)}
+                                            />
+                                        </div>
                                     </div>
 
                                     {/* Must-haves */}

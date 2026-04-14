@@ -6,6 +6,7 @@ import { Lead } from '../../types';
 import { isValidPhone } from '../../utils/validation';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { app } from '../../config/firebase';
+import { PrioritySelector } from '../common/PrioritySelector';
 import toast from 'react-hot-toast';
 
 interface EditLeadModalProps {
@@ -22,6 +23,7 @@ const inputCls = 'w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-s
 const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 const sectionCls = 'rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-3';
 const sectionTitleCls = 'flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2';
+
 
 export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: EditLeadModalProps) {
     const { data: agents } = useAgents();
@@ -60,6 +62,14 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
     const [mustHaveBalcony, setMustHaveBalcony] = useState(lead.requirements?.mustHaveBalcony ?? false);
     const [mustHaveSafeRoom, setMustHaveSafeRoom] = useState(lead.requirements?.mustHaveSafeRoom ?? false);
     const [condition, setCondition] = useState(lead.requirements?.condition ?? 'any');
+
+    // Weights / Priorities
+    const [weights, setWeights] = useState({
+        budget: lead.requirements?.weights?.budget ?? 5,
+        rooms: lead.requirements?.weights?.rooms ?? 5,
+        location: lead.requirements?.weights?.location ?? 5,
+        amenities: lead.requirements?.weights?.amenities ?? 5
+    });
 
     // Seller
     const [sellerAddress, setSellerAddress] = useState(
@@ -172,6 +182,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                     mustHaveSafeRoom,
                     condition: condition as any,
                     urgency: urgency as any,
+                    weights,
                 };
             } else {
                 updates.requirements = {
@@ -435,6 +446,33 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                                                 className={`py-2 text-xs font-semibold rounded-lg border transition-all ${condition === val ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
                                             >{label}</button>
                                         ))}
+                                    </div>
+                                </div>
+
+                                {/* Priorities Section */}
+                                <div className={sectionCls}>
+                                    <div className={sectionTitleCls}><Layers size={12} className="text-blue-500" />עדיפויות וחשיבות</div>
+                                    <div className="space-y-3">
+                                        <PrioritySelector
+                                            label="תקציב"
+                                            value={weights.budget}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, budget: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="מספר חדרים"
+                                            value={weights.rooms}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, rooms: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="מיקום / שכונה"
+                                            value={weights.location}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, location: v }))}
+                                        />
+                                        <PrioritySelector
+                                            label="אבזור (מעלית, חניה וכו')"
+                                            value={weights.amenities}
+                                            onChange={(v) => setWeights(prev => ({ ...prev, amenities: v }))}
+                                        />
                                     </div>
                                 </div>
                             </div>

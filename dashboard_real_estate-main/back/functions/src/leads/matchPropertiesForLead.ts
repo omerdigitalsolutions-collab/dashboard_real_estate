@@ -28,16 +28,9 @@
  */
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
-import { isCityMatch } from './stringUtils';
+import { evaluateMatch, MatchingProperty } from './matchingEngine';
 
 const db = getFirestore();
-
-interface LeadRequirements {
-    desiredCity?: string[];
-    maxBudget?: number | null;
-    minRooms?: number | null;
-    propertyType?: string[];
-}
 
 export const matchPropertiesForLead = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
@@ -46,7 +39,7 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
 
     const { agencyId, requirements } = request.data as {
         agencyId?: string;
-        requirements?: LeadRequirements;
+        requirements?: any;
     };
 
     if (!agencyId?.trim()) {
@@ -77,7 +70,6 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     let globalProperties: any[] = [];
     const req = requirements ?? {};
     if (req.desiredCity && req.desiredCity.length > 0) {
-        // We limit to fetching from up to 5 cities to avoid excessive round-trips
         const citiesToFetch = req.desiredCity.slice(0, 5);
         const globalPromises = citiesToFetch.map(async (cityName) => {
             try {
@@ -104,32 +96,39 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     }
 
     const allCandidateProperties = [...agencyProperties, ...globalProperties];
-    const propertyTypes = req.propertyType ?? [];
 
-    // ── Deterministic Matching Engine ───────────────────────────────────────────
-    const matches = allCandidateProperties.filter(property => {
-        // 1. City filter (skip if no cities specified)
-        if (!isCityMatch(req.desiredCity || [], property.city || '')) {
-            return false;
+    // ── Weighted Matching Engine ───────────────────────────────────────────────
+    const matches: any[] = [];
+    
+    for (const prop of allCandidateProperties) {
+        // Prepare property for matching engine
+        const matchingProp: MatchingProperty = {
+            id: prop.id,
+            city: prop.city,
+            neighborhood: prop.neighborhood,
+            price: prop.price,
+            rooms: prop.rooms,
+            type: prop.type,
+            hasElevator: prop.hasElevator,
+            hasParking: prop.hasParking,
+            hasBalcony: prop.hasBalcony,
+            hasSafeRoom: prop.hasSafeRoom
+        };
+
+        const result = evaluateMatch(matchingProp, req);
+        if (result) {
+            matches.push({
+                ...prop,
+                matchScore: result.matchScore,
+                category: result.category,
+                isNeighborhoodMatch: result.isNeighborhoodMatch,
+                requiresVerification: result.requiresVerification
+            });
         }
+    }
 
-        // 2. Budget filter (skip if no max budget)
-        if (req.maxBudget != null && req.maxBudget > 0) {
-            if ((property.price ?? Infinity) > req.maxBudget) return false;
-        }
-
-        // 3. Rooms filter (skip if no minimum rooms)
-        if (req.minRooms != null && req.minRooms > 0) {
-            if ((property.rooms ?? 0) < req.minRooms) return false;
-        }
-
-        // 4. Property type filter (skip if no types specified)
-        if (propertyTypes.length > 0) {
-            if (!propertyTypes.includes(property.type)) return false;
-        }
-
-        return true;
-    });
+    // Sort by matchScore descending
+    matches.sort((a, b) => b.matchScore - a.matchScore);
 
     return {
         matches,

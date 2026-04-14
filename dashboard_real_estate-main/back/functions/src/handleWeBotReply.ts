@@ -61,27 +61,21 @@ const createCatalogDeclaration: FunctionDeclaration = {
 // ─── Helper: map Firestore weBotConfig → BotConfig ────────────────────────────
 
 function mapWeBotConfig(raw: Record<string, any>): BotConfig {
-  // Firestore field names come from WeBotSettings.tsx UI:
-  //   toneOfVoice: 'professional' | 'friendly' | 'sales'
-  //   fallbackPolicy: 'apologize' | 'collect'
-  //   muteDuration: '1h' | '12h' | '24h'
+  // Map internal keys from Firestore (saved by WeBotSettings.tsx) to BotConfig type
   const toneMap: Record<string, BotConfig['tone']> = {
     professional: 'professional',
-    friendly:     'friendly_emoji',
-    sales:        'direct_sales',
-  };
-  const muteHoursMap: Record<string, number> = {
-    '1h': 1,
-    '12h': 12,
-    '24h': 24,
+    friendly_emoji: 'friendly_emoji',
+    direct_sales: 'direct_sales',
   };
 
   return {
     isActive:          raw.isActive !== false,
-    tone:              toneMap[raw.toneOfVoice] ?? 'professional',
-    fallbackAction:    raw.fallbackPolicy === 'collect' ? 'collect_details' : 'human_handoff',
-    firewallMuteHours: muteHoursMap[raw.muteDuration] ?? 12,
-    generalNotes:      raw.guardrails || '',
+    tone:              toneMap[raw.tone] ?? 'professional',
+    customTone:        raw.customTone,
+    fallbackAction:    raw.fallbackAction === 'collect_details' ? 'collect_details' : 'human_handoff',
+    customFallbackAction: raw.customFallbackAction,
+    firewallMuteHours: typeof raw.firewallMuteHours === 'number' ? raw.firewallMuteHours : 12,
+    generalNotes:      raw.generalNotes || '',
   };
 }
 

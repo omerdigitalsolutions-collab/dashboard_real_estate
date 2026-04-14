@@ -18,7 +18,13 @@ interface PropertyMatcherModalProps {
 
 // ── Helper: property card thumbnail ──────────────────────────────────────────
 function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, onQuickAddToCatalog, isInCatalog }: {
-    property: Property & { isLiked?: boolean; isExclusivity?: boolean };
+    property: Property & { 
+        isLiked?: boolean; 
+        isExclusivity?: boolean; 
+        matchScore?: number; 
+        isNeighborhoodMatch?: boolean;
+        category?: 'high' | 'medium';
+    };
     selected: boolean;
     onToggle: () => void;
     onRemove?: () => void;
@@ -26,7 +32,7 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
     onQuickAddToCatalog?: () => void;
     isInCatalog?: boolean;
 }) {
-    const isExclusivity = (property as any).isExclusivity !== false; // Default to true if not specified (legacy)
+    const isExclusivity = (property as any).isExclusivity !== false;
 
     return (
         <div
@@ -48,15 +54,21 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
                 )}
             </div>
 
-            {/* Remove button (only in edit panel) */}
-            {onRemove && selected && (
-                <button
-                    onClick={e => { e.stopPropagation(); onRemove(); }}
-                    className="absolute top-4 left-4 z-10 w-6 h-6 rounded-full bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 flex items-center justify-center transition-colors shadow-sm"
-                    title="הסר מהקטלוג"
-                >
-                    <Trash2 size={12} />
-                </button>
+            {/* Score Badge */}
+            {property.matchScore !== undefined && (
+                <div className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold border shadow-sm ${
+                    property.category === 'high' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                    {property.matchScore}% התאמה
+                </div>
+            )}
+
+            {/* Neighborhood Check */}
+            {property.isNeighborhoodMatch === false && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 bg-amber-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
+                    <AlertCircle size={10} />
+                    מחוץ לשכונה המבוקשת
+                </div>
             )}
 
             {/* Quick Actions (only shown if provided) */}
@@ -92,6 +104,11 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
                     />
                 ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100" />
+                )}
+                {property.neighborhood && (
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] py-0.5 text-center font-bold">
+                        {property.neighborhood}
+                    </div>
                 )}
             </div>
 
@@ -233,20 +250,17 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
         }));
     }, [allProperties, likedPropertyIds]);
 
-    const { inCatalogMatched, otherMatched } = useMemo(() => {
-        const inCatalog: (Property & { isLiked?: boolean })[] = [];
-        const others: (Property & { isLiked?: boolean })[] = [];
+    const { highMatches, mediumMatches } = useMemo(() => {
+        const high: any[] = [];
+        const medium: any[] = [];
 
         matchedPropertiesWithLikes.forEach(p => {
-            if (selectedPropertyIds.has(p.id)) {
-                inCatalog.push(p);
-            } else {
-                others.push(p);
-            }
+            if (p.category === 'high') high.push(p);
+            else medium.push(p);
         });
 
-        return { inCatalogMatched: inCatalog, otherMatched: others };
-    }, [matchedPropertiesWithLikes, selectedPropertyIds]);
+        return { highMatches: high, mediumMatches: medium };
+    }, [matchedPropertiesWithLikes]);
 
     const [panel, setPanel] = useState<'match' | 'edit'>('match');
     const [searchQuery, setSearchQuery] = useState('');
@@ -535,11 +549,14 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                                     </label>
                                     <span className="text-xs text-blue-600 font-medium">נבחרו {selectedPropertyIds.size} פריטים</span>
                                 </div>
-                                {inCatalogMatched.length > 0 && (
+                                {highMatches.length > 0 && (
                                     <div className="space-y-4">
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">בקודם (כבר בקטלוג):</p>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                            <p className="text-sm font-bold text-slate-700">התאמה גבוהה ({highMatches.length})</p>
+                                        </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {inCatalogMatched.map(property => (
+                                            {highMatches.map(property => (
                                                 <PropertyThumb
                                                     key={property.id}
                                                     property={property}
@@ -547,18 +564,21 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                                                     onToggle={() => handleToggle(property.id)}
                                                     onQuickShare={() => handleQuickShare(property)}
                                                     onQuickAddToCatalog={() => handleQuickAddToCatalog(property)}
-                                                    isInCatalog={true}
+                                                    isInCatalog={selectedPropertyIds.has(property.id)}
                                                 />
                                             ))}
                                         </div>
                                     </div>
                                 )}
 
-                                {otherMatched.length > 0 && (
+                                {mediumMatches.length > 0 && (
                                     <div className="space-y-4 pt-4">
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">התאמות חדשות:</p>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                                            <p className="text-sm font-bold text-slate-700">התאמה בינונית ({mediumMatches.length})</p>
+                                        </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {otherMatched.map(property => (
+                                            {mediumMatches.map(property => (
                                                 <PropertyThumb
                                                     key={property.id}
                                                     property={property}
@@ -566,7 +586,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                                                     onToggle={() => handleToggle(property.id)}
                                                     onQuickShare={() => handleQuickShare(property)}
                                                     onQuickAddToCatalog={() => handleQuickAddToCatalog(property)}
-                                                    isInCatalog={false}
+                                                    isInCatalog={selectedPropertyIds.has(property.id)}
                                                 />
                                             ))}
                                         </div>
