@@ -163,25 +163,26 @@ async function fetchActiveLeads(agencyId: string): Promise<any[]> {
         });
 }
 
-import { evaluateMatch, IngestedProperty as EngProp, MatchedLead as ML } from './matchingEngine';
-
-// Reuse the local types but wrap the helper
-export type IngestedProperty = EngProp;
-export type MatchedLead = ML & {
-    name: string;
-    phone: string;
-    email: string | null;
-    agencyId: string;
-    assignedAgentId: string | null;
-    requirements: any;
-};
+import { evaluateMatch, MatchingProperty } from './matchingEngine';
 
 // ... checkDuplicate and fetchActiveLeads stay same ...
 
 // ─── Lead Evaluation ──────────────────────────────────────────────────────────
 
 function evaluateLead(property: IngestedProperty, lead: any): MatchedLead | null {
-    const res = evaluateMatch(property, lead.requirements);
+    const matchingProp: MatchingProperty = {
+        id: property.id || 'temp-id',
+        city: property.city,
+        neighborhood: property.neighborhood,
+        price: property.price,
+        rooms: property.rooms,
+        type: property.type,
+        hasElevator: property.hasElevator,
+        hasParking: property.hasParking,
+        hasBalcony: property.hasBalcony,
+        hasSafeRoom: property.hasSafeRoom
+    };
+    const res = evaluateMatch(matchingProp, lead.requirements);
     if (!res) return null;
 
     return {

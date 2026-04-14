@@ -71,7 +71,7 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     const req = requirements ?? {};
     if (req.desiredCity && req.desiredCity.length > 0) {
         const citiesToFetch = req.desiredCity.slice(0, 5);
-        const globalPromises = citiesToFetch.map(async (cityName) => {
+        const globalPromises = citiesToFetch.map(async (cityName: string) => {
             try {
                 const citySnap = await db.collection('cities').doc(cityName).collection('properties')
                     .limit(50)
