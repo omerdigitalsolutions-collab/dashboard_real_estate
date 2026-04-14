@@ -857,15 +857,9 @@ export const whatsappWebhook = onRequest({
     if (cleanPhone.startsWith('972')) cleanPhone = '0' + cleanPhone.substring(3);
 
     // ── Message handling handled by webhookWhatsAppAI ────────────────────────
-    if (isDirect || isGroup) {
-      console.log(`Webhook: Message from ${rawSender} received in legacy webhook. Ignoring logic as it is handled by webhookWhatsAppAI.`);
-      return;
     }
   } catch (err) {
     console.error('Webhook fatal error:', err);
   }
 });
-  } catch (err) {
-    console.error('Webhook fatal error:', err);
-  }
-});
+
