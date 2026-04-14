@@ -4,13 +4,19 @@ import { getAuth } from 'firebase-admin/auth';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
 import { validateUserAuth } from '../config/authGuard';
+import { randomBytes } from 'crypto';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 
 const db = getFirestore();
 
 type Role = 'admin' | 'agent';
-const generateToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+// ── Cryptographically secure token generation ──────────────────────────────────
+// Uses Node's crypto module instead of Math.random() to produce
+// 24 bytes of randomness → 48-char hex string (entropy: ~144 bits).
+const generateToken = () => randomBytes(24).toString('hex');
+
 const generateRandomSuffix = (length = 5) => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No O, 0, I, 1 to avoid confusion
   let result = '';
@@ -672,6 +678,31 @@ export const joinWithCode = onCall({ cors: true }, async (request) => {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedCode = joinCode.trim().toUpperCase();
 
+  // 0. Email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalizedEmail)) {
+    throw new HttpsError('invalid-argument', 'Invalid email address.');
+  }
+
+  // 0b. Abuse prevention: rate-limit per email (max 5 attempts per 10 min)
+  const rateLimitRef = db.collection('_rate_limits').doc(`joinCode_${normalizedEmail.replace(/[^a-z0-9]/g, '_')}`);
+  const rateLimitSnap = await rateLimitRef.get();
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000; // 10 minutes
+  if (rateLimitSnap.exists) {
+    const rl = rateLimitSnap.data() as { count: number; firstAttemptMs: number };
+    if (now - rl.firstAttemptMs < windowMs && rl.count >= 5) {
+      throw new HttpsError('resource-exhausted', 'Too many attempts. Please wait 10 minutes before trying again.');
+    }
+    if (now - rl.firstAttemptMs >= windowMs) {
+      await rateLimitRef.set({ count: 1, firstAttemptMs: now });
+    } else {
+      await rateLimitRef.update({ count: rl.count + 1 });
+    }
+  } else {
+    await rateLimitRef.set({ count: 1, firstAttemptMs: now });
+  }
+
   // 1. Validate Code
   const codeSnap = await db.collection('joinCodes').doc(normalizedCode).get();
   if (!codeSnap.exists) {
@@ -827,3 +858,123 @@ export const sendAgentInvite = onCall(
     return { success: true, message: `הזמנה נשלחה בהצלחה ל-${normalizedEmail}` };
   }
 );
+
+/**
+ * claimInviteToken — Called by the client when they authenticate with an invite token.
+ * This function securely looks up the stub, merges it into the user's permanent document,
+ * sets custom claims, and deletes the stub.
+ * 
+ * Target: `users/{request.auth.uid}`
+ */
+export const claimInviteToken = onCall({ cors: true }, async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated.');
+  }
+
+  const { token } = request.data as { token?: string };
+  if (!token?.trim()) {
+    throw new HttpsError('invalid-argument', 'Invite token is required.');
+  }
+
+  // Find the stub matching the token
+  const stubsSnap = await db.collection('users')
+    .where('inviteToken', '==', token.trim())
+    .limit(1)
+    .get();
+
+  let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
+
+  // Fallback for legacy invitations (token was docId)
+  if (!stubDoc && token.trim().length >= 20) {
+    const legacyDoc = await db.collection('users').doc(token.trim()).get();
+    const legacyData = legacyDoc.data();
+    if (legacyDoc.exists && !legacyData?.inviteToken) {
+      stubDoc = legacyDoc as any;
+    }
+  }
+
+  if (!stubDoc || !stubDoc.exists) {
+    throw new HttpsError('not-found', 'Invite token not found.');
+  }
+
+  const stubData = stubDoc.data() as { 
+    uid?: string | null; 
+    agencyId: string; 
+    role: string;
+    email: string;
+    name?: string;
+    phone?: string;
+  };
+
+  // Ensure it's not already linked to another Google account
+  if (stubData.uid && stubData.uid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Token is already linked to another account.');
+  }
+
+  // ── Verify Target Agency is active ──────────────────────────────────────────
+  const agencySnap = await db.doc(`agencies/${stubData.agencyId}`).get();
+  if (!agencySnap.exists) {
+    throw new HttpsError('not-found', 'The agency you are trying to join no longer exists.');
+  }
+  const agencyData = agencySnap.data() as {
+    isActive?: boolean;
+    billing?: { status?: string; trialEndsAt?: FirebaseFirestore.Timestamp };
+  };
+  if (agencyData.isActive === false) {
+    throw new HttpsError('failed-precondition', 'This agency is currently inactive.');
+  }
+  // Check billing — allow joining if no billing field, billing is active/paid, or trial is not expired
+  const billing = agencyData.billing;
+  if (billing) {
+    const status = billing.status;
+    const trialEndsAt = billing.trialEndsAt;
+    const isTrialing = status === 'trialing';
+    const trialExpired = trialEndsAt && trialEndsAt.toDate() < new Date();
+    if (status && status !== 'active' && status !== 'paid' && !(isTrialing && !trialExpired)) {
+      throw new HttpsError('failed-precondition', 'This agency\'s subscription has expired. Contact the agency admin.');
+    }
+  }
+
+  const userUid = request.auth.uid;
+  const userRef = db.collection('users').doc(userUid);
+
+  await db.runTransaction(async (transaction) => {
+    const userSnap = await transaction.get(userRef);
+
+    if (userSnap.exists) {
+      // Migrate existing user to the new agency
+      transaction.update(userRef, {
+        agencyId: stubData.agencyId,
+        role: stubData.role,
+        inviteToken: token.trim(),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    } else {
+      // Link: create the user document using the stub's data
+      transaction.set(userRef, {
+        uid: userUid,
+        email: request.auth?.token.email || stubData.email,
+        name: stubData.name || null,
+        phone: stubData.phone || null,
+        role: stubData.role,
+        agencyId: stubData.agencyId,
+        isActive: true,
+        inviteToken: token.trim(),
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+
+    // Delete the stub document if its ID isn't the user's UID
+    if (stubDoc && stubDoc.id !== userUid) {
+      transaction.delete(stubDoc.ref);
+    }
+  });
+
+  // Finally, set the custom claims securely
+  await getAuth().setCustomUserClaims(userUid, {
+    agencyId: stubData.agencyId,
+    role: stubData.role
+  });
+
+  return { success: true, agencyId: stubData.agencyId };
+});

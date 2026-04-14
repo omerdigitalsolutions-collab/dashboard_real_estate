@@ -18,7 +18,7 @@ import './config/admin';
 import { createAgencyAccount, checkPhoneAvailable, captureLead } from './agencies/onboarding';
 
 // ── Users Module ───────────────────────────────────────────────────────────────
-import { inviteAgent, sendAgentInvite, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode } from './users/team';
+import { inviteAgent, sendAgentInvite, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken } from './users/team';
 
 // ── Tasks Module ───────────────────────────────────────────────────────────────
 import { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete } from './tasks/cleanup';
@@ -85,7 +85,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 //   catalogs-generateCatalog
 //   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
-export const users = { inviteAgent, sendAgentInvite, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode };
+export const users = { inviteAgent, sendAgentInvite, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };

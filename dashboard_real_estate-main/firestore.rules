@@ -157,7 +157,16 @@ service cloud.firestore {
 
       // Regular users can only update their own profile fields (not role or agencyId)
       allow update: if isAuthed() && (
+        // Normal profile edits (name, phone, avatar etc.) — cannot change role or agency
         (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'agencyId']))
+        // ── Invite Claim ──────────────────────────────────────────────────────
+        // Any authenticated user may claim an *unclaimed* stub (uid == null)
+        // by writing only their own UID into the uid field. This powers the
+        // invite-link join flow without requiring a Cloud Function deployment.
+        || (resource.data.uid == null
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid']))
+        // ── Admin / Super-admin overrides ─────────────────────────────────────
         || isAgencyAdmin(resource.data.agencyId)
         || isSuperAdmin()
         || isBootstrapAdmin()
@@ -406,6 +415,13 @@ service cloud.firestore {
       allow create: if true;
       // Reading/updating restricted to Server/SuperAdmin
       allow read, update, delete: if isSuperAdmin();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // RATE LIMITS — Server (Admin SDK) only — never readable or writable by clients
+    // ══════════════════════════════════════════════════════════════════════════
+    match /_rate_limits/{document=**} {
+      allow read, write: if false;
     }
   }
 }

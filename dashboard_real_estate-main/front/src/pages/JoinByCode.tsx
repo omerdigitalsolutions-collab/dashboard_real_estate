@@ -34,7 +34,19 @@ export default function JoinByCode() {
         } catch (err: any) {
             console.error(err);
             setStatus('idle');
-            const msg = err.message || 'שגיאה באימות הקוד. וודא שהקוד והמייל תקינים.';
+            let msg = 'שגיאה באימות הקוד. וודא שהקוד והמייל תקינים.';
+            const code = err?.code || '';
+            if (code === 'functions/not-found') {
+                msg = 'קוד ההצטרפות לא תקין. בדוק שהקוד נכון ונסה שוב.';
+            } else if (code === 'functions/already-exists') {
+                msg = 'המשתמש הזה כבר רשום במערכת. פנה למנהל המשרד או התחבר ישירות.';
+            } else if (code === 'functions/resource-exhausted') {
+                msg = 'יותר מדי ניסיונות כושלים. המתן 10 דקות ונסה שוב.';
+            } else if (code === 'functions/failed-precondition') {
+                msg = 'הסוכנות אינה פעילה. פנה למנהל המשרד לסיוע.';
+            } else if (err.message) {
+                msg = err.message;
+            }
             setErrorMsg(msg);
             toast.error(msg);
         }

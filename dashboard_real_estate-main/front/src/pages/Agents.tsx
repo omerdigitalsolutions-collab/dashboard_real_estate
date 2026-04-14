@@ -9,7 +9,8 @@ import EditAgentModal from '../components/modals/EditAgentModal';
 import EmailInviteModal from '../components/modals/EmailInviteModal';
 import { Star, UserPlus, Pencil, UserCog, Trash2, Share2, Mail } from 'lucide-react';
 import { AppUser } from '../types';
-import { deleteAgent } from '../services/teamService';
+import { deleteAgent, sendAgentInvite } from '../services/teamService';
+import { Loader2 } from 'lucide-react';
 
 export default function Agents() {
   const { userData } = useAuth();
@@ -21,6 +22,8 @@ export default function Agents() {
   const [editingAgentDetails, setEditingAgentDetails] = useState<AppUser | null>(null);
   const [sharingAgent, setSharingAgent] = useState<AppUser | null>(null);
   const [toast, setToast] = useState('');
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [isSendingBulk, setIsSendingBulk] = useState(false);
 
   if (agentsLoading || agencyLoading) {
     return (
@@ -48,14 +51,91 @@ export default function Agents() {
     return `₪${v}`;
   };
 
+  const stubsWithEmail = agentsData.filter(a => a.isStub && a.agentDoc?.email);
+  const isAllStubsSelected = stubsWithEmail.length > 0 && stubsWithEmail.every(a => selectedAgents.has(a.id));
+
+  const toggleAgentSelection = (docId: string) => {
+    const newSet = new Set(selectedAgents);
+    if (newSet.has(docId)) {
+      newSet.delete(docId);
+    } else {
+      newSet.add(docId);
+    }
+    setSelectedAgents(newSet);
+  };
+
+  const handleSelectAllStubs = () => {
+    if (isAllStubsSelected) {
+      setSelectedAgents(new Set());
+    } else {
+      setSelectedAgents(new Set(stubsWithEmail.map(a => a.id)));
+    }
+  };
+
+  const handleBulkInvite = async () => {
+    if (selectedAgents.size === 0) return;
+    setIsSendingBulk(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const agentId of selectedAgents) {
+      const agent = agentsData.find(a => a.id === agentId);
+      if (agent && agent.agentDoc?.email) {
+        try {
+          await sendAgentInvite(agent.agentDoc.email);
+          successCount++;
+        } catch (e) {
+          console.error('Failed to send invite to', agent.agentDoc.email, e);
+          failCount++;
+        }
+      }
+    }
+
+    setIsSendingBulk(false);
+    setSelectedAgents(new Set());
+    if (failCount === 0) {
+      setToast(`נשלחו ${successCount} הזמנות בהצלחה!`);
+    } else {
+      setToast(`נשלחו ${successCount} הזמנות. ${failCount} נכשלו.`);
+    }
+    setTimeout(() => setToast(''), 3500);
+  };
+
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">סוכנים</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-slate-900">סוכנים</h1>
+            {stubsWithEmail.length > 0 && (
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                <input
+                  type="checkbox"
+                  id="selectAll"
+                  checked={isAllStubsSelected}
+                  onChange={handleSelectAllStubs}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="selectAll" className="text-sm font-medium text-slate-700 cursor-pointer select-none">
+                  בחר הכל ({stubsWithEmail.length})
+                </label>
+              </div>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-0.5">{agentsData.length} סוכנים פעילים בצוות</p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedAgents.size > 0 && (
+            <button
+              onClick={handleBulkInvite}
+              disabled={isSendingBulk}
+              className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+            >
+              {isSendingBulk ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
+              שלח ל-{selectedAgents.size} נבחרים
+            </button>
+          )}
           <button
             onClick={() => setShowEmailInvite(true)}
             className="inline-flex items-center gap-2 bg-transparent border border-slate-300 hover:bg-slate-50 text-slate-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
@@ -84,6 +164,16 @@ export default function Agents() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
+                  {agent.isStub && !!agent.agentDoc?.email && (
+                    <div className="flex items-center justify-center p-1" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={selectedAgents.has(agent.id)}
+                        onChange={() => toggleAgentSelection(agent.id)}
+                      />
+                    </div>
+                  )}
                   <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${agent.avatarColor}`}>
                     {agent.avatar}
                   </div>
@@ -170,6 +260,29 @@ export default function Agents() {
                           title="שתף קישור הצטרפות"
                         >
                           <Share2 size={16} />
+                        </button>
+                      )}
+                      {agent.isStub && agent.agentDoc?.email && (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!agent.agentDoc?.email) return;
+                            try {
+                              await sendAgentInvite(agent.agentDoc.email);
+                              setToast(`הזמנה נשלחה בהצלחה ל-${agent.agentDoc.email}`);
+                            } catch (err: any) {
+                              if (err.code === 'already-exists' || err.message?.includes('already registered')) {
+                                setToast('הסוכן כבר רשום במערכת.');
+                              } else {
+                                setToast('שגיאה בשליחת ההזמנה. נסה שוב מאוחר יותר.');
+                              }
+                            }
+                            setTimeout(() => setToast(''), 3500);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="שלח הזמנה במייל"
+                        >
+                          <Mail size={16} />
                         </button>
                       )}
                       <button

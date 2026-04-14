@@ -152,31 +152,30 @@ export const findUserByEmail = async (email: string): Promise<{ docId: string } 
 };
 
 /**
- * Links a stub user document to a real Firebase Auth UID.
+ * claimInviteTokenService — Securely links a newly authenticated user mapped by their invite token 
+ * to the agency backend. Evaluated entirely via Cloud Functions to bypass firestore rules.
+ */
+export const claimInviteTokenService = async (token: string): Promise<void> => {
+    try {
+        const fn = httpsCallable<{ token: string }, { success: boolean; agencyId: string }>(
+            functions, 'users-claimInviteToken'
+        );
+        await fn({ token });
+        await forceRefreshToken();
+    } catch (error) {
+        console.error('[authService] Error claiming invite token:', error);
+        throw error;
+    }
+};
+
+/**
+ * linkStubUser — Sets the uid field on a stub document.
+ * Allowed by Firestore rules when: stub.uid == null AND we only write our own UID.
+ * Used as the primary path for new agents joining (no CF deployment needed).
  */
 export const linkStubUser = async (stubDocId: string, uid: string): Promise<void> => {
     const userRef = doc(db, 'users', stubDocId);
     await updateDoc(userRef, { uid });
-};
-
-/**
- * Migrates an existing user document to a new agency based on a stub invite.
- * Merges agencyId, role, and inviteToken into the user's permanent doc at /users/{uid}.
- */
-export const migrateUserToInvite = async (uid: string, stubId: string): Promise<void> => {
-    const userRef = doc(db, 'users', uid);
-    const stubRef = doc(db, 'users', stubId);
-    
-    const stubSnap = await getDoc(stubRef);
-    if (!stubSnap.exists()) return;
-
-    const { agencyId, role, inviteToken } = stubSnap.data();
-    
-    // Update the permanent document with the new agency/role/token
-    await updateDoc(userRef, { agencyId, role, inviteToken });
-    
-    // Delete the stub document
-    await deleteDoc(stubRef);
 };
 
 /**

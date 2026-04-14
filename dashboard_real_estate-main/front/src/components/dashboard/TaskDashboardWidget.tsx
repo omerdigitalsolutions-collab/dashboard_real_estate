@@ -35,7 +35,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
     // Filter: Show all tasks
     // Sort: High -> Medium -> Low -> Date for open; Completed tasks at the end
     const displayData = useMemo(() => {
-        const filtered = tasks;
+        const filtered = tasks ?? [];
 
         // Priority weighting
         const weight = { High: 3, Medium: 2, Low: 1 };

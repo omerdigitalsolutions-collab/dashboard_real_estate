@@ -9,9 +9,9 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
-import { linkStubUser, migrateUserToInvite } from '../services/authService';
+import { claimInviteTokenService, linkStubUser } from '../services/authService';
 
-// ─── Context Shape ─────────────────────────────────────────────────────────────
+// ─── Context Shape ───────────────────────────────────────────────────────────── 
 interface AuthContextType {
     /** The raw Firebase Auth user object. Null when logged out. */
     currentUser: User | null;
@@ -114,33 +114,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     if (urlToken) {
                         console.log('[AuthContext] Token found in URL, prioritizing invite check.');
-                        const tokenSnap = await getDocs(
-                            query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
-                        );
-                        
-                        if (!tokenSnap.empty) {
-                            const stubDoc = tokenSnap.docs[0];
-                            const stubData = stubDoc.data();
-                            
-                            if (stubData.uid === null || stubData.uid === firebaseUser.uid) {
-                                console.log('[AuthContext] Valid stub found! Linking/Migrating...');
-                                if (uidDocSnap.exists()) {
-                                    await migrateUserToInvite(firebaseUser.uid, stubDoc.id);
-                                } else {
-                                    await linkStubUser(stubDoc.id, firebaseUser.uid);
-                                }
+                        try {
+                            const tokenSnap = await getDocs(
+                                query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
+                            );
 
-                                // Forced SMS verification for agents joining via code/invite
-                                if (!firebaseUser.phoneNumber) {
-                                    console.log('[AuthContext] No phone verified. Redirecting to /verify-phone');
-                                    window.location.replace(`/verify-phone?token=${urlToken}`);
+                            if (!tokenSnap.empty) {
+                                const stubDoc = tokenSnap.docs[0];
+                                const stubData = stubDoc.data();
+
+                                if (stubData.uid === null || stubData.uid === firebaseUser.uid) {
+                                    if (stubData.uid === null) {
+                                        // Stub not yet claimed — link it
+                                        if (uidDocSnap.exists()) {
+                                            // Existing user migrating to new agency — needs Admin SDK
+                                            // Try Cloud Function (must be deployed), graceful fallback if not
+                                            try {
+                                                console.log('[AuthContext] Existing user migration via CF...');
+                                                await claimInviteTokenService(urlToken);
+                                            } catch (cfErr) {
+                                                console.warn('[AuthContext] CF claim failed (may not be deployed yet). Fallback linking stub UID only.', cfErr);
+                                                // At minimum link stub so completeAgentSetup can set claims
+                                                await linkStubUser(stubDoc.id, firebaseUser.uid);
+                                            }
+                                        } else {
+                                            // New user — just set uid on stub (allowed by Firestore rules)
+                                            console.log('[AuthContext] New user: linking stub via Firestore...');
+                                            await linkStubUser(stubDoc.id, firebaseUser.uid);
+                                        }
+                                    }
+                                    // Redirect to setup — always, whether just claimed or already claimed
+                                    if (!firebaseUser.phoneNumber) {
+                                        console.log('[AuthContext] No phone verified. Redirecting to /verify-phone');
+                                        window.location.replace(`/verify-phone?token=${urlToken}`);
+                                    } else {
+                                        window.location.replace(`/agent-setup?token=${urlToken}`);
+                                    }
+                                    return;
                                 } else {
-                                    window.location.replace(`/agent-setup?token=${urlToken}`);
+                                    console.log('[AuthContext] Token already linked to a different user.');
                                 }
-                                return; // Stop here, redirecting
                             } else {
-                                console.log('[AuthContext] Token already linked to another user.');
+                                console.log('[AuthContext] Token not found in DB — proceeding as normal user.');
                             }
+                        } catch (inviteErr) {
+                            console.error('[AuthContext] Invite check failed — proceeding as normal auth flow:', inviteErr);
+                            // Don't loop — fall through to normal user doc lookup below
                         }
                     }
 
@@ -226,12 +245,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                             if (stubDoc) {
                                 console.log('[AuthContext] Stub found by email! Linking and redirecting.');
-                                await linkStubUser(stubDoc.id, firebaseUser.uid);
                                 const stubData = stubDoc.data();
-                                setUserData({ id: stubDoc.id, uid: firebaseUser.uid, ...stubData } as AppUser);
+                                const token = stubData.inviteToken || stubDoc.id;
+                                await claimInviteTokenService(token);
+                                
+                                setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...stubData } as AppUser);
                                 setRequireOnboarding(false);
 
-                                const token = stubData.inviteToken || stubDoc.id;
                                 window.location.replace(`/agent-setup?token=${token}`);
                             } else {
                                 console.log('[AuthContext] No stub found. Require onboarding.');
