@@ -49,9 +49,13 @@ export const getLiveLeads = (agencyId: string, callback: (leads: Lead[]) => void
     });
 };
 
-export const updateLead = async (leadId: string, data: Partial<Lead>) => {
-    const docRef = doc(db, 'leads', leadId);
-    await updateDoc(docRef, data);
+export const updateLead = async (leadId: string, updates: Partial<Lead>) => {
+    const functions = getFunctions(undefined, 'europe-west1');
+    const updateLeadCallable = httpsCallable<{ leadId: string; updates: Partial<Lead> }, { success: boolean }>(
+        functions, 
+        'leads-updateLead'
+    );
+    await updateLeadCallable({ leadId, updates });
 };
 
 export const deleteLead = async (leadId: string): Promise<void> => {
