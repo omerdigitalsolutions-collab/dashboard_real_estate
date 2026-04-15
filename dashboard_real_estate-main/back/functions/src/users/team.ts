@@ -382,6 +382,7 @@ export const inviteAgent = onCall(
  * Output: { agencyName: string, agentName: string, email: string }
  */
 export const getInviteInfo = onCall({ cors: true }, async (request) => {
+  console.log('[getInviteInfo] Invoked with data:', request.data);
   const { token } = request.data as { token?: string };
 
   if (!token?.trim()) {
@@ -463,43 +464,28 @@ export const completeAgentSetup = onCall({ cors: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'token is required.');
   }
 
-  let stubsSnap = await db.collection('users')
-    .where('inviteToken', '==', token.trim())
-    .limit(1)
-    .get();
+  const userUid = request.auth.uid;
+  const userRef = db.collection('users').doc(userUid);
+  const userSnap = await userRef.get();
 
-  let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
-
-  // Fallback for legacy invitations (token was docId)
-  if (!stubDoc && token.trim().length >= 20) {
-    const legacyDoc = await db.collection('users').doc(token.trim()).get();
-    const legacyData = legacyDoc.data();
-    if (legacyDoc.exists && !legacyData?.inviteToken) {
-      stubDoc = legacyDoc as any;
-    }
+  if (!userSnap.exists) {
+    throw new HttpsError('not-found', 'User record not found. Please log in again.');
   }
 
-  if (!stubDoc) {
-    throw new HttpsError('not-found', 'Invite token not found.');
-  }
-
-  const stubRef = stubDoc.ref;
-
-  const stub = stubDoc.data() as {
-    uid?: string | null;
-    name?: string;
-    phone?: string;
+  const userData = userSnap.data() as {
+    inviteToken?: string;
     agencyId: string;
     role: string;
+    uid?: string;
   };
 
-  // Ensure the caller is the linked agent
-  if (stub.uid !== request.auth.uid) {
-    throw new HttpsError(
-      'permission-denied',
-      'This token is not linked to your account.'
-    );
+  // Verify token matches if provided
+  if (userData.inviteToken !== token.trim()) {
+    throw new HttpsError('permission-denied', 'Invalid invitation token for this account.');
   }
+
+  const stubRef = userRef;
+  const stub = userData;
 
   // Build update payload — only include provided fields
   const update: Record<string, string> = {};
@@ -976,10 +962,11 @@ export const claimInviteToken = onCall({ cors: true }, async (request) => {
       });
     }
 
-    // Delete the stub document if its ID isn't the user's UID
-    if (stubDoc && stubDoc.id !== userUid) {
-      transaction.delete(stubDoc.ref);
-    }
+    // DO NOT delete the stub yet — it might hold information or reference we need
+    // until the full onboarding (name/phone) is complete.
+    // if (stubDoc && stubDoc.id !== userUid) {
+    //   transaction.delete(stubDoc.ref);
+    // }
   });
 
   // Finally, set the custom claims securely

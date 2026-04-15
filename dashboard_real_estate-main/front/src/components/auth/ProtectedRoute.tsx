@@ -27,7 +27,16 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
         return <Navigate to="/onboarding" replace />;
     }
 
-    if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup')) {
+    // ── Incomplete Profile Gate (for Agents/Members) ───────────────────────────
+    // If they have a record (requireOnboarding is false) but no phone, they MUST finish setup.
+    const isProfileIncomplete = userData && !userData.phone;
+    
+    if (isProfileIncomplete && location.pathname !== '/agent-setup') {
+        return <Navigate to="/agent-setup" replace />;
+    }
+
+    // If profile is complete, don't let them go back to setup/onboarding
+    if (!requireOnboarding && !isProfileIncomplete && (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup')) {
         return <Navigate to="/" replace />;
     }
 
