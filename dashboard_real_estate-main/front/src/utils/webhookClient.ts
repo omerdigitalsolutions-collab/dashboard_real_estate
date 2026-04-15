@@ -21,7 +21,12 @@ interface SendPayload {
     fileName?: string;
 }
 
-const cfSend = httpsCallable<SendPayload, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
+interface SendResult {
+    success: boolean;
+    error?: string;
+}
+
+const cfSend = httpsCallable<SendPayload, SendResult>(fns, 'whatsapp-sendWhatsappMessage');
 
 /**
  * Send a single WhatsApp message to a lead.
@@ -36,6 +41,9 @@ export async function sendWhatsAppMessage(
 ): Promise<boolean> {
     try {
         const result = await cfSend({ phone, message, isBroadcast, fileUrl, fileName });
+        if (result.data.error) {
+            console.warn(`[WhatsApp] Dispatch notice for ${phone}:`, result.data.error);
+        }
         return result.data.success === true;
     } catch (err) {
         console.error('[WhatsApp] sendWhatsAppMessage failed:', err);

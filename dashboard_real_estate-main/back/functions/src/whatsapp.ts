@@ -49,6 +49,7 @@ function getWahaBaseUrl(): string {
 
 /** Normalise Israeli phone to international format: 0501234567 → 972501234567@c.us */
 function toWaId(phone: string): string {
+  if (phone.includes('@')) return phone; // Already a WaId (contact or group)
   let clean = phone.replace(/\D/g, '');
   if (clean.startsWith('0')) clean = '972' + clean.substring(1);
   return `${clean}@c.us`;
@@ -531,30 +532,76 @@ export const sendWhatsappMessage = onCall({
     throw new HttpsError('failed-precondition', 'WhatsApp is not connected. Please connect first in Settings.');
   }
 
-  // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
+  // ── 1. Try Green API mode via dynamic keys ───────────────────────────────────────────────────────
   const keys = await getGreenApiCredentials(agencyId, masterKey.value());
   if (keys?.idInstance && keys?.apiTokenInstance) {
-    if (fileUrl) {
-      const sendFileUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
-      await axios.post(sendFileUrl, {
-        chatId: toWaId(phone),
-        urlFile: fileUrl,
-        fileName: fileName || 'file',
-        caption: message
-      }, { timeout: 20_000 });
-      console.log(`[Green API] File message sent to ${phone}`);
-    } else {
-      const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
-      await axios.post(sendUrl, {
-        chatId: toWaId(phone),
-        message: message
-      }, { timeout: 10_000 });
-      console.log(`[Green API] Message sent to ${phone}`);
+    try {
+      if (fileUrl) {
+        const sendFileUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
+        await axios.post(sendFileUrl, {
+          chatId: toWaId(phone),
+          urlFile: fileUrl,
+          fileName: fileName || 'file',
+          caption: message
+        }, { timeout: 20_000 });
+        console.log(`[WhatsApp] Green API: File sent to ${phone}`);
+      } else {
+        const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+        await axios.post(sendUrl, {
+          chatId: toWaId(phone),
+          message: message
+        }, { timeout: 10_000 });
+        console.log(`[WhatsApp] Green API: Message sent to ${phone}`);
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error(`[WhatsApp] Green API dispatch failed for agency ${agencyId}:`, err.response?.data || err.message);
+      const errorMsg = err.response?.data?.message || err.message || 'Unknown Green API error';
+      return { success: false, error: `Green API: ${errorMsg}` };
     }
-    return { success: true };
   }
 
-  throw new HttpsError('failed-precondition', 'Session not found.');
+  // ── 2. Try WAHA mode (Self-hosted) ───────────────────────────────────────────────────────
+  // We check for WAHA if Green API keys aren't found, or as a fallback
+  const waBaseUrl = process.env.WAHA_BASE_URL;
+  if (waBaseUrl) {
+    const sessionName = `agency_${agencyId}`;
+    try {
+      const headers: any = {};
+      if (process.env.WAHA_MASTER_KEY) {
+        headers['Authorization'] = `Bearer ${process.env.WAHA_MASTER_KEY}`;
+      }
+
+      const chatId = toWaId(phone);
+
+      if (fileUrl) {
+        const url = `${waBaseUrl.replace(/\/$/, '')}/api/sendRemoteFile`;
+        await axios.post(url, {
+          session: sessionName,
+          chatId: chatId,
+          fileUrl: fileUrl,
+          fileName: fileName || 'file',
+          caption: message
+        }, { headers, timeout: 20_000 });
+        console.log(`[WhatsApp] WAHA: File sent to ${phone}`);
+      } else {
+        const url = `${waBaseUrl.replace(/\/$/, '')}/api/sendText`;
+        await axios.post(url, {
+          session: sessionName,
+          chatId: chatId,
+          text: message
+        }, { headers, timeout: 10_000 });
+        console.log(`[WhatsApp] WAHA: Message sent to ${phone}`);
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error(`[WhatsApp] WAHA dispatch failed for agency ${agencyId}:`, err.response?.data || err.message);
+      const errorMsg = err.response?.data?.error || err.message || 'Unknown WAHA error';
+      return { success: false, error: `WAHA: ${errorMsg}` };
+    }
+  }
+
+  throw new HttpsError('failed-precondition', 'No WhatsApp session or instance found. Please reconnect in Settings.');
 });
 
 /**
