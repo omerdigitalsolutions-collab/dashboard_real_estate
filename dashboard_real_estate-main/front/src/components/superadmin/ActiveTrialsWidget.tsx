@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, Timestamp, doc, getDoc, getDocs, where, limit } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { Clock, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Search } from 'lucide-react';
+import { db, functions } from '../../config/firebase';
+import { Clock, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Search, PlayCircle, Timer } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
+import { useNavigate } from 'react-router-dom';
 
 interface ActiveTrial {
     id: string;
@@ -70,6 +72,24 @@ export default function ActiveTrialsWidget() {
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState(true);
     const [search, setSearch] = useState('');
+    const navigate = useNavigate();
+
+    const handleReactivateBilling = async (agencyId: string, agencyName: string, action: 'activate' | 'extend') => {
+        const actionText = action === 'activate' ? 'להפעיל את המנוי לתמיד (יסיר חסימת ניסיון) עבור' : 'להאריך את תקופת הניסיון ב-7 ימים עבור';
+        if (!window.confirm(`האם אתה בטוח שברצונך ${actionText} הסוכנות "${agencyName}"?`)) {
+            return;
+        }
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminReactivateBilling');
+            await fn({ agencyId, action });
+            alert(`הפעולה בוצעה בהצלחה!`);
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Reactivate Billing Error:', err);
+            alert("שגיאה בביצוע הפעולה: " + (err as any).message);
+        }
+    };
 
     useEffect(() => {
         const q = query(
@@ -298,11 +318,27 @@ export default function ActiveTrialsWidget() {
                                                 </td>
                                                 {/* Quick info from raw doc */}
                                                 <td className="px-6 py-4">
-                                                    {daysLeft !== null && daysLeft <= 1 && daysLeft >= 0 && (
-                                                        <span className="text-[10px] font-bold text-red-500 animate-pulse">
-                                                            ⚠ דחוף
-                                                        </span>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => handleReactivateBilling(trial.agencyId, name, 'extend')}
+                                                            className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition-all"
+                                                            title="הארך תקופת ניסיון (7 ימים)"
+                                                        >
+                                                            <Timer className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReactivateBilling(trial.agencyId, name, 'activate')}
+                                                            className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all shadow-[0_0_10px_rgba(6,182,212,0.1)]"
+                                                            title="הפעל מנוי מלא - הסר חסימת ניסיון"
+                                                        >
+                                                            <PlayCircle className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        {daysLeft !== null && daysLeft <= 1 && daysLeft >= 0 && (
+                                                            <span className="text-[10px] font-bold text-red-500 animate-pulse mr-2">
+                                                                ⚠ דחוף
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
