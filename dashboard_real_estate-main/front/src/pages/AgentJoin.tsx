@@ -43,7 +43,7 @@ export default function AgentJoin() {
         }
 
         const getInviteInfo = httpsCallable<{ token: string }, { agencyName: string; agentName: string }>(
-            functions, 'users-getInviteInfo'
+            functions, 'getInviteInfo'
         );
 
         getInviteInfo({ token })

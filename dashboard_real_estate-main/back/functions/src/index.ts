@@ -62,7 +62,18 @@ import { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, 
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
 
 // ── Super Admin Module ─────────────────────────────────────────────────────────
-import { superAdminUpdateExpenses, superAdminGetDashboardStats, setupSuperAdmin, superAdminGetAgencyUsage, superAdminUpdateAgencyPlan, superAdminListAuthUsers, superAdminSetAgencyStatus, superAdminSetUserStatus, superAdminApproveAgency } from './superadmin';
+import { 
+    superAdminUpdateExpenses, 
+    superAdminGetDashboardStats, 
+    setupSuperAdmin, 
+    superAdminGetAgencyUsage, 
+    superAdminUpdateAgencyPlan, 
+    superAdminReactivateBilling,
+    superAdminListAuthUsers, 
+    superAdminSetAgencyStatus, 
+    superAdminSetUserStatus, 
+    superAdminApproveAgency 
+} from './superadmin';
 import { superAdminSetPlan } from './superadmin/setAgencyPlan';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from './admin/globalImport';
 
@@ -103,6 +114,7 @@ export const superadmin = {
     superAdminGetImportMappingV2,
     superAdminGetAgencyUsage,
     superAdminUpdateAgencyPlan,
+    superAdminReactivateBilling,
     superAdminSetPlan,
     superAdminListAuthUsers,
     superAdminSetAgencyStatus,
@@ -121,3 +133,7 @@ export { maxPaymentWebhook } from './maxWebhook';
 // Top-level export so the URL is clean (no namespace prefix):
 //   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI
 export { webhookWhatsAppAI } from './webhookWhatsAppAI';
+
+// ── Public Invite Info ────────────────────────────────────────────────────────
+// Top-level export to avoid hyphenated routing issues in v2
+export { getInviteInfo } from './users/team';
