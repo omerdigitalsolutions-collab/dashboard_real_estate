@@ -32,6 +32,8 @@ import {
     LogIn,
     AlertTriangle,
     AlertCircle,
+    PlayCircle,
+    Timer,
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
@@ -348,6 +350,23 @@ export default function SuperAdminDashboard() {
         } catch (err: any) {
             console.error('Set User Status Error:', err);
             alert("שגיאה בעדכון סטטוס משתמש: " + err.message);
+        }
+    };
+
+    const handleReactivateBilling = async (agencyId: string, agencyName: string, action: 'activate' | 'extend') => {
+        const actionText = action === 'activate' ? 'להפעיל את המנוי לתמיד (יסיר חסימת ניסיון) עבור' : 'להאריך את תקופת הניסיון ב-7 ימים עבור';
+        if (!window.confirm(`האם אתה בטוח שברצונך ${actionText} הסוכנות "${agencyName}"?`)) {
+            return;
+        }
+
+        try {
+            const fn = httpsCallable<any, any>(functions, 'superadmin-superAdminReactivateBilling');
+            await fn({ agencyId, action });
+            alert(`הפעולה בוצעה בהצלחה!`);
+            window.location.reload();
+        } catch (err: any) {
+            console.error('Reactivate Billing Error:', err);
+            alert("שגיאה בביצוע הפעולה: " + err.message);
         }
     };
 
@@ -769,6 +788,20 @@ export default function SuperAdminDashboard() {
                                                             title="התחבר כמנהל"
                                                         >
                                                             <LogIn className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReactivateBilling(ag.id, ag.name ?? 'ללא שם', 'extend')}
+                                                            className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20"
+                                                            title="הארך תקופת ניסיון (7 ימים)"
+                                                        >
+                                                            <Timer className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReactivateBilling(ag.id, ag.name ?? 'ללא שם', 'activate')}
+                                                            className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                                                            title="המשך לאחר תקופת ניסיון (הפעל מנוי גישה מלאה)"
+                                                        >
+                                                            <PlayCircle className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </td>

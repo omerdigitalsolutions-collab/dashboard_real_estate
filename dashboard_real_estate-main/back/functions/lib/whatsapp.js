@@ -43,7 +43,6 @@ const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
-const generative_ai_1 = require("@google/generative-ai");
 const featureGuard_1 = require("./config/featureGuard");
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
@@ -487,8 +486,6 @@ exports.checkWhatsAppStatus = (0, https_1.onCall)({
         return { status: ((_g = (_f = agencyDoc.data()) === null || _f === void 0 ? void 0 : _f.whatsappIntegration) === null || _g === void 0 ? void 0 : _g.status) || 'PENDING_SCAN' };
     }
 });
-// ─── 3. sendWhatsappMessage ──────────────────────────────────────────────────
-const whatsappService_1 = require("./whatsappService");
 /**
  * Secure message dispatch. Frontend sends only { phone, message } — never any tokens.
  * The function resolves the agency's WAHA credentials server-side.
@@ -814,174 +811,7 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
         let cleanPhone = rawSender.replace('@c.us', '');
         if (cleanPhone.startsWith('972'))
             cleanPhone = '0' + cleanPhone.substring(3);
-        // ============================================================================
-        // 1. B2B GROUP MESSAGES (Property Hunting)
-        // ============================================================================
-        if (isGroup) {
-            console.log(`Webhook (Group): Checking if ${chatId} is monitored...`);
-            console.log(`Webhook (Group): Monitored list -> ${JSON.stringify(monitoredGroupIds)}`);
-            if (!monitoredGroupIds.includes(chatId)) {
-                console.log(`Webhook (Group): Chat ${chatId} is NOT in the monitored list. Ignoring.`);
-                return; // Skip if not a monitored group
-            }
-            console.log(`Webhook (Group): Chat ${chatId} IS monitored. Proceeding matching logic with Gemini...`);
-            const apiKey = geminiApiKey.value();
-            if (!apiKey) {
-                console.error("GEMINI API KEY MISSING for B2B Property Extraction");
-                return;
-            }
-            try {
-                const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-                const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel.
-Scan this message for property listings (for sale or rent).
-If it's NOT a real estate listing (e.g., just chat), return {"isProperty": false}.
-If it IS a listing, extract the details. Prices are usually in NIS.
-Message: "${textMessage}"
-
-Output strict JSON:
-{
-  "isProperty": boolean,
-  "type": "sale" | "rent",
-  "city": string | null,
-  "price": number | null,
-  "rooms": number | null
-}`;
-                const result = await model.generateContent(prompt);
-                const cleanJson = result.response.text().replace(/```json|```/g, '').trim();
-                const parsed = JSON.parse(cleanJson);
-                if (parsed.isProperty) {
-                    await db.collection('properties').add({
-                        agencyId,
-                        source: 'whatsapp_group',
-                        groupId: chatId,
-                        externalAgentPhone: cleanPhone,
-                        rawDescription: textMessage,
-                        city: parsed.city || null,
-                        price: parsed.price || 0,
-                        rooms: parsed.rooms || null,
-                        type: parsed.type || 'sale',
-                        listingType: 'external',
-                        status: 'draft', // Requires manual approval in dashboard
-                        createdAt: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                    console.log(`Webhook: AI parsed external property from group ${chatId} by ${cleanPhone}`);
-                }
-            }
-            catch (e) {
-                console.error('Gemini extraction failed for B2B group message:', e);
-            }
-            return; // Done
-        }
-        // ============================================================================
-        // 2. DIRECT MESSAGES (Smart Lead Detection)
-        // ============================================================================
-        if (isDirect) {
-            // ── Find existing lead ───────────────────────────────────────────────────
-            const leadsSnap = await db.collection('leads')
-                .where('agencyId', '==', agencyId)
-                .where('phone', '==', cleanPhone)
-                .limit(1).get();
-            if (leadsSnap.empty) {
-                // Unknown number - Use Gemini to scan and summarize
-                const apiKey = geminiApiKey.value();
-                let aiTriage = { isRealEstateLead: false, summary: '', intent: 'inquiry' };
-                if (apiKey) {
-                    try {
-                        const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-                        const prompt = `You are a real estate AI triage assistant. Analyze this inbound WhatsApp message.
-        Message: "${textMessage}"
-        
-        Determine if this is a potential real estate lead (buyer, seller, or interested in a property).
-        Return ONLY a JSON object:
-        {
-          "isRealEstateLead": boolean,
-          "summary": "a short 3-7 word summary in Hebrew",
-          "intent": "buy" | "rent" | "sell" | "inquiry"
-        }`;
-                        const result = await model.generateContent(prompt);
-                        const responseText = result.response.text().trim();
-                        const cleanJson = responseText.replace(/```json|```/g, '').trim();
-                        aiTriage = JSON.parse(cleanJson);
-                    }
-                    catch (e) {
-                        console.error('Gemini Triage Error:', e);
-                        // Fallback to basic keyword check if AI fails
-                        const leadKeywords = ['נכס', 'דירה', 'מחיר', 'למכירה', 'להשכרה', 'פרטים', 'תיווך'];
-                        const hasKeyword = leadKeywords.some(kw => textMessage.toLowerCase().includes(kw));
-                        if (hasKeyword)
-                            aiTriage = { isRealEstateLead: true, summary: 'ליד חדש מוואטסאפ (זיהוי מילות מפתח)', intent: 'inquiry' };
-                    }
-                }
-                if (!aiTriage.isRealEstateLead) {
-                    console.log(`Webhook: Ignored spam/irrelevant DM from ${cleanPhone}`);
-                    return;
-                }
-                // Check for existing pending lead to avoid duplicates
-                const pendingSnap = await db.collection('pending_leads')
-                    .where('agencyId', '==', agencyId)
-                    .where('phone', '==', cleanPhone)
-                    .limit(1).get();
-                if (pendingSnap.empty) {
-                    const expireDate = new Date();
-                    expireDate.setDate(expireDate.getDate() + 14);
-                    const expiresAt = admin.firestore.Timestamp.fromDate(expireDate);
-                    await db.collection('pending_leads').add({
-                        agencyId,
-                        phone: cleanPhone,
-                        initialMessage: textMessage,
-                        aiSummary: aiTriage.summary,
-                        aiIntent: aiTriage.intent,
-                        status: 'pending',
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        expiresAt: expiresAt,
-                    });
-                    console.log(`Webhook: New pending lead created for ${cleanPhone} (AI Summary: ${aiTriage.summary})`);
-                    // Create notification for the agency
-                    await db.collection('alerts').add({
-                        agencyId,
-                        targetAgentId: 'all',
-                        type: 'new_pending_lead',
-                        title: 'ליד חדש זוהה מ-WhatsApp ✨',
-                        message: `${aiTriage.summary || 'הודעה חדשה'} ממספר לא מוכר (${cleanPhone}).`,
-                        isRead: false,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        link: '/dashboard/leads?tab=pending'
-                    });
-                }
-                return;
-            }
-            // Existing lead - save message to their thread
-            const leadId = leadsSnap.docs[0].id;
-            // ── Idempotency ─────────────────────────────────────────────────────────
-            if (idMessage) {
-                const dup = await db.collection(`leads/${leadId}/messages`)
-                    .where('idMessage', '==', idMessage).limit(1).get();
-                if (!dup.empty) {
-                    console.log('Webhook: duplicate message ignored');
-                    return;
-                }
-            }
-            await db.collection(`leads/${leadId}/messages`).add({
-                idMessage: idMessage || null,
-                text: textMessage,
-                direction: isOutbound ? 'outbound' : 'inbound',
-                senderPhone: isOutbound ? 'human_outbound' : cleanPhone,
-                source: isOutbound ? 'whatsapp_human' : 'whatsapp_web',
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                isRead: isOutbound,
-            });
-            // ── Trigger history sync for new/active interaction ─────────────────────
-            if (isDirect && !isOutbound) {
-                // Run in background
-                const keys = await getGreenApiCredentials(agencyId, masterKey.value());
-                if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-                    (0, whatsappService_1.syncChatHistory)(db, agencyId, leadId, cleanPhone, keys).catch(e => console.error('Sync failed:', e));
-                }
-            }
-            console.log(`Webhook: message routed to lead ${leadId} | direction: ${isOutbound ? 'outbound' : 'inbound'}`);
-        }
+        // ── Message handling handled by webhookWhatsAppAI ────────────────────────
     }
     catch (err) {
         console.error('Webhook fatal error:', err);

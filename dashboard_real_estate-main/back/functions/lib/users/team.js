@@ -111,29 +111,38 @@ exports.toggleAgentStatus = (0, https_1.onCall)({ cors: true }, async (request) 
  * Output: { success: true }
  */
 exports.deleteAgent = (0, https_1.onCall)({ cors: true }, async (request) => {
+    console.log('[deleteAgent] Invoked with data:', request.data);
     const authData = await (0, authGuard_1.validateUserAuth)(request);
+    console.log('[deleteAgent] Caller authenticated:', authData);
     const { userId } = request.data;
     if (!(userId === null || userId === void 0 ? void 0 : userId.trim())) {
+        console.log('[deleteAgent] Missing userId');
         throw new https_1.HttpsError('invalid-argument', 'userId is required.');
     }
     // ── Prevent self-deletion ────────────────────────────────────────────────────
     if (authData.uid === userId.trim()) {
+        console.log('[deleteAgent] Self deletion attempt');
         throw new https_1.HttpsError('permission-denied', 'You cannot delete yourself.');
     }
     // ── Verify caller is admin ───────────────────────────────────────────────────
     if (authData.role !== 'admin') {
+        console.log(`[deleteAgent] Caller is not admin. Role: ${authData.role}`);
         throw new https_1.HttpsError('permission-denied', 'Only admins can delete agents.');
     }
     // ── Verify target belongs to same agency ────────────────────────────────────
     const targetDoc = await db.doc(`users/${userId.trim()}`).get();
     if (!targetDoc.exists) {
+        console.log(`[deleteAgent] Target doc does not exist: users/${userId.trim()}`);
         throw new https_1.HttpsError('not-found', 'Target user not found.');
     }
     const target = targetDoc.data();
+    console.log(`[deleteAgent] Target user agencyId: ${target.agencyId}, Caller agencyId: ${authData.agencyId}`);
     if (target.agencyId !== authData.agencyId) {
+        console.log('[deleteAgent] Agency mismatch!');
         throw new https_1.HttpsError('permission-denied', 'Cannot modify users in a different agency.');
     }
     // ── DELETE ──────────────────────────────────────────────────────────────────
+    console.log(`[deleteAgent] Proceeding to delete user doc: ${userId.trim()}`);
     await db.doc(`users/${userId.trim()}`).delete();
     // If the user was already linked to an Auth account, we *could* delete it here,
     // but usually it's better to just remove their access via Custom Claims or 
@@ -762,13 +771,16 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
     const userUid = request.auth.uid;
     const userRef = db.collection('users').doc(userUid);
     await db.runTransaction(async (transaction) => {
-        var _a;
+        var _a, _b;
         const userSnap = await transaction.get(userRef);
         if (userSnap.exists) {
+            const existingRole = (_a = userSnap.data()) === null || _a === void 0 ? void 0 : _a.role;
+            // Don't downgrade an admin to an agent role. Preserve existing role for admins.
+            const effectiveRole = existingRole === 'admin' ? 'admin' : stubData.role;
             // Migrate existing user to the new agency
             transaction.update(userRef, {
                 agencyId: stubData.agencyId,
-                role: stubData.role,
+                role: effectiveRole,
                 inviteToken: token.trim(),
                 updatedAt: firestore_1.FieldValue.serverTimestamp()
             });
@@ -777,7 +789,7 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
             // Link: create the user document using the stub's data
             transaction.set(userRef, {
                 uid: userUid,
-                email: ((_a = request.auth) === null || _a === void 0 ? void 0 : _a.token.email) || stubData.email,
+                email: ((_b = request.auth) === null || _b === void 0 ? void 0 : _b.token.email) || stubData.email,
                 name: stubData.name || null,
                 phone: stubData.phone || null,
                 role: stubData.role,

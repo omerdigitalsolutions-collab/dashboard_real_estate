@@ -89,27 +89,21 @@ const createCatalogDeclaration = {
 };
 // ─── Helper: map Firestore weBotConfig → BotConfig ────────────────────────────
 function mapWeBotConfig(raw) {
-    var _a, _b;
-    // Firestore field names come from WeBotSettings.tsx UI:
-    //   toneOfVoice: 'professional' | 'friendly' | 'sales'
-    //   fallbackPolicy: 'apologize' | 'collect'
-    //   muteDuration: '1h' | '12h' | '24h'
+    var _a;
+    // Map internal keys from Firestore (saved by WeBotSettings.tsx) to BotConfig type
     const toneMap = {
         professional: 'professional',
-        friendly: 'friendly_emoji',
-        sales: 'direct_sales',
-    };
-    const muteHoursMap = {
-        '1h': 1,
-        '12h': 12,
-        '24h': 24,
+        friendly_emoji: 'friendly_emoji',
+        direct_sales: 'direct_sales',
     };
     return {
         isActive: raw.isActive !== false,
-        tone: (_a = toneMap[raw.toneOfVoice]) !== null && _a !== void 0 ? _a : 'professional',
-        fallbackAction: raw.fallbackPolicy === 'collect' ? 'collect_details' : 'human_handoff',
-        firewallMuteHours: (_b = muteHoursMap[raw.muteDuration]) !== null && _b !== void 0 ? _b : 12,
-        generalNotes: raw.guardrails || '',
+        tone: (_a = toneMap[raw.tone]) !== null && _a !== void 0 ? _a : 'professional',
+        customTone: raw.customTone,
+        fallbackAction: raw.fallbackAction === 'collect_details' ? 'collect_details' : 'human_handoff',
+        customFallbackAction: raw.customFallbackAction,
+        firewallMuteHours: typeof raw.firewallMuteHours === 'number' ? raw.firewallMuteHours : 12,
+        generalNotes: raw.generalNotes || '',
     };
 }
 // ─── Main Handler ─────────────────────────────────────────────────────────────
@@ -139,17 +133,6 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         const lastHumanReplyAt = (_d = (_c = (_b = leadData.lastHumanReplyAt) === null || _b === void 0 ? void 0 : _b.toMillis) === null || _c === void 0 ? void 0 : _c.call(_b)) !== null && _d !== void 0 ? _d : 0;
         if (Date.now() - lastHumanReplyAt < muteMs) {
             console.log(`[WeBot] 🔇 Firewall mute active for lead ${leadId} — human replied ${Math.floor((Date.now() - lastHumanReplyAt) / 60000)} min ago.`);
-            // Still log inbound message so agent sees it in CRM
-            await db.collection(`leads/${leadId}/messages`).add({
-                idMessage: idMessage !== null && idMessage !== void 0 ? idMessage : null,
-                text: incomingMessage,
-                direction: 'inbound',
-                senderPhone: customerPhone,
-                source: 'whatsapp_ai_bot',
-                botMuted: true,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                isRead: false,
-            });
             return;
         }
         // ── 4. RAG: fetch active properties for this agency ────────────────────

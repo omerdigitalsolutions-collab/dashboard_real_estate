@@ -16,7 +16,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findMatchingLeads = findMatchingLeads;
 const firestore_1 = require("firebase-admin/firestore");
-const stringUtils_1 = require("./stringUtils");
 const db = (0, firestore_1.getFirestore)();
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRICE_MARGIN = 1.07; // Allow +7% over maxBudget
@@ -110,103 +109,26 @@ async function fetchActiveLeads(agencyId) {
         return lastDate >= sixMonthsAgo;
     });
 }
+const matchingEngine_1 = require("./matchingEngine");
+// ... checkDuplicate and fetchActiveLeads stay same ...
 // ─── Lead Evaluation ──────────────────────────────────────────────────────────
-/**
- * Evaluates a single lead against the property.
- * Returns null if no match, or a MatchedLead with score if match found.
- */
 function evaluateLead(property, lead) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    const req = (_a = lead.requirements) !== null && _a !== void 0 ? _a : {};
-    const requiresVerification = [];
-    let scorePoints = 0;
-    let scorePossible = 0;
-    // ── City filter ───────────────────────────────────────────────────────────
-    if (!(0, stringUtils_1.isCityMatch)(req.desiredCity || [], property.city || '')) {
-        return null; // Hard reject
-    }
-    const desiredCitiesCount = ((_b = req.desiredCity) !== null && _b !== void 0 ? _b : []).length;
-    if (desiredCitiesCount > 0) {
-        scorePossible += 25;
-        scorePoints += 25;
-    }
-    // ── Property type filter (sale vs rent) ───────────────────────────────────
-    const wantedTypes = (_c = req.propertyType) !== null && _c !== void 0 ? _c : [];
-    if (wantedTypes.length > 0) {
-        scorePossible += 10;
-        if (wantedTypes.includes(property.type))
-            scorePoints += 10;
-        // No hard reject — type preference is soft
-    }
-    // ── Price with +7% margin ─────────────────────────────────────────────────
-    if (req.maxBudget != null && req.maxBudget > 0) {
-        scorePossible += 30;
-        const effectiveBudget = req.maxBudget * PRICE_MARGIN;
-        if (property.price > effectiveBudget)
-            return null; // Hard reject over budget
-        // Score based on how much room below budget
-        const headroom = (effectiveBudget - property.price) / effectiveBudget;
-        // Full score if price is ≤ maxBudget (headroom > 0.07), partial if in the +7% zone
-        scorePoints += headroom >= 0.07 ? 30 : Math.round(30 * (headroom / 0.07));
-    }
-    // ── Rooms with ±0.5 tolerance ─────────────────────────────────────────────
-    const desiredMin = req.minRooms != null ? req.minRooms : null;
-    const desiredMax = req.maxRooms != null ? req.maxRooms : null;
-    if ((desiredMin != null || desiredMax != null) && property.rooms != null) {
-        scorePossible += 20;
-        const roomsOk = (desiredMin == null || property.rooms >= desiredMin - ROOMS_TOLERANCE) &&
-            (desiredMax == null || property.rooms <= desiredMax + ROOMS_TOLERANCE);
-        if (!roomsOk)
-            return null; // Hard reject outside room range
-        // Perfect score if within strict range, partial for tolerance zone
-        const strictOk = (desiredMin == null || property.rooms >= desiredMin) &&
-            (desiredMax == null || property.rooms <= desiredMax);
-        scorePoints += strictOk ? 20 : 10;
-    }
-    // ── Amenity checks with Null Benefit of Doubt ─────────────────────────────
-    const amenityChecks = [
-        { reqField: 'mustHaveElevator', propField: 'hasElevator', label: 'hasElevator' },
-        { reqField: 'mustHaveParking', propField: 'hasParking', label: 'hasParking' },
-        { reqField: 'mustHaveBalcony', propField: 'hasBalcony', label: 'hasBalcony' },
-        { reqField: 'mustHaveSafeRoom', propField: 'hasSafeRoom', label: 'hasSafeRoom' },
-    ];
-    let amenityScore = 0;
-    const amenityMax = amenityChecks.filter(a => req[a.reqField] === true).length * 4;
-    if (amenityMax > 0)
-        scorePossible += amenityMax;
-    for (const { reqField, propField, label } of amenityChecks) {
-        if (req[reqField] !== true)
-            continue; // Lead doesn't require this amenity
-        const propValue = property[propField];
-        if (propValue === false) {
-            return null; // Hard reject: property explicitly doesn't have required amenity
-        }
-        else if (propValue === true) {
-            amenityScore += 4; // Perfect — property has the amenity
-        }
-        else {
-            // null/undefined — benefit of the doubt, but flag for agent to verify
-            requiresVerification.push(label);
-            amenityScore += 2; // Partial score for unknown
-        }
-    }
-    scorePoints += amenityScore;
-    // ── Final score calculation ───────────────────────────────────────────────
-    // Minimum possible score (just city + price = 55 pts) → already a match.
-    // If scorePossible is 0 (no requirements), give a 50% baseline score.
-    const matchScore = scorePossible > 0
-        ? Math.min(100, Math.round((scorePoints / scorePossible) * 100))
-        : 50;
-    return {
-        id: lead.id,
-        name: (_d = lead.name) !== null && _d !== void 0 ? _d : 'Unknown',
-        phone: (_e = lead.phone) !== null && _e !== void 0 ? _e : '',
-        email: (_f = lead.email) !== null && _f !== void 0 ? _f : null,
-        agencyId: lead.agencyId,
-        assignedAgentId: (_g = lead.assignedAgentId) !== null && _g !== void 0 ? _g : null,
-        matchScore,
-        requiresVerification,
-        requirements: req,
+    var _a, _b, _c, _d;
+    const matchingProp = {
+        id: property.id || 'temp-id',
+        city: property.city,
+        neighborhood: property.neighborhood,
+        price: property.price,
+        rooms: property.rooms,
+        type: property.type,
+        hasElevator: property.hasElevator,
+        hasParking: property.hasParking,
+        hasBalcony: property.hasBalcony,
+        hasSafeRoom: property.hasSafeRoom
     };
+    const res = (0, matchingEngine_1.evaluateMatch)(matchingProp, lead.requirements);
+    if (!res)
+        return null;
+    return Object.assign(Object.assign({}, res), { id: lead.id, name: (_a = lead.name) !== null && _a !== void 0 ? _a : 'Unknown', phone: (_b = lead.phone) !== null && _b !== void 0 ? _b : '', email: (_c = lead.email) !== null && _c !== void 0 ? _c : null, agencyId: lead.agencyId, assignedAgentId: (_d = lead.assignedAgentId) !== null && _d !== void 0 ? _d : null, requirements: lead.requirements });
 }
 //# sourceMappingURL=findMatchingLeads.js.map

@@ -31,10 +31,10 @@ exports.matchPropertiesForLead = void 0;
  */
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
-const stringUtils_1 = require("./stringUtils");
+const matchingEngine_1 = require("./matchingEngine");
 const db = (0, firestore_1.getFirestore)();
 exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b;
+    var _a;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -58,7 +58,6 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     let globalProperties = [];
     const req = requirements !== null && requirements !== void 0 ? requirements : {};
     if (req.desiredCity && req.desiredCity.length > 0) {
-        // We limit to fetching from up to 5 cities to avoid excessive round-trips
         const citiesToFetch = req.desiredCity.slice(0, 5);
         const globalPromises = citiesToFetch.map(async (cityName) => {
             try {
@@ -79,31 +78,29 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
         globalProperties = results.flat();
     }
     const allCandidateProperties = [...agencyProperties, ...globalProperties];
-    const propertyTypes = (_b = req.propertyType) !== null && _b !== void 0 ? _b : [];
-    // ── Deterministic Matching Engine ───────────────────────────────────────────
-    const matches = allCandidateProperties.filter(property => {
-        var _a, _b;
-        // 1. City filter (skip if no cities specified)
-        if (!(0, stringUtils_1.isCityMatch)(req.desiredCity || [], property.city || '')) {
-            return false;
+    // ── Weighted Matching Engine ───────────────────────────────────────────────
+    const matches = [];
+    for (const prop of allCandidateProperties) {
+        // Prepare property for matching engine
+        const matchingProp = {
+            id: prop.id,
+            city: prop.city,
+            neighborhood: prop.neighborhood,
+            price: prop.price,
+            rooms: prop.rooms,
+            type: prop.type,
+            hasElevator: prop.hasElevator,
+            hasParking: prop.hasParking,
+            hasBalcony: prop.hasBalcony,
+            hasSafeRoom: prop.hasSafeRoom
+        };
+        const result = (0, matchingEngine_1.evaluateMatch)(matchingProp, req);
+        if (result) {
+            matches.push(Object.assign(Object.assign({}, prop), { matchScore: result.matchScore, category: result.category, isNeighborhoodMatch: result.isNeighborhoodMatch, requiresVerification: result.requiresVerification }));
         }
-        // 2. Budget filter (skip if no max budget)
-        if (req.maxBudget != null && req.maxBudget > 0) {
-            if (((_a = property.price) !== null && _a !== void 0 ? _a : Infinity) > req.maxBudget)
-                return false;
-        }
-        // 3. Rooms filter (skip if no minimum rooms)
-        if (req.minRooms != null && req.minRooms > 0) {
-            if (((_b = property.rooms) !== null && _b !== void 0 ? _b : 0) < req.minRooms)
-                return false;
-        }
-        // 4. Property type filter (skip if no types specified)
-        if (propertyTypes.length > 0) {
-            if (!propertyTypes.includes(property.type))
-                return false;
-        }
-        return true;
-    });
+    }
+    // Sort by matchScore descending
+    matches.sort((a, b) => b.matchScore - a.matchScore);
     return {
         matches,
         totalScanned: allCandidateProperties.length,
