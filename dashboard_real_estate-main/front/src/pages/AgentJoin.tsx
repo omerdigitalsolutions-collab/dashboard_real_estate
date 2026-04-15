@@ -64,8 +64,25 @@ export default function AgentJoin() {
     const handleGoogleSignIn = async () => {
         try {
             setStatus('signing-in');
-            await signInWithPopup(auth, new GoogleAuthProvider());
-            // AuthContext will detect the stub + redirect to /agent-setup automatically
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                await signInWithPopup(auth, new GoogleAuthProvider());
+            }
+            
+            // Explicitly claim the token now that user is signed in
+            try {
+                const { claimInviteTokenService } = await import('../services/authService');
+                await claimInviteTokenService(token);
+            } catch (err: any) {
+                if (err?.message && !err.message.includes('already')) {
+                     alert(err.message);
+                     setStatus('ready');
+                     return;
+                }
+            }
+
+            // Successfully claimed, go to profile setup
+            navigate(`/agent-setup?token=${token}`);
         } catch (err: any) {
             setStatus('ready');
             if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {

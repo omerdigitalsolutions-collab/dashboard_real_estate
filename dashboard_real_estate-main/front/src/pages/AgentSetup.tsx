@@ -65,7 +65,7 @@ export default function AgentSetup() {
 
             await refreshUserData();
             setDone(true);
-            setTimeout(() => navigate('/'), 2000);
+            setTimeout(() => navigate('/dashboard'), 2000);
         } catch (err: any) {
             setError(err.message ?? 'אירעה שגיאה, נסה שנית');
         } finally {

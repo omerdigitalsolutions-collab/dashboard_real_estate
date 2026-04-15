@@ -107,56 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const uidDocRef = doc(db, 'users', firebaseUser.uid);
                     console.log('[AuthContext] Checking user doc at /users/' + firebaseUser.uid);
                     let uidDocSnap = await getDoc(uidDocRef);
-
-                    // ── INVITE TOKEN FLOW ──────────────────────────────────────────
+                    // ── INVITE TOKEN FLOW (Flag Only) ──────────────────────────────
                     const urlParams = new URLSearchParams(window.location.search);
                     const urlToken = urlParams.get('token');
-
-                    if (urlToken) {
-                        console.log('[AuthContext] Token found in URL, prioritizing invite check.');
-                        try {
-                            const tokenSnap = await getDocs(
-                                query(collection(db, 'users'), where('inviteToken', '==', urlToken), limit(1))
-                            );
-
-                            if (!tokenSnap.empty) {
-                                const stubDoc = tokenSnap.docs[0];
-                                const stubData = stubDoc.data();
-
-                                if (stubData.uid === null || stubData.uid === firebaseUser.uid) {
-                                    // Always use the Cloud Function to claim — it handles
-                                    // both new users and existing-user migration securely.
-                                    console.log('[AuthContext] Claiming invite token via Cloud Function...');
-                                    try {
-                                        await claimInviteTokenService(urlToken);
-                                    } catch (cfErr: any) {
-                                        console.error('[AuthContext] claimInviteToken failed:', cfErr);
-                                        // If already claimed by this user, continue to redirect
-                                        if (!cfErr?.message?.includes('already')) {
-                                            throw cfErr;
-                                        }
-                                    }
-
-                                    // Redirect to agent setup
-                                    window.location.replace(`/agent-setup?token=${urlToken}`);
-                                    return; // Stop here, redirecting
-                                } else {
-                                    console.log('[AuthContext] Token already linked to a different user.');
-                                }
-                            } else {
-                                // Token not found — might already be claimed & stub deleted.
-                                // Check if this user already has a doc (i.e., claim succeeded previously).
-                                if (uidDocSnap.exists()) {
-                                    console.log('[AuthContext] Token not found but user doc exists — token was already claimed.');
-                                    // Continue to normal flow below
-                                } else {
-                                    console.log('[AuthContext] Token not found in DB — invalid or expired token.');
-                                }
-                            }
-                        } catch (inviteErr) {
-                            console.error('[AuthContext] Invite check failed — proceeding as normal auth flow:', inviteErr);
-                        }
-                    }
 
                     if (!uidDocSnap.exists()) {
                         console.log('[AuthContext] User doc does not exist.');
