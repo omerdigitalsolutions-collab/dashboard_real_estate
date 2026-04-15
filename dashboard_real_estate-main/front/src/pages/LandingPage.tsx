@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
     CheckCircle2,
     MessageCircle,
@@ -21,13 +21,17 @@ import {
     Users,
     GraduationCap,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Copy,
+    Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LandingPage() {
     const { userData } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const [linkCopied, setLinkCopied] = useState(false);
 
     const handleLoginClick = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -181,10 +185,26 @@ export default function LandingPage() {
         }
     };
 
+    // Auto-scroll to training section when navigating to /training
+    useEffect(() => {
+        if (location.pathname === '/training') {
+            const el = document.getElementById('training');
+            if (el) {
+                setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+            }
+        }
+    }, [location.pathname]);
+
     const handleScrollToTraining = (e: React.MouseEvent) => {
         e.preventDefault();
         const el = document.getElementById('training');
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const handleCopyTrainingLink = () => {
+        navigator.clipboard.writeText('https://homer.management/#training');
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
     };
 
     const handleContactSubmit = async (e: React.FormEvent) => {
@@ -878,6 +898,29 @@ export default function LandingPage() {
                             צוות hOMER מזמין אתכם להדרכה אישית ומקצועית, ללא עלות וללא התחייבות.
                             נראה לכם בדיוק איך המערכת תחסוך לכם זמן ותייצר עסקאות.
                         </p>
+
+                        {/* Direct link tab */}
+                        <div className="mt-6 inline-flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-sm text-sm text-slate-500 font-medium" dir="ltr">
+                            <span className="text-slate-400 text-xs">🔗</span>
+                            <span className="text-slate-600 font-mono text-xs">homer.management/#training</span>
+                            <button
+                                type="button"
+                                onClick={handleCopyTrainingLink}
+                                className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold transition-all border border-emerald-200"
+                            >
+                                {linkCopied ? (
+                                    <>
+                                        <Check className="w-3 h-3" />
+                                        הועתק!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="w-3 h-3" />
+                                        העתק קישור
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
 
                     {trainingStatus === 'success' ? (
