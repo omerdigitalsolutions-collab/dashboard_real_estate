@@ -29,7 +29,7 @@ import { addProperty } from './properties/addProperty';
 import { updateProperty } from './properties/updateProperty';
 import { deleteProperty } from './properties/deleteProperty';
 import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty } from './properties/geocode';
-import { onPropertyCreatedMatchmaking } from './properties/matchmaking';
+import { onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking } from './properties/matchmaking';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -96,9 +96,9 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 //   catalogs-generateCatalog
 //   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
-export const users = { inviteAgent, sendAgentInvite, getInviteInfo, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken };
+export const users = { inviteAgent, sendAgentInvite, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };

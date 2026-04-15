@@ -5,6 +5,7 @@ import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
 import WhatsAppBotSettings from '../components/settings/WeBotSettings';
 import { useAuth } from '../context/AuthContext';
+import { auth } from '../config/firebase';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
@@ -161,6 +162,10 @@ export default function Settings() {
 
     try {
       setAgencyLogoUploading(true);
+      // Force-refresh the ID token so custom claims (agencyId, role) are current
+      if (auth.currentUser) {
+        await auth.currentUser.getIdToken(true);
+      }
       const newUrl = await uploadAndSaveAgencyLogo(agencyId, file);
       setAgencyLogoUrl(newUrl);
       showToast('לוגו הסוכנות עודכן בהצלחה! 🏢');

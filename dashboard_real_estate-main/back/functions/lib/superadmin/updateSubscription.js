@@ -64,6 +64,7 @@ exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, asyn
     }
 });
 exports.superAdminReactivateBilling = functions.https.onCall({ cors: true }, async (request) => {
+    var _a, _b;
     if (!request.auth || request.auth.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'You must be a Super Admin to perform this action.');
     }
@@ -75,11 +76,19 @@ exports.superAdminReactivateBilling = functions.https.onCall({ cors: true }, asy
     const agencyRef = db.collection('agencies').doc(agencyId);
     try {
         if (action === 'activate') {
+            // Read current plan so we don't overwrite a plan the admin already set.
+            // If billing.planId is 'free_trial' (trial default) or missing, upgrade to 'pro'.
+            const agencySnap = await agencyRef.get();
+            const currentBillingPlanId = (_b = (_a = agencySnap.data()) === null || _a === void 0 ? void 0 : _a.billing) === null || _b === void 0 ? void 0 : _b.planId;
+            const newPlanId = (!currentBillingPlanId || currentBillingPlanId === 'free_trial')
+                ? 'pro'
+                : currentBillingPlanId;
             await agencyRef.update({
                 'billing.status': 'active',
+                'billing.planId': newPlanId,
                 'status': 'active'
             });
-            return { success: true, message: `Agency reactivated (Status: active).` };
+            return { success: true, message: `Agency reactivated (Status: active, Plan: ${newPlanId}).` };
         }
         else if (action === 'extend') {
             // Extend trial by 7 days from NOW

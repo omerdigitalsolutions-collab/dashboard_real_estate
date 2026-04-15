@@ -7,7 +7,7 @@
  * - premium (formerly enterprise)
  */
 
-export type PlanId = 'basic' | 'advanced' | 'premium' | 'starter' | 'pro' | 'enterprise';
+export type PlanId = 'basic' | 'advanced' | 'premium' | 'starter' | 'pro' | 'enterprise' | 'free_trial';
 
 export interface PlanFeatures {
     canAccessAiBot: boolean;
@@ -37,6 +37,16 @@ export const PLAN_FEATURES: Record<PlanId, PlanFeatures> = {
         canAccessAdvancedFiltering: true,
     },
     premium: {
+        canAccessAiBot: true,
+        canAccessBroadcast: true,
+        canAccessAiImport: true,
+        canAccessAiInsights: true,
+        canAccessSourcing: true,
+        canAccessAdvancedFiltering: true,
+    },
+    // Trial plan — used during onboarding. Backend grants full access during trial;
+    // frontend mirrors that so users with this planId see all features.
+    free_trial: {
         canAccessAiBot: true,
         canAccessBroadcast: true,
         canAccessAiImport: true,

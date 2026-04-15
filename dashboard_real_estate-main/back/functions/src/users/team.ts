@@ -569,13 +569,21 @@ export const generateAgencyJoinCode = onCall({ cors: true }, async (request) => 
   const agencyData = agencyDoc.data() as { agencyName?: string; name?: string };
   const name = agencyData.agencyName || agencyData.name || 'AGENCY';
   
-  // Create a safe prefix: Uppercase, alphanumeric only, max 10 chars
-  const prefix = name
+  // Create a safe prefix: Uppercase, alphanumeric only, max 10 chars.
+  // Hebrew (and other non-Latin) names will produce an empty string after stripping,
+  // so we fall back to a generic prefix in that case.
+  const rawPrefix = name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .replace(/[^a-zA-Z0-9]/g, '')    // Remove non-alphanumeric
+    .replace(/[\u0300-\u036f]/g, '') // Remove Latin accents
+    .replace(/[^a-zA-Z0-9]/g, '')    // Remove non-alphanumeric (incl. Hebrew)
     .toUpperCase()
     .substring(0, 10);
+
+  // For Hebrew/non-Latin names rawPrefix is empty — fall back to the first 5 chars
+  // of the agencyId (always alphanumeric), which is unique per agency.
+  const prefix = rawPrefix.length > 0
+    ? rawPrefix
+    : authData.agencyId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 5);
 
   let attempts = 0;
   let finalCode = '';
@@ -933,14 +941,17 @@ export const claimInviteToken = onCall({ cors: true }, async (request) => {
   const userUid = request.auth.uid;
   const userRef = db.collection('users').doc(userUid);
 
+  // Resolve effectiveRole before the transaction so we can use it for Custom Claims.
+  // An existing admin must never be downgraded by claiming an agent invite.
+  const preSnap = await userRef.get();
+  const existingRole = (preSnap.data() as any)?.role;
+  const effectiveRole: string = existingRole === 'admin' ? 'admin' : stubData.role;
+
   await db.runTransaction(async (transaction) => {
     const userSnap = await transaction.get(userRef);
 
     if (userSnap.exists) {
-      const existingRole = (userSnap.data() as any)?.role;
-      // Don't downgrade an admin to an agent role. Preserve existing role for admins.
-      const effectiveRole = existingRole === 'admin' ? 'admin' : stubData.role;
-      // Migrate existing user to the new agency
+      // Migrate existing user to the new agency, preserving their role if admin.
       transaction.update(userRef, {
         agencyId: stubData.agencyId,
         role: effectiveRole,
@@ -954,25 +965,26 @@ export const claimInviteToken = onCall({ cors: true }, async (request) => {
         email: request.auth?.token.email || stubData.email,
         name: stubData.name || null,
         phone: stubData.phone || null,
-        role: stubData.role,
+        role: effectiveRole,
         agencyId: stubData.agencyId,
         isActive: true,
         inviteToken: token.trim(),
         createdAt: FieldValue.serverTimestamp()
       });
     }
-
-    // DO NOT delete the stub yet — it might hold information or reference we need
-    // until the full onboarding (name/phone) is complete.
-    // if (stubDoc && stubDoc.id !== userUid) {
-    //   transaction.delete(stubDoc.ref);
-    // }
   });
 
-  // Finally, set the custom claims securely
+  // Mark the stub as consumed so the same invite link cannot be reused by
+  // a different account. Only needed when the stub lives at a different doc ID.
+  if (stubDoc && stubDoc.id !== userUid) {
+    await stubDoc.ref.update({ uid: userUid, claimedAt: FieldValue.serverTimestamp() });
+  }
+
+  // Set custom claims using effectiveRole (not stubData.role) to avoid
+  // accidentally downgrading an existing admin to an agent.
   await getAuth().setCustomUserClaims(userUid, {
     agencyId: stubData.agencyId,
-    role: stubData.role
+    role: effectiveRole
   });
 
   return { success: true, agencyId: stubData.agencyId };

@@ -82,6 +82,8 @@ function getWahaBaseUrl() {
 }
 /** Normalise Israeli phone to international format: 0501234567 → 972501234567@c.us */
 function toWaId(phone) {
+    if (phone.includes('@'))
+        return phone; // Already a WaId (contact or group)
     let clean = phone.replace(/\D/g, '');
     if (clean.startsWith('0'))
         clean = '972' + clean.substring(1);
@@ -495,7 +497,7 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     cors: true,
     secrets: ['WAHA_BASE_URL', 'WAHA_MASTER_KEY', masterKey]
 }, async (request) => {
-    var _a;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Must be logged in.');
     const { phone, message, isBroadcast, fileUrl, fileName } = request.data;
@@ -510,30 +512,76 @@ exports.sendWhatsappMessage = (0, https_1.onCall)({
     if (!wa || ((_a = wa.status) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== 'CONNECTED') {
         throw new https_1.HttpsError('failed-precondition', 'WhatsApp is not connected. Please connect first in Settings.');
     }
-    // ── Green API mode via dynamic keys ───────────────────────────────────────────────────────
+    // ── 1. Try Green API mode via dynamic keys ───────────────────────────────────────────────────────
     const keys = await getGreenApiCredentials(agencyId, masterKey.value());
     if ((keys === null || keys === void 0 ? void 0 : keys.idInstance) && (keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
-        if (fileUrl) {
-            const sendFileUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
-            await axios_1.default.post(sendFileUrl, {
-                chatId: toWaId(phone),
-                urlFile: fileUrl,
-                fileName: fileName || 'file',
-                caption: message
-            }, { timeout: 20000 });
-            console.log(`[Green API] File message sent to ${phone}`);
+        try {
+            if (fileUrl) {
+                const sendFileUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendFileByUrl/${keys.apiTokenInstance}`;
+                await axios_1.default.post(sendFileUrl, {
+                    chatId: toWaId(phone),
+                    urlFile: fileUrl,
+                    fileName: fileName || 'file',
+                    caption: message
+                }, { timeout: 20000 });
+                console.log(`[WhatsApp] Green API: File sent to ${phone}`);
+            }
+            else {
+                const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
+                await axios_1.default.post(sendUrl, {
+                    chatId: toWaId(phone),
+                    message: message
+                }, { timeout: 10000 });
+                console.log(`[WhatsApp] Green API: Message sent to ${phone}`);
+            }
+            return { success: true };
         }
-        else {
-            const sendUrl = `https://7105.api.greenapi.com/waInstance${keys.idInstance}/sendMessage/${keys.apiTokenInstance}`;
-            await axios_1.default.post(sendUrl, {
-                chatId: toWaId(phone),
-                message: message
-            }, { timeout: 10000 });
-            console.log(`[Green API] Message sent to ${phone}`);
+        catch (err) {
+            console.error(`[WhatsApp] Green API dispatch failed for agency ${agencyId}:`, ((_b = err.response) === null || _b === void 0 ? void 0 : _b.data) || err.message);
+            const errorMsg = ((_d = (_c = err.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || err.message || 'Unknown Green API error';
+            return { success: false, error: `Green API: ${errorMsg}` };
         }
-        return { success: true };
     }
-    throw new https_1.HttpsError('failed-precondition', 'Session not found.');
+    // ── 2. Try WAHA mode (Self-hosted) ───────────────────────────────────────────────────────
+    // We check for WAHA if Green API keys aren't found, or as a fallback
+    const waBaseUrl = process.env.WAHA_BASE_URL;
+    if (waBaseUrl) {
+        const sessionName = `agency_${agencyId}`;
+        try {
+            const headers = {};
+            if (process.env.WAHA_MASTER_KEY) {
+                headers['Authorization'] = `Bearer ${process.env.WAHA_MASTER_KEY}`;
+            }
+            const chatId = toWaId(phone);
+            if (fileUrl) {
+                const url = `${waBaseUrl.replace(/\/$/, '')}/api/sendRemoteFile`;
+                await axios_1.default.post(url, {
+                    session: sessionName,
+                    chatId: chatId,
+                    fileUrl: fileUrl,
+                    fileName: fileName || 'file',
+                    caption: message
+                }, { headers, timeout: 20000 });
+                console.log(`[WhatsApp] WAHA: File sent to ${phone}`);
+            }
+            else {
+                const url = `${waBaseUrl.replace(/\/$/, '')}/api/sendText`;
+                await axios_1.default.post(url, {
+                    session: sessionName,
+                    chatId: chatId,
+                    text: message
+                }, { headers, timeout: 10000 });
+                console.log(`[WhatsApp] WAHA: Message sent to ${phone}`);
+            }
+            return { success: true };
+        }
+        catch (err) {
+            console.error(`[WhatsApp] WAHA dispatch failed for agency ${agencyId}:`, ((_e = err.response) === null || _e === void 0 ? void 0 : _e.data) || err.message);
+            const errorMsg = ((_g = (_f = err.response) === null || _f === void 0 ? void 0 : _f.data) === null || _g === void 0 ? void 0 : _g.error) || err.message || 'Unknown WAHA error';
+            return { success: false, error: `WAHA: ${errorMsg}` };
+        }
+    }
+    throw new https_1.HttpsError('failed-precondition', 'No WhatsApp session or instance found. Please reconnect in Settings.');
 });
 /**
  * Raw helper for sending system alerts (from cron jobs, webhooks, etc)

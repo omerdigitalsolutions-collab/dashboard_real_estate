@@ -9,7 +9,6 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
-import { claimInviteTokenService } from '../services/authService';
 
 // ─── Context Shape ───────────────────────────────────────────────────────────── 
 interface AuthContextType {

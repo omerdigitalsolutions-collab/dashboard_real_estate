@@ -320,6 +320,7 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
  */
 exports.getInviteInfo = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
+    console.log('[getInviteInfo] Invoked with data:', request.data);
     const { token } = request.data;
     if (!(token === null || token === void 0 ? void 0 : token.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'token is required.');
@@ -379,28 +380,19 @@ exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request)
     if (!(token === null || token === void 0 ? void 0 : token.trim())) {
         throw new https_1.HttpsError('invalid-argument', 'token is required.');
     }
-    let stubsSnap = await db.collection('users')
-        .where('inviteToken', '==', token.trim())
-        .limit(1)
-        .get();
-    let stubDoc = !stubsSnap.empty ? stubsSnap.docs[0] : null;
-    // Fallback for legacy invitations (token was docId)
-    if (!stubDoc && token.trim().length >= 20) {
-        const legacyDoc = await db.collection('users').doc(token.trim()).get();
-        const legacyData = legacyDoc.data();
-        if (legacyDoc.exists && !(legacyData === null || legacyData === void 0 ? void 0 : legacyData.inviteToken)) {
-            stubDoc = legacyDoc;
-        }
+    const userUid = request.auth.uid;
+    const userRef = db.collection('users').doc(userUid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+        throw new https_1.HttpsError('not-found', 'User record not found. Please log in again.');
     }
-    if (!stubDoc) {
-        throw new https_1.HttpsError('not-found', 'Invite token not found.');
+    const userData = userSnap.data();
+    // Verify token matches if provided
+    if (userData.inviteToken !== token.trim()) {
+        throw new https_1.HttpsError('permission-denied', 'Invalid invitation token for this account.');
     }
-    const stubRef = stubDoc.ref;
-    const stub = stubDoc.data();
-    // Ensure the caller is the linked agent
-    if (stub.uid !== request.auth.uid) {
-        throw new https_1.HttpsError('permission-denied', 'This token is not linked to your account.');
-    }
+    const stubRef = userRef;
+    const stub = userData;
     // Build update payload — only include provided fields
     const update = {};
     if (name === null || name === void 0 ? void 0 : name.trim())
@@ -466,13 +458,20 @@ exports.generateAgencyJoinCode = (0, https_1.onCall)({ cors: true }, async (requ
     }
     const agencyData = agencyDoc.data();
     const name = agencyData.agencyName || agencyData.name || 'AGENCY';
-    // Create a safe prefix: Uppercase, alphanumeric only, max 10 chars
-    const prefix = name
+    // Create a safe prefix: Uppercase, alphanumeric only, max 10 chars.
+    // Hebrew (and other non-Latin) names will produce an empty string after stripping,
+    // so we fall back to a generic prefix in that case.
+    const rawPrefix = name
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // Remove accents
-        .replace(/[^a-zA-Z0-9]/g, '') // Remove non-alphanumeric
+        .replace(/[\u0300-\u036f]/g, '') // Remove Latin accents
+        .replace(/[^a-zA-Z0-9]/g, '') // Remove non-alphanumeric (incl. Hebrew)
         .toUpperCase()
         .substring(0, 10);
+    // For Hebrew/non-Latin names rawPrefix is empty — fall back to the first 5 chars
+    // of the agencyId (always alphanumeric), which is unique per agency.
+    const prefix = rawPrefix.length > 0
+        ? rawPrefix
+        : authData.agencyId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 5);
     let attempts = 0;
     let finalCode = '';
     while (attempts < 5) {
@@ -719,6 +718,7 @@ exports.sendAgentInvite = (0, https_1.onCall)({ secrets: [resendApiKey], cors: t
  * Target: `users/{request.auth.uid}`
  */
 exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
     if (!request.auth || !request.auth.uid) {
         throw new https_1.HttpsError('unauthenticated', 'User must be authenticated.');
     }
@@ -770,14 +770,16 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
     }
     const userUid = request.auth.uid;
     const userRef = db.collection('users').doc(userUid);
+    // Resolve effectiveRole before the transaction so we can use it for Custom Claims.
+    // An existing admin must never be downgraded by claiming an agent invite.
+    const preSnap = await userRef.get();
+    const existingRole = (_a = preSnap.data()) === null || _a === void 0 ? void 0 : _a.role;
+    const effectiveRole = existingRole === 'admin' ? 'admin' : stubData.role;
     await db.runTransaction(async (transaction) => {
-        var _a, _b;
+        var _a;
         const userSnap = await transaction.get(userRef);
         if (userSnap.exists) {
-            const existingRole = (_a = userSnap.data()) === null || _a === void 0 ? void 0 : _a.role;
-            // Don't downgrade an admin to an agent role. Preserve existing role for admins.
-            const effectiveRole = existingRole === 'admin' ? 'admin' : stubData.role;
-            // Migrate existing user to the new agency
+            // Migrate existing user to the new agency, preserving their role if admin.
             transaction.update(userRef, {
                 agencyId: stubData.agencyId,
                 role: effectiveRole,
@@ -789,25 +791,27 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
             // Link: create the user document using the stub's data
             transaction.set(userRef, {
                 uid: userUid,
-                email: ((_b = request.auth) === null || _b === void 0 ? void 0 : _b.token.email) || stubData.email,
+                email: ((_a = request.auth) === null || _a === void 0 ? void 0 : _a.token.email) || stubData.email,
                 name: stubData.name || null,
                 phone: stubData.phone || null,
-                role: stubData.role,
+                role: effectiveRole,
                 agencyId: stubData.agencyId,
                 isActive: true,
                 inviteToken: token.trim(),
                 createdAt: firestore_1.FieldValue.serverTimestamp()
             });
         }
-        // Delete the stub document if its ID isn't the user's UID
-        if (stubDoc && stubDoc.id !== userUid) {
-            transaction.delete(stubDoc.ref);
-        }
     });
-    // Finally, set the custom claims securely
+    // Mark the stub as consumed so the same invite link cannot be reused by
+    // a different account. Only needed when the stub lives at a different doc ID.
+    if (stubDoc && stubDoc.id !== userUid) {
+        await stubDoc.ref.update({ uid: userUid, claimedAt: firestore_1.FieldValue.serverTimestamp() });
+    }
+    // Set custom claims using effectiveRole (not stubData.role) to avoid
+    // accidentally downgrading an existing admin to an agent.
     await (0, auth_1.getAuth)().setCustomUserClaims(userUid, {
         agencyId: stubData.agencyId,
-        role: stubData.role
+        role: effectiveRole
     });
     return { success: true, agencyId: stubData.agencyId };
 });

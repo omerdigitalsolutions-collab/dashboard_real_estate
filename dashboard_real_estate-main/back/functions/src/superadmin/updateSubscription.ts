@@ -65,11 +65,20 @@ export const superAdminReactivateBilling = functions.https.onCall({ cors: true }
 
     try {
         if (action === 'activate') {
+            // Read current plan so we don't overwrite a plan the admin already set.
+            // If billing.planId is 'free_trial' (trial default) or missing, upgrade to 'pro'.
+            const agencySnap = await agencyRef.get();
+            const currentBillingPlanId = agencySnap.data()?.billing?.planId as string | undefined;
+            const newPlanId = (!currentBillingPlanId || currentBillingPlanId === 'free_trial')
+                ? 'pro'
+                : currentBillingPlanId;
+
             await agencyRef.update({
                 'billing.status': 'active',
+                'billing.planId': newPlanId,
                 'status': 'active'
             });
-            return { success: true, message: `Agency reactivated (Status: active).` };
+            return { success: true, message: `Agency reactivated (Status: active, Plan: ${newPlanId}).` };
         } else if (action === 'extend') {
             // Extend trial by 7 days from NOW
             const newTrialEnd = new Date();

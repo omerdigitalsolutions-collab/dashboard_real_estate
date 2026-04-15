@@ -111,6 +111,7 @@ function App() {
         />
 
         <Route path="/" element={<LandingPage />} />
+        <Route path="/training" element={<LandingPage />} />
 
         {/* Dashboard Routes are protected */}
         <Route

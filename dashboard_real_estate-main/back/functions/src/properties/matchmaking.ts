@@ -1,5 +1,6 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { evaluateMatch, MatchingProperty } from '../leads/matchingEngine';
 
 const db = admin.firestore();
 
@@ -117,6 +118,99 @@ export const onPropertyCreatedMatchmaking = onDocumentCreated(
 
         } catch (err) {
             console.error(`Error during matchmaking for property ${propertyId}:`, err);
+        }
+    }
+);
+
+/**
+ * Triggered whenever a new document is added to the public `cities/{cityName}/properties` collection.
+ * Finds all active leads across ALL agencies that are looking in that city,
+ * runs the weighted matching engine, and generates alerts for high/medium matches.
+ */
+export const onGlobalPropertyCreatedMatchmaking = onDocumentCreated(
+    'cities/{cityName}/properties/{propertyId}',
+    async (event) => {
+        const cityName = event.params.cityName;
+        const propertyId = event.params.propertyId;
+        const propertySnap = event.data;
+
+        if (!propertySnap) return;
+
+        const propertyData = propertySnap.data();
+        const propertyPrice = propertyData.price;
+        const propertyRooms = propertyData.rooms;
+        const propertyType = propertyData.type; // 'sale' | 'rent'
+
+        // Skip if missing critical data
+        if (!propertyPrice || !propertyType) {
+            console.log(`Global matchmaking skipped for ${propertyId}: Missing price or type.`);
+            return;
+        }
+
+        const matchingProp: MatchingProperty = {
+            id: propertyId,
+            city: propertyData.city || cityName,
+            neighborhood: propertyData.neighborhood || null,
+            price: propertyPrice,
+            rooms: propertyRooms ?? null,
+            type: propertyType,
+            hasElevator: propertyData.hasElevator ?? null,
+            hasParking: propertyData.hasParking ?? null,
+            hasBalcony: propertyData.hasBalcony ?? null,
+            hasSafeRoom: propertyData.hasSafeRoom ?? null,
+        };
+
+        try {
+            // Query all active leads looking in this city (across all agencies)
+            const leadsSnap = await db.collection('leads')
+                .where('requirements.desiredCity', 'array-contains', cityName)
+                .where('status', 'not-in', ['lost', 'won'])
+                .get();
+
+            if (leadsSnap.empty) {
+                console.log(`Global matchmaking: No active leads found for city "${cityName}".`);
+                return;
+            }
+
+            const batch = db.batch();
+            let matchCount = 0;
+
+            leadsSnap.docs.forEach((doc) => {
+                const lead = doc.data();
+                const reqs = lead.requirements;
+                if (!reqs) return;
+
+                const result = evaluateMatch(matchingProp, reqs);
+                if (!result) return;
+
+                matchCount++;
+                const alertRef = db.collection('alerts').doc();
+                batch.set(alertRef, {
+                    agencyId: lead.agencyId,
+                    targetAgentId: lead.assignedAgentId || 'all',
+                    type: 'global_property_match',
+                    title: 'נכס מהמאגר הציבורי תואם ללקוח!',
+                    message: `נמצא נכס ב${cityName} מהמאגר הציבורי שתואם ל${lead.name || 'לקוח שלך'} (ציון: ${result.matchScore})`,
+                    link: `/dashboard/leads/${doc.id}`,
+                    propertyId: propertyId,
+                    propertyCollectionPath: `cities/${cityName}/properties`,
+                    leadId: doc.id,
+                    matchScore: result.matchScore,
+                    matchCategory: result.category,
+                    isRead: false,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+
+                console.log(`Global matchmaking: Public property ${propertyId} matched lead ${doc.id} (score: ${result.matchScore})`);
+            });
+
+            if (matchCount > 0) {
+                await batch.commit();
+                console.log(`Global matchmaking complete for ${propertyId}. Created ${matchCount} alerts.`);
+            }
+
+        } catch (err) {
+            console.error(`Error during global matchmaking for property ${propertyId}:`, err);
         }
     }
 );

@@ -250,17 +250,39 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
         }));
     }, [allProperties, likedPropertyIds]);
 
+    // Split matches: agency properties vs public database
+    const { agencyMatches, publicMatches } = useMemo(() => {
+        const agency: any[] = [];
+        const pub: any[] = [];
+        matchedPropertiesWithLikes.forEach(p => {
+            if (p.collectionPath && p.collectionPath.startsWith('cities/')) pub.push(p);
+            else agency.push(p);
+        });
+        return { agencyMatches: agency, publicMatches: pub };
+    }, [matchedPropertiesWithLikes]);
+
+    const [sourceTab, setSourceTab] = useState<'agency' | 'public'>('agency');
+
+    // Switch to public tab automatically if no agency matches but there are public ones
+    useEffect(() => {
+        if (!loadingMatches && agencyMatches.length === 0 && publicMatches.length > 0) {
+            setSourceTab('public');
+        }
+    }, [loadingMatches, agencyMatches.length, publicMatches.length]);
+
+    const activeSourceMatches = sourceTab === 'agency' ? agencyMatches : publicMatches;
+
     const { highMatches, mediumMatches } = useMemo(() => {
         const high: any[] = [];
         const medium: any[] = [];
 
-        matchedPropertiesWithLikes.forEach(p => {
+        activeSourceMatches.forEach(p => {
             if (p.category === 'high') high.push(p);
             else medium.push(p);
         });
 
         return { highMatches: high, mediumMatches: medium };
-    }, [matchedPropertiesWithLikes]);
+    }, [activeSourceMatches]);
 
     const [panel, setPanel] = useState<'match' | 'edit'>('match');
     const [searchQuery, setSearchQuery] = useState('');
@@ -290,8 +312,16 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
     };
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) setSelectedPropertyIds(new Set(matchedPropertiesWithLikes.map(p => p.id)));
-        else setSelectedPropertyIds(new Set());
+        if (e.target.checked) setSelectedPropertyIds(prev => {
+            const next = new Set(prev);
+            activeSourceMatches.forEach(p => next.add(p.id));
+            return next;
+        });
+        else setSelectedPropertyIds(prev => {
+            const next = new Set(prev);
+            activeSourceMatches.forEach(p => next.delete(p.id));
+            return next;
+        });
     };
 
     const formatPhoneForWhatsApp = (phone?: string) => {
@@ -536,16 +566,47 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                             </div>
                         ) : (
                             <div className="space-y-4">
+                                {/* Source Tabs: Agency vs Public */}
+                                <div className="flex rounded-xl overflow-hidden border border-slate-200 text-xs font-semibold mb-2">
+                                    <button
+                                        onClick={() => setSourceTab('agency')}
+                                        className={`flex-1 px-4 py-2.5 flex items-center justify-center gap-2 transition-colors ${sourceTab === 'agency' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        נכסי המשרד
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${sourceTab === 'agency' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            {agencyMatches.length}
+                                        </span>
+                                    </button>
+                                    <button
+                                        onClick={() => setSourceTab('public')}
+                                        className={`flex-1 px-4 py-2.5 flex items-center justify-center gap-2 transition-colors ${sourceTab === 'public' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        מאגר ציבורי
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${sourceTab === 'public' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                                            {publicMatches.length}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {activeSourceMatches.length === 0 ? (
+                                    <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-center">
+                                        <AlertCircle size={28} className="mb-3 text-slate-300" />
+                                        <p className="text-sm font-medium text-slate-500">
+                                            {sourceTab === 'agency' ? 'אין נכסים תואמים במלאי המשרד' : 'אין נכסים תואמים במאגר הציבורי'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                <>
                                 {/* Select all bar */}
-                                <div className="flex items-center justify-between bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl mb-6">
+                                <div className="flex items-center justify-between bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl">
                                     <label className="flex items-center gap-3 cursor-pointer text-sm font-semibold text-blue-800">
                                         <input
                                             type="checkbox"
-                                            checked={selectedPropertyIds.size === matchedPropertiesWithLikes.length && matchedPropertiesWithLikes.length > 0}
+                                            checked={activeSourceMatches.length > 0 && activeSourceMatches.every(p => selectedPropertyIds.has(p.id))}
                                             onChange={handleSelectAll}
                                             className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-blue-300"
                                         />
-                                        בחר הכל ({matchedPropertiesWithLikes.length} נכסים נמצאו)
+                                        בחר הכל ({activeSourceMatches.length} נכסים נמצאו)
                                     </label>
                                     <span className="text-xs text-blue-600 font-medium">נבחרו {selectedPropertyIds.size} פריטים</span>
                                 </div>
@@ -591,6 +652,8 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                                             ))}
                                         </div>
                                     </div>
+                                )}
+                                </>
                                 )}
                             </div>
                         )

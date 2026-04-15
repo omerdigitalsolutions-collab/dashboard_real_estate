@@ -1,5 +1,5 @@
 import { signInWithRedirect, getRedirectResult, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, getDocs, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, googleProvider, functions } from '../config/firebase';
 
@@ -166,16 +166,6 @@ export const claimInviteTokenService = async (token: string): Promise<void> => {
         console.error('[authService] Error claiming invite token:', error);
         throw error;
     }
-};
-
-/**
- * linkStubUser — Sets the uid field on a stub document.
- * Allowed by Firestore rules when: stub.uid == null AND we only write our own UID.
- * Used as the primary path for new agents joining (no CF deployment needed).
- */
-export const linkStubUser = async (stubDocId: string, uid: string): Promise<void> => {
-    const userRef = doc(db, 'users', stubDocId);
-    await updateDoc(userRef, { uid });
 };
 
 /**
