@@ -17,13 +17,19 @@ function evaluateMatch(property, requirements) {
     // ── 1. Transaction Type (STRICT) ──────────────────────────────────────────
     const wantedTypes = (_b = req.propertyType) !== null && _b !== void 0 ? _b : [];
     if (wantedTypes.length > 0) {
+        // Normalize property type for comparison
+        const pType = (property.type || '').toString().toLowerCase();
+        const isSale = pType === 'sale' || pType.includes('מכירה') || pType.includes('קנייה');
+        const isRent = pType === 'rent' || pType.includes('שכירות');
         const typeMatch = wantedTypes.some(t => {
-            if (t === 'sale' || t === 'rent')
-                return t === property.type;
+            if (t === 'sale')
+                return isSale;
+            if (t === 'rent')
+                return isRent;
             if (t.includes('קנייה') || t.includes('מכירה'))
-                return property.type === 'sale';
+                return isSale;
             if (t.includes('שכירות'))
-                return property.type === 'rent';
+                return isRent;
             return false;
         });
         if (!typeMatch)

@@ -72,24 +72,43 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     if (req.desiredCity && req.desiredCity.length > 0) {
         const citiesToFetch = req.desiredCity.slice(0, 10);
         const globalPromises = citiesToFetch.map(async (cityName: string) => {
-            try {
-                const citySnap = await db.collection('cities').doc(cityName).collection('properties')
-                    .limit(200)
-                    .get();
-                return citySnap.docs.map(doc => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        isExclusivity: false,
-                        collectionPath: `cities/${cityName}/properties`,
-                        address: data.street || data.address || 'כתובת חסויה',
-                        ...data,
-                    };
-                });
-            } catch (err) {
-                console.warn(`Could not fetch global properties for city: ${cityName}`, err);
-                return [];
+            const trimmedCity = cityName.trim();
+            if (!trimmedCity) return [];
+
+            // Define variations to try (Original, with hyphen, with space)
+            const variations = [
+                trimmedCity,
+                trimmedCity.replace(/\s+/g, '-'), // "תל אביב" -> "תל-אביב"
+                trimmedCity.replace(/-/g, ' '),   // "תל-אביב" -> "תל אביב"
+            ];
+            // Unique variations
+            const uniqueVariations = Array.from(new Set(variations));
+
+            for (const cityVariant of uniqueVariations) {
+                try {
+                    const citySnap = await db.collection('cities').doc(cityVariant).collection('properties')
+                        .limit(100)
+                        .get();
+                    
+                    if (citySnap.empty) continue;
+
+                    return citySnap.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            isExclusivity: false,
+                            collectionPath: `cities/${cityVariant}/properties`,
+                            address: data.street || data.address || 'כתובת חסויה',
+                            // Default missing/invalid type to 'sale' for global data
+                            type: data.type || 'sale',
+                            ...data,
+                        };
+                    });
+                } catch (err) {
+                    console.warn(`Could not fetch global properties for variant: ${cityVariant}`, err);
+                }
             }
+            return [];
         });
         const results = await Promise.all(globalPromises);
         globalProperties = results.flat();
