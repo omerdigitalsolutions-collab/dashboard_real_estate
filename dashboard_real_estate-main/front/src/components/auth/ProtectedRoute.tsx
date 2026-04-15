@@ -19,15 +19,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
 
     if (requireOnboarding) {
-        // If they are on onboarding or verify-phone, let them stay
-        if (location.pathname === '/onboarding' || location.pathname === '/verify-phone') {
+        // If they are on onboarding, verify-phone, or agent-setup, let them stay
+        if (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup') {
             return <>{children}</>;
         }
         // Otherwise, send to onboarding first (new flow)
         return <Navigate to="/onboarding" replace />;
     }
 
-    if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone')) {
+    if (!requireOnboarding && (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup')) {
         return <Navigate to="/" replace />;
     }
 
