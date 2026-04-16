@@ -47,7 +47,7 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
     timeoutSeconds: 300,
     memory: '512MiB',
 }, async (req, res) => {
-    var _a;
+    var _a, _b, _c;
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
         return;
@@ -66,7 +66,34 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
         }
         const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `You are an expert real estate data parser. Extract ALL property listings from the provided Yad2 email HTML into a strict JSON ARRAY of objects.
+        // --- Detect source site ---
+        // Priority 1: explicit source field sent from Apps Script
+        // Priority 2: scan HTML for known domain strings
+        const htmlLower = htmlBody.toLowerCase();
+        const explicitSource = ((_c = (_b = req.body) === null || _b === void 0 ? void 0 : _b.source) !== null && _c !== void 0 ? _c : '').toLowerCase();
+        let detectedSource = 'unknown';
+        if (explicitSource === 'yad2' || explicitSource === 'madlan') {
+            detectedSource = explicitSource;
+        }
+        else if (htmlLower.includes('yad2.co.il') || htmlLower.includes('yad2')) {
+            detectedSource = 'yad2';
+        }
+        else if (htmlLower.includes('madlan.co.il') || htmlLower.includes('madlan')) {
+            detectedSource = 'madlan';
+        }
+        // --- Detect deal type (sale vs rent) from HTML keywords ---
+        const isRentKeyword = htmlLower.includes('להשכרה') ||
+            htmlLower.includes('השכרה') ||
+            htmlLower.includes('שכירות');
+        const isSaleKeyword = htmlLower.includes('למכירה') ||
+            htmlLower.includes('מכירה');
+        // Prefer explicit keyword; if ambiguous fall back to Gemini
+        let htmlDealType = null;
+        if (isRentKeyword && !isSaleKeyword)
+            htmlDealType = 'rent';
+        else if (isSaleKeyword && !isRentKeyword)
+            htmlDealType = 'sale';
+        const prompt = `You are an expert real estate data parser. Extract ALL property listings from the provided real-estate alert email HTML (from Yad2 or Madlan) into a strict JSON ARRAY of objects.
   Rules for each object:
   - \`price\`: Number (remove ₪ and commas. e.g., 2290000).
   - \`city\`: Extract from the header (e.g., 'מודיעין מכבים רעות') and normalize to a short string (e.g., 'מודיעין').
@@ -75,8 +102,9 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
   - \`propertyType\`: Extract from the piped string (e.g., 'דירה', 'פנטהאוז').
   - \`rooms\`: Number, extracted from the piped string.
   - \`sqm\`: Number, extracted from the piped string (digits only).
+  - \`dealType\`: Determine whether each listing is a sale or a rental. Set to 'sale' if the listing says 'למכירה' or 'מכירה', set to 'rent' if it says 'להשכרה' or 'השכרה'. Default to 'sale' if unclear.
   - \`listingType\` & \`agencyName\`: Look below 'לפרטים נוספים'. If there is a name (e.g., 'Remax Gold'), set listingType to 'cooperation' and agencyName to that name. If missing, set listingType to 'private'.
-  - \`yad2Link\`: Search the HTML for an href link to Yad2 (e.g., highly likely on a button or an anchor tag representing 'לצפייה במודעה' or similar). If found, extract the URL. Otherwise, leave empty string.
+  - \`yad2Link\`: Search the HTML for an href link to yad2.co.il or madlan.co.il (e.g., on a button or anchor tag 'לצפייה במודעה'). If found, extract the URL. Otherwise, leave empty string.
   Return ONLY the raw JSON array without markdown code blocks.
 
   HTML Email Body:
@@ -106,13 +134,19 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
                 .doc(normalizedCityName)
                 .collection('properties')
                 .doc(hashId);
-            batch.set(propRef, Object.assign(Object.assign({}, prop), { city: normalizedCityName, street: streetStr, source: 'yad2_alert', isPublic: true, createdAt: new Date(), ingestedAt: new Date(), listingType: prop.listingType === 'cooperation' ? 'external' : 'private' }), { merge: true });
+            // Resolve deal type: HTML keyword takes priority, else Gemini's answer, else 'sale'
+            const resolvedDealType = htmlDealType !== null && htmlDealType !== void 0 ? htmlDealType : (prop.dealType === 'rent' ? 'rent' : 'sale');
+            // Resolve source label
+            const sourceLabel = detectedSource === 'yad2' ? 'yad2_alert' :
+                detectedSource === 'madlan' ? 'madlan_alert' :
+                    'email_alert';
+            batch.set(propRef, Object.assign(Object.assign({}, prop), { city: normalizedCityName, street: streetStr, source: sourceLabel, siteSource: detectedSource, type: resolvedDealType, isPublic: true, createdAt: new Date(), ingestedAt: new Date(), listingType: prop.listingType === 'cooperation' ? 'external' : 'private' }), { merge: true });
             count++;
         }
         if (count > 0) {
             await batch.commit();
         }
-        console.log(`Successfully inserted ${count} properties`);
+        console.log(`Successfully inserted ${count} properties | source: ${detectedSource} | dealType: ${htmlDealType !== null && htmlDealType !== void 0 ? htmlDealType : 'from-gemini'}`);
     }
     catch (error) {
         console.error('Error processing Yad2 Webhook:', error);

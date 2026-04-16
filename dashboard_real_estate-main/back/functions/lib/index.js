@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInviteInfo = exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.getInviteInfo = exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -49,10 +49,14 @@ const textToAction_1 = require("./ai/textToAction");
 const homerChatBot_1 = require("./ai/homerChatBot");
 // ── Calendar Module ────────────────────────────────────────────────────────────
 const calendar_1 = require("./calendar");
+// ── Deals Module ──────────────────────────────────────────────────────────────
+const addDeal_1 = require("./deals/addDeal");
+const updateDeal_1 = require("./deals/updateDeal");
 // ── Automation Module ──────────────────────────────────────────────────────────
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
 const superadmin_1 = require("./superadmin");
+const healAdmin_1 = require("./superadmin/healAdmin");
 const setAgencyPlan_1 = require("./superadmin/setAgencyPlan");
 const globalImport_1 = require("./admin/globalImport");
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
@@ -95,8 +99,10 @@ exports.superadmin = {
     superAdminListAuthUsers: superadmin_1.superAdminListAuthUsers,
     superAdminSetAgencyStatus: superadmin_1.superAdminSetAgencyStatus,
     superAdminSetUserStatus: superadmin_1.superAdminSetUserStatus,
-    superAdminApproveAgency: superadmin_1.superAdminApproveAgency
+    superAdminApproveAgency: superadmin_1.superAdminApproveAgency,
+    superAdminHealSelf: healAdmin_1.superAdminHealSelf
 };
+exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts };
 var stripeWebhook_1 = require("./stripeWebhook");

@@ -65,13 +65,13 @@ const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
  */
 const db = admin.firestore();
 const REGION = 'europe-west1';
-// Allowed CORS origins — add your production domain here when deploying
+// Allowed CORS origins
 const CORS_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:3000',
     'https://dashboard-6f9d1.web.app',
     'https://dashboard-6f9d1.firebaseapp.com',
-    true, // Allow all origins (for callable functions, the SDK handles auth)
+    'https://homer.management',
 ];
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getWahaBaseUrl() {

@@ -56,7 +56,7 @@ exports.setupSuperAdmin = functions.https.onCall({ cors: true }, async (request)
         const auth = (0, auth_1.getAuth)();
         const user = await auth.getUser(uid);
         const currentClaims = user.customClaims || {};
-        await auth.setCustomUserClaims(uid, Object.assign(Object.assign({}, currentClaims), { superAdmin: true }));
+        await auth.setCustomUserClaims(uid, Object.assign(Object.assign({}, currentClaims), { superAdmin: true, role: 'superadmin' }));
         console.log(`Successfully granted superAdmin claim to user: ${uid}`);
         return { success: true, message: 'Super Admin permissions granted. Please log out and log back in to refresh your token.' };
     }

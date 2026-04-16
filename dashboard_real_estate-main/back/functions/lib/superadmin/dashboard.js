@@ -38,7 +38,7 @@ const functions = __importStar(require("firebase-functions/v2"));
 const firestore_1 = require("firebase-admin/firestore");
 exports.superAdminGetDashboardStats = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
     }
     const db = (0, firestore_1.getFirestore)();

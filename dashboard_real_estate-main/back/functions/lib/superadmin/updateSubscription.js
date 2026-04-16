@@ -38,7 +38,7 @@ const functions = __importStar(require("firebase-functions/v2"));
 const firestore_1 = require("firebase-admin/firestore");
 exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, async (request) => {
     // Auth: Must verify request.auth.token.superAdmin === true
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError('permission-denied', 'You must be a Super Admin to perform this action.');
     }
     const { agencyId, newPlanId } = request.data;
@@ -65,7 +65,7 @@ exports.superAdminUpdateAgencyPlan = functions.https.onCall({ cors: true }, asyn
 });
 exports.superAdminReactivateBilling = functions.https.onCall({ cors: true }, async (request) => {
     var _a, _b;
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError('permission-denied', 'You must be a Super Admin to perform this action.');
     }
     const { agencyId, action } = request.data;

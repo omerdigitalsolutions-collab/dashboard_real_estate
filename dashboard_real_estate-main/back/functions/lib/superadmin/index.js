@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.superAdminApproveAgency = exports.superAdminListAuthUsers = exports.superAdminSetUserStatus = exports.superAdminSetAgencyStatus = exports.superAdminReactivateBilling = exports.superAdminUpdateAgencyPlan = exports.superAdminGetAgencyUsage = exports.setupSuperAdmin = exports.superAdminGetDashboardStats = exports.superAdminUpdateExpenses = void 0;
+exports.superAdminHealSelf = exports.superAdminApproveAgency = exports.superAdminListAuthUsers = exports.superAdminSetUserStatus = exports.superAdminSetAgencyStatus = exports.superAdminReactivateBilling = exports.superAdminUpdateAgencyPlan = exports.superAdminGetAgencyUsage = exports.setupSuperAdmin = exports.superAdminGetDashboardStats = exports.superAdminUpdateExpenses = void 0;
 var finances_1 = require("./finances");
 Object.defineProperty(exports, "superAdminUpdateExpenses", { enumerable: true, get: function () { return finances_1.superAdminUpdateExpenses; } });
 var dashboard_1 = require("./dashboard");
@@ -19,4 +19,6 @@ var admin_1 = require("./admin");
 Object.defineProperty(exports, "superAdminListAuthUsers", { enumerable: true, get: function () { return admin_1.superAdminListAuthUsers; } });
 var approveAgency_1 = require("./approveAgency");
 Object.defineProperty(exports, "superAdminApproveAgency", { enumerable: true, get: function () { return approveAgency_1.superAdminApproveAgency; } });
+var healAdmin_1 = require("./healAdmin");
+Object.defineProperty(exports, "superAdminHealSelf", { enumerable: true, get: function () { return healAdmin_1.superAdminHealSelf; } });
 //# sourceMappingURL=index.js.map

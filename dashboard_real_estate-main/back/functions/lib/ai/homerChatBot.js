@@ -127,6 +127,85 @@ const tools = [
             },
         ],
     },
+    {
+        functionDeclarations: [
+            {
+                name: 'queryGoals',
+                description: 'Fetch agency and personal goals (monthly/yearly) and current progress towards them.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {},
+                },
+            },
+            {
+                name: 'queryAgentLeaderboard',
+                description: 'Fetch a ranking of agents by their sales performance (deals closed and commission generated).',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        period: {
+                            type: generative_ai_1.SchemaType.STRING,
+                            description: 'Optional. "month" or "year". Defaults to month.',
+                        },
+                    },
+                },
+            },
+            {
+                name: 'queryExpenses',
+                description: 'Fetch and summarize agency expenses for a period.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        period: {
+                            type: generative_ai_1.SchemaType.STRING,
+                            description: 'Optional. "month" or "year". Defaults to month.',
+                        },
+                    },
+                },
+            },
+            {
+                name: 'queryMeetings',
+                description: 'Fetch upcoming meetings and appointments.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        period: {
+                            type: generative_ai_1.SchemaType.STRING,
+                            description: 'Optional. "today", "tomorrow", or "week". Defaults to today.',
+                        },
+                    },
+                },
+            },
+            {
+                name: 'queryLeadMatches',
+                description: 'Find properties that match a specific lead\'s requirements.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        leadId: {
+                            type: generative_ai_1.SchemaType.STRING,
+                            description: 'Required. The lead ID.',
+                        },
+                    },
+                    required: ['leadId'],
+                },
+            },
+            {
+                name: 'searchEntity',
+                description: 'Search for a lead or property by name, phone, or address.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        query: {
+                            type: generative_ai_1.SchemaType.STRING,
+                            description: 'Search term (name, phone, address).',
+                        },
+                    },
+                    required: ['query'],
+                },
+            },
+        ],
+    },
 ];
 // ─── 2. Tool Resolvers (All strictly scoped by agencyId) ──────────────────────
 async function execQueryTeam(db, agencyId) {
@@ -251,6 +330,179 @@ async function execCreateLead(db, agencyId, uid, args) {
         leadId: leadRef.id,
     };
 }
+async function execQueryGoals(db, agencyId, uid) {
+    var _a, _b, _c, _d;
+    const agencyDoc = await db.collection('agencies').doc(agencyId).get();
+    const userDoc = await db.collection('users').doc(uid).get();
+    const now = new Date();
+    const startMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const startYear = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+    // Get current progress: total Won commissions
+    const dealsSnap = await db.collection('deals')
+        .where('agencyId', '==', agencyId)
+        .where('stage', '==', 'Won')
+        .where('updatedAt', '>=', admin.firestore.Timestamp.fromDate(startYear))
+        .get();
+    let monthRevenue = 0;
+    let yearRevenue = 0;
+    let monthDeals = 0;
+    let yearDeals = 0;
+    dealsSnap.forEach(doc => {
+        const d = doc.data();
+        const updatedAt = d.updatedAt;
+        if (!updatedAt)
+            return;
+        const date = updatedAt.toDate ? updatedAt.toDate() : new Date(updatedAt);
+        const comm = d.projectedCommission || 0;
+        if (date >= startMonth) {
+            monthRevenue += comm;
+            monthDeals++;
+        }
+        yearRevenue += comm;
+        yearDeals++;
+    });
+    return {
+        agency: agencyDoc.exists ? {
+            name: (_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.name,
+            monthlyGoals: (_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.monthlyGoals,
+            yearlyGoals: (_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.yearlyGoals,
+            currentProgress: { monthRevenue, yearRevenue, monthDeals, yearDeals }
+        } : null,
+        personal: userDoc.exists ? {
+            goals: (_d = userDoc.data()) === null || _d === void 0 ? void 0 : _d.goals,
+            currentProgress: {
+                monthRevenue: dealsSnap.docs.filter(d => { var _a; return (d.data().createdBy === uid || d.data().agentId === uid) && (((_a = d.data().updatedAt) === null || _a === void 0 ? void 0 : _a.toDate) ? d.data().updatedAt.toDate() : new Date(d.data().updatedAt)) >= startMonth; }).reduce((acc, d) => acc + (d.data().projectedCommission || 0), 0),
+                yearRevenue: dealsSnap.docs.filter(d => (d.data().createdBy === uid || d.data().agentId === uid)).reduce((acc, d) => acc + (d.data().projectedCommission || 0), 0)
+            }
+        } : null
+    };
+}
+async function execQueryAgentLeaderboard(db, agencyId, args) {
+    const now = new Date();
+    const start = args.period === 'year'
+        ? new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const dealsSnap = await db.collection('deals')
+        .where('agencyId', '==', agencyId)
+        .where('stage', '==', 'Won')
+        .where('updatedAt', '>=', admin.firestore.Timestamp.fromDate(start))
+        .get();
+    const stats = {};
+    dealsSnap.forEach(doc => {
+        const d = doc.data();
+        const agentId = d.createdBy || d.agentId || 'unknown';
+        if (!stats[agentId])
+            stats[agentId] = { deals: 0, revenue: 0 };
+        stats[agentId].deals++;
+        stats[agentId].revenue += d.projectedCommission || 0;
+    });
+    const agentsSnap = await db.collection('users').where('agencyId', '==', agencyId).get();
+    const names = {};
+    agentsSnap.forEach(doc => {
+        const d = doc.data();
+        names[doc.id] = d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim();
+    });
+    const leaderboard = Object.entries(stats).map(([id, s]) => (Object.assign({ agent: names[id] || `סוכן ${id.slice(0, 4)}` }, s))).sort((a, b) => b.revenue - a.revenue);
+    return { period: args.period || 'month', leaderboard };
+}
+async function execQueryExpenses(db, agencyId, args) {
+    const now = new Date();
+    const start = args.period === 'year'
+        ? new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const snap = await db.collection('expenses')
+        .where('agencyId', '==', agencyId)
+        .where('date', '>=', admin.firestore.Timestamp.fromDate(start))
+        .get();
+    let total = 0;
+    const byCategory = {};
+    snap.forEach(doc => {
+        const d = doc.data();
+        total += d.amount || 0;
+        const cat = d.category || 'Other';
+        byCategory[cat] = (byCategory[cat] || 0) + (d.amount || 0);
+    });
+    return { totalExpenses: total, breakdown: byCategory };
+}
+async function execQueryMeetings(db, agencyId, args) {
+    const now = new Date();
+    const startDay = new Date(now.setHours(0, 0, 0, 0));
+    let endDay = new Date(startDay);
+    if (args.period === 'tomorrow') {
+        startDay.setDate(startDay.getDate() + 1);
+        endDay.setDate(startDay.getDate() + 1);
+    }
+    else if (args.period === 'week') {
+        endDay.setDate(startDay.getDate() + 7);
+    }
+    else {
+        endDay.setDate(startDay.getDate() + 1);
+    }
+    const snap = await db.collection('tasks')
+        .where('agencyId', '==', agencyId)
+        .where('category', '==', 'meeting')
+        .where('dueDate', '>=', admin.firestore.Timestamp.fromDate(startDay))
+        .where('dueDate', '<', admin.firestore.Timestamp.fromDate(endDay))
+        .get();
+    return {
+        count: snap.size,
+        meetings: snap.docs.map(doc => {
+            var _a, _b;
+            const d = doc.data();
+            const date = ((_a = d.dueDate) === null || _a === void 0 ? void 0 : _a.toDate) ? d.dueDate.toDate() : new Date(d.dueDate);
+            return {
+                title: d.title,
+                time: date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
+                location: (_b = d.relatedTo) === null || _b === void 0 ? void 0 : _b.name
+            };
+        })
+    };
+}
+async function execQueryLeadMatches(db, agencyId, args) {
+    const leadDoc = await db.collection('leads').doc(args.leadId).get();
+    if (!leadDoc.exists)
+        return { error: 'Lead not found.' };
+    const lead = leadDoc.data();
+    const req = lead.requirements || {};
+    let query = db.collection('properties')
+        .where('agencyId', '==', agencyId)
+        .where('status', '==', 'active');
+    if (req.maxBudget)
+        query = query.where('price', '<=', req.maxBudget);
+    const snap = await query.limit(10).get();
+    let matches = snap.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+    if (req.desiredCity && req.desiredCity.length > 0) {
+        matches = matches.filter((p) => req.desiredCity.includes(p.city));
+    }
+    if (req.minRooms) {
+        matches = matches.filter((p) => (p.rooms || 0) >= req.minRooms);
+    }
+    return {
+        leadName: lead.name,
+        topMatches: matches.slice(0, 5).map((p) => ({ address: p.address, price: p.price, rooms: p.rooms }))
+    };
+}
+async function execSearchEntity(db, agencyId, args) {
+    const q = args.query.toLowerCase();
+    const leadsSnap = await db.collection('leads').where('agencyId', '==', agencyId).get();
+    const propsSnap = await db.collection('properties').where('agencyId', '==', agencyId).get();
+    const results = [];
+    leadsSnap.forEach(doc => {
+        var _a, _b;
+        const d = doc.data();
+        if (((_a = d.name) === null || _a === void 0 ? void 0 : _a.toLowerCase().includes(q)) || ((_b = d.phone) === null || _b === void 0 ? void 0 : _b.includes(q))) {
+            results.push({ type: 'lead', name: d.name, id: doc.id });
+        }
+    });
+    propsSnap.forEach(doc => {
+        var _a, _b;
+        const d = doc.data();
+        if (((_a = d.address) === null || _a === void 0 ? void 0 : _a.toLowerCase().includes(q)) || ((_b = d.city) === null || _b === void 0 ? void 0 : _b.toLowerCase().includes(q))) {
+            results.push({ type: 'property', address: d.address, id: doc.id });
+        }
+    });
+    return { results: results.slice(0, 5) };
+}
 exports.homerChatBot = (0, https_1.onCall)({
     secrets: [geminiApiKey],
     region: 'europe-west1',
@@ -348,6 +600,24 @@ exports.homerChatBot = (0, https_1.onCall)({
                         break;
                     case 'createLead':
                         toolResult = await execCreateLead(db, agencyId, uid, args);
+                        break;
+                    case 'queryGoals':
+                        toolResult = await execQueryGoals(db, agencyId, uid);
+                        break;
+                    case 'queryAgentLeaderboard':
+                        toolResult = await execQueryAgentLeaderboard(db, agencyId, args);
+                        break;
+                    case 'queryExpenses':
+                        toolResult = await execQueryExpenses(db, agencyId, args);
+                        break;
+                    case 'queryMeetings':
+                        toolResult = await execQueryMeetings(db, agencyId, args);
+                        break;
+                    case 'queryLeadMatches':
+                        toolResult = await execQueryLeadMatches(db, agencyId, args);
+                        break;
+                    case 'searchEntity':
+                        toolResult = await execSearchEntity(db, agencyId, args);
                         break;
                     default:
                         console.warn(`[homerChatBot] Unknown tool requested: ${name}`);

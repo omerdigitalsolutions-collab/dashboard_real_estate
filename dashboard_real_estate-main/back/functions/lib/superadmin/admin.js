@@ -43,9 +43,9 @@ const admin = __importStar(require("firebase-admin"));
  * Strictly restricted to users with the 'superadmin' role in their custom claims.
  */
 exports.superAdminListAuthUsers = functions.https.onCall({ cors: true }, async (request) => {
-    var _a;
+    var _a, _b;
     // 1. Role verification
-    if (((_a = request.auth) === null || _a === void 0 ? void 0 : _a.token.role) !== 'superadmin') {
+    if (((_a = request.auth) === null || _a === void 0 ? void 0 : _a.token.role) !== 'superadmin' && ((_b = request.auth) === null || _b === void 0 ? void 0 : _b.token.superAdmin) !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Unauthorized service access');
     }
     try {

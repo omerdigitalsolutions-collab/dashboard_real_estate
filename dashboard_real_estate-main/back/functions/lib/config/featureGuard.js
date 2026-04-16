@@ -46,6 +46,7 @@ const PLAN_FEATURES = {
  * משמשת לעטיפת כל קריאה לפונקציות השרת.
  */
 async function requireFeatureAccess(request, requiredFeature) {
+    var _a;
     // קודם כל, מוודאים שהמשתמש מחובר ובטוח (שימוש ב-authGuard שיצרנו)
     const user = await (0, authGuard_1.validateUserAuth)(request);
     // שליפת נתוני הסוכנות והמנוי
@@ -55,13 +56,14 @@ async function requireFeatureAccess(request, requiredFeature) {
     }
     const agencyData = agencyDoc.data();
     const currentPlan = (agencyData === null || agencyData === void 0 ? void 0 : agencyData.planId) || 'starter'; // ברירת מחדל
-    const status = (agencyData === null || agencyData === void 0 ? void 0 : agencyData.status) || 'active';
+    // billing.status is authoritative; fall back to top-level status for legacy docs
+    const billingStatus = ((_a = agencyData === null || agencyData === void 0 ? void 0 : agencyData.billing) === null || _a === void 0 ? void 0 : _a.status) || (agencyData === null || agencyData === void 0 ? void 0 : agencyData.status) || 'active';
     // טיפול בחסימות מערכת (תשלום נכשל או מנוי מבוטל)
-    if (status === 'locked' || status === 'past_due') {
+    if (billingStatus === 'locked' || billingStatus === 'past_due') {
         throw new https_1.HttpsError("permission-denied", "Agency account is locked due to billing issues.");
     }
     // ⭐️ בונוס: טריאל של 7 ימים נותן גישה פתוחה להכל (כדי שיתמכרו ל-AI)
-    if (status === 'trialing') {
+    if (billingStatus === 'trialing') {
         return user;
     }
     // בדיקה האם המסלול הנוכחי מכיל את הפיצ'ר המבוקש

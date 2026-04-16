@@ -140,13 +140,23 @@ async function checkPhoneEligibility(phone) {
  * פונקציית עזר: הקמת המשרד והמשתמש במערכת
  */
 async function provisionNewAgency(session, resendApiKey) {
-    var _a, _b;
+    var _a, _b, _c;
     const customerEmail = (_a = session.customer_details) === null || _a === void 0 ? void 0 : _a.email;
     const customerName = ((_b = session.customer_details) === null || _b === void 0 ? void 0 : _b.name) || "Agency Admin";
     if (!customerEmail) {
         throw new Error("No email found in Stripe session.");
     }
     console.log(`🏗️ Starting provisioning for email: ${customerEmail}`);
+    // Anti-abuse: check if the phone number has already been used for a trial
+    const ownerPhone = ((_c = session.customer_details) === null || _c === void 0 ? void 0 : _c.phone) || '';
+    let billingStatus = 'active';
+    if (ownerPhone) {
+        const eligibility = await checkPhoneEligibility(ownerPhone);
+        if (!eligibility.eligible) {
+            console.warn(`[provisionNewAgency] Phone ${ownerPhone} already used for a trial. Setting billing to past_due for manual review.`);
+            billingStatus = 'past_due';
+        }
+    }
     // שלב א': יצירת מסמך סוכנות (Agency) חדש ב-Firestore
     // משתמשים ב-doc() ללא פרמטרים כדי לייצר מזהה ייחודי אוטומטי
     const agencyRef = db.collection("agencies").doc();
@@ -154,16 +164,16 @@ async function provisionNewAgency(session, resendApiKey) {
     const agencyData = {
         name: `${customerName}'s Agency`, // שם זמני, הם יוכלו לשנות
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'active',
+        status: billingStatus === 'past_due' ? 'pending_review' : 'active',
         subscriptionStatus: 'paid',
         stripeCustomerId: session.customer, // שמירת מזהה הלקוח ב-Stripe לעתיד
         stripeSubscriptionId: session.subscription,
-        // Billing — Stripe-paid customers get 'active' status immediately
+        // Billing — Stripe-paid customers get 'active' status immediately (unless flagged)
         billing: {
             planId: 'pro',
-            status: 'active',
+            status: billingStatus,
             trialEndsAt: null,
-            ownerPhone: '',
+            ownerPhone,
             paidAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         // הגדרות ברירת מחדל למשרד חדש
@@ -239,7 +249,7 @@ async function provisionNewAgency(session, resendApiKey) {
         }
     }
     else {
-        console.log(`⚠️ RESEND_API_KEY is not defined. Skipping email to ${customerEmail}. Reset link: ${await auth.generatePasswordResetLink(customerEmail)}`);
+        console.log(`⚠️ RESEND_API_KEY is not defined. Skipping welcome email to ${customerEmail}.`);
     }
 }
 //# sourceMappingURL=stripeWebhook.js.map

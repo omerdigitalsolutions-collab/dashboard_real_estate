@@ -16,11 +16,10 @@ const db = (0, firestore_1.getFirestore)();
 const generateToken = () => (0, crypto_1.randomBytes)(24).toString('hex');
 const generateRandomSuffix = (length = 5) => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No O, 0, I, 1 to avoid confusion
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    const bytes = (0, crypto_1.randomBytes)(length);
+    return Array.from(bytes)
+        .map(b => chars[b % chars.length])
+        .join('');
 };
 /**
  * updateAgentRole — Changes the role of a team member.
@@ -545,9 +544,15 @@ exports.saveAgencyJoinCode = (0, https_1.onCall)({ cors: true }, async (request)
  * Output: { success: true, inviteToken: string }
  */
 exports.joinWithCode = (0, https_1.onCall)({ cors: true }, async (request) => {
-    const { email, joinCode } = request.data;
-    if (!(email === null || email === void 0 ? void 0 : email.trim()) || !(joinCode === null || joinCode === void 0 ? void 0 : joinCode.trim())) {
-        throw new https_1.HttpsError('invalid-argument', 'Email and join code are required.');
+    // Auth required — prevents anyone from registering arbitrary emails as stubs
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'You must be signed in to join with a code.');
+    }
+    const { joinCode } = request.data;
+    // Use the verified email from the Firebase Auth token — do NOT trust client-provided email
+    const email = request.auth.token.email;
+    if (!email || !(joinCode === null || joinCode === void 0 ? void 0 : joinCode.trim())) {
+        throw new https_1.HttpsError('invalid-argument', 'Join code is required and account must have an email.');
     }
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedCode = joinCode.trim().toUpperCase();
@@ -744,10 +749,6 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
         throw new https_1.HttpsError('not-found', 'Invite token not found.');
     }
     const stubData = stubDoc.data();
-    // Ensure it's not already linked to another Google account
-    if (stubData.uid && stubData.uid !== request.auth.uid) {
-        throw new https_1.HttpsError('permission-denied', 'Token is already linked to another account.');
-    }
     // ── Verify Target Agency is active ──────────────────────────────────────────
     const agencySnap = await db.doc(`agencies/${stubData.agencyId}`).get();
     if (!agencySnap.exists) {
@@ -775,8 +776,21 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
     const preSnap = await userRef.get();
     const existingRole = (_a = preSnap.data()) === null || _a === void 0 ? void 0 : _a.role;
     const effectiveRole = existingRole === 'admin' ? 'admin' : stubData.role;
+    // ── Atomic transaction: check stub ownership + link user + mark stub consumed ──
+    // All reads and writes in one transaction to prevent race conditions where two
+    // concurrent requests could both claim the same invite token.
     await db.runTransaction(async (transaction) => {
         var _a;
+        // Re-read stub inside the transaction to get the freshest state
+        const freshStub = await transaction.get(stubDoc.ref);
+        if (!freshStub.exists) {
+            throw new https_1.HttpsError('not-found', 'Invite token no longer exists.');
+        }
+        const freshStubData = freshStub.data();
+        // Atomic ownership check — prevents two users from claiming simultaneously
+        if (freshStubData.uid && freshStubData.uid !== userUid) {
+            throw new https_1.HttpsError('permission-denied', 'Token is already linked to another account.');
+        }
         const userSnap = await transaction.get(userRef);
         if (userSnap.exists) {
             // Migrate existing user to the new agency, preserving their role if admin.
@@ -801,12 +815,11 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
                 createdAt: firestore_1.FieldValue.serverTimestamp()
             });
         }
+        // Mark stub as consumed inside the same transaction
+        if (stubDoc.id !== userUid) {
+            transaction.update(stubDoc.ref, { uid: userUid, claimedAt: firestore_1.FieldValue.serverTimestamp() });
+        }
     });
-    // Mark the stub as consumed so the same invite link cannot be reused by
-    // a different account. Only needed when the stub lives at a different doc ID.
-    if (stubDoc && stubDoc.id !== userUid) {
-        await stubDoc.ref.update({ uid: userUid, claimedAt: firestore_1.FieldValue.serverTimestamp() });
-    }
     // Set custom claims using effectiveRole (not stubData.role) to avoid
     // accidentally downgrading an existing admin to an agent.
     await (0, auth_1.getAuth)().setCustomUserClaims(userUid, {

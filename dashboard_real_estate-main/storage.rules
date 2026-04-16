@@ -40,36 +40,41 @@ service firebase.storage {
     //            the leading slash on every child segment).
     // ══════════════════════════════════════════════════════════════════════════
 
+    // Helper: checks if caller is an admin/owner of the given agency.
+    // Falls back to Firestore if token claims are stale or not yet set.
+    function isAgencyAdmin(agencyId) {
+      return request.auth != null
+        && request.auth.token.agencyId == agencyId
+        && (
+          request.auth.token.role == 'admin'
+          || request.auth.token.role == 'owner'
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+          || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'owner'
+        );
+    }
+
     // 1. Agency Logo — Admin / Owner only
     // Allows both agencies/{agencyId}/logo.{ext} AND agencies/{agencyId}/logo/{fileName}
     match /agencies/{agencyId}/{fileName} {
       allow read: if true; // Public — needed for catalogs/website widgets
 
-      allow create, update: if request.auth != null
-                            && request.auth.token.agencyId == agencyId
-                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+      allow create, update: if isAgencyAdmin(agencyId)
                             && fileName.matches('logo\\..*')
                             && request.resource.size < 5 * 1024 * 1024
                             && request.resource.contentType.matches('image/.*');
 
-      allow delete: if request.auth != null
-                    && request.auth.token.agencyId == agencyId
-                    && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+      allow delete: if isAgencyAdmin(agencyId)
                     && fileName.matches('logo\\..*');
     }
 
     match /agencies/{agencyId}/logo/{fileName} {
       allow read: if true; // Public — needed for catalogs/website widgets
 
-      allow create, update: if request.auth != null
-                            && request.auth.token.agencyId == agencyId
-                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner')
+      allow create, update: if isAgencyAdmin(agencyId)
                             && request.resource.size < 5 * 1024 * 1024
                             && request.resource.contentType.matches('image/.*');
 
-      allow delete: if request.auth != null
-                    && request.auth.token.agencyId == agencyId
-                    && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner');
+      allow delete: if isAgencyAdmin(agencyId);
     }
 
 
