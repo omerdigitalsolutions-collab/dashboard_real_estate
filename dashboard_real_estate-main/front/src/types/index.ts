@@ -191,6 +191,11 @@ export interface Property {
     rawDescription?: string;
     groupId?: string;
     externalAgentPhone?: string;
+    externalAgentName?: string;
+    street?: string;
+    neighborhood?: string;
+    floor?: number;
+    description?: string;
     originalSource?: string;
     externalLink?: string;
 

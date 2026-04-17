@@ -48,7 +48,9 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
     const searchTimeout = useRef<any>(null);
     const [maxBudget, setMaxBudget] = useState(lead.requirements?.maxBudget?.toString() ?? '');
     const [transactionType, setTransactionType] = useState<'sale' | 'rent'>(
-        lead.requirements?.propertyType?.includes('rent') ? 'rent' : 'sale'
+        (lead.requirements as any)?.dealType === 'rent' ||
+        lead.requirements?.propertyType?.includes('rent')
+            ? 'rent' : 'sale'
     );
     const [urgency, setUrgency] = useState(lead.requirements?.urgency ?? 'flexible');
     const [minRooms, setMinRooms] = useState(lead.requirements?.minRooms?.toString() ?? '');
@@ -175,7 +177,8 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                     minSizeSqf: minSizeSqf ? parseInt(minSizeSqf) : null,
                     floorMin: floorMin ? parseInt(floorMin) : null,
                     floorMax: floorMax ? parseInt(floorMax) : null,
-                    propertyType: propertyKind.length > 0 ? propertyKind : [transactionType],
+                    dealType: transactionType,
+                    propertyType: propertyKind,
                     mustHaveElevator,
                     mustHaveParking,
                     mustHaveBalcony,
@@ -374,7 +377,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                                         </div>
                                         <div>
                                             <label className={labelCls}>תקציב מקסימלי (₪)</label>
-                                            <input type="number" min="0" step="50000" value={maxBudget} onChange={e => setMaxBudget(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                            <input type="number" min="0" value={maxBudget} onChange={e => setMaxBudget(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
                                         </div>
                                     </div>
                                     <div>

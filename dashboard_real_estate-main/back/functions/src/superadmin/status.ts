@@ -9,7 +9,7 @@ import { getFirestore } from 'firebase-admin/firestore';
  */
 export const superAdminSetAgencyStatus = functions.https.onCall({ cors: true }, async (request) => {
     // 1. Security: Strict Super Admin check
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError(
             'permission-denied',
             'You must be a Super Admin to perform this action.'
@@ -69,7 +69,7 @@ export const superAdminSetAgencyStatus = functions.https.onCall({ cors: true }, 
  */
 export const superAdminSetUserStatus = functions.https.onCall({ cors: true }, async (request) => {
     // 1. Security: Strict Super Admin check
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError(
             'permission-denied',
             'You must be a Super Admin to perform this action.'

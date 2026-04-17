@@ -56,58 +56,69 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
     // ── 1. Transaction Type (STRICT) ──────────────────────────────────────────
     const wantedTypes = req.propertyType ?? [];
     if (wantedTypes.length > 0) {
-        // Normalize property type for comparison
+        // Normalize property type for comparison (handles Hebrew variants like
+        // "קניה"/"קנייה", "למכירה", "להשכרה", "שכירות")
         const pType = (property.type || '').toString().toLowerCase();
-        const isSale = pType === 'sale' || pType.includes('מכירה') || pType.includes('קנייה');
-        const isRent = pType === 'rent' || pType.includes('שכירות');
+        const isSale = pType === 'sale' || pType.includes('מכיר') || pType.includes('קני');
+        const isRent = pType === 'rent' || pType.includes('שכיר') || pType.includes('שכר');
 
         const typeMatch = wantedTypes.some(t => {
-            if (t === 'sale') return isSale;
-            if (t === 'rent') return isRent;
-            if (t.includes('קנייה') || t.includes('מכירה')) return isSale;
-            if (t.includes('שכירות')) return isRent;
+            const tl = (t || '').toString().toLowerCase();
+            if (tl === 'sale' || tl.includes('מכיר') || tl.includes('קני')) return isSale;
+            if (tl === 'rent' || tl.includes('שכיר') || tl.includes('שכר')) return isRent;
             return false;
         });
         if (!typeMatch) return null;
     }
 
     // ── 2. Location (City + Neighborhood) ─────────────────────────────────────
-    const locationWeight = weights.location || 1;
-    totalPossibleWeight += locationWeight;
-    
     const desiredCities = req.desiredCity || [];
     const desiredNeighborhoods = req.desiredNeighborhoods || [];
-    const allLocationQueries = [...desiredCities, ...desiredNeighborhoods];
+    const hasLocationConstraint = desiredCities.length > 0 || desiredNeighborhoods.length > 0;
 
     if (!isCityMatch(desiredCities, property.city || '')) {
         return null;
     }
-    
-    let neighborhoodScore = 0.5;
+
+    let neighborhoodScore = 1.0;
     let isNeighborhoodMatch = false;
 
-    if (allLocationQueries.length > 0) {
+    if (desiredNeighborhoods.length > 0) {
         if (property.neighborhood) {
             const propNeighborhood = property.neighborhood.toLowerCase().trim();
-            // Check if any query contains the neighborhood or is equal to it
-            const found = allLocationQueries.some(q => {
-                const qLower = q.toLowerCase();
+            const found = desiredNeighborhoods.some(q => {
+                const qLower = (q || '').toLowerCase().trim();
+                if (!qLower) return false;
                 return qLower.includes(propNeighborhood) || propNeighborhood.includes(qLower);
             });
             if (found) {
                 neighborhoodScore = 1.0;
                 isNeighborhoodMatch = true;
+            } else {
+                neighborhoodScore = 0.5;
+                isNeighborhoodMatch = false;
             }
         } else {
-            // If property has no neighborhood data, we treat it as a match to avoid penalizing valid city matches
-            neighborhoodScore = 1.0;
-            isNeighborhoodMatch = true;
+            // Property has no neighborhood data — can't confirm, partial credit + verification
+            neighborhoodScore = 0.6;
+            isNeighborhoodMatch = false;
+            requiresVerification.push('neighborhood');
+        }
+
+        // Neighborhood-only filters (no desiredCity) must hard-match to avoid
+        // matching "רמת אביב" in Haifa when the lead asked for it in Tel Aviv.
+        if (desiredCities.length === 0 && !isNeighborhoodMatch) {
+            return null;
         }
     } else {
-        neighborhoodScore = 1.0;
         isNeighborhoodMatch = true;
     }
-    weightedPoints += neighborhoodScore * locationWeight;
+
+    if (hasLocationConstraint) {
+        const locationWeight = weights.location || 1;
+        totalPossibleWeight += locationWeight;
+        weightedPoints += neighborhoodScore * locationWeight;
+    }
 
     // ── 3. Price ──────────────────────────────────────────────────────────────
     if (req.maxBudget != null && req.maxBudget > 0) {
@@ -130,21 +141,27 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
     // ── 4. Rooms ──────────────────────────────────────────────────────────────
     const desiredMin = req.minRooms != null ? req.minRooms : null;
     const desiredMax = req.maxRooms != null ? req.maxRooms : null;
-    if ((desiredMin != null || desiredMax != null) && property.rooms != null) {
+    if (desiredMin != null || desiredMax != null) {
         const roomsWeight = weights.rooms || 1;
         totalPossibleWeight += roomsWeight;
 
-        const roomsOk =
-            (desiredMin == null || property.rooms >= desiredMin - ROOMS_TOLERANCE) &&
-            (desiredMax == null || property.rooms <= desiredMax + ROOMS_TOLERANCE);
-        if (!roomsOk) return null;
+        if (property.rooms == null) {
+            // Unknown room count — flag for verification instead of silently passing
+            requiresVerification.push('rooms');
+            weightedPoints += 0.5 * roomsWeight;
+        } else {
+            const roomsOk =
+                (desiredMin == null || property.rooms >= desiredMin - ROOMS_TOLERANCE) &&
+                (desiredMax == null || property.rooms <= desiredMax + ROOMS_TOLERANCE);
+            if (!roomsOk) return null;
 
-        const strictOk =
-            (desiredMin == null || property.rooms >= desiredMin) &&
-            (desiredMax == null || property.rooms <= desiredMax);
-        
-        const roomsScore = strictOk ? 1.0 : 0.5;
-        weightedPoints += roomsScore * roomsWeight;
+            const strictOk =
+                (desiredMin == null || property.rooms >= desiredMin) &&
+                (desiredMax == null || property.rooms <= desiredMax);
+
+            const roomsScore = strictOk ? 1.0 : 0.5;
+            weightedPoints += roomsScore * roomsWeight;
+        }
     }
 
     // ── 5. Amenities ──────────────────────────────────────────────────────────
@@ -176,9 +193,10 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
         weightedPoints += avgAmenityScore * amenityWeight;
     }
 
-    const matchScore = totalPossibleWeight > 0
-        ? Math.min(100, Math.round((weightedPoints / totalPossibleWeight) * 100))
-        : 50;
+    // No scorable criteria at all → not a real match, don't surface to agents
+    if (totalPossibleWeight === 0) return null;
+
+    const matchScore = Math.min(100, Math.round((weightedPoints / totalPossibleWeight) * 100));
 
     if (matchScore < 50) return null;
     const category = matchScore >= 80 ? 'high' : 'medium';

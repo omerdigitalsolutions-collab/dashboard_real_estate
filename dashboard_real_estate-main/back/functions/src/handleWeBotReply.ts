@@ -267,7 +267,8 @@ export async function handleWeBotReply(
     });
 
     // ── 5. Build dynamic system prompt ─────────────────────────────────────
-    const systemPrompt = buildWeBotPrompt(botConfig, ragProperties);
+    const agencyName: string = agencyData.agencyName || agencyData.name || 'הסוכנות שלנו';
+    const systemPrompt = buildWeBotPrompt(botConfig, ragProperties, agencyName);
 
     // ── 6. Load conversation history from Firestore ─────────────────────────
     const chatHistory = await loadChatHistory(leadId);
@@ -276,7 +277,7 @@ export async function handleWeBotReply(
     // ── 7. Initialise Gemini with Function Calling + chat history ───────────
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       tools: [{ functionDeclarations: [scheduleMeetingDeclaration, updateLeadRequirementsDeclaration, createCatalogDeclaration] }],
       systemInstruction: systemPrompt,
     });

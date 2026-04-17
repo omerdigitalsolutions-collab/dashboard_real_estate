@@ -843,10 +843,21 @@ export default function Properties() {
                                         {/* Details */}
                                         <div className="p-4 flex-1">
                                             {prop.status === 'draft' ? (
-                                                <div className="mb-4">
-                                                    <h3 className="font-bold text-lg text-amber-700 mb-1">הודעה מקבוצת WhatsApp</h3>
-                                                    <p className="text-sm text-slate-600 line-clamp-3 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                                                        "{prop.rawDescription}"
+                                                <div className="mb-3">
+                                                    {/* Parsed summary row */}
+                                                    <div className="flex justify-between items-start mb-1.5">
+                                                        <h3 className="font-bold text-base text-amber-700 line-clamp-1">
+                                                            {prop.street ? prop.street : prop.city || 'כתובת לא ידועה'}
+                                                            {prop.city && prop.street ? `, ${prop.city}` : ''}
+                                                        </h3>
+                                                        {prop.price ? <span className="font-bold text-base text-blue-600">₪{prop.price.toLocaleString()}</span> : null}
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mb-2">
+                                                        {[prop.neighborhood, prop.rooms ? `${prop.rooms} חד׳` : null, prop.floor != null ? `קומה ${prop.floor}` : null, prop.sqm ? `${prop.sqm} מ״ר` : null].filter(Boolean).join(' • ')}
+                                                    </p>
+                                                    {/* AI description or raw message fallback */}
+                                                    <p className="text-xs text-slate-600 line-clamp-2 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                                                        {prop.description || prop.rawDescription}
                                                     </p>
                                                 </div>
                                             ) : (
@@ -898,8 +909,10 @@ export default function Properties() {
                                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${prop.status === 'draft' ? 'bg-amber-100 text-amber-600' : 'bg-violet-100 text-violet-600'}`}>
                                                                 {prop.status === 'draft' ? 'ע' : client?.name ? client.name.charAt(0) : <UserIcon size={12} />}
                                                             </div>
-                                                            <span className="text-xs font-semibold text-slate-700 truncate" dir="ltr">
-                                                                {prop.status === 'draft' ? (prop.externalAgentPhone || 'לא ידוע') : (client?.name || 'לא שויך')}
+                                                            <span className="text-xs font-semibold text-slate-700 truncate" dir={prop.status === 'draft' && !prop.externalAgentName ? 'ltr' : 'rtl'}>
+                                                                {prop.status === 'draft'
+                                                                    ? (prop.externalAgentName || prop.externalAgentPhone || 'לא ידוע')
+                                                                    : (client?.name || 'לא שויך')}
                                                             </span>
                                                         </div>
                                                         {(prop.status === 'draft' ? prop.externalAgentPhone : client?.phone) && (

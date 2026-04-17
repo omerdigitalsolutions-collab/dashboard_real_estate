@@ -6,7 +6,7 @@ import {
     ReactNode,
 } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, setDoc, serverTimestamp, limit, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, limit, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
 
@@ -112,39 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     if (!uidDocSnap.exists()) {
                         console.log('[AuthContext] User doc does not exist.');
-                        const email = firebaseUser.email?.toLowerCase();
-                        const knownAdmins: Record<string, { agencyId: string, name: string }> = {
-                            'omerdigitalsolutions@gmail.com': { agencyId: 'FD1zzacN9WFeSmENqY5G', name: 'OMER' },
-                            'omerfm4444@gmail.com': { agencyId: 'P7z9y24z2DBGiCPSgQRI', name: 'עומר עסיס' },
-                            'omerasis4@gmail.com': { agencyId: '5QfL1fcRZ4CsZ8ZZmsUK', name: 'OMER ASIS' }
-                        };
-
-                        if (email && knownAdmins[email] && !urlToken) {
-                            const info = knownAdmins[email];
-                            console.log('[RECOVERY] Healing user record for:', email);
-                            try {
-                                const agencyRef = doc(db, 'agencies', info.agencyId);
-                                await setDoc(agencyRef, {
-                                    agencyId: info.agencyId,
-                                    agencyName: email === 'omerdigitalsolutions@gmail.com' ? "אנגלו" : "סוכנות " + info.name,
-                                    createdAt: serverTimestamp()
-                                }, { merge: true });
-
-                                await setDoc(uidDocRef, {
-                                    uid: firebaseUser.uid,
-                                    email: firebaseUser.email,
-                                    name: info.name,
-                                    agencyId: info.agencyId,
-                                    role: 'admin',
-                                    createdAt: serverTimestamp()
-                                });
-
-                                uidDocSnap = await getDoc(uidDocRef);
-                                console.log('[RECOVERY] Healing successful.');
-                            } catch (healingErr) {
-                                console.error('[RECOVERY] Healing process failed:', healingErr);
-                            }
-                        }
                     }
 
                     if (uidDocSnap.exists()) {

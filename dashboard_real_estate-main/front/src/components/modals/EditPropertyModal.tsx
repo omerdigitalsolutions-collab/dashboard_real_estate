@@ -40,8 +40,9 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     const [status, setStatus] = useState(property.status);
     const [agentId, setAgentId] = useState(property.agentId ?? '');
     const [description, setDescription] = useState(property.description ?? '');
+    const isWhatsappProperty = property.source === 'whatsapp_group' || property.listingType === 'external';
     const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>(
-        property.listingType || (property.isExclusive ? 'exclusive' : 'private')
+        isWhatsappProperty ? 'external' : (property.listingType || (property.isExclusive ? 'exclusive' : 'private'))
     );
     const [originalSource, setOriginalSource] = useState(property.originalSource ?? '');
     const [externalLink, setExternalLink] = useState(property.externalLink ?? property.yad2Link ?? '');
@@ -344,14 +345,16 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                                     />
                                     <span className="text-sm font-medium text-slate-700">רגיל (פרטי)</span>
                                 </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className={`flex items-center gap-2 ${isWhatsappProperty ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                    title={isWhatsappProperty ? 'לא ניתן לסמן נכס חיצוני/WhatsApp כבלעדי' : undefined}>
                                     <input
                                         type="radio"
                                         name="editListingType"
                                         value="exclusive"
                                         checked={listingType === 'exclusive'}
                                         onChange={() => setListingType('exclusive')}
-                                        className="w-4 h-4 text-amber-500 focus:ring-amber-500"
+                                        disabled={isWhatsappProperty}
+                                        className="w-4 h-4 text-amber-500 focus:ring-amber-500 disabled:cursor-not-allowed"
                                     />
                                     <span className="text-sm font-medium text-slate-700">👑 בלעדיות</span>
                                 </label>

@@ -126,6 +126,17 @@ async function provisionNewAgency(session: Stripe.Checkout.Session, resendApiKey
 
     console.log(`🏗️ Starting provisioning for email: ${customerEmail}`);
 
+    // Anti-abuse: check if the phone number has already been used for a trial
+    const ownerPhone = session.customer_details?.phone || '';
+    let billingStatus = 'active';
+    if (ownerPhone) {
+        const eligibility = await checkPhoneEligibility(ownerPhone);
+        if (!eligibility.eligible) {
+            console.warn(`[provisionNewAgency] Phone ${ownerPhone} already used for a trial. Setting billing to past_due for manual review.`);
+            billingStatus = 'past_due';
+        }
+    }
+
     // שלב א': יצירת מסמך סוכנות (Agency) חדש ב-Firestore
     // משתמשים ב-doc() ללא פרמטרים כדי לייצר מזהה ייחודי אוטומטי
     const agencyRef = db.collection("agencies").doc();
@@ -134,16 +145,16 @@ async function provisionNewAgency(session: Stripe.Checkout.Session, resendApiKey
     const agencyData = {
         name: `${customerName}'s Agency`, // שם זמני, הם יוכלו לשנות
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'active',
+        status: billingStatus === 'past_due' ? 'pending_review' : 'active',
         subscriptionStatus: 'paid',
         stripeCustomerId: session.customer, // שמירת מזהה הלקוח ב-Stripe לעתיד
         stripeSubscriptionId: session.subscription,
-        // Billing — Stripe-paid customers get 'active' status immediately
+        // Billing — Stripe-paid customers get 'active' status immediately (unless flagged)
         billing: {
             planId: 'pro',
-            status: 'active',
+            status: billingStatus,
             trialEndsAt: null,
-            ownerPhone: '',
+            ownerPhone,
             paidAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         // הגדרות ברירת מחדל למשרד חדש
@@ -223,6 +234,6 @@ async function provisionNewAgency(session: Stripe.Checkout.Session, resendApiKey
             // לא נזרוק שגיאה כדי לא להכשיל את תהליך ה-Webhook כולו, המשרד כבר הוקם.
         }
     } else {
-        console.log(`⚠️ RESEND_API_KEY is not defined. Skipping email to ${customerEmail}. Reset link: ${await auth.generatePasswordResetLink(customerEmail)}`);
+        console.log(`⚠️ RESEND_API_KEY is not defined. Skipping welcome email to ${customerEmail}.`);
     }
 }

@@ -121,6 +121,10 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const hasImages = imageUrls.length > 0;
     const images = imageUrls;
 
+    const externalUrl = property.yad2Link || property.externalLink;
+    const isYad2Link = !!externalUrl?.startsWith('https://www.yad2.co.il/');
+    const externalButtonText = isYad2Link ? 'לינק למודעה ביד 2' : 'מדלן';
+
     const isRent = property.type === 'rent';
     const typeLabel = isRent ? 'להשכרה' : 'למכירה';
     const typeColor = isRent ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100';
@@ -155,7 +159,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
             const newUrls = await uploadPropertyImages(userData.agencyId, property.id, files);
             const combinedUrls = [...imageUrls, ...newUrls];
             setImageUrls(combinedUrls);
-            await updateProperty(property.id, { imageUrls: combinedUrls });
+            await updateProperty(property.id, { imageUrls: combinedUrls }, property.isGlobalCityProperty ? property.city : undefined);
             toast.success('התמונות הועלו בהצלחה ✓');
         } catch (error) {
             console.error('Error uploading images:', error);
@@ -171,7 +175,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         try {
             const newImages = imageUrls.filter((_, i) => i !== index);
             setImageUrls(newImages);
-            await updateProperty(property.id, { imageUrls: newImages });
+            await updateProperty(property.id, { imageUrls: newImages }, property.isGlobalCityProperty ? property.city : undefined);
             
             // Adjust active index if needed
             if (activeImageIndex >= newImages.length) {
@@ -200,7 +204,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         setImageUrls(newImages);
         
         try {
-            await updateProperty(property.id, { imageUrls: newImages });
+            await updateProperty(property.id, { imageUrls: newImages }, property.isGlobalCityProperty ? property.city : undefined);
             // Sync active index to the moved image
             if (activeImageIndex === oldIndex) {
                 setActiveImageIndex(newIndex);
@@ -217,7 +221,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
 
     const handleAgentChange = async (newAgentId: string) => {
         try {
-            await updateProperty(property.id, { agentId: newAgentId });
+            await updateProperty(property.id, { agentId: newAgentId }, property.isGlobalCityProperty ? property.city : undefined);
             toast.success('סוכן מוקצה עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating agent:', err);
@@ -227,7 +231,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
 
     const handleLeadChange = async (newLeadId: string) => {
         try {
-            await updateProperty(property.id, { leadId: newLeadId });
+            await updateProperty(property.id, { leadId: newLeadId }, property.isGlobalCityProperty ? property.city : undefined);
             toast.success('שיוך ליד עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating lead:', err);
@@ -238,7 +242,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const handleSaveDescription = async () => {
         try {
             setIsSavingDescription(true);
-            await updateProperty(property.id, { description: editedDescription });
+            await updateProperty(property.id, { description: editedDescription }, property.isGlobalCityProperty ? property.city : undefined);
             toast.success('תיאור הנכס שומר בהצלחה ✓');
             setIsEditingDescription(false);
         } catch (err) {
@@ -553,18 +557,18 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     <div className="text-right">
                                         <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">מקור הנכס</div>
                                         <div className="text-sm font-bold text-slate-900">
-                                            {property.originalSource || (property.yad2Link ? 'Yad2' : 'מקור חיצוני')}
+                                            {isYad2Link ? 'Yad2' : (externalUrl ? 'Madlan' : (property.originalSource || 'מקור חיצוני'))}
                                         </div>
                                     </div>
                                 </div>
                                 {(property.externalLink || property.yad2Link) && (
                                     <a
-                                        href={property.externalLink || property.yad2Link}
+                                        href={externalUrl}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-orange-200"
                                     >
-                                        צפה במודעה המקורית
+                                        {externalButtonText}
                                         <ArrowUpLeft size={16} />
                                     </a>
                                 )}

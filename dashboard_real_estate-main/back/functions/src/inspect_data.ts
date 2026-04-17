@@ -1,23 +1,31 @@
 import * as admin from 'firebase-admin';
-import './config/admin'; // Use existing config
 
-const db = admin.firestore();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 async function inspect() {
-    try {
-        const agenciesSnap = await db.collection('agencies').get();
-        console.log(`Found ${agenciesSnap.size} agencies.`);
+    const db = admin.firestore();
+    const dealsSnap = await db.collection('deals').limit(1).get();
+    if (dealsSnap.empty) {
+        console.log('No deals found');
+    } else {
+        console.log('Deal Sample:', JSON.stringify(dealsSnap.docs[0].data(), null, 2));
+    }
 
-        for (const doc of agenciesSnap.docs) {
-            const data = doc.data();
-            console.log('--- AGENCY ---');
-            console.log('ID:', doc.id);
-            console.log('Name:', data.agencyName || data.name);
-            console.log('WhatsApp Integration:', JSON.stringify(data.whatsappIntegration, null, 2));
-        }
-    } catch (error) {
-        console.error('Error:', error);
+    const agentsSnap = await db.collection('users').limit(1).get();
+    if (agentsSnap.empty) {
+        console.log('No agents found');
+    } else {
+        console.log('Agent Sample:', JSON.stringify(agentsSnap.docs[0].data(), null, 2));
+    }
+
+    const agenciesSnap = await db.collection('agencies').limit(1).get();
+    if (agenciesSnap.empty) {
+        console.log('No agencies found');
+    } else {
+        console.log('Agency Sample:', JSON.stringify(agenciesSnap.docs[0].data(), null, 2));
     }
 }
 
-inspect();
+inspect().catch(console.error);

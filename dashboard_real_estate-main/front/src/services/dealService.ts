@@ -1,17 +1,13 @@
 import {
     collection,
-    addDoc,
-    updateDoc,
-    doc,
     query,
     where,
     orderBy,
     onSnapshot,
-    serverTimestamp,
-    deleteDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Deal, DealStage } from '../types';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const COLLECTION = 'deals';
 
@@ -21,12 +17,13 @@ export async function addDeal(
     agencyId: string,
     data: Omit<Deal, 'id' | 'agencyId' | 'createdAt'>
 ): Promise<string> {
-    const ref = await addDoc(collection(db, COLLECTION), {
-        ...data,
-        agencyId,
-        createdAt: serverTimestamp(),
-    });
-    return ref.id;
+    const functions = getFunctions(undefined, 'europe-west1');
+    const addDealFn = httpsCallable<any, { success: boolean; id: string }>(
+        functions,
+        'deals-addDeal'
+    );
+    const result = await addDealFn({ ...data, agencyId });
+    return result.data.id;
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -70,33 +67,42 @@ export async function updateDealStage(
     newStage: DealStage,
     actualCommission?: number
 ): Promise<void> {
-    const ref = doc(db, COLLECTION, dealId);
+    const functions = getFunctions(undefined, 'europe-west1');
+    const updateDealFn = httpsCallable<any, { success: boolean }>(
+        functions,
+        'deals-updateDeal'
+    );
+    
     const updates: any = {
-        stage: newStage,
-        updatedAt: serverTimestamp()
+        stage: newStage
     };
 
     if (actualCommission !== undefined) {
         updates.actualCommission = actualCommission;
     }
 
-    await updateDoc(ref, updates as any);
+    await updateDealFn({ dealId, updates });
 }
 
 export async function updateDeal(
     dealId: string,
     updates: Partial<Omit<Deal, 'id' | 'agencyId' | 'createdAt'>>
 ): Promise<void> {
-    const ref = doc(db, COLLECTION, dealId);
-    await updateDoc(ref, {
-        ...updates,
-        updatedAt: serverTimestamp()
-    });
+    const functions = getFunctions(undefined, 'europe-west1');
+    const updateDealFn = httpsCallable<any, { success: boolean }>(
+        functions,
+        'deals-updateDeal'
+    );
+    await updateDealFn({ dealId, updates });
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 export async function deleteDeal(dealId: string): Promise<void> {
-    const ref = doc(db, COLLECTION, dealId);
-    await deleteDoc(ref);
+    const functions = getFunctions(undefined, 'europe-west1');
+    const deleteDealFn = httpsCallable<any, { success: boolean }>(
+        functions,
+        'deals-deleteDeal'
+    );
+    await deleteDealFn({ dealId });
 }

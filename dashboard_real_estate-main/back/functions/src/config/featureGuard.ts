@@ -71,15 +71,16 @@ export async function requireFeatureAccess(request: CallableRequest<any>, requir
 
     const agencyData = agencyDoc.data();
     const currentPlan = agencyData?.planId || 'starter'; // ברירת מחדל
-    const status = agencyData?.status || 'active';
+    // billing.status is authoritative; fall back to top-level status for legacy docs
+    const billingStatus = agencyData?.billing?.status || agencyData?.status || 'active';
 
     // טיפול בחסימות מערכת (תשלום נכשל או מנוי מבוטל)
-    if (status === 'locked' || status === 'past_due') {
+    if (billingStatus === 'locked' || billingStatus === 'past_due') {
         throw new HttpsError("permission-denied", "Agency account is locked due to billing issues.");
     }
 
     // ⭐️ בונוס: טריאל של 7 ימים נותן גישה פתוחה להכל (כדי שיתמכרו ל-AI)
-    if (status === 'trialing') {
+    if (billingStatus === 'trialing') {
         return user;
     }
 

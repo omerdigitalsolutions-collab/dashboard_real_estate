@@ -68,9 +68,10 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         let currentAgencyProperties: Property[] = [];
         let currentCityProperties: Property[] = [];
+        let currentWhatsappProperties: Property[] = [];
 
         const updatePropertiesState = () => {
-            const merged = [...currentAgencyProperties, ...currentCityProperties];
+            const merged = [...currentAgencyProperties, ...currentCityProperties, ...currentWhatsappProperties];
             const seen = new Set<string>();
             const deduped = merged.filter((p) => {
                 if (seen.has(p.id)) return false;
@@ -103,7 +104,30 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             loadedFlags.properties = true; checkLoaded();
         }
 
-        // 2. Deals Query
+        // 2. WhatsApp Properties subcollection (agencies/{agencyId}/whatsappProperties)
+        let unsubWhatsappProperties = () => { };
+        try {
+            unsubWhatsappProperties = onSnapshot(
+                collection(db, 'agencies', agencyId, 'whatsappProperties'),
+                (snap) => {
+                    currentWhatsappProperties = snap.docs.map(d => ({
+                        id: d.id,
+                        ...d.data(),
+                        source: 'whatsapp_group',
+                        status: 'draft',
+                        isExclusive: false,
+                    } as Property));
+                    updatePropertiesState();
+                },
+                (err) => {
+                    console.error('[useLiveDashboardData] WhatsApp Properties Error:', err);
+                }
+            );
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] WhatsApp Properties Sync Error:', e);
+        }
+
+        // 4. Deals Query
         const qDeals = query(
             collection(db, 'deals'),
             where('agencyId', '==', agencyId)
@@ -125,7 +149,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             loadedFlags.deals = true; checkLoaded();
         }
 
-        // 3. Tasks Query (Only for current user)
+        // 5. Tasks Query (Only for current user)
         const qTasks = query(
             collection(db, 'tasks'),
             where('agencyId', '==', agencyId),
@@ -318,6 +342,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         return () => {
             clearTimeout(safetyTimeout);
             unsubProperties();
+            unsubWhatsappProperties();
             unsubDeals();
             unsubTasks();
             unsubLeads();

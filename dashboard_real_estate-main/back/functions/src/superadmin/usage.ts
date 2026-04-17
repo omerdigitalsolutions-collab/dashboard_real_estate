@@ -10,7 +10,7 @@ import { getStorage } from 'firebase-admin/storage';
  */
 export const superAdminGetAgencyUsage = functions.https.onCall({ cors: true }, async (request) => {
     // ── Auth Guard ────────────────────────────────────────────────────────────
-    if (!request.auth || request.auth.token.superAdmin !== true) {
+    if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
         throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
     }
 

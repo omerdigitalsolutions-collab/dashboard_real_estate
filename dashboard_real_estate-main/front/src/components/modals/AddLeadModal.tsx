@@ -183,7 +183,8 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                         minSizeSqf: minSizeSqf ? parseInt(minSizeSqf) : null,
                         floorMin: floorMin ? parseInt(floorMin) : null,
                         floorMax: floorMax ? parseInt(floorMax) : null,
-                        propertyType: propertyKind.length > 0 ? propertyKind : [transactionType],
+                        dealType: transactionType,
+                        propertyType: propertyKind,
                         mustHaveElevator,
                         mustHaveParking,
                         mustHaveBalcony,
@@ -449,7 +450,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         </div>
                                         <div>
                                             <label className={labelCls}>תקציב מקסימלי (₪)</label>
-                                            <input type="number" min="0" step="50000" value={maxBudget} onChange={e => setMaxBudget(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                            <input type="number" min="0"  value={maxBudget} onChange={e => setMaxBudget(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
                                         </div>
                                     </div>
                                     <div>
@@ -566,7 +567,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                 </div>
                                 <div>
                                     <label className={labelCls}>מחיר מבוקש (₪)</label>
-                                    <input type="number" min="0" step="50000" value={sellerPrice} onChange={e => setSellerPrice(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                    <input type="number" min="0"  value={sellerPrice} onChange={e => setSellerPrice(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
                                 </div>
                                 <div>
                                     <label className={labelCls}>מספר חדרים</label>

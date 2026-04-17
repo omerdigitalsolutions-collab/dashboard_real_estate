@@ -19,7 +19,7 @@ export const superAdminApproveAgency = functions.https.onCall(
     { cors: true, secrets: [resendApiKey] },
     async (request) => {
         // 1. Security: Strict Super Admin check
-        if (!request.auth || request.auth.token.superAdmin !== true) {
+        if (!request.auth || (request.auth.token.superAdmin !== true && request.auth.token.role !== 'superadmin')) {
             throw new functions.https.HttpsError(
                 'permission-denied',
                 'You must be a Super Admin to perform this action.'

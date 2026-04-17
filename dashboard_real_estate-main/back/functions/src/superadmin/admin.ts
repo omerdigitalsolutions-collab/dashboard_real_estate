@@ -9,7 +9,7 @@ import * as admin from 'firebase-admin';
  */
 export const superAdminListAuthUsers = functions.https.onCall({ cors: true }, async (request) => {
     // 1. Role verification
-    if (request.auth?.token.role !== 'superadmin') {
+    if (request.auth?.token.role !== 'superadmin' && request.auth?.token.superAdmin !== true) {
         throw new functions.https.HttpsError('permission-denied', 'Unauthorized service access');
     }
 

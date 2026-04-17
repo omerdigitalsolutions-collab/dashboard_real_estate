@@ -27,7 +27,8 @@ export const setupSuperAdmin = functions.https.onCall({ cors: true }, async (req
 
         await auth.setCustomUserClaims(uid, {
             ...currentClaims,
-            superAdmin: true
+            superAdmin: true,
+            role: 'superadmin'
         });
 
         console.log(`Successfully granted superAdmin claim to user: ${uid}`);

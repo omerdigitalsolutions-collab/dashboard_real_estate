@@ -172,10 +172,22 @@ export async function getPropertiesByIds(agencyId: string, propertyIds: string[]
  */
 export async function updateProperty(
     propertyId: string,
-    updates: Partial<Omit<Property, 'id' | 'agencyId'>>
+    updates: Partial<Omit<Property, 'id' | 'agencyId'>>,
+    cityHint?: string
 ): Promise<void> {
-    const ref = doc(db, COLLECTION, propertyId);
-    await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
+    console.log(`[propertyService] updateProperty called for ${propertyId}`, { cityHint, updates });
+    const functions = getFunctions(undefined, 'europe-west1');
+    const updateFn = httpsCallable<{ propertyId: string; updates: any; cityName?: string }, { success: boolean }>(
+        functions,
+        'properties-updateProperty'
+    );
+    try {
+        await updateFn({ propertyId, updates, cityName: cityHint });
+        console.log(`[propertyService] updateProperty success for ${propertyId}`);
+    } catch (err) {
+        console.error(`[propertyService] updateProperty FAILED for ${propertyId}:`, err);
+        throw err;
+    }
 }
 
 /**

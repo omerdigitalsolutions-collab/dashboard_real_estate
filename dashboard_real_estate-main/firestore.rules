@@ -26,16 +26,6 @@ service cloud.firestore {
       return isAuthed() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
     }
 
-    function isBootstrapAdmin() {
-      return isAuthed() &&
-        request.auth.token.email != null &&
-        request.auth.token.email_verified == true && (
-          request.auth.token.email.lower() == 'omerdigitalsolutions@gmail.com' ||
-          request.auth.token.email.lower() == 'omerfm4444@gmail.com' ||
-          request.auth.token.email.lower() == 'omerasis4@gmail.com'
-        );
-    }
-
     function isNonEmptyString(val) {
       return val is string && val.size() > 0;
     }
@@ -86,16 +76,16 @@ service cloud.firestore {
     match /agencies/{agencyId} {
       // Read: must be in the agency AND billing must be active (SuperAdmin/Bootstrap bypass billing check)
       allow read: if isAuthed() && (
-        isSuperAdmin() || isBootstrapAdmin() ||
+        isSuperAdmin() ||
         (inAgency(agencyId) && (isBillingActive(resource.data) || isAdmin()))
       );
-      allow create: if isBootstrapAdmin();
+      allow create: if isSuperAdmin();
 
       // Only admins can modify their own agency — agencyId is immutable
       allow update: if isAuthed()
-          && (isAgencyAdmin(agencyId) || isBootstrapAdmin())
+          && (isAgencyAdmin(agencyId) || isSuperAdmin())
           && (
-            isBootstrapAdmin() ||
+            isSuperAdmin() ||
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'monthlyGoals', 'yearlyGoals', 'settings',
               'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
@@ -109,29 +99,49 @@ service cloud.firestore {
     // AGENCY AGENTS (subcollection — not to be confused with /users)
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/agents/{agentId} {
-      allow read: if isAuthed() && (inAgency(agencyId) || isBootstrapAdmin());
-      allow create, update, delete: if isAuthed() && (isAgencyAdmin(agencyId) || isBootstrapAdmin());
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      allow create, update, delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // WHATSAPP PROPERTIES
+    // Properties parsed from monitored WhatsApp groups by the AI webhook.
+    // Write path is Cloud Functions (Admin SDK) only — clients read only.
+    // isExclusive is always false; these are external/B2B draft listings.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/whatsappProperties/{propertyId} {
+      // Any authenticated member of the agency can read
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      // Admins can delete WhatsApp drafts they no longer need
+      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
+      // Updates via updateProperty Cloud Function (Admin SDK bypasses rules).
+      // Allow direct updates from agency members but block setting isExclusive=true.
+      allow update: if isAuthed()
+          && inAgency(agencyId)
+          && !('isExclusive' in request.resource.data && request.resource.data.isExclusive == true);
+      // Create is Cloud Function (Admin SDK) only — deny from clients
+      allow create: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // AGENCY EXPENSES & INCOMES
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/expenses/{expenseId} {
-      allow read: if isAuthed() && inAgency(agencyId);
-      allow create, update: if isAuthed() && isAgencyAdmin(agencyId)
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      allow create, update: if isAuthed() && (isSuperAdmin() || (isAgencyAdmin(agencyId)
           && isPositiveNumber(request.resource.data.amount)
           && isNonEmptyString(request.resource.data.category)
-          && request.resource.data.date != null;
-      allow delete: if isAuthed() && isAgencyAdmin(agencyId);
+          && request.resource.data.date != null));
+      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
     }
 
     match /agencies/{agencyId}/incomes/{incomeId} {
-      allow read: if isAuthed() && inAgency(agencyId);
-      allow create, update: if isAuthed() && isAgencyAdmin(agencyId)
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      allow create, update: if isAuthed() && (isSuperAdmin() || (isAgencyAdmin(agencyId)
           && isPositiveNumber(request.resource.data.amount)
           && isNonEmptyString(request.resource.data.title)
-          && request.resource.data.date != null;
-      allow delete: if isAuthed() && isAgencyAdmin(agencyId);
+          && request.resource.data.date != null));
+      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -142,18 +152,17 @@ service cloud.firestore {
       allow read: if isAuthed() && (
         request.auth.uid == userId
         || isSuperAdmin()
-        || isBootstrapAdmin()
         || (resource != null && inAgency(resource.data.agencyId))
         || (resource != null && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower())
       );
 
       // List: agents can only see their own agency
       allow list: if isAuthed() && (
-        inAgency(resource.data.agencyId) || isSuperAdmin() || isBootstrapAdmin()
+        inAgency(resource.data.agencyId) || isSuperAdmin()
       );
 
-      // Allow creating own user doc on signup, or by bootstrap admin
-      allow create: if isAuthed() && (request.auth.uid == userId || isBootstrapAdmin());
+      // Allow creating own user doc on signup, or by super admin
+      allow create: if isAuthed() && (request.auth.uid == userId || isSuperAdmin());
 
       // Regular users can only update their own profile fields (not role or agencyId)
       allow update: if isAuthed() && (
@@ -169,7 +178,6 @@ service cloud.firestore {
         // ── Admin / Super-admin overrides ─────────────────────────────────────
         || isAgencyAdmin(resource.data.agencyId)
         || isSuperAdmin()
-        || isBootstrapAdmin()
       );
 
       allow delete: if isSuperAdmin();
@@ -256,13 +264,13 @@ service cloud.firestore {
           && isPositiveNumber(request.resource.data.projectedCommission)
           && isBillingActiveForCaller();
 
-      // Admins can update any deal.
-      // Agents can only update deals they created — but cannot inflate commissions or force a 'won' stage.
+      // Any agency member can update deals (stage changes, notes, etc).
+      // Only admins can change commission amounts.
+      // Marking 'won' (actualCommission) is also admin-only.
       allow update: if isAuthed()
           && inAgency(resource.data.agencyId)
           && agencyIdUnchanged()
-          && (isAdmin() || resource.data.createdBy == request.auth.uid)
-          && (request.resource.data.stage == resource.data.stage || request.resource.data.stage != 'Won' || isAgencyAdmin(resource.data.agencyId))
+          && isBillingActiveForCaller()
           && (request.resource.data.projectedCommission == resource.data.projectedCommission || isAgencyAdmin(resource.data.agencyId))
           && (request.resource.data.actualCommission == resource.data.actualCommission || isAgencyAdmin(resource.data.agencyId));
 

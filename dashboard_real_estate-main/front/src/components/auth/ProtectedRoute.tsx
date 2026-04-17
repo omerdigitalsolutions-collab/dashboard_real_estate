@@ -29,7 +29,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
     // ── Incomplete Profile Gate (for Agents/Members) ───────────────────────────
     // If they have a record (requireOnboarding is false) but no phone, they MUST finish setup.
-    const isProfileIncomplete = userData && !userData.phone;
+    // Admins provisioned via Stripe don't have a phone — don't force them to agent-setup
+    const isProfileIncomplete = userData && !userData.phone && userData.role !== 'admin';
     
     if (isProfileIncomplete && location.pathname !== '/agent-setup') {
         return <Navigate to="/agent-setup" replace />;

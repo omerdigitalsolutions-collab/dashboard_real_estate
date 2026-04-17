@@ -423,9 +423,9 @@ export default function SuperAdminDashboard() {
                         try {
                             const { httpsCallable } = await import('firebase/functions');
                             const { functions } = await import('../config/firebase');
-                            const setupFn = httpsCallable(functions, 'superadmin-setupSuperAdmin');
+                            const setupFn = httpsCallable(functions, 'superadmin-superAdminHealSelf');
                             const res = await setupFn();
-                            alert((res.data as any).message);
+                            alert((res.data as any).message || 'ההרשאות עודכנו. אנא בצע התנתקות והתחברות מחדש.');
                             window.location.reload();
                         } catch (e: any) {
                             alert('שגיאה: ' + e.message);

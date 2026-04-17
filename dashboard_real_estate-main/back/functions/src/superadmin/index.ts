@@ -6,3 +6,4 @@ export { superAdminUpdateAgencyPlan, superAdminReactivateBilling } from './updat
 export { superAdminSetAgencyStatus, superAdminSetUserStatus } from './status';
 export { superAdminListAuthUsers } from './admin';
 export { superAdminApproveAgency } from './approveAgency';
+export { superAdminHealSelf } from './healAdmin';
