@@ -65,7 +65,9 @@ exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) 
                 const data = doc.data();
                 const images = data.imageUrls || data.images;
                 const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
-                liveProperties.push(Object.assign(Object.assign({}, data), { id: doc.id, address: data.street || data.address || 'כתובת חסויה', city: data.city || '', price: data.price || 0, rooms: data.rooms || null, sqm: data.sqm || null, floor: data.floor || null, images: finalImages, type: data.type || 'sale', kind: data.kind || null, listingType: data.listingType || null, description: data.description || null, createdAt: data.createdAt || null, agentName: '', agentPhone: '' }));
+                liveProperties.push(Object.assign(Object.assign({}, data), { id: doc.id, address: data.street || data.address || 'כתובת חסויה', city: data.city || '', price: data.price || 0, rooms: data.rooms || null, sqm: data.sqm || null, floor: data.floor || null, images: finalImages, type: data.type || 'sale', kind: data.kind || null, listingType: data.listingType || null, description: data.description || null, createdAt: data.createdAt || null, agentName: '', 
+                    // Keep agent phone only for exclusive listings so the contact button can reach the right agent
+                    agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '' }));
             }
         }
     }

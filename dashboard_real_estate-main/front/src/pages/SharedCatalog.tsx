@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCatalogWithQueries, getLiveCatalogProperties, saveCatalogLikes, SharedCatalog } from '../services/catalogService';
-import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Phone, X, CheckCircle2, DollarSign, Zap, Car, Wind, Shield, Clock } from 'lucide-react';
+import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Maximize2, Phone, X, CheckCircle2, DollarSign, Zap, Car, Wind, Shield, Clock } from 'lucide-react';
+import CatalogPropertyModal from './CatalogPropertyModal';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -33,7 +34,7 @@ function conditionLabel(val?: string) {
 }
 
 // ─── Image Carousel ───────────────────────────────────────────────────────────
-function ImageCarousel({ images, alt }: { images: string[]; alt: string }) {
+function ImageCarousel({ images, alt, onZoom }: { images: string[]; alt: string; onZoom?: (url: string) => void }) {
     const [current, setCurrent] = useState(0);
     const imgs = images.slice(0, 5);
 
@@ -55,9 +56,20 @@ function ImageCarousel({ images, alt }: { images: string[]; alt: string }) {
                     key={i}
                     src={src}
                     alt={alt}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${i === current ? 'opacity-100' : 'opacity-0'}`}
+                    onClick={e => { e.stopPropagation(); onZoom?.(imgs[current]); }}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 cursor-zoom-in ${i === current ? 'opacity-100' : 'opacity-0'}`}
                 />
             ))}
+            {/* Zoom button */}
+            {onZoom && (
+                <button
+                    onClick={e => { e.stopPropagation(); onZoom(imgs[current]); }}
+                    className="absolute bottom-10 right-2 z-20 w-8 h-8 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
+                    title="הגדל תמונה"
+                >
+                    <Maximize2 size={13} />
+                </button>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none z-10" />
             {imgs.length > 1 && (
                 <>
@@ -183,6 +195,8 @@ export default function SharedCatalogPage() {
     const [liveProperties, setLiveProperties] = useState<any[]>([]);
     const [loadingProperties, setLoadingProperties] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+    const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const persistLikes = useCallback((ids: Set<string>, catalogToken: string) => {
@@ -315,6 +329,13 @@ export default function SharedCatalogPage() {
     const { leadName, agencyName, agencyLogoUrl, leadRequirements } = catalog;
     const rawAgencyPhone = catalog.agencyPhone || '';
     const agencyPhone = rawAgencyPhone.replace(/\D/g, '').replace(/^0/, '972');
+
+    const getContactPhone = (property: any): string => {
+        if (property.listingType === 'exclusive' && property.agentPhone) {
+            return property.agentPhone;
+        }
+        return rawAgencyPhone;
+    };
     const waMessage = encodeURIComponent(`היי, עברתי על קטלוג הנכסים שנשלח אלי ואשמח לפרטים נוספים.`);
     const waLink = agencyPhone ? `https://wa.me/${agencyPhone}?text=${waMessage}` : '#';
     const likedCount = likedIds.size;
@@ -323,6 +344,34 @@ export default function SharedCatalogPage() {
         <div className="min-h-screen bg-[#f5f6fa] pb-36" dir="rtl">
             {/* Like Toast */}
             {showToast && <LikeToast name={leadName || ''} onClose={() => setShowToast(false)} />}
+
+            {/* Image Lightbox */}
+            {zoomedImage && (
+                <div
+                    className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+                    onClick={() => setZoomedImage(null)}
+                >
+                    <button
+                        className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center z-[201] transition-colors"
+                        onClick={() => setZoomedImage(null)}
+                    >
+                        <X size={20} />
+                    </button>
+                    <img
+                        src={zoomedImage}
+                        alt="תמונה מוגדלת"
+                        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    />
+                </div>
+            )}
+
+            {/* Property Profile Modal */}
+            <CatalogPropertyModal
+                property={selectedProperty}
+                agencyPhone={rawAgencyPhone}
+                onClose={() => setSelectedProperty(null)}
+            />
 
             {/* ── Header ──────────────────────────────────────────────────── */}
             <header className="bg-gradient-to-br from-[#0f1729] via-[#0f2052] to-[#0f1729] text-white shadow-2xl relative overflow-hidden">
@@ -389,7 +438,7 @@ export default function SharedCatalogPage() {
                             >
                                 {/* Image */}
                                 <div className="relative">
-                                    <ImageCarousel images={property.images || []} alt={streetName} />
+                                    <ImageCarousel images={property.images || []} alt={streetName} onZoom={setZoomedImage} />
 
                                     {/* Top badges */}
                                     <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
@@ -417,8 +466,11 @@ export default function SharedCatalogPage() {
                                     </button>
                                 </div>
 
-                                {/* Details */}
-                                <div className="p-4 flex flex-col flex-1 text-right">
+                                {/* Details — clicking opens Property Profile modal */}
+                                <div
+                                    className="p-4 flex flex-col flex-1 text-right cursor-pointer"
+                                    onClick={() => setSelectedProperty(property)}
+                                >
                                     {/* Location */}
                                     <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
                                         <MapPin size={11} className="text-slate-300 shrink-0" />
@@ -458,6 +510,22 @@ export default function SharedCatalogPage() {
                                         <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-50 pt-3 mt-auto line-clamp-2">
                                             {property.description}
                                         </p>
+                                    )}
+
+                                    {/* Contact button */}
+                                    {getContactPhone(property) && (
+                                        <a
+                                            href={`tel:${getContactPhone(property)}`}
+                                            onClick={e => e.stopPropagation()}
+                                            className={`mt-3 flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-xl transition-colors ${
+                                                property.listingType === 'exclusive' && property.agentPhone
+                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                    : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                            }`}
+                                        >
+                                            <Phone size={13} />
+                                            <span dir="ltr">{getContactPhone(property)}</span>
+                                        </a>
                                     )}
                                 </div>
                             </div>
