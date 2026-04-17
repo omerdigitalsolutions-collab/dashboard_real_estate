@@ -90,7 +90,7 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
                     listingType: data.listingType || null,
                     description: data.description || null,
                     createdAt: data.createdAt || null,
-                    agentName: '', // Strip agent name for strict privacy
+                    agentName: data.listingType === 'exclusive' ? (data.agentName || '') : '',
                     // Keep agent phone only for exclusive listings so the contact button can reach the right agent
                     agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '',
                 });

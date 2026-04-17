@@ -330,12 +330,31 @@ export default function SharedCatalogPage() {
     const rawAgencyPhone = catalog.agencyPhone || '';
     const agencyPhone = rawAgencyPhone.replace(/\D/g, '').replace(/^0/, '972');
 
-    const getContactPhone = (property: any): string => {
+    const getCallPhone = (property: any): string => {
         if (property.listingType === 'exclusive' && property.agentPhone) {
             return property.agentPhone;
         }
         return rawAgencyPhone;
     };
+
+    const getWaPhone = (property: any): string => {
+        if (property.listingType === 'exclusive' && property.agentPhone) {
+            return property.agentPhone.replace(/\D/g, '').replace(/^0/, '972');
+        }
+        return agencyPhone; // catalog stores WA integration phone or office phone
+    };
+
+    const getWaLink = (property: any): string => {
+        const phone = getWaPhone(property);
+        if (!phone) return '#';
+        const addr = toStreetOnly(property.address || '');
+        const location = [addr, property.city].filter(Boolean).join(', ');
+        const agentDisplayName = property.agentName || '';
+        const greeting = agentDisplayName ? `היי ${agentDisplayName},` : 'היי,';
+        const msg = `${greeting} אני מתעניין/ת בנכס ב${location}`;
+        return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    };
+
     const waMessage = encodeURIComponent(`היי, עברתי על קטלוג הנכסים שנשלח אלי ואשמח לפרטים נוספים.`);
     const waLink = agencyPhone ? `https://wa.me/${agencyPhone}?text=${waMessage}` : '#';
     const likedCount = likedIds.size;
@@ -512,20 +531,33 @@ export default function SharedCatalogPage() {
                                         </p>
                                     )}
 
-                                    {/* Contact button */}
-                                    {getContactPhone(property) && (
-                                        <a
-                                            href={`tel:${getContactPhone(property)}`}
-                                            onClick={e => e.stopPropagation()}
-                                            className={`mt-3 flex items-center justify-center gap-2 text-xs font-bold px-3 py-2 rounded-xl transition-colors ${
-                                                property.listingType === 'exclusive' && property.agentPhone
-                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                                    : 'bg-slate-900 hover:bg-slate-800 text-white'
-                                            }`}
-                                        >
-                                            <Phone size={13} />
-                                            <span dir="ltr">{getContactPhone(property)}</span>
-                                        </a>
+                                    {/* Action buttons: Call + WhatsApp */}
+                                    {(getCallPhone(property) || getWaPhone(property)) && (
+                                        <div className="mt-3 flex gap-2">
+                                            {getCallPhone(property) && (
+                                                <a
+                                                    href={`tel:${getCallPhone(property)}`}
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors"
+                                                    title={`התקשר: ${getCallPhone(property)}`}
+                                                >
+                                                    <Phone size={13} />
+                                                    <span>התקשר</span>
+                                                </a>
+                                            )}
+                                            {getWaPhone(property) && (
+                                                <a
+                                                    href={getWaLink(property)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[#25D366] hover:bg-[#1fbc5a] text-white transition-colors"
+                                                >
+                                                    <MessageCircle size={13} />
+                                                    <span>וואצאפ</span>
+                                                </a>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
