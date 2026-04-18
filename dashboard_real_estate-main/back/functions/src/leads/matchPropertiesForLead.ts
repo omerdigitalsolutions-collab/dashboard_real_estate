@@ -47,22 +47,26 @@ async function getMatchingCityNames(desiredCities: string[]): Promise<string[]> 
     if (!cachedCityNames || (now - lastCacheUpdate > CACHE_TTL)) {
         try {
             console.log('Refreshing cities catalog cache...');
-            // Fetch only document IDs to save bandwidth/costs
+            // Fetch all document IDs. Note: this still only finds 'real' documents.
             const snapshot = await db.collection('cities').select().get();
             cachedCityNames = snapshot.docs.map(doc => doc.id);
             lastCacheUpdate = now;
         } catch (err) {
             console.error('Error fetching cities catalog:', err);
-            return desiredCities; // Fallback to raw inputs if catalog fetch fails
+            return desiredCities;
         }
     }
 
     if (!cachedCityNames) return desiredCities;
 
     // Filter the catalog for anything that matches our desired cities
-    return cachedCityNames.filter(catalogCity => 
+    const resolved = cachedCityNames.filter(catalogCity => 
         isCityMatch(desiredCities, catalogCity)
     );
+
+    // Optimization: If a desired city is missing from the catalog, it might be a phantom.
+    // The main code will 'heal' these below.
+    return resolved;
 }
 
 export const matchPropertiesForLead = onCall({ cors: true }, async (request) => {
@@ -83,6 +87,28 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
     const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
     if (!callerDoc.exists || callerDoc.data()?.agencyId !== agencyId) {
         throw new HttpsError('permission-denied', 'Access denied to this agency.');
+    }
+
+    // ── City Discovery & Healing ───────────────────────────────────────────────
+    // We fetch the agency doc to find its activeGlobalCities and 'touch' them
+    // to ensure they are visible in the global cities catalog.
+    const agencyDoc = await db.doc(`agencies/${agencyId}`).get();
+    const agencyData = agencyDoc.data();
+    const activeGlobalCities = (agencyData?.settings?.activeGlobalCities || 
+                                (agencyData?.mainServiceArea ? [agencyData.mainServiceArea] : [])) as string[];
+
+    if (activeGlobalCities.length > 0) {
+        console.log('[HEAL] Touching cities for agency:', agencyId, activeGlobalCities);
+        const healBatch = db.batch();
+        activeGlobalCities.forEach(city => {
+            // We touch the exact document and potentially some variations if we can guess them
+            // But usually the user provides the 'base' name which matches the phantom ID.
+            healBatch.set(db.collection('cities').doc(city), { 
+                exists: true, 
+                lastHeal: new Date() 
+            }, { merge: true });
+        });
+        await healBatch.commit().catch(e => console.error('[HEAL] Failed to touch cities:', e));
     }
 
     // ── Fetch active properties from Agency ──────────────────────────────────────
