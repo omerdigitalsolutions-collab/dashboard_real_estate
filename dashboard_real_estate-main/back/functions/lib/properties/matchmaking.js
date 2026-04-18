@@ -45,7 +45,7 @@ const CLOSED_LEAD_STATUSES = ['lost', 'won'];
 // In-memory cache for city catalog
 let cachedCityNames = null;
 let lastCacheUpdate = 0;
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
 async function getCompatibleCities(cityName) {
     const now = Date.now();
     if (!cachedCityNames || (now - lastCacheUpdate > CACHE_TTL)) {

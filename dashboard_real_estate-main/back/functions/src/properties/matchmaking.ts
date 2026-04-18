@@ -14,7 +14,7 @@ type WriteFn = (batch: admin.firestore.WriteBatch) => void;
 // In-memory cache for city catalog
 let cachedCityNames: string[] | null = null;
 let lastCacheUpdate = 0;
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
 
 async function getCompatibleCities(cityName: string): Promise<string[]> {
     const now = Date.now();

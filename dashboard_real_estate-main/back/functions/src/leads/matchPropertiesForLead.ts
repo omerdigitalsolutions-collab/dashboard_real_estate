@@ -36,7 +36,7 @@ const db = getFirestore();
 // In-memory cache for the city list (document IDs in 'cities' collection)
 let cachedCityNames: string[] | null = null;
 let lastCacheUpdate = 0;
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
 
 /**
  * Fetches all city names from the 'cities' collection and returns those that
@@ -128,6 +128,7 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
                         address: data.street || data.address || 'כתובת חסויה',
                         type: data.type || 'sale',
                         ...data,
+                        city: data.city || cityName, // Ensure city is set for matching engine
                     };
                 });
             } catch (err) {

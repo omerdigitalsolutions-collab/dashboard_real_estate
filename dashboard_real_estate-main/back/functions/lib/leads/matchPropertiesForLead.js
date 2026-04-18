@@ -37,7 +37,7 @@ const db = (0, firestore_1.getFirestore)();
 // In-memory cache for the city list (document IDs in 'cities' collection)
 let cachedCityNames = null;
 let lastCacheUpdate = 0;
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
 /**
  * Fetches all city names from the 'cities' collection and returns those that
  * match any of the desired cities using substring matching.
@@ -101,7 +101,7 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
                     return [];
                 return citySnap.docs.map(doc => {
                     const data = doc.data();
-                    return Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, address: data.street || data.address || 'כתובת חסויה', type: data.type || 'sale' }, data);
+                    return Object.assign(Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, address: data.street || data.address || 'כתובת חסויה', type: data.type || 'sale' }, data), { city: data.city || cityName });
                 });
             }
             catch (err) {

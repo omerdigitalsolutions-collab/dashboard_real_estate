@@ -12,7 +12,7 @@ function normalizeCity(city) {
     return city
         .toLowerCase()
         .trim()
-        .replace(/[-'`"]/g, ' ') // Replace hyphens and quotes with spaces
+        .replace(/[-'`"|/\\,.]/g, ' ') // Replace hyphens, quotes, pipes, slashes, and other separators with spaces
         .replace(/\s+/g, ' ') // Collapse multiple spaces into one
         .trim();
 }
