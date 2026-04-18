@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Property, Deal, AppTask, Alert, Lead, Agency } from '../types';
 import { getPlanFeatures } from '../config/plans';
+import { isCityMatch } from '../utils/stringUtils';
 
 interface LiveDashboardData {
     properties: Property[];
@@ -33,9 +34,18 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const [rawAgency, setRawAgency] = useState<Agency | null>(null);
     const [agencyName, setAgencyName] = useState<string | null>(null);
     const [agencyLogo, setAgencyLogo] = useState<string | null>(null);
+    const [citiesCatalog, setCitiesCatalog] = useState<string[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
+
+    // 0. Fetch the cities catalog (all document IDs in 'cities') for substring matching
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'cities'), (snap) => {
+            setCitiesCatalog(snap.docs.map(doc => doc.id));
+        }, (err) => console.error('[useLiveDashboardData] Cities Catalog Error:', err));
+        return () => unsub();
+    }, []);
 
     useEffect(() => {
         if (!userData?.agencyId || !userData?.uid) {
@@ -284,11 +294,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     const planFeatures = getPlanFeatures(data?.planId);
                     const canAccessSourcing = planFeatures.canAccessSourcing;
 
-                    const loadedCities = canAccessSourcing 
+                    const baseCities = canAccessSourcing 
                         ? (settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []))
                         : [];
 
-                    console.log('[DEBUG cities] loadedCities from agency settings (gated):', loadedCities);
+                    // Expand service areas: find all cities in catalog that match the user's selected areas
+                    const loadedCities = (citiesCatalog.length > 0 && baseCities.length > 0)
+                        ? citiesCatalog.filter(catalogCity => isCityMatch(baseCities, catalogCity))
+                        : baseCities;
+
+                    console.log('[DEBUG cities] Resolved subscription cities:', loadedCities);
                     const citiesChanged = loadedCities.length !== activeCities.length || !loadedCities.every((c: string) => activeCities.includes(c));
 
                     if (citiesChanged) {
@@ -351,7 +366,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubAgency();
             globalCityUnsubs.forEach(unsub => unsub());
         };
-    }, [userData?.agencyId, userData?.uid]);
+    }, [userData?.agencyId, userData?.uid, citiesCatalog]);
 
     // Keep max 10 completed tasks, delete completed ones older than 48 hours
     // --- Task Cleanup Hook ---
