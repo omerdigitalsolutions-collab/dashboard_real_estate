@@ -129,11 +129,12 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
             const roomsNum = prop.rooms;
             const hashInput = `${streetStr}_${priceNum}_${roomsNum}`;
             const hashId = crypto.createHash('sha256').update(hashInput).digest('hex');
-            const propRef = db
-                .collection('cities')
-                .doc(normalizedCityName)
-                .collection('properties')
-                .doc(hashId);
+            const cityRef = db.collection('cities').doc(normalizedCityName);
+            batch.set(cityRef, {
+                exists: true,
+                lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            const propRef = cityRef.collection('properties').doc(hashId);
             // Resolve deal type: HTML keyword takes priority, else Gemini's answer, else 'sale'
             const resolvedDealType = htmlDealType !== null && htmlDealType !== void 0 ? htmlDealType : (prop.dealType === 'rent' ? 'rent' : 'sale');
             // Resolve source label
