@@ -32,6 +32,17 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminGetImportMappingV2 = exports.superAdminImportGlobalPropertiesV2 = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
@@ -67,9 +78,21 @@ exports.superAdminImportGlobalPropertiesV2 = functions.https.onCall({
         for (let i = 0; i < properties.length; i += batchSize) {
             const chunk = properties.slice(i, i + batchSize);
             const batch = db.batch();
-            chunk.forEach((prop) => {
-                // City Normalization
-                const rawCity = (prop.city || 'unknown').toString().trim();
+            chunk.forEach((rawPropInput) => {
+                const prop = Object.assign({}, rawPropInput);
+                // Normalize boolean string fields ("true"/"false" → boolean)
+                for (const f of ['hasBalcony', 'hasElevator', 'hasParking', 'hasSafeRoom']) {
+                    if (typeof prop[f] === 'string') {
+                        prop[f] = prop[f].toLowerCase() === 'true';
+                    }
+                }
+                // Normalize dealType: "buy" → "sale"
+                if (prop.type === 'buy')
+                    prop.type = 'sale';
+                else if (prop.type === 'rent')
+                    prop.type = 'rent';
+                // City: prefer English `city`, fall back to `cityHebrew`
+                const rawCity = (prop.city || prop.cityHebrew || 'unknown').toString().trim();
                 const normalizedCity = rawCity || 'unknown';
                 // street normalization for ID
                 const street = (prop.street || '').toString().trim();
@@ -78,7 +101,17 @@ exports.superAdminImportGlobalPropertiesV2 = functions.https.onCall({
                 const hashInput = `${normalizedCity.toLowerCase()}_${street.toLowerCase()}_${price}`;
                 const docId = crypto.createHash('sha256').update(hashInput).digest('hex');
                 const propRef = db.collection('cities').doc(normalizedCity).collection('properties').doc(docId);
-                batch.set(propRef, Object.assign(Object.assign({}, prop), { city: normalizedCity, street: street, source: "super_admin_excel", isPublic: true, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
+                // Normalize imageUrl → imageUrls array
+                let imageUrls = [];
+                if (Array.isArray(prop.imageUrls)) {
+                    imageUrls = prop.imageUrls.map(String).filter(Boolean);
+                }
+                else if (typeof prop.imageUrl === 'string' && prop.imageUrl.trim()) {
+                    imageUrls = [prop.imageUrl.trim()];
+                }
+                // Strip raw/redundant fields from spread
+                const _a = prop, { imageUrl: _iu, imageUrls: _ius, listingUrl, cityHebrew: _ch } = _a, restProp = __rest(_a, ["imageUrl", "imageUrls", "listingUrl", "cityHebrew"]);
+                batch.set(propRef, Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, restProp), { city: normalizedCity, street: street }), (imageUrls.length > 0 ? { imageUrls } : {})), (listingUrl ? { listingUrl: String(listingUrl).trim() } : {})), { source: "super_admin_excel", isPublic: true, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
             });
             await batch.commit();
             totalInserted += chunk.length;
@@ -110,18 +143,27 @@ exports.superAdminGetImportMappingV2 = functions.https.onCall({
     const mapping = {};
     // Dictionary definition: DB key -> array of typical Hebrew/English column headers
     const rules = {
-        city: [/עיר/i, /יישוב/i, /ישוב/i, /city/i],
-        street: [/רחוב/i, /כתובת/i, /שכונה/i, /street/i, /address/i],
-        price: [/מחיר/i, /עלות/i, /price/i],
-        rooms: [/חדרים/i, /מספר חדרים/i, /rooms/i],
-        sqm: [/מ״ר/i, /מ"ר/i, /שטח/i, /גודל/i, /sqm/i, /size/i],
-        floor: [/קומה/i, /קומות/i, /floor/i],
-        type: [/סוג/i, /עסקה/i, /type/i], // sale or rent
-        kind: [/סוג נכס/i, /סוג מודעה/i, /kind/i, /property type/i],
-        description: [/תיאור/i, /מידע/i, /פרטים/i, /description/i],
-        listingType: [/בלעדיות/i, /בלעדי/i, /שיווק/i, /listing/i],
-        agentName: [/סוכן/i, /איש קשר/i, /מתווך/i, /agent/i],
-        notes: [/הערות/i, /הערה פנימית/i, /notes/i]
+        city: [/^city$/i, /^cityHebrew$/i, /עיר/i, /יישוב/i, /ישוב/i],
+        street: [/^address$/i, /^streetName$/i, /רחוב/i, /כתובת/i, /street/i],
+        neighborhood: [/^neighbourhood$/i, /^neighborhood$/i, /שכונה/i, /quarter/i],
+        price: [/^price$/i, /מחיר/i, /עלות/i],
+        rooms: [/^rooms$/i, /חדרים/i, /מספר חדרים/i],
+        sqm: [/^areaSqm$/i, /מ״ר/i, /מ"ר/i, /שטח/i, /גודל/i, /sqm/i, /size/i],
+        floor: [/^floor$/i, /קומה/i, /קומות/i],
+        type: [/^dealType$/i, /סוג עסקה/i, /עסקה/i, /^type$/i],
+        kind: [/^propertyType$/i, /סוג נכס/i, /סוג מודעה/i, /^kind$/i, /property type/i],
+        description: [/^listingDescription$/i, /תיאור/i, /מידע/i, /פרטים/i, /description/i, /property details/i, /features/i],
+        listingType: [/בלעדיות/i, /בלעדי/i, /שיווק/i, /listing type/i],
+        agentName: [/^contactName$/i, /סוכן/i, /איש קשר/i, /מתווך/i, /agent/i, /agency name/i],
+        contactPhone: [/^contactPhone$/i, /contact.*phone/i, /^phone$/i, /טלפון/i],
+        notes: [/הערות/i, /הערה פנימית/i, /^notes$/i],
+        imageUrl: [/^coverImage$/i, /^images\/\d*$/i, /image url/i, /תמונה/i, /photo/i, /^img$/i],
+        listingUrl: [/^url$/i, /listing url/i, /^link$/i, /קישור/i, /מודעה/i, /yad2/i, /madlan/i],
+        hasBalcony: [/^hasBalcony$/i, /balcony/i, /מרפסת/i],
+        hasElevator: [/^hasElevator$/i, /elevator/i, /מעלית/i],
+        hasParking: [/^hasParking$/i, /^parking$/i, /חניה/i, /חנייה/i],
+        hasSafeRoom: [/^hasSecureRoom$/i, /secure.*room/i, /safe.*room/i, /ממ"ד/i, /ממד/i],
+        listingId: [/^listingId$/i, /listing.*id/i],
     };
     headers.forEach((header) => {
         const cleanHeader = header.trim();

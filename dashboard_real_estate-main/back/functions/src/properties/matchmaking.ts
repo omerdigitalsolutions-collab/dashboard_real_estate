@@ -1,6 +1,7 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { evaluateMatch, MatchingProperty } from '../leads/matchingEngine';
+import { normalizeCity, isCityMatch } from '../leads/stringUtils';
 import { notifyNewProperty, MatchedLead, newPropertyAlertSecrets } from '../notifications/newPropertyAlert';
 
 const db = admin.firestore();
@@ -9,6 +10,34 @@ const BATCH_WRITE_LIMIT = 400;
 const CLOSED_LEAD_STATUSES = ['lost', 'won'];
 
 type WriteFn = (batch: admin.firestore.WriteBatch) => void;
+
+// In-memory cache for city catalog
+let cachedCityNames: string[] | null = null;
+let lastCacheUpdate = 0;
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+async function getCompatibleCities(cityName: string): Promise<string[]> {
+    const now = Date.now();
+    if (!cachedCityNames || (now - lastCacheUpdate > CACHE_TTL)) {
+        try {
+            const snapshot = await db.collection('cities').select().get();
+            cachedCityNames = snapshot.docs.map(doc => doc.id);
+            lastCacheUpdate = now;
+        } catch (err) {
+            console.error('Error fetching city catalog for matchmaking:', err);
+            return [cityName];
+        }
+    }
+
+    // Find all names in our catalog that match the incoming cityName (substring match both ways)
+    // E.g. for "תל אביב יפו", find ["תל אביב", "תל אביב-יפו", "יפו"]
+    const matches = cachedCityNames.filter(c => isCityMatch([c], cityName));
+    
+    // Always include the original name just in case
+    if (!matches.includes(cityName)) matches.push(cityName);
+    
+    return matches;
+}
 
 async function commitWrites(writes: WriteFn[]) {
     for (let i = 0; i < writes.length; i += BATCH_WRITE_LIMIT) {
@@ -89,7 +118,8 @@ async function runAgencyMatchmaking(
     });
 
     const matchCount = matchedLeads.length;
-    if (matchCount === 0) return;
+    const isYad2OrMadlan = propertyData.source === 'yad2_alert' || propertyData.source === 'madlan_alert';
+    if (matchCount === 0 && !isYad2OrMadlan) return;
 
     const isExternal = propertyData.listingType === 'external' || propertyData.source === 'whatsapp_group';
     if (isExternal) {
@@ -207,12 +237,21 @@ export const onGlobalPropertyCreatedMatchmaking = onDocumentCreated(
         };
 
         try {
+            // 1. Find all potential city names that leads might be using to refer to this city
+            // E.g. if cityName is "תל אביב יפו", candidates might be ["תל אביב", "תל אביב-יפו"]
+            const candidateCities = await getCompatibleCities(cityName);
+            
+            // 2. Fetch leads looking for ANY of these candidates
+            // array-contains-any limit is 10, so we slice if needed
             const leadsSnap = await db.collection('leads')
-                .where('requirements.desiredCity', 'array-contains', cityName)
+                .where('requirements.desiredCity', 'array-contains-any', candidateCities.slice(0, 10))
                 .get();
+
+            const isGlobalYad2OrMadlan = propertyData.source === 'yad2_alert' || propertyData.source === 'madlan_alert';
 
             if (leadsSnap.empty) {
                 console.log(`Global matchmaking: No leads found for city "${cityName}".`);
+                // For Yad2/Madlan we still want to notify, but without any leads we don't know which agencies to notify
                 return;
             }
 
@@ -256,6 +295,16 @@ export const onGlobalPropertyCreatedMatchmaking = onDocumentCreated(
 
                 console.log(`Global matchmaking: Public property ${propertyId} matched lead ${doc.id} (score: ${result.matchScore})`);
             });
+
+            // For Yad2/Madlan: also notify agencies with leads in the city that had no matches
+            if (isGlobalYad2OrMadlan) {
+                leadsSnap.docs.forEach((doc) => {
+                    const leadAgencyId: string | undefined = doc.data().agencyId;
+                    if (leadAgencyId && !perAgency.has(leadAgencyId)) {
+                        perAgency.set(leadAgencyId, []);
+                    }
+                });
+            }
 
             if (perAgency.size === 0) return;
 

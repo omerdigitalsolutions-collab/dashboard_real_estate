@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
+import { formatNumberWithCommas, parseFormattedNumber } from '../../utils/formatters';
 import UpgradeModal from '../ui/UpgradeModal';
 import { addProperty } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
@@ -481,11 +482,19 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                             </div>
                         </div>
 
-                        {/* Price */}
-                        <div>
-                            <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
-                            <input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} required placeholder="1,500,000" className={inputCls} dir="ltr" />
-                        </div>
+                    <div>
+                        <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            value={formatNumberWithCommas(price)}
+                            onChange={e => setPrice(parseFormattedNumber(e.target.value))}
+                            required
+                            placeholder="1,500,000"
+                            className={inputCls}
+                            dir="ltr"
+                        />
+                    </div>
 
                         {/* Rooms + Sqm + Floor */}
                         <div className="grid grid-cols-3 gap-3">

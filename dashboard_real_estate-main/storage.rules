@@ -100,7 +100,24 @@ service firebase.storage {
     }
 
 
-    // 3. Lead Documents / Files
+    // 3. Property Videos
+    match /agencies/{agencyId}/properties/{propertyId}/videos/{fileName} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && request.resource.size < 200 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*')
+                    && firestore.get(
+                         /databases/(default)/documents/properties/$(propertyId)
+                       ).data.agencyId == agencyId;
+
+      allow update, delete: if request.auth != null
+                            && request.auth.token.agencyId == agencyId
+                            && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner');
+    }
+
+    // 4. Lead Documents / Files
     match /agencies/{agencyId}/leads/{leadId}/{fileName} {
       // Visible only to agents of the same agency
       allow read: if request.auth != null

@@ -248,3 +248,15 @@ export async function uploadPropertyImages(
 
     return await Promise.all(uploadPromises);
 }
+
+export async function uploadPropertyVideo(
+    agencyId: string,
+    propertyId: string,
+    videoFile: File
+): Promise<string> {
+    const ext = videoFile.name.split('.').pop() ?? 'mp4';
+    const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+    const storageRef = ref(storage, `agencies/${agencyId}/properties/${propertyId}/videos/${uniqueFilename}`);
+    const snapshot = await uploadBytes(storageRef, videoFile);
+    return getDownloadURL(snapshot.ref);
+}

@@ -1,7 +1,7 @@
 import { Property, AppUser, Lead } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft } from 'lucide-react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft, Video, VideoOff } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { updateProperty, uploadPropertyImages } from '../../services/propertyService';
+import { updateProperty, uploadPropertyImages, uploadPropertyVideo } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import { AddMeetingModal } from './AddMeetingModal';
@@ -100,7 +100,9 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isUploadingVideo, setIsUploadingVideo] = useState(false);
     const [imageUrls, setImageUrls] = useState<string[]>(property.imageUrls || []);
+    const [videoUrl, setVideoUrl] = useState<string | undefined>(property.videoUrl);
 
     // Description Edit State
     const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -109,6 +111,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
 
     // Sync state when property prop changes
     useEffect(() => {
@@ -116,6 +119,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         if (property.imageUrls) {
             setImageUrls(property.imageUrls);
         }
+        setVideoUrl(property.videoUrl);
     }, [property]);
 
     const hasImages = imageUrls.length > 0;
@@ -236,6 +240,42 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         } catch (err) {
             console.error('Error updating lead:', err);
             toast.error('שגיאה בשיוך ליד.');
+        }
+    };
+
+    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !userData?.agencyId) return;
+
+        if (file.size > 200 * 1024 * 1024) {
+            toast.error('הסרטון גדול מדי. מקסימום 200MB.');
+            return;
+        }
+
+        try {
+            setIsUploadingVideo(true);
+            const url = await uploadPropertyVideo(userData.agencyId, property.id, file);
+            setVideoUrl(url);
+            await updateProperty(property.id, { videoUrl: url }, property.isGlobalCityProperty ? property.city : undefined);
+            toast.success('הסרטון הועלה בהצלחה ✓');
+        } catch (error) {
+            console.error('Error uploading video:', error);
+            toast.error('אירעה שגיאה בהעלאת הסרטון.');
+        } finally {
+            setIsUploadingVideo(false);
+            if (videoInputRef.current) videoInputRef.current.value = '';
+        }
+    };
+
+    const handleDeleteVideo = async () => {
+        if (!confirm('האם אתה בטוח שברצונך למחוק את הסרטון?')) return;
+        try {
+            setVideoUrl(undefined);
+            await updateProperty(property.id, { videoUrl: null }, property.isGlobalCityProperty ? property.city : undefined);
+            toast.success('הסרטון נמחק בהצלחה');
+        } catch (error) {
+            console.error('Error deleting video:', error);
+            toast.error('שגיאה במחיקת הסרטון');
         }
     };
 
@@ -400,6 +440,60 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                             className="hidden"
                             onChange={handleFileChange}
                         />
+                        <input
+                            type="file"
+                            accept="video/*"
+                            ref={videoInputRef}
+                            className="hidden"
+                            onChange={handleVideoUpload}
+                        />
+
+                        {/* Video Section */}
+                        <div className="mb-6">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">סרטון נכס</span>
+                                {videoUrl ? (
+                                    <button
+                                        onClick={handleDeleteVideo}
+                                        className="text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                    >
+                                        <Trash2 size={12} />
+                                        מחק סרטון
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => videoInputRef.current?.click()}
+                                        disabled={isUploadingVideo}
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                    >
+                                        {isUploadingVideo ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />}
+                                        {isUploadingVideo ? 'מעלה סרטון...' : 'העלה סרטון'}
+                                    </button>
+                                )}
+                            </div>
+                            {videoUrl ? (
+                                <div className="w-full rounded-2xl overflow-hidden bg-black border border-slate-200">
+                                    <video
+                                        src={videoUrl}
+                                        controls
+                                        className="w-full max-h-72 object-contain"
+                                        preload="metadata"
+                                    />
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={() => !isUploadingVideo && videoInputRef.current?.click()}
+                                    className="w-full h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-100 hover:border-blue-300 hover:text-blue-500 transition-all"
+                                >
+                                    {isUploadingVideo ? (
+                                        <Loader2 size={24} className="animate-spin mb-1" />
+                                    ) : (
+                                        <VideoOff size={24} className="mb-1 opacity-50" />
+                                    )}
+                                    <p className="text-xs font-medium">{isUploadingVideo ? 'מעלה סרטון...' : 'לחץ להעלאת סרטון (עד 200MB)'}</p>
+                                </div>
+                            )}
+                        </div>
 
                         {/* Property Details Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">

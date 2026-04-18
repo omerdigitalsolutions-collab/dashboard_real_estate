@@ -222,15 +222,16 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     // ── Input Validation ────────────────────────────────────────────────────────
     const { email, name, role, phone, appUrl } = request.data;
-    if (!(email === null || email === void 0 ? void 0 : email.trim())) {
-        throw new https_1.HttpsError('invalid-argument', 'email is required.');
+    let normalizedEmail = null;
+    if (email === null || email === void 0 ? void 0 : email.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const candidate = email.trim().toLowerCase();
+        if (!emailRegex.test(candidate)) {
+            throw new https_1.HttpsError('invalid-argument', 'email is invalid.');
+        }
+        normalizedEmail = candidate;
     }
-    const normalizedEmail = email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(normalizedEmail)) {
-        throw new https_1.HttpsError('invalid-argument', 'email is invalid.');
-    }
-    const derivedName = (name === null || name === void 0 ? void 0 : name.trim()) || normalizedEmail.split('@')[0];
+    const derivedName = (name === null || name === void 0 ? void 0 : name.trim()) || (normalizedEmail ? normalizedEmail.split('@')[0] : 'סוכן חדש');
     const normalizedRole = role === 'admin' ? 'admin' : 'agent';
     // ── RBAC: Verify caller is an admin ─────────────────────────────────────────
     if (authData.role !== 'admin') {
@@ -239,34 +240,50 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
     // ── Read Agency Name ─────────────────────────────────────────────────────────
     const agencyDoc = await db.doc(`agencies/${authData.agencyId}`).get();
     const agencyName = ((_a = agencyDoc.data()) === null || _a === void 0 ? void 0 : _a.name) || 'הסוכנות שלנו';
-    // ── Global Check: Prevent inviting already active users ──────────────────────
-    const existingSnap = await db
-        .collection('users')
-        .where('email', '==', normalizedEmail)
-        .limit(1)
-        .get();
+    // ── Global Check: Prevent inviting already active users (only if email provided) ──
     const inviteToken = generateToken();
     let stubId;
-    if (!existingSnap.empty) {
-        const existingDoc = existingSnap.docs[0];
-        const existingData = existingDoc.data();
-        if (existingData.uid) {
-            throw new https_1.HttpsError('already-exists', 'המשתמש הזה כבר רשום במערכת.');
+    if (normalizedEmail) {
+        const existingSnap = await db
+            .collection('users')
+            .where('email', '==', normalizedEmail)
+            .limit(1)
+            .get();
+        if (!existingSnap.empty) {
+            const existingDoc = existingSnap.docs[0];
+            const existingData = existingDoc.data();
+            if (existingData.uid) {
+                throw new https_1.HttpsError('already-exists', 'המשתמש הזה כבר רשום במערכת.');
+            }
+            // User exists but has no UID -> It's a stub, we can repurpose/update it
+            await existingDoc.ref.update({
+                inviteToken,
+                agencyId: authData.agencyId,
+                role: normalizedRole,
+                updatedAt: firestore_1.FieldValue.serverTimestamp()
+            });
+            stubId = existingDoc.id;
         }
-        // User exists but has no UID -> It's a stub, we can repurpose/update it
-        await existingDoc.ref.update({
-            inviteToken,
-            agencyId: authData.agencyId,
-            role: normalizedRole,
-            updatedAt: firestore_1.FieldValue.serverTimestamp()
-        });
-        stubId = existingDoc.id;
+        else {
+            const stubRef = await db.collection('users').add({
+                uid: null,
+                email: normalizedEmail,
+                name: derivedName,
+                role: normalizedRole,
+                agencyId: authData.agencyId,
+                phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
+                isActive: true,
+                createdAt: firestore_1.FieldValue.serverTimestamp(),
+                inviteToken,
+            });
+            stubId = stubRef.id;
+        }
     }
     else {
-        // ── Create Stub Document ─────────────────────────────────────────────────────
+        // ── Create Stub Document without email ───────────────────────────────────────
         const stubRef = await db.collection('users').add({
-            uid: null, // linked when the agent first signs in
-            email: normalizedEmail,
+            uid: null,
+            email: null,
             name: derivedName,
             role: normalizedRole,
             agencyId: authData.agencyId,
@@ -280,35 +297,39 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
     // ── Compute Join URL ─────────────────────────────────────────────────────────
     const baseUrl = 'https://homer.management';
     const joinLink = `${baseUrl}/join?token=${inviteToken}`;
-    // ── Send Invite Email ────────────────────────────────────────────────────────
-    const apiKey = resendApiKey.value();
-    if (apiKey) {
-        const resend = new resend_1.Resend(apiKey);
-        try {
-            await resend.emails.send({
-                from: 'hello@homer.management',
-                to: [normalizedEmail],
-                subject: `🏠 הזמנה להצטרף לסוכנות נדל״ן ${agencyName} 🏠`,
-                html: buildInviteEmail(derivedName, agencyName, joinLink),
-            });
-            console.log(`[inviteAgent] Invite email sent to ${normalizedEmail} via Resend`);
+    // ── Send Invite Email (only if email provided) ───────────────────────────────
+    if (normalizedEmail) {
+        const apiKey = resendApiKey.value();
+        if (apiKey) {
+            const resend = new resend_1.Resend(apiKey);
+            try {
+                await resend.emails.send({
+                    from: 'hello@homer.management',
+                    to: [normalizedEmail],
+                    subject: `🏠 הזמנה להצטרף לסוכנות נדל״ן ${agencyName} 🏠`,
+                    html: buildInviteEmail(derivedName, agencyName, joinLink),
+                });
+                console.log(`[inviteAgent] Invite email sent to ${normalizedEmail} via Resend`);
+            }
+            catch (mailErr) {
+                console.error('[inviteAgent] Failed to send invite email:', mailErr);
+            }
         }
-        catch (mailErr) {
-            console.error('[inviteAgent] Failed to send invite email:', mailErr);
+        else {
+            console.warn('[inviteAgent] RESEND_API_KEY not set — email will not be sent.');
         }
     }
-    else {
-        console.warn('[inviteAgent] RESEND_API_KEY not set — email will not be sent.');
-    }
-    // ── Build WhatsApp URL (if phone provided) ───────────────────────────────────
+    // ── Build WhatsApp & SMS URLs (if phone provided) ────────────────────────────
     let whatsappUrl;
+    let smsUrl;
     if (phone === null || phone === void 0 ? void 0 : phone.trim()) {
         const digits = phone.trim().replace(/\D/g, '');
         const intl = digits.startsWith('0') ? `972${digits.slice(1)}` : digits;
-        const msg = encodeURIComponent(`שלום ${derivedName}! 👋\nהוזמנת להצטרף ל${agencyName} כסוכן נדל"ן.\nלחץ על הקישור כדי להצטרף: ${joinLink}`);
-        whatsappUrl = `https://wa.me/${intl}?text=${msg}`;
+        const msgText = `שלום ${derivedName}! 👋\nהוזמנת להצטרף ל${agencyName} כסוכן נדל"ן.\nלחץ על הקישור כדי להצטרף: ${joinLink}`;
+        whatsappUrl = `https://wa.me/${intl}?text=${encodeURIComponent(msgText)}`;
+        smsUrl = `sms:+${intl}?body=${encodeURIComponent(msgText)}`;
     }
-    return { success: true, stubId, inviteToken, whatsappUrl };
+    return { success: true, stubId, inviteToken, whatsappUrl, smsUrl };
 });
 /**
  * getInviteInfo — Public (no-auth) function to fetch invite details from a stub ID.

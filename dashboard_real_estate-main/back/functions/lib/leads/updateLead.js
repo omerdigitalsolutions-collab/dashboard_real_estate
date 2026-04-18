@@ -21,7 +21,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
-const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
+const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won', 'potential_seller', 'searching'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 exports.updateLead = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;

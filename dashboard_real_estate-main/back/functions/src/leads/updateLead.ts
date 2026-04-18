@@ -20,7 +20,7 @@ import { validateUserAuth } from '../config/authGuard';
 
 const db = getFirestore();
 
-const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won'];
+const VALID_STATUSES = ['new', 'contacted', 'meeting_set', 'lost', 'won', 'potential_seller', 'searching'];
 const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
 
 export const updateLead = onCall({ cors: true }, async (request) => {

@@ -53,6 +53,11 @@ exports.updateProperty = (0, https_1.onCall)({ cors: true }, async (request) => 
     if (authData.agencyId !== propertyData.agencyId) {
         throw new https_1.HttpsError('permission-denied', 'You do not have access to this property.');
     }
+    // ── Block exclusivity on WhatsApp-sourced properties ───────────────────────
+    const isWhatsappSource = propertyData.source === 'whatsapp_group' || propertyData.listingType === 'external';
+    if (isWhatsappSource && updates.isExclusive === true) {
+        throw new https_1.HttpsError('invalid-argument', 'Cannot mark an external/WhatsApp property as exclusive.');
+    }
     // ── Strip immutable fields from updates ─────────────────────────────────────
     const safeUpdates = Object.assign({}, updates);
     for (const field of IMMUTABLE_FIELDS) {

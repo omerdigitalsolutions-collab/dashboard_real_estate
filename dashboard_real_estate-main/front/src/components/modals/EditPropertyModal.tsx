@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Building2, Loader2 } from 'lucide-react';
+import { formatNumberWithCommas, parseFormattedNumber } from '../../utils/formatters';
 import { updateProperty } from '../../services/propertyService';
 import { useAgents } from '../../hooks/useFirestoreData';
 import { Property } from '../../types';
@@ -285,7 +286,16 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <label className={labelCls}>מחיר (₪) <span className="text-red-500">*</span></label>
-                                <input type="number" min="0" step="any" value={price} onChange={e => setPrice(e.target.value)} required placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={formatNumberWithCommas(price)}
+                                    onChange={e => setPrice(parseFormattedNumber(e.target.value))}
+                                    required
+                                    placeholder="2,500,000"
+                                    className={inputCls}
+                                    dir="ltr"
+                                />
                             </div>
                             <div>
                                 <label className={labelCls}>חדרים</label>

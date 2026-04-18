@@ -66,12 +66,14 @@ const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
 const handleWeBotReply_1 = require("./handleWeBotReply");
-const whatsappService_1 = require("./whatsappService");
 const generative_ai_1 = require("@google/generative-ai");
 // ─── Firebase Secrets ─────────────────────────────────────────────────────────
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
 const webhookSecret = (0, params_1.defineSecret)('WAHA_WEBHOOK_SECRET');
+const googleClientId = (0, params_1.defineSecret)('GOOGLE_CLIENT_ID');
+const googleClientSecret = (0, params_1.defineSecret)('GOOGLE_CLIENT_SECRET');
+const googleRedirectUri = (0, params_1.defineSecret)('GOOGLE_REDIRECT_URI');
 const db = admin.firestore();
 const REGION = 'europe-west1';
 // ─── Crypto Helpers (mirrors whatsapp.ts — AES-256-CBC) ───────────────────────
@@ -120,15 +122,36 @@ function normalisePhone(rawSender) {
 }
 // ─── Helper: Resolve agencyId from idInstance ─────────────────────────────────
 async function resolveAgencyByInstance(idInstance) {
-    var _a, _b;
-    const snap = await db
-        .collectionGroup('private_credentials')
-        .where('idInstance', '==', idInstance)
-        .limit(1)
-        .get();
-    if (snap.empty)
+    var _a, _b, _c;
+    // Primary: collectionGroup index query (requires deployed Firestore index)
+    try {
+        const snap = await db
+            .collectionGroup('private_credentials')
+            .where('idInstance', '==', idInstance)
+            .limit(1)
+            .get();
+        if (!snap.empty)
+            return (_b = (_a = snap.docs[0].ref.parent.parent) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : null;
         return null;
-    return (_b = (_a = snap.docs[0].ref.parent.parent) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : null;
+    }
+    catch (err) {
+        // code 9 = FAILED_PRECONDITION, typically means the index hasn't been deployed yet
+        if ((err === null || err === void 0 ? void 0 : err.code) !== 9)
+            throw err;
+        console.warn('[AI Bot] collectionGroup index not deployed — falling back to agency scan. Run: firebase deploy --only firestore:indexes');
+    }
+    // Fallback: scan agencies and check each private_credentials/whatsapp doc directly
+    const agenciesSnap = await db.collection('agencies').limit(100).get();
+    for (const agencyDoc of agenciesSnap.docs) {
+        const credsDoc = await agencyDoc.ref
+            .collection('private_credentials')
+            .doc('whatsapp')
+            .get();
+        if (credsDoc.exists && ((_c = credsDoc.data()) === null || _c === void 0 ? void 0 : _c.idInstance) === idInstance) {
+            return agencyDoc.id;
+        }
+    }
+    return null;
 }
 // ─── Helper: Send Green API Message ──────────────────────────────────────────
 async function sendGreenApiMessage(creds, waChatId, message) {
@@ -171,47 +194,51 @@ async function upsertLead(agencyId, phone, rawName) {
 // ─── Main Cloud Function ──────────────────────────────────────────────────────
 exports.webhookWhatsAppAI = (0, https_1.onRequest)({
     region: REGION,
-    secrets: [geminiApiKey, masterKey, webhookSecret],
+    secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
     timeoutSeconds: 300,
     memory: '1GiB'
 }, async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // 1. ACK immediately
     res.status(200).send('OK');
     try {
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
         const idInstance = ((_a = body === null || body === void 0 ? void 0 : body.idInstance) === null || _a === void 0 ? void 0 : _a.toString()) || ((_c = (_b = body === null || body === void 0 ? void 0 : body.instanceData) === null || _b === void 0 ? void 0 : _b.idInstance) === null || _c === void 0 ? void 0 : _c.toString());
+        console.log(`[Webhook] 📥 type=${typeWebhook} instance=${idInstance !== null && idInstance !== void 0 ? idInstance : 'undefined'}`);
         if (!idInstance) {
-            console.error(`[Webhook] ❌ Missing idInstance`);
+            console.error(`[Webhook] ❌ Missing idInstance. Body keys: ${Object.keys(body || {}).join(',')}`);
             return;
         }
         const isRelevant = ['incomingMessageReceived', 'outgoingMessageReceived', 'message'].includes(typeWebhook);
-        if (!isRelevant)
+        if (!isRelevant) {
+            console.log(`[Webhook] ⏭️ Skipping irrelevant type: ${typeWebhook}`);
             return;
+        }
         // Resolve Agency
         const agencyId = await resolveAgencyByInstance(idInstance);
         if (!agencyId) {
-            console.error(`[Webhook] ❌ Could not resolve agency for instance ${idInstance}`);
+            console.error(`[Webhook] ❌ Could not resolve agency for instance ${idInstance}. Check Firestore indexes and private_credentials docs.`);
             return;
         }
+        console.log(`[Webhook] ✅ Resolved agency=${agencyId} for instance=${idInstance}`);
         const agencyDoc = await db.collection('agencies').doc(agencyId).get();
         if (!agencyDoc.exists)
             return;
         const agencyData = agencyDoc.data();
-        const newLeadPolicy = ((_d = agencyData.weBotConfig) === null || _d === void 0 ? void 0 : _d.newLeadPolicy) || 'auto';
         // Extract data
         const senderData = (body === null || body === void 0 ? void 0 : body.senderData) || {};
         const messageData = (body === null || body === void 0 ? void 0 : body.messageData) || {};
         const chatId = senderData.chatId || '';
         const senderName = senderData.senderName || '';
-        const isGroup = chatId.endsWith('@g.us');
+        // Exclude groups, broadcast lists, status updates, and WhatsApp channels
+        const isGroup = chatId.endsWith('@g.us') || chatId.includes('@broadcast') || chatId.includes('@newsletter');
         const isOutbound = typeWebhook === 'outgoingMessageReceived';
-        const rawSender = isOutbound ? (((_e = body === null || body === void 0 ? void 0 : body.chatData) === null || _e === void 0 ? void 0 : _e.chatId) || senderData.chatId) : (senderData.sender || chatId);
+        const rawSender = isOutbound ? (((_d = body === null || body === void 0 ? void 0 : body.chatData) === null || _d === void 0 ? void 0 : _d.chatId) || senderData.chatId) : (senderData.sender || chatId);
         const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
-        let textMessage = ((_f = messageData.textMessageData) === null || _f === void 0 ? void 0 : _f.textMessage) ||
-            ((_g = messageData.extendedTextMessageData) === null || _g === void 0 ? void 0 : _g.text) ||
-            ((_h = messageData.imageMessageData) === null || _h === void 0 ? void 0 : _h.caption) || '';
+        let textMessage = ((_e = messageData.textMessageData) === null || _e === void 0 ? void 0 : _e.textMessage) ||
+            ((_f = messageData.extendedTextMessageData) === null || _f === void 0 ? void 0 : _f.text) ||
+            ((_g = messageData.imageMessageData) === null || _g === void 0 ? void 0 : _g.caption) || '';
         if (!textMessage) {
             if (messageData.typeMessage === 'imageMessage')
                 textMessage = '[תמונה]';
@@ -227,28 +254,55 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
         const { localPhone } = normalisePhone(rawSender);
         // Scenario A: Groups
         if (isGroup) {
-            const monitoredGroupsRaw = ((_j = agencyData.whatsappIntegration) === null || _j === void 0 ? void 0 : _j.monitoredGroups) || [];
+            const monitoredGroupsRaw = ((_h = agencyData.whatsappIntegration) === null || _h === void 0 ? void 0 : _h.monitoredGroups) || [];
             const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
             if (monitoredGroupIds.includes(chatId) && geminiApiKey.value()) {
                 try {
                     const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey.value());
                     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                    const prompt = `You are a real estate parser for B2B WhatsApp groups in Israel. Message: "${textMessage}". Output JSON: {"isProperty": boolean, "type": "sale"|"rent", "city": string, "price": number, "rooms": number}`;
+                    const prompt = `You are a real estate listing parser for Israeli B2B WhatsApp agent groups. Extract structured data from the following Hebrew/English message.
+
+Message: "${textMessage}"
+
+Return ONLY a JSON object with these fields (no markdown, no explanation):
+{
+  "isProperty": boolean,         // true only if this is a real estate listing
+  "type": "sale" | "rent",       // transaction type
+  "city": string,                // city name in Hebrew, e.g. "תל אביב"
+  "neighborhood": string | null, // neighborhood/area if mentioned
+  "street": string | null,       // street name and number if mentioned, e.g. "רחוב הרצל 12"
+  "price": number | null,        // numeric price (remove commas/symbols)
+  "rooms": number | null,        // number of rooms (can be 2.5, 3, 4 etc.)
+  "floor": number | null,        // floor number if mentioned
+  "sqm": number | null,          // square meters if mentioned
+  "description": string | null   // short summary of notable features (elevator, parking, balcony, condition etc.) in Hebrew
+}`;
                     const result = await model.generateContent(prompt);
                     const cleanJson = result.response.text().replace(/```json|```/g, '').trim();
                     const parsed = JSON.parse(cleanJson);
                     if (parsed.isProperty) {
-                        await db.collection('properties').add({
+                        const address = [parsed.street, parsed.city].filter(Boolean).join(', ') || parsed.city || null;
+                        await db.collection('agencies').doc(agencyId).collection('whatsappProperties').add({
                             agencyId,
                             source: 'whatsapp_group',
                             groupId: chatId,
+                            // Agent contact info (sender of the WhatsApp message)
                             externalAgentPhone: localPhone,
+                            externalAgentName: senderName || null,
                             rawDescription: textMessage,
+                            // Parsed fields
+                            address,
                             city: parsed.city || null,
+                            neighborhood: parsed.neighborhood || null,
+                            street: parsed.street || null,
                             price: parsed.price || 0,
                             rooms: parsed.rooms || null,
+                            floor: (_j = parsed.floor) !== null && _j !== void 0 ? _j : null,
+                            sqm: (_k = parsed.sqm) !== null && _k !== void 0 ? _k : null,
+                            description: parsed.description || null,
                             type: parsed.type || 'sale',
                             listingType: 'external',
+                            isExclusive: false,
                             status: 'draft',
                             createdAt: admin.firestore.FieldValue.serverTimestamp()
                         });
@@ -265,7 +319,14 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
             const leadSnap = await db.collection('leads').where('agencyId', '==', agencyId).where('phone', '==', localPhone).limit(1).get();
             if (!leadSnap.empty) {
                 const leadId = leadSnap.docs[0].id;
-                await leadSnap.docs[0].ref.update({ isBotActive: false });
+                // If the bot sent a message in the last 60s, this outbound webhook is for it — skip
+                const sixtySecondsAgo = Date.now() - 60000;
+                const recentBotSnap = await db.collection(`leads/${leadId}/messages`)
+                    .where('botSentAt', '>=', sixtySecondsAgo)
+                    .limit(1).get();
+                if (!recentBotSnap.empty)
+                    return;
+                // Human agent sent manually — log it
                 await db.collection(`leads/${leadId}/messages`).add({
                     idMessage: idMessage || null,
                     text: textMessage,
@@ -279,67 +340,26 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
             return;
         }
         // Scenario C: Inbound DM
-        if (idMessage) {
-            const dup = await db.collectionGroup('messages').where('idMessage', '==', idMessage).limit(1).get();
-            if (!dup.empty)
-                return;
-        }
         const leadSnapCheck = await db.collection('leads').where('agencyId', '==', agencyId).where('phone', '==', localPhone).limit(1).get();
         let leadId;
         let isBotActive;
         if (!leadSnapCheck.empty) {
             leadId = leadSnapCheck.docs[0].id;
             isBotActive = leadSnapCheck.docs[0].data().isBotActive !== false;
+            // Idempotency: check for duplicate within this lead's messages (no collectionGroup index needed)
+            if (idMessage) {
+                const dup = await db.collection(`leads/${leadId}/messages`).where('idMessage', '==', idMessage).limit(1).get();
+                if (!dup.empty)
+                    return;
+            }
         }
         else {
-            if (newLeadPolicy === 'manual') {
-                const apiKey = geminiApiKey.value();
-                if (apiKey) {
-                    try {
-                        const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-                        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                        const prompt = `Analyze: "${textMessage}". Is potential Real Estate lead? Return JSON: {"isRealEstateLead": boolean, "summary": "Hebrew summary", "intent": "buy"|"rent"|"sell"|"inquiry"}`;
-                        const result = await model.generateContent(prompt);
-                        const triage = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
-                        if (triage.isRealEstateLead) {
-                            await db.collection('pending_leads').add({
-                                agencyId,
-                                phone: localPhone,
-                                name: senderName || null,
-                                initialMessage: textMessage,
-                                aiSummary: triage.summary,
-                                aiIntent: triage.intent,
-                                status: 'pending',
-                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                            });
-                            await db.collection('alerts').add({
-                                agencyId,
-                                targetAgentId: 'all',
-                                type: 'new_pending_lead',
-                                title: 'ליד חדש מ-WhatsApp ✨',
-                                message: `${triage.summary || 'הודעה חדשה'} (${localPhone}).`,
-                                isRead: false,
-                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                                link: '/dashboard/leads?tab=pending'
-                            });
-                        }
-                    }
-                    catch (e) {
-                        console.error('Triage error:', e);
-                    }
-                }
-                return;
-            }
-            else {
-                const res = await upsertLead(agencyId, localPhone, senderName);
-                leadId = res.leadId;
-                isBotActive = res.isBotActive;
-                const keys = await getGreenApiCredentials(agencyId, masterKey.value());
-                if (keys)
-                    await (0, whatsappService_1.syncChatHistory)(db, agencyId, leadId, localPhone, keys).catch(e => console.error(e));
-            }
+            // Always create a lead for anyone who messages — never initiate outbound
+            const res = await upsertLead(agencyId, localPhone, senderName);
+            leadId = res.leadId;
+            isBotActive = res.isBotActive;
         }
-        await db.collection(`leads/${leadId}/messages`).add({
+        const inboundMsgRef = await db.collection(`leads/${leadId}/messages`).add({
             idMessage: idMessage || null,
             text: textMessage,
             direction: 'inbound',
@@ -352,11 +372,11 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
         if (isBotActive) {
             const creds = await getGreenApiCredentials(agencyId, masterKey.value());
             if (creds)
-                await (0, handleWeBotReply_1.handleWeBotReply)(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage);
+                await (0, handleWeBotReply_1.handleWeBotReply)(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage, inboundMsgRef.id);
         }
     }
     catch (err) {
-        console.error('[Webhook] Fatal:', err);
+        console.error('[Webhook] ❌ Fatal error:', err);
     }
 });
 //# sourceMappingURL=webhookWhatsAppAI.js.map

@@ -37,9 +37,22 @@ export const superAdminImportGlobalPropertiesV2 = functions.https.onCall({
             const chunk = properties.slice(i, i + batchSize);
             const batch = db.batch();
 
-            chunk.forEach((prop) => {
-                // City Normalization
-                const rawCity = (prop.city || 'unknown').toString().trim();
+            chunk.forEach((rawPropInput) => {
+                const prop = { ...rawPropInput } as any;
+
+                // Normalize boolean string fields ("true"/"false" → boolean)
+                for (const f of ['hasBalcony', 'hasElevator', 'hasParking', 'hasSafeRoom'] as const) {
+                    if (typeof prop[f] === 'string') {
+                        prop[f] = prop[f].toLowerCase() === 'true';
+                    }
+                }
+
+                // Normalize dealType: "buy" → "sale"
+                if (prop.type === 'buy') prop.type = 'sale';
+                else if (prop.type === 'rent') prop.type = 'rent';
+
+                // City: prefer English `city`, fall back to `cityHebrew`
+                const rawCity = (prop.city || prop.cityHebrew || 'unknown').toString().trim();
                 const normalizedCity = rawCity || 'unknown';
 
                 // street normalization for ID
@@ -52,10 +65,23 @@ export const superAdminImportGlobalPropertiesV2 = functions.https.onCall({
 
                 const propRef = db.collection('cities').doc(normalizedCity).collection('properties').doc(docId);
 
+                // Normalize imageUrl → imageUrls array
+                let imageUrls: string[] = [];
+                if (Array.isArray(prop.imageUrls)) {
+                    imageUrls = (prop.imageUrls as any[]).map(String).filter(Boolean);
+                } else if (typeof prop.imageUrl === 'string' && prop.imageUrl.trim()) {
+                    imageUrls = [prop.imageUrl.trim()];
+                }
+
+                // Strip raw/redundant fields from spread
+                const { imageUrl: _iu, imageUrls: _ius, listingUrl, cityHebrew: _ch, ...restProp } = prop as any;
+
                 batch.set(propRef, {
-                    ...prop,
+                    ...restProp,
                     city: normalizedCity,
                     street: street,
+                    ...(imageUrls.length > 0 ? { imageUrls } : {}),
+                    ...(listingUrl ? { listingUrl: String(listingUrl).trim() } : {}),
                     source: "super_admin_excel",
                     isPublic: true,
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -99,18 +125,27 @@ export const superAdminGetImportMappingV2 = functions.https.onCall({
 
     // Dictionary definition: DB key -> array of typical Hebrew/English column headers
     const rules: Record<string, RegExp[]> = {
-        city: [/עיר/i, /יישוב/i, /ישוב/i, /city/i],
-        street: [/רחוב/i, /כתובת/i, /שכונה/i, /street/i, /address/i],
-        price: [/מחיר/i, /עלות/i, /price/i],
-        rooms: [/חדרים/i, /מספר חדרים/i, /rooms/i],
-        sqm: [/מ״ר/i, /מ"ר/i, /שטח/i, /גודל/i, /sqm/i, /size/i],
-        floor: [/קומה/i, /קומות/i, /floor/i],
-        type: [/סוג/i, /עסקה/i, /type/i], // sale or rent
-        kind: [/סוג נכס/i, /סוג מודעה/i, /kind/i, /property type/i],
-        description: [/תיאור/i, /מידע/i, /פרטים/i, /description/i],
-        listingType: [/בלעדיות/i, /בלעדי/i, /שיווק/i, /listing/i],
-        agentName: [/סוכן/i, /איש קשר/i, /מתווך/i, /agent/i],
-        notes: [/הערות/i, /הערה פנימית/i, /notes/i]
+        city:         [/^city$/i, /^cityHebrew$/i, /עיר/i, /יישוב/i, /ישוב/i],
+        street:       [/^address$/i, /^streetName$/i, /רחוב/i, /כתובת/i, /street/i],
+        neighborhood: [/^neighbourhood$/i, /^neighborhood$/i, /שכונה/i, /quarter/i],
+        price:        [/^price$/i, /מחיר/i, /עלות/i],
+        rooms:        [/^rooms$/i, /חדרים/i, /מספר חדרים/i],
+        sqm:          [/^areaSqm$/i, /מ״ר/i, /מ"ר/i, /שטח/i, /גודל/i, /sqm/i, /size/i],
+        floor:        [/^floor$/i, /קומה/i, /קומות/i],
+        type:         [/^dealType$/i, /סוג עסקה/i, /עסקה/i, /^type$/i],
+        kind:         [/^propertyType$/i, /סוג נכס/i, /סוג מודעה/i, /^kind$/i, /property type/i],
+        description:  [/^listingDescription$/i, /תיאור/i, /מידע/i, /פרטים/i, /description/i, /property details/i, /features/i],
+        listingType:  [/בלעדיות/i, /בלעדי/i, /שיווק/i, /listing type/i],
+        agentName:    [/^contactName$/i, /סוכן/i, /איש קשר/i, /מתווך/i, /agent/i, /agency name/i],
+        contactPhone: [/^contactPhone$/i, /contact.*phone/i, /^phone$/i, /טלפון/i],
+        notes:        [/הערות/i, /הערה פנימית/i, /^notes$/i],
+        imageUrl:     [/^coverImage$/i, /^images\/\d*$/i, /image url/i, /תמונה/i, /photo/i, /^img$/i],
+        listingUrl:   [/^url$/i, /listing url/i, /^link$/i, /קישור/i, /מודעה/i, /yad2/i, /madlan/i],
+        hasBalcony:   [/^hasBalcony$/i, /balcony/i, /מרפסת/i],
+        hasElevator:  [/^hasElevator$/i, /elevator/i, /מעלית/i],
+        hasParking:   [/^hasParking$/i, /^parking$/i, /חניה/i, /חנייה/i],
+        hasSafeRoom:  [/^hasSecureRoom$/i, /secure.*room/i, /safe.*room/i, /ממ"ד/i, /ממד/i],
+        listingId:    [/^listingId$/i, /listing.*id/i],
     };
 
     headers.forEach((header) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, UserPlus, MapPin, DollarSign, Home, Zap, Car, Wind, Shield, Layers, Clock, Loader2 } from 'lucide-react';
+import { formatNumberWithCommas, parseFormattedNumber } from '../../utils/formatters';
 import { addLead } from '../../services/leadService';
 import { useAuth } from '../../context/AuthContext';
 import { useAgents } from '../../hooks/useFirestoreData';
@@ -450,7 +451,15 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         </div>
                                         <div>
                                             <label className={labelCls}>תקציב מקסימלי (₪)</label>
-                                            <input type="number" min="0"  value={maxBudget} onChange={e => setMaxBudget(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={formatNumberWithCommas(maxBudget)}
+                                                onChange={e => setMaxBudget(parseFormattedNumber(e.target.value))}
+                                                placeholder="2,500,000"
+                                                className={inputCls}
+                                                dir="ltr"
+                                            />
                                         </div>
                                     </div>
                                     <div>
@@ -567,7 +576,15 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                 </div>
                                 <div>
                                     <label className={labelCls}>מחיר מבוקש (₪)</label>
-                                    <input type="number" min="0"  value={sellerPrice} onChange={e => setSellerPrice(e.target.value)} placeholder="2,500,000" className={inputCls} dir="ltr" />
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={formatNumberWithCommas(sellerPrice)}
+                                        onChange={e => setSellerPrice(parseFormattedNumber(e.target.value))}
+                                        placeholder="2,500,000"
+                                        className={inputCls}
+                                        dir="ltr"
+                                    />
                                 </div>
                                 <div>
                                     <label className={labelCls}>מספר חדרים</label>

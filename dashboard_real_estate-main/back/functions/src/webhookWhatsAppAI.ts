@@ -34,6 +34,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const masterKey = defineSecret('ENCRYPTION_MASTER_KEY');
 const webhookSecret = defineSecret('WAHA_WEBHOOK_SECRET');
+const googleClientId = defineSecret('GOOGLE_CLIENT_ID');
+const googleClientSecret = defineSecret('GOOGLE_CLIENT_SECRET');
+const googleRedirectUri = defineSecret('GOOGLE_REDIRECT_URI');
 
 const db = admin.firestore();
 const REGION = 'europe-west1';
@@ -100,14 +103,33 @@ function normalisePhone(rawSender: string): { localPhone: string; waChatId: stri
 // ─── Helper: Resolve agencyId from idInstance ─────────────────────────────────
 
 async function resolveAgencyByInstance(idInstance: string): Promise<string | null> {
-    const snap = await db
-        .collectionGroup('private_credentials')
-        .where('idInstance', '==', idInstance)
-        .limit(1)
-        .get();
+    // Primary: collectionGroup index query (requires deployed Firestore index)
+    try {
+        const snap = await db
+            .collectionGroup('private_credentials')
+            .where('idInstance', '==', idInstance)
+            .limit(1)
+            .get();
+        if (!snap.empty) return snap.docs[0].ref.parent.parent?.id ?? null;
+        return null;
+    } catch (err: any) {
+        // code 9 = FAILED_PRECONDITION, typically means the index hasn't been deployed yet
+        if (err?.code !== 9) throw err;
+        console.warn('[AI Bot] collectionGroup index not deployed — falling back to agency scan. Run: firebase deploy --only firestore:indexes');
+    }
 
-    if (snap.empty) return null;
-    return snap.docs[0].ref.parent.parent?.id ?? null;
+    // Fallback: scan agencies and check each private_credentials/whatsapp doc directly
+    const agenciesSnap = await db.collection('agencies').limit(100).get();
+    for (const agencyDoc of agenciesSnap.docs) {
+        const credsDoc = await agencyDoc.ref
+            .collection('private_credentials')
+            .doc('whatsapp')
+            .get();
+        if (credsDoc.exists && credsDoc.data()?.idInstance === idInstance) {
+            return agencyDoc.id;
+        }
+    }
+    return null;
 }
 
 // ─── Helper: Send Green API Message ──────────────────────────────────────────
@@ -173,7 +195,7 @@ async function upsertLead(
 export const webhookWhatsAppAI = onRequest(
     {
         region: REGION,
-        secrets: [geminiApiKey, masterKey, webhookSecret],
+        secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
         timeoutSeconds: 300,
         memory: '1GiB'
     },
@@ -210,7 +232,6 @@ export const webhookWhatsAppAI = onRequest(
             const agencyDoc = await db.collection('agencies').doc(agencyId).get();
             if (!agencyDoc.exists) return;
             const agencyData = agencyDoc.data()!;
-            const newLeadPolicy = agencyData.weBotConfig?.newLeadPolicy || 'auto';
 
             // Extract data
             const senderData = body?.senderData || {};
@@ -305,19 +326,14 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                 if (!leadSnap.empty) {
                     const leadId = leadSnap.docs[0].id;
 
-                    // Check if this message was already logged by the bot — if so, skip entirely
-                    // (Green API fires outgoingMessageReceived for bot-sent messages too)
-                    if (idMessage) {
-                        const botMsgSnap = await db.collection(`leads/${leadId}/messages`)
-                            .where('idMessage', '==', idMessage)
-                            .limit(1).get();
-                        if (!botMsgSnap.empty) return; // already logged by handleWeBotReply
-                    }
+                    // If the bot sent a message in the last 60s, this outbound webhook is for it — skip
+                    const sixtySecondsAgo = Date.now() - 60_000;
+                    const recentBotSnap = await db.collection(`leads/${leadId}/messages`)
+                        .where('botSentAt', '>=', sixtySecondsAgo)
+                        .limit(1).get();
+                    if (!recentBotSnap.empty) return;
 
-                    // This is a human agent sending manually — mute the bot via firewall
-                    await leadSnap.docs[0].ref.update({
-                        lastHumanReplyAt: admin.firestore.FieldValue.serverTimestamp(),
-                    });
+                    // Human agent sent manually — log it
                     await db.collection(`leads/${leadId}/messages`).add({
                         idMessage: idMessage || null,
                         text: textMessage,
@@ -332,11 +348,6 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
             }
 
             // Scenario C: Inbound DM
-            if (idMessage) {
-                const dup = await db.collectionGroup('messages').where('idMessage', '==', idMessage).limit(1).get();
-                if (!dup.empty) return;
-            }
-
             const leadSnapCheck = await db.collection('leads').where('agencyId', '==', agencyId).where('phone', '==', localPhone).limit(1).get();
 
             let leadId: string;
@@ -345,15 +356,20 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
             if (!leadSnapCheck.empty) {
                 leadId = leadSnapCheck.docs[0].id;
                 isBotActive = leadSnapCheck.docs[0].data().isBotActive !== false;
+
+                // Idempotency: check for duplicate within this lead's messages (no collectionGroup index needed)
+                if (idMessage) {
+                    const dup = await db.collection(`leads/${leadId}/messages`).where('idMessage', '==', idMessage).limit(1).get();
+                    if (!dup.empty) return;
+                }
             } else {
                 // Always create a lead for anyone who messages — never initiate outbound
                 const res = await upsertLead(agencyId, localPhone, senderName);
                 leadId = res.leadId;
                 isBotActive = res.isBotActive;
-                // Bot only responds — no syncChatHistory to avoid Green API side effects
             }
 
-            await db.collection(`leads/${leadId}/messages`).add({
+            const inboundMsgRef = await db.collection(`leads/${leadId}/messages`).add({
                 idMessage: idMessage || null,
                 text: textMessage,
                 direction: 'inbound',
@@ -366,7 +382,7 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
 
             if (isBotActive) {
                 const creds = await getGreenApiCredentials(agencyId, masterKey.value());
-                if (creds) await handleWeBotReply(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage);
+                if (creds) await handleWeBotReply(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage, inboundMsgRef.id);
             }
         } catch (err) { console.error('[Webhook] ❌ Fatal error:', err); }
     }

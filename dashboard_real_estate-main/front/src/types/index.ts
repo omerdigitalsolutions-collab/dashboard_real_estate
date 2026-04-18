@@ -201,6 +201,7 @@ export interface Property {
 
     images?: string[];
     imageUrls?: string[];
+    videoUrl?: string;
     lat?: number;
     lng?: number;
     leadId?: string;

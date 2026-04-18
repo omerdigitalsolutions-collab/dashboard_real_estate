@@ -32,7 +32,36 @@ exports.matchPropertiesForLead = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const matchingEngine_1 = require("./matchingEngine");
+const stringUtils_1 = require("./stringUtils");
 const db = (0, firestore_1.getFirestore)();
+// In-memory cache for the city list (document IDs in 'cities' collection)
+let cachedCityNames = null;
+let lastCacheUpdate = 0;
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+/**
+ * Fetches all city names from the 'cities' collection and returns those that
+ * match any of the desired cities using substring matching.
+ */
+async function getMatchingCityNames(desiredCities) {
+    const now = Date.now();
+    if (!cachedCityNames || (now - lastCacheUpdate > CACHE_TTL)) {
+        try {
+            console.log('Refreshing cities catalog cache...');
+            // Fetch only document IDs to save bandwidth/costs
+            const snapshot = await db.collection('cities').select().get();
+            cachedCityNames = snapshot.docs.map(doc => doc.id);
+            lastCacheUpdate = now;
+        }
+        catch (err) {
+            console.error('Error fetching cities catalog:', err);
+            return desiredCities; // Fallback to raw inputs if catalog fetch fails
+        }
+    }
+    if (!cachedCityNames)
+        return desiredCities;
+    // Filter the catalog for anything that matches our desired cities
+    return cachedCityNames.filter(catalogCity => (0, stringUtils_1.isCityMatch)(desiredCities, catalogCity));
+}
 exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     if (!request.auth) {
@@ -58,38 +87,27 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     let globalProperties = [];
     const req = requirements !== null && requirements !== void 0 ? requirements : {};
     if (req.desiredCity && req.desiredCity.length > 0) {
-        const citiesToFetch = req.desiredCity.slice(0, 10);
+        // 1. Discover which cities in the global catalog match our desiredCities (substring match)
+        // We Use a simple in-memory cache for the city names list to avoid repeated listDocuments calls
+        const matchingCityNames = await getMatchingCityNames(req.desiredCity);
+        // 2. Limit the number of cities to fetch from to avoid excessive Firestore calls
+        const citiesToFetch = matchingCityNames.slice(0, 15);
         const globalPromises = citiesToFetch.map(async (cityName) => {
-            const trimmedCity = cityName.trim();
-            if (!trimmedCity)
-                return [];
-            // Define variations to try (Original, with hyphen, with space)
-            const variations = [
-                trimmedCity,
-                trimmedCity.replace(/\s+/g, '-'), // "תל אביב" -> "תל-אביב"
-                trimmedCity.replace(/-/g, ' '), // "תל-אביב" -> "תל אביב"
-            ];
-            // Unique variations
-            const uniqueVariations = Array.from(new Set(variations));
-            for (const cityVariant of uniqueVariations) {
-                try {
-                    const citySnap = await db.collection('cities').doc(cityVariant).collection('properties')
-                        .limit(100)
-                        .get();
-                    if (citySnap.empty)
-                        continue;
-                    return citySnap.docs.map(doc => {
-                        const data = doc.data();
-                        return Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityVariant}/properties`, address: data.street || data.address || 'כתובת חסויה', 
-                            // Default missing/invalid type to 'sale' for global data
-                            type: data.type || 'sale' }, data);
-                    });
-                }
-                catch (err) {
-                    console.warn(`Could not fetch global properties for variant: ${cityVariant}`, err);
-                }
+            try {
+                const citySnap = await db.collection('cities').doc(cityName).collection('properties')
+                    .limit(50) // Reduced limit per city to stay within reasonable bounds
+                    .get();
+                if (citySnap.empty)
+                    return [];
+                return citySnap.docs.map(doc => {
+                    const data = doc.data();
+                    return Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, address: data.street || data.address || 'כתובת חסויה', type: data.type || 'sale' }, data);
+                });
             }
-            return [];
+            catch (err) {
+                console.warn(`Could not fetch global properties for city: ${cityName}`, err);
+                return [];
+            }
         });
         const results = await Promise.all(globalPromises);
         globalProperties = results.flat();

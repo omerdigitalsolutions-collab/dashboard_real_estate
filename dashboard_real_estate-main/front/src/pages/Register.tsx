@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { Loader2, Mail, Lock, User } from 'lucide-react';
-import { signInWithGoogle, checkUserExists } from '../services/authService';
+import { signInWithGooglePopup, checkUserExists } from '../services/authService';
 import { isValidEmail } from '../utils/validation';
 
 export default function Register() {
@@ -62,7 +62,7 @@ export default function Register() {
         setIsGoogleLoading(true);
 
         try {
-            const user = await signInWithGoogle();
+            const user = await signInWithGooglePopup();
             const exists = await checkUserExists(user.uid);
             if (exists) {
                 navigate('/');

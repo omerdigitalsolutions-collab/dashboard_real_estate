@@ -85,6 +85,7 @@ import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2 } from
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
 import { checkTrialExpiryAlerts } from './scheduled/checkTrialExpiryAlerts';
+import { weeklyFollowUp } from './scheduled/weeklyFollowUp';
 
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/manual_requests';
@@ -132,7 +133,7 @@ export const deals = { addDeal, updateDeal, deleteDeal };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 
-export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts };
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';
