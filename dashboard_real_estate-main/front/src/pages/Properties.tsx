@@ -892,13 +892,19 @@ export default function Properties() {
                                                                     (agency?.logoUrl || agency?.settings?.logoUrl) ? (
                                                                         <img src={agency.logoUrl || agency?.settings?.logoUrl} alt="Office" className="w-full h-full object-contain" />
                                                                     ) : (
-                                                                        <Building size={12} />
+                                                                        <Building size={14} />
                                                                     )
                                                                 ) : (
                                                                     agent?.photoURL ? (
                                                                         <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
                                                                     ) : (
-                                                                        agent?.name ? agent.name.charAt(0) : <UserIcon size={12} />
+                                                                        agent?.name ? (
+                                                                            <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-600 font-bold">
+                                                                                {agent.name.charAt(0)}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <UserIcon size={14} />
+                                                                        )
                                                                     )
                                                                 )}
                                                             </div>
@@ -926,7 +932,7 @@ export default function Properties() {
                                                     <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                                                         <div className="flex items-center gap-2 truncate">
                                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${prop.status === 'draft' ? 'bg-amber-100 text-amber-600' : 'bg-violet-100 text-violet-600'}`}>
-                                                                {prop.status === 'draft' ? 'ע' : client?.name ? client.name.charAt(0) : <UserIcon size={12} />}
+                                                                {prop.status === 'draft' ? 'ע' : client?.name ? client.name.charAt(0) : <UserIcon size={14} />}
                                                             </div>
                                                             <span className="text-xs font-semibold text-slate-700 truncate" dir={prop.status === 'draft' && !prop.externalAgentName ? 'ltr' : 'rtl'}>
                                                                 {prop.status === 'draft'
@@ -1126,13 +1132,19 @@ export default function Properties() {
                                                                 (agency?.logoUrl || agency?.settings?.logoUrl) ? (
                                                                     <img src={agency.logoUrl || agency?.settings?.logoUrl} alt="Office" className="w-full h-full object-contain" />
                                                                 ) : (
-                                                                    <Building size={12} />
+                                                                    <Building size={14} />
                                                                 )
                                                             ) : (
                                                                 agent?.photoURL ? (
                                                                     <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
                                                                 ) : (
-                                                                    agent?.name ? agent.name.charAt(0) : <UserIcon size={12} />
+                                                                    agent?.name ? (
+                                                                        <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-600 font-bold">
+                                                                            {agent.name.charAt(0)}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <UserIcon size={14} />
+                                                                    )
                                                                 )
                                                             )}
                                                         </div>

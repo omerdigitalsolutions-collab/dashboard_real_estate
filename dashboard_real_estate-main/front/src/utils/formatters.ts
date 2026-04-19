@@ -49,15 +49,20 @@ export function translatePropertyKind(kind?: string): string {
         'house': 'בית פרטי',
         'private_house': 'בית פרטי',
         'penthouse': 'פנטהאוז',
+        'rooftop': 'גג/פנטהאוז',
         'studio': 'סטודיו',
         'duplex': 'דופלקס',
+        'triplex': 'טריפלקס',
         'garden_apartment': 'דירת גן',
         'commercial': 'מסחרי',
         'plot': 'מגרש',
+        'land': 'קרקע/מגרש',
         'office': 'משרד',
         'warehouse': 'מחסן',
         'villa': 'וילה',
-        'cottage': 'קוטג׳'
+        'cottage': 'קוטג׳',
+        'townhouse': 'קוטג׳',
+        'basement': 'מרתף'
     };
     
     return mapping[kind.toLowerCase()] || kind;

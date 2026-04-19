@@ -1,5 +1,5 @@
 import { Property, AppUser, Lead, Agency } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft, Video, VideoOff, Phone, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft, Video, VideoOff, Phone, MessageCircle, ChevronLeft, ChevronRight, User, Building } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateProperty, uploadPropertyImages, uploadPropertyVideo } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
@@ -124,7 +124,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
 
     // Sync state when property prop changes
     useEffect(() => {
-        setEditedDescription(property.description || '');
+        setEditedDescription(property.description || property.rawDescription || '');
         if (property.imageUrls) {
             setImageUrls(property.imageUrls);
         }
@@ -402,7 +402,13 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                         return agent?.photoURL ? (
                                             <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
                                         ) : (
-                                            <Building2 size={24} />
+                                            agent?.name ? (
+                                                <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-600 font-bold text-lg">
+                                                    {agent.name.charAt(0)}
+                                                </div>
+                                            ) : (
+                                                <User size={24} />
+                                            )
                                         );
                                     })()
                                 )}
@@ -773,32 +779,48 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                             </div>
                         )}
 
-                        {/* Public Property Contact Section */}
-                        {property.isGlobalCityProperty && (agency?.officePhone || agency?.billing?.ownerPhone) && (
+                        {/* Property Contact Section */}
+                        {(property.isGlobalCityProperty || property.agentId || property.contactPhone) && (
                             <div className="mb-8 p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                                 <div className="text-right">
                                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-                                        <UserIcon size={16} className="text-blue-600" />
-                                        צור קשר עם מנהל המשרד
+                                        <User size={16} className="text-blue-600" />
+                                        {property.isGlobalCityProperty ? 'צור קשר עם המשרד' : 'צור קשר לתיאום'}
                                     </h3>
-                                    <p className="text-xs text-slate-500">לתיאום פגישה או בירור פרטים נוספים על הנכס</p>
+                                    <p className="text-xs text-slate-500">
+                                        {property.isGlobalCityProperty 
+                                            ? 'לתיאום פגישה או בירור פרטים נוספים על הנכס'
+                                            : `פנה ל${agents.find(a => a.uid === property.agentId)?.name || 'הסוכן'} למידע נוסף`}
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-3 w-full sm:w-auto">
-                                    <a
-                                        href={`tel:${agency.officePhone || agency.billing?.ownerPhone}`}
-                                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm"
-                                    >
-                                        <Phone size={18} />
-                                        שיחה
-                                    </a>
-                                    <a
-                                        href={`https://wa.me/${formatPhoneForWhatsApp(agency.officePhone || agency.billing?.ownerPhone)}?text=${encodeURIComponent(`היי ${agency.name || 'מנהל'}, שמי ${leads.find(l => l.id === property.leadId)?.name || userData?.name || ''}, אשמח לתאם שיחה טלפונית לגבי הנכס ב${property.address}`)}`}
-                                        target="_blank" rel="noreferrer"
-                                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-200"
-                                    >
-                                        <MessageCircle size={18} />
-                                        ווטסאפ
-                                    </a>
+                                    {(() => {
+                                        const phone = property.isGlobalCityProperty 
+                                            ? (agency?.officePhone || agency?.billing?.ownerPhone)
+                                            : (agents.find(a => a.uid === property.agentId)?.phone || property.contactPhone);
+                                        
+                                        if (!phone) return null;
+
+                                        return (
+                                            <>
+                                                <a
+                                                    href={`tel:${phone}`}
+                                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm"
+                                                >
+                                                    <Phone size={18} />
+                                                    שיחה
+                                                </a>
+                                                <a
+                                                    href={`https://wa.me/${formatPhoneForWhatsApp(phone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${property.address}${property.city ? `, ${property.city}` : ''}. אשמח לקבל פרטים נוספים.`)}`}
+                                                    target="_blank" rel="noreferrer"
+                                                    className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-200"
+                                                >
+                                                    <MessageCircle size={18} />
+                                                    ווטסאפ
+                                                </a>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         )}
