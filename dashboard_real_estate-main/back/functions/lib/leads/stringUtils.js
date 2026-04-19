@@ -11,10 +11,7 @@ function normalizeCity(city) {
         return '';
     return city
         .toLowerCase()
-        .trim()
-        .replace(/[-'`"|/\\,.]/g, ' ') // Replace hyphens, quotes, pipes, slashes, and other separators with spaces
-        .replace(/\s+/g, ' ') // Collapse multiple spaces into one
-        .trim();
+        .replace(/[^a-z0-9\u0590-\u05FF]/g, ''); // Remove everything except letters and numbers
 }
 /**
  * Checks if a property city matches any of the desired cities.
@@ -30,7 +27,7 @@ function isCityMatch(desiredCities, propertyCity) {
         const normDesired = normalizeCity(desired);
         if (!normDesired)
             return false;
-        // Match if one contains the other (e.g. "תל אביב" vs "תל אביב יפו")
+        // Match if one contains the other (bidirectional)
         return normProp.includes(normDesired) || normDesired.includes(normProp);
     });
 }

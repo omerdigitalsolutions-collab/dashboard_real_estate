@@ -101,7 +101,8 @@ exports.superadmin = {
     superAdminSetAgencyStatus: superadmin_1.superAdminSetAgencyStatus,
     superAdminSetUserStatus: superadmin_1.superAdminSetUserStatus,
     superAdminApproveAgency: superadmin_1.superAdminApproveAgency,
-    superAdminHealSelf: healAdmin_1.superAdminHealSelf
+    superAdminHealSelf: healAdmin_1.superAdminHealSelf,
+    superAdminConsolidateCityV2: globalImport_1.superAdminConsolidateCityV2
 };
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };

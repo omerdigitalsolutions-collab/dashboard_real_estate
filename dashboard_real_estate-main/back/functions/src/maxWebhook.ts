@@ -85,17 +85,15 @@ export const maxPaymentWebhook = onRequest({}, async (req, res) => {
     console.log(`📥 Max IPN received | status=${status} | txId=${transactionId} | uid=${uid} | plan=${plan}`);
 
     // ── 2. Signature Verification ────────────────────────────────────────────
-    // TODO: When you receive the exact Max signature spec, make this strict.
-    // For now, skip verification only if MAX_API_SECRET is not set (dev mode).
-    if (maxApiSecret && signature) {
-        if (!isSignatureValid(maxApiSecret, signature, transactionId, status, uid ?? "")) {
-            console.error("❌ Max webhook signature mismatch — rejecting request.");
-            // Return 200 so Max doesn't retry, but log the rejection.
-            res.status(200).json({ received: true, error: "signature_mismatch" });
-            return;
-        }
-    } else if (!maxApiSecret) {
-        console.warn("⚠️  MAX_API_SECRET not set — skipping signature verification (dev mode).");
+    if (!maxApiSecret) {
+        console.error("❌ MAX_API_SECRET is not configured — rejecting all requests.");
+        res.status(500).send("Webhook secret not configured.");
+        return;
+    }
+    if (!signature || !isSignatureValid(maxApiSecret, signature, transactionId, status, uid ?? "")) {
+        console.error("❌ Max webhook signature missing or mismatch — rejecting request.");
+        res.status(200).json({ received: true, error: "signature_mismatch" });
+        return;
     }
 
     // ── 3. Check transaction status ──────────────────────────────────────────

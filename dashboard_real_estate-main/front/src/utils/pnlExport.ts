@@ -5,6 +5,7 @@ import html2pdf from 'html2pdf.js';
 export interface PnLReportData {
     agencyName: string;
     agencyLogo: string;
+    userLogo?: string;
     dateRangeLabel: string;
     totalRevenue: number;
     totalExpenses: number;
@@ -107,14 +108,26 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
     };
 
     container.innerHTML = `
-        <div style="font-family: Arial, Helvetica, sans-serif; direction: rtl; padding: 40px; background: #ffffff; color: #111827; width: 800px;">
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; padding: 40px; background: #ffffff; color: #111827; width: 800px;">
             <!-- Header -->
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px; margin-bottom: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f3f4f6; padding-bottom: 25px; margin-bottom: 35px;">
                 <div>
-                    <h1 style="margin: 0; font-size: 28px; color: #111827;">דוח רווח והפסד</h1>
-                    <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">תקופה: <strong>${data.dateRangeLabel}</strong></p>
+                    <h1 style="margin: 0; font-size: 32px; font-weight: 800; color: #020617; letter-spacing: -0.5px;">דוח רווח והפסד</h1>
+                    <p style="margin: 8px 0 0 0; color: #64748b; font-size: 15px; display: flex; align-items: center; gap: 6px;">
+                        <span>תקופה:</span>
+                        <span style="font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 2px 10px; border-radius: 6px;">${data.dateRangeLabel}</span>
+                    </p>
                 </div>
-                ${data.agencyLogo ? `<img src="${data.agencyLogo}" style="max-height: 60px; max-width: 150px; object-fit: contain;" />` : `<h2 style="color: #4f46e5; margin:0;">${data.agencyName}</h2>`}
+                <div style="text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        ${data.userLogo ? `<img src="${data.userLogo}" style="height: 55px; width: 55px; border-radius: 50%; object-fit: cover; border: 2px solid #f1f5f9;" />` : ''}
+                        ${data.agencyLogo ? `<img src="${data.agencyLogo}" style="max-height: 55px; max-width: 140px; object-fit: contain;" />` : ''}
+                    </div>
+                    ${data.agencyName ? `
+                    <div style="margin-top: 4px;">
+                        <p style="margin: 0; font-size: 16px; font-weight: 800; color: #1e293b;">${data.agencyName}</p>
+                    </div>` : ''}
+                </div>
             </div>
 
             <!-- Summary KPI Cards -->

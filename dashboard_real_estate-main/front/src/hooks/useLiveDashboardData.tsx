@@ -294,14 +294,25 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     const planFeatures = getPlanFeatures(data?.planId);
                     const canAccessSourcing = planFeatures.canAccessSourcing;
 
+                    const agencyCities = settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []);
+                    const userCities = userData?.serviceAreas || [];
                     const baseCities = canAccessSourcing 
-                        ? (settings?.activeGlobalCities || (data?.mainServiceArea ? [data?.mainServiceArea] : []))
+                        ? Array.from(new Set([...agencyCities, ...userCities]))
                         : [];
 
                     // Expand service areas: find all cities in catalog that match the user's selected areas
-                    const loadedCities = (citiesCatalog.length > 0 && baseCities.length > 0)
+                    const catalogMatches = (citiesCatalog.length > 0 && baseCities.length > 0)
                         ? citiesCatalog.filter(catalogCity => isCityMatch(baseCities, catalogCity))
-                        : baseCities;
+                        : [];
+
+                    // Also subscribe directly to configured cities not found in the catalog.
+                    // This handles "phantom" city documents where the subcollection exists
+                    // but the parent city document doesn't (so it's invisible to collection queries).
+                    const uncoveredBaseCities = baseCities.filter(bc =>
+                        !catalogMatches.some(cm => isCityMatch([bc], cm))
+                    );
+
+                    const loadedCities = Array.from(new Set([...catalogMatches, ...uncoveredBaseCities]));
 
                     console.log('[DEBUG cities] Resolved subscription cities:', loadedCities);
                     const citiesChanged = loadedCities.length !== activeCities.length || !loadedCities.every((c: string) => activeCities.includes(c));

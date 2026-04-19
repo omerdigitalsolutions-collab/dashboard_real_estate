@@ -65,8 +65,8 @@ const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
-const handleWeBotReply_1 = require("./handleWeBotReply");
 const generative_ai_1 = require("@google/generative-ai");
+const botPipeline_1 = require("./whatsapp/botPipeline");
 // ─── Firebase Secrets ─────────────────────────────────────────────────────────
 const geminiApiKey = (0, params_1.defineSecret)('GEMINI_API_KEY');
 const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
@@ -214,6 +214,18 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
         if (!isRelevant) {
             console.log(`[Webhook] ⏭️ Skipping irrelevant type: ${typeWebhook}`);
             return;
+        }
+        // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery)
+        const idMessageEarly = body === null || body === void 0 ? void 0 : body.idMessage;
+        if (idMessageEarly) {
+            const processedRef = db.collection('processed_messages').doc(idMessageEarly);
+            const alreadyDone = await processedRef.get();
+            if (alreadyDone.exists)
+                return;
+            await processedRef.set({
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                instance: idInstance,
+            });
         }
         // Resolve Agency
         const agencyId = await resolveAgencyByInstance(idInstance);
@@ -371,8 +383,20 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
         });
         if (isBotActive) {
             const creds = await getGreenApiCredentials(agencyId, masterKey.value());
-            if (creds)
-                await (0, handleWeBotReply_1.handleWeBotReply)(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage, inboundMsgRef.id);
+            if (creds) {
+                const { waChatId } = normalisePhone(rawSender);
+                await (0, botPipeline_1.processInboundMessage)({
+                    phone: localPhone,
+                    waChatId,
+                    text: textMessage,
+                    agencyId,
+                    leadId,
+                    geminiApiKey: geminiApiKey.value(),
+                    creds,
+                    idMessage,
+                    inboundMsgDocId: inboundMsgRef.id,
+                });
+            }
         }
     }
     catch (err) {

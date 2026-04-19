@@ -28,7 +28,10 @@ const GLOBAL_PROPERTY_FIELDS: { key: string; label: string }[] = [
     { key: 'hasBalcony',   label: 'מרפסת (כן/לא)' },
     { key: 'hasElevator',  label: 'מעלית (כן/לא)' },
     { key: 'hasParking',   label: 'חניה (כן/לא)' },
+    { key: 'parkingSpots', label: 'מספר חניות (0/1/2...)' },
     { key: 'hasSafeRoom',  label: 'ממ"ד (כן/לא)' },
+    { key: 'hasAgent',     label: 'יש תיווך (כן/לא)' },
+    { key: 'contactName',  label: 'שם איש קשר' },
     { key: 'contactPhone', label: 'טלפון איש קשר' },
     { key: 'listingId',    label: 'מזהה מודעה חיצוני' },
 ];
@@ -181,7 +184,7 @@ const GlobalPropertyImport: React.FC = () => {
         setResults(null);
 
         try {
-            const NUMERIC_FIELDS = new Set(['price', 'sqm', 'rooms', 'floor']);
+            const NUMERIC_FIELDS = new Set(['price', 'sqm', 'rooms', 'floor', 'parkingSpots']);
 
             const mappedProperties = rawRows.map(row => {
                 const item: Record<string, any> = {};
@@ -208,10 +211,14 @@ const GlobalPropertyImport: React.FC = () => {
                         return;
                     }
 
-                    // For all other fields: concatenate multiple values with " | "
+                    // For all other fields: concatenate multiple values with " | " (skip if identical)
                     const str = String(raw).trim();
                     if (str) {
-                        item[dbKey] = item[dbKey] ? `${item[dbKey]} | ${str}` : str;
+                        if (!item[dbKey]) {
+                            item[dbKey] = str;
+                        } else if (item[dbKey] !== str) {
+                            item[dbKey] = `${item[dbKey]} | ${str}`;
+                        }
                     }
                 });
                 return item;

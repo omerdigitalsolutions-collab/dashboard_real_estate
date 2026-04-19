@@ -1,10 +1,13 @@
-import { Property, AppUser, Lead } from '../../types';
-import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft, Video, VideoOff } from 'lucide-react';
+import { Property, AppUser, Lead, Agency } from '../../types';
+import { X, Building2, MapPin, Tag, Fullscreen, Image as ImageIcon, Loader2, Plus, Handshake, Trash2, GripVertical, Calendar, ExternalLink, ArrowUpLeft, Video, VideoOff, Phone, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateProperty, uploadPropertyImages, uploadPropertyVideo } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
+import { useSuperAdmin } from '../../hooks/useSuperAdmin';
 import toast from 'react-hot-toast';
 import { AddMeetingModal } from './AddMeetingModal';
+import { translatePropertyKind } from '../../utils/formatters';
+
 import {
     DndContext,
     closestCenter,
@@ -28,6 +31,7 @@ interface PropertyDetailsModalProps {
     property: Property;
     agents: AppUser[];
     leads: Lead[];
+    agency?: Agency;
     onClose: () => void;
     onCreateDeal?: (property: Property) => void;
 }
@@ -38,9 +42,10 @@ interface SortableThumbnailProps {
     isActive: boolean;
     onSelect: (index: number) => void;
     onDelete: (index: number) => void;
+    isReadOnly?: boolean;
 }
 
-function SortableThumbnail({ url, index, isActive, onSelect, onDelete }: SortableThumbnailProps) {
+function SortableThumbnail({ url, index, isActive, onSelect, onDelete, isReadOnly }: SortableThumbnailProps) {
     const {
         attributes,
         listeners,
@@ -71,32 +76,35 @@ function SortableThumbnail({ url, index, isActive, onSelect, onDelete }: Sortabl
             />
             
             {/* Overlay controls */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
-                <div className="flex justify-between items-start">
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(index);
-                        }}
-                        className="p-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                    >
-                        <Trash2 size={12} />
-                    </button>
-                    <div 
-                        {...attributes} 
-                        {...listeners}
-                        className="p-1 bg-white/20 text-white rounded-md cursor-grab active:cursor-grabbing"
-                    >
-                        <GripVertical size={12} />
+            {!isReadOnly && (
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1">
+                    <div className="flex justify-between items-start">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(index);
+                            }}
+                            className="p-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                        <div 
+                            {...attributes} 
+                            {...listeners}
+                            className="p-1 bg-white/20 text-white rounded-md cursor-grab active:cursor-grabbing"
+                        >
+                            <GripVertical size={12} />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }
 
-export default function PropertyDetailsModal({ property, agents, leads, onClose, onCreateDeal }: PropertyDetailsModalProps) {
+export default function PropertyDetailsModal({ property, agents, leads, agency, onClose, onCreateDeal }: PropertyDetailsModalProps) {
     const { userData } = useAuth();
+    const { isSuperAdmin } = useSuperAdmin();
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -106,8 +114,9 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
 
     // Description Edit State
     const [isEditingDescription, setIsEditingDescription] = useState(false);
-    const [editedDescription, setEditedDescription] = useState(property.description || '');
+    const [editedDescription, setEditedDescription] = useState(property.description || property.rawDescription || '');
     const [isSavingDescription, setIsSavingDescription] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +130,33 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         }
         setVideoUrl(property.videoUrl);
     }, [property]);
+    // Add keyboard navigation
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (isImageFullscreen || (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA')) {
+                if (e.key === 'ArrowRight') {
+                    setActiveImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
+                } else if (e.key === 'ArrowLeft') {
+                    setActiveImageIndex(prev => (prev + 1) % imageUrls.length);
+                } else if (e.key === 'Escape' && isImageFullscreen) {
+                    setIsImageFullscreen(false);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isImageFullscreen, imageUrls.length]);
+
+    const nextImage = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setActiveImageIndex(prev => (prev + 1) % images.length);
+    };
+
+    const prevImage = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setActiveImageIndex(prev => (prev - 1 + images.length) % images.length);
+    };
 
     const hasImages = imageUrls.length > 0;
     const images = imageUrls;
@@ -160,7 +196,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
 
         try {
             setIsUploading(true);
-            const newUrls = await uploadPropertyImages(userData.agencyId, property.id, files);
+            const newUrls = await uploadPropertyImages(
+                userData.agencyId,
+                property.id,
+                files,
+                property.isGlobalCityProperty,
+                isSuperAdmin
+            );
             const combinedUrls = [...imageUrls, ...newUrls];
             setImageUrls(combinedUrls);
             await updateProperty(property.id, { imageUrls: combinedUrls }, property.isGlobalCityProperty ? property.city : undefined);
@@ -234,12 +276,32 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
     };
 
     const handleLeadChange = async (newLeadId: string) => {
+        if (property.isGlobalCityProperty) {
+            toast.error('עליך לייבא את הנכס למלאי הפרטי שלך לפני שיוך לקוח.');
+            return;
+        }
         try {
-            await updateProperty(property.id, { leadId: newLeadId }, property.isGlobalCityProperty ? property.city : undefined);
+            await updateProperty(property.id, { leadId: newLeadId });
             toast.success('שיוך ליד עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating lead:', err);
             toast.error('שגיאה בשיוך ליד.');
+        }
+    };
+
+    const handleImportToMyProperties = async () => {
+        try {
+            setIsImporting(true);
+            const newId = await updateProperty(property.id, {}, property.city);
+            if (newId !== property.id) {
+                toast.success('הנכס נוסף למלאי שלך בהצלחה! ✓');
+                onClose();
+            }
+        } catch (err) {
+            console.error('Error importing property:', err);
+            toast.error('אירעה שגיאה בייבוא הנכס למלאי שלך.');
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -252,9 +314,20 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
             return;
         }
 
+        if (property.isGlobalCityProperty && !isSuperAdmin) {
+            toast.error('עליך לייבא את הנכס למלאי הפרטי שלך לפני הוספת סרטון.');
+            return;
+        }
+
         try {
             setIsUploadingVideo(true);
-            const url = await uploadPropertyVideo(userData.agencyId, property.id, file);
+            const url = await uploadPropertyVideo(
+                userData.agencyId,
+                property.id,
+                file,
+                property.isGlobalCityProperty,
+                isSuperAdmin
+            );
             setVideoUrl(url);
             await updateProperty(property.id, { videoUrl: url }, property.isGlobalCityProperty ? property.city : undefined);
             toast.success('הסרטון הועלה בהצלחה ✓');
@@ -279,12 +352,26 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
         }
     };
 
+    const formatPhoneForWhatsApp = (phone?: string) => {
+        if (!phone) return null;
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.startsWith('0')) return `972${cleaned.substring(1)}`;
+        if (cleaned.startsWith('972')) return cleaned;
+        return `972${cleaned}`;
+    };
+
     const handleSaveDescription = async () => {
         try {
             setIsSavingDescription(true);
-            await updateProperty(property.id, { description: editedDescription }, property.isGlobalCityProperty ? property.city : undefined);
-            toast.success('תיאור הנכס שומר בהצלחה ✓');
-            setIsEditingDescription(false);
+            const newId = await updateProperty(property.id, { description: editedDescription }, property.isGlobalCityProperty ? property.city : undefined);
+            
+            if (newId !== property.id) {
+                toast.success('הנכס נוסף למלאי הפרטי שלך! ✓');
+                onClose();
+            } else {
+                toast.success('תיאור הנכס שומר בהצלחה ✓');
+                setIsEditingDescription(false);
+            }
         } catch (err) {
             console.error('Error updating description:', err);
             toast.error('שגיאה בשמירת תיאור הנכס.');
@@ -301,9 +388,24 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                 <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" dir="rtl">
                     {/* Header */}
                     <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white z-10">
-                        <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${typeColor} border`}>
-                                <Building2 size={20} />
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center ${property.isGlobalCityProperty ? 'bg-cyan-50 text-cyan-600 border-cyan-100' : typeColor} border shrink-0 shadow-sm`}>
+                                {property.isGlobalCityProperty ? (
+                                    (agency?.logoUrl || agency?.settings?.logoUrl) ? (
+                                        <img src={agency.logoUrl || agency.settings?.logoUrl} alt="Office" className="w-full h-full object-contain" />
+                                    ) : (
+                                        <Building2 size={24} />
+                                    )
+                                ) : (
+                                    (() => {
+                                        const agent = agents.find(a => a.uid === property.agentId);
+                                        return agent?.photoURL ? (
+                                            <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Building2 size={24} />
+                                        );
+                                    })()
+                                )}
                             </div>
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900 leading-tight">
@@ -318,11 +420,27 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         <div className="flex items-center gap-2">
                             {onCreateDeal && (
                                 <button
-                                    onClick={() => onCreateDeal(property)}
+                                    onClick={() => {
+                                        if (property.isGlobalCityProperty) {
+                                            toast.error('עליך לייבא את הנכס למלאי הפרטי שלך לפני יצירת עסקה.');
+                                            return;
+                                        }
+                                        onCreateDeal?.(property);
+                                    }}
                                     className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg transition-colors text-sm"
                                 >
                                     <Handshake size={16} />
                                     <span className="hidden sm:inline">צור עסקה</span>
+                                </button>
+                            )}
+                            {property.isGlobalCityProperty && (
+                                <button
+                                    onClick={handleImportToMyProperties}
+                                    disabled={isImporting}
+                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded-lg transition-colors text-sm shadow-sm"
+                                >
+                                    {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    <span>הוסף למלאי שלי</span>
                                 </button>
                             )}
                             <button
@@ -348,13 +466,41 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-4">
-                                    <button
-                                        onClick={() => setIsImageFullscreen(true)}
-                                        className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white p-2 rounded-lg transition-colors"
-                                    >
-                                        <Fullscreen size={18} />
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setIsImageFullscreen(true)}
+                                            className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white p-2 rounded-lg transition-colors"
+                                        >
+                                            <Fullscreen size={18} />
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {/* Navigation Arrows */}
+                                {images.length > 1 && (
+                                    <>
+                                        <button
+                                            onClick={prevImage}
+                                            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover:opacity-100"
+                                        >
+                                            <ChevronLeft size={24} />
+                                        </button>
+                                        <button
+                                            onClick={nextImage}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover:opacity-100"
+                                        >
+                                            <ChevronRight size={24} />
+                                        </button>
+                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+                                            {images.map((_, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'bg-white w-6' : 'bg-white/40 w-1.5'}`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
                                 {property.listingType === 'exclusive' || property.isExclusive ? (
                                     <div className="absolute top-4 right-4 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
                                         <Tag size={12} fill="currentColor" />
@@ -378,7 +524,9 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         {hasImages && (
                             <div className="mb-6">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">ניהול תמונות (גרור לשינוי סדר)</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                        {property.isGlobalCityProperty ? 'תמונות הנכס' : 'ניהול תמונות (גרור לשינוי סדר)'}
+                                    </span>
                                     <span className="text-xs font-medium text-slate-400">{images.length}/10</span>
                                 </div>
                                 <DndContext 
@@ -399,11 +547,12 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                                     isActive={activeImageIndex === idx}
                                                     onSelect={setActiveImageIndex}
                                                     onDelete={handleDeleteImage}
+                                                    isReadOnly={property.isGlobalCityProperty && !isSuperAdmin}
                                                 />
                                             ))}
                                         </SortableContext>
                                         
-                                        {images.length < 10 && (
+                                        {images.length < 10 && (!property.isGlobalCityProperty || isSuperAdmin) && (
                                             <button
                                                 onClick={handleUploadClick}
                                                 disabled={isUploading}
@@ -420,18 +569,18 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                             </div>
                         )}
 
-                        {!hasImages && (
-                            <div className="flex justify-center mb-6">
-                                <button
-                                    onClick={handleUploadClick}
-                                    disabled={isUploading}
-                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
-                                >
-                                    {isUploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                                    הוסף תמונות ({images.length}/10)
-                                </button>
-                            </div>
-                        )}
+                        {!hasImages && (!property.isGlobalCityProperty || isSuperAdmin) && (
+                                <div className="flex justify-center mb-6">
+                                    <button
+                                        onClick={handleUploadClick}
+                                        disabled={isUploading}
+                                        className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {isUploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                        הוסף תמונות ({images.length}/10)
+                                    </button>
+                                </div>
+                            )}
                         <input
                             type="file"
                             multiple
@@ -455,16 +604,17 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 {videoUrl ? (
                                     <button
                                         onClick={handleDeleteVideo}
-                                        className="text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                        disabled={property.isGlobalCityProperty}
+                                        className="text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
                                     >
                                         <Trash2 size={12} />
                                         מחק סרטון
                                     </button>
-                                ) : (
+                                ) : (!property.isGlobalCityProperty || isSuperAdmin) && (
                                     <button
                                         onClick={() => videoInputRef.current?.click()}
                                         disabled={isUploadingVideo}
-                                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                        className="text-xs font-semibold text-blue-600 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                                     >
                                         {isUploadingVideo ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />}
                                         {isUploadingVideo ? 'מעלה סרטון...' : 'העלה סרטון'}
@@ -482,7 +632,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 </div>
                             ) : (
                                 <div
-                                    onClick={() => !isUploadingVideo && videoInputRef.current?.click()}
+                                    onClick={() => {
+                                        if (property.isGlobalCityProperty && !isSuperAdmin) {
+                                            toast.error('נכס מהמאגר הציבורי הוא לקריאה בלבד.');
+                                            return;
+                                        }
+                                        if (!isUploadingVideo) videoInputRef.current?.click();
+                                    }}
                                     className="w-full h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-100 hover:border-blue-300 hover:text-blue-500 transition-all"
                                 >
                                     {isUploadingVideo ? (
@@ -511,15 +667,20 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">סוג נכס</div>
-                                <div className="text-base font-bold text-slate-900">{property.kind || '-'}</div>
+                                <div className="text-base font-bold text-slate-900">{translatePropertyKind(property.kind || property.propertyType)}</div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">חדרים</div>
                                 <div className="text-base font-bold text-slate-900">{property.rooms || '-'}</div>
                             </div>
+                            {property.parkingSpots != null && (
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <div className="text-xs font-semibold text-slate-500 mb-1">חניות</div>
+                                    <div className="text-base font-bold text-slate-900">{property.parkingSpots}</div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Global Property Specific Data */}
                         {property.isGlobalCityProperty && (
                             <div className="mb-8 p-5 bg-cyan-50/30 rounded-2xl border border-cyan-100/50">
                                 <h3 className="text-xs font-bold text-cyan-600 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -553,18 +714,91 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                             </span>
                                         </div>
                                     )}
-                                    {property.source && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">קוד מקור</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.source}</span>
-                                        </div>
-                                    )}
+
                                     {property.sqm && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">שטח (מ"ר)</span>
                                             <span className="text-sm font-semibold text-slate-700">{property.sqm}</span>
                                         </div>
                                     )}
+                                    {property.agentName && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">שם סוכן / סוכנות</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.agentName}</span>
+                                        </div>
+                                    )}
+                                    {property.contactName && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">שם איש קשר</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.contactName}</span>
+                                        </div>
+                                    )}
+                                    {property.contactPhone && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">טלפון איש קשר</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.contactPhone}</span>
+                                        </div>
+                                    )}
+                                    {property.parkingSpots !== undefined && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">חניות</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.parkingSpots}</span>
+                                        </div>
+                                    )}
+                                    {property.hasBalcony !== undefined && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מרפסת</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasBalcony ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasBalcony ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {property.hasElevator !== undefined && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מעלית</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasElevator ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasElevator ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {property.hasSafeRoom !== undefined && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">ממ"ד</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasSafeRoom ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasSafeRoom ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {property.hasAgent !== undefined && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">יש תיווך</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasAgent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasAgent ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Public Property Contact Section */}
+                        {property.isGlobalCityProperty && (agency?.officePhone || agency?.billing?.ownerPhone) && (
+                            <div className="mb-8 p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="text-right">
+                                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                                        <UserIcon size={16} className="text-blue-600" />
+                                        צור קשר עם מנהל המשרד
+                                    </h3>
+                                    <p className="text-xs text-slate-500">לתיאום פגישה או בירור פרטים נוספים על הנכס</p>
+                                </div>
+                                <div className="flex items-center gap-3 w-full sm:w-auto">
+                                    <a
+                                        href={`tel:${agency.officePhone || agency.billing?.ownerPhone}`}
+                                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm"
+                                    >
+                                        <Phone size={18} />
+                                        שיחה
+                                    </a>
+                                    <a
+                                        href={`https://wa.me/${formatPhoneForWhatsApp(agency.officePhone || agency.billing?.ownerPhone)}?text=${encodeURIComponent(`היי ${agency.name || 'מנהל'}, שמי ${leads.find(l => l.id === property.leadId)?.name || userData?.name || ''}, אשמח לתאם שיחה טלפונית לגבי הנכס ב${property.address}`)}`}
+                                        target="_blank" rel="noreferrer"
+                                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-200"
+                                    >
+                                        <MessageCircle size={18} />
+                                        ווטסאפ
+                                    </a>
                                 </div>
                             </div>
                         )}
@@ -578,7 +812,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 </h3>
                                 {!isEditingDescription ? (
                                     <button
-                                        onClick={() => setIsEditingDescription(true)}
+                                        onClick={() => {
+                                            if (property.isGlobalCityProperty && !isSuperAdmin) {
+                                                toast.error('נכס מהמאגר הציבורי הוא לקריאה בלבד. לייבוא ועריכה לחץ על "הוסף למלאי שלי" למעלה.');
+                                                return;
+                                            }
+                                            setIsEditingDescription(true);
+                                        }}
                                         className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors"
                                     >
                                         ערוך
@@ -588,7 +828,7 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                         <button
                                             onClick={() => {
                                                 setIsEditingDescription(false);
-                                                setEditedDescription(property.description || '');
+                                                setEditedDescription(property.description || property.rawDescription || '');
                                             }}
                                             disabled={isSavingDescription}
                                             className="text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50"
@@ -617,13 +857,19 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     autoFocus
                                 />
                             ) : (
-                                property.description ? (
+                                (property.description || property.rawDescription) ? (
                                     <div
                                         className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors group relative"
-                                        onClick={() => setIsEditingDescription(true)}
+                                        onClick={() => {
+                                            if (property.isGlobalCityProperty && !isSuperAdmin) {
+                                                toast.error('נכס מהמאגר הציבורי הוא לקריאה בלבד.');
+                                                return;
+                                            }
+                                            setIsEditingDescription(true);
+                                        }}
                                     >
                                         <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                            {property.description}
+                                            {property.description || property.rawDescription}
                                         </p>
                                         <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm border border-slate-200 rounded p-1.5 text-slate-400 pointer-events-none">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -632,7 +878,13 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 ) : (
                                     <div
                                         className="text-sm text-slate-400 italic bg-slate-50 p-4 rounded-xl cursor-pointer hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-all flex items-center justify-between group"
-                                        onClick={() => setIsEditingDescription(true)}
+                                        onClick={() => {
+                                            if (property.isGlobalCityProperty && !isSuperAdmin) {
+                                                toast.error('נכס מהמאגר הציבורי הוא לקריאה בלבד.');
+                                                return;
+                                            }
+                                            setIsEditingDescription(true);
+                                        }}
                                     >
                                         <span>לא הוזן תיאור מילולי לנכס זה. לחץ להוספה...</span>
                                         <Plus size={16} className="opacity-0 group-hover:opacity-100 text-blue-500 transition-opacity" />
@@ -640,32 +892,29 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                 )
                             )}
                         </div>
-                        
-                        {/* External Source / Link */}
-                        {(property.originalSource || property.externalLink || property.yad2Link) && (
+
+                        {/* External Link */}
+                        {(property.externalLink || property.yad2Link) && (
                             <div className="mb-8 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">
                                         <ExternalLink size={20} />
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">מקור הנכס</div>
                                         <div className="text-sm font-bold text-slate-900">
-                                            {isYad2Link ? 'Yad2' : (externalUrl ? 'Madlan' : (property.originalSource || 'מקור חיצוני'))}
+                                            {isYad2Link ? 'צפה במודעה ביד 2' : 'צפה במודעה במקור'}
                                         </div>
                                     </div>
                                 </div>
-                                {(property.externalLink || property.yad2Link) && (
-                                    <a
-                                        href={externalUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-orange-200"
-                                    >
-                                        {externalButtonText}
-                                        <ArrowUpLeft size={16} />
-                                    </a>
-                                )}
+                                <a
+                                    href={externalUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-orange-200"
+                                >
+                                    {externalButtonText}
+                                    <ArrowUpLeft size={16} />
+                                </a>
                             </div>
                         )}
 
@@ -676,8 +925,9 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     שיוך סוכן מטפל
                                 </label>
                                 <select
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                     value={property.agentId || ""}
+                                    disabled={property.isGlobalCityProperty}
                                     onChange={(e) => handleAgentChange(e.target.value)}
                                 >
                                     <option value="" disabled>בחר סוכן...</option>
@@ -691,8 +941,9 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                                     שיוך ליד פוטנציאלי
                                 </label>
                                 <select
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                     value={property.leadId || ""}
+                                    disabled={property.isGlobalCityProperty}
                                     onChange={(e) => handleLeadChange(e.target.value)}
                                 >
                                     <option value="">ללא שיוך</option>
@@ -726,8 +977,35 @@ export default function PropertyDetailsModal({ property, agents, leads, onClose,
                         <img
                             src={images[activeImageIndex]}
                             alt="Fullscreen"
-                            className="max-w-full max-h-full object-contain rounded-lg"
+                            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-all duration-300"
                         />
+
+                        {/* Fullscreen Navigation */}
+                        {images.length > 1 && (
+                            <>
+                                <button
+                                    onClick={prevImage}
+                                    className="absolute left-8 top-1/2 -translate-y-1/2 w-16 h-16 bg-white/5 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all group"
+                                >
+                                    <ChevronLeft size={48} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                                <button
+                                    onClick={nextImage}
+                                    className="absolute right-8 top-1/2 -translate-y-1/2 w-16 h-16 bg-white/5 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all group"
+                                >
+                                    <ChevronRight size={48} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                                <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-3">
+                                    {images.map((_, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setActiveImageIndex(i)}
+                                            className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'bg-blue-500 w-8' : 'bg-white/20 w-2 hover:bg-white/40'}`}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                     {images.length > 1 && (
                         <div className="p-4 flex justify-center gap-2 overflow-x-auto">

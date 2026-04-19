@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Expense } from '../types';
@@ -72,5 +72,17 @@ export function useExpenses() {
         await deleteDoc(expenseRef);
     };
 
-    return { expenses, loading, error, addExpense, deleteExpense };
+    const updateExpense = async (expenseId: string, data: Partial<Expense>) => {
+        if (!userData?.agencyId) {
+            throw new Error('User not authenticated properly to update expense');
+        }
+        const expenseRef = doc(db, 'agencies', userData.agencyId, 'expenses', expenseId);
+        await updateDoc(expenseRef, {
+            ...data,
+            updatedAt: serverTimestamp(),
+        });
+    };
+
+    return { expenses, loading, error, addExpense, deleteExpense, updateExpense };
+
 }

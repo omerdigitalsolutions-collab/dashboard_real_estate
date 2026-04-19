@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,9 @@ import UpgradeModal from '../components/ui/UpgradeModal';
 import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
 import { Property, AppUser, Lead, TimeRange } from '../types';
 import { deleteProperty } from '../services/propertyService';
+import { normalizeCity } from '../utils/stringUtils';
+import { translatePropertyKind } from '../utils/formatters';
+
 
 export default function Properties() {
     const { properties = [], loading: propertiesLoading } = useLiveDashboardData();
@@ -182,9 +185,10 @@ export default function Properties() {
     };
 
     const filtered = filteredPropertiesByTime.filter((prop: Property) => {
-        const matchesSearch =
-            (prop.city && prop.city.toLowerCase().includes(search.toLowerCase())) ||
-            (prop.address && prop.address.toLowerCase().includes(search.toLowerCase())) || '';
+        const normSearch = normalizeCity(search);
+        const matchesSearch = !normSearch || 
+            (prop.city && normalizeCity(prop.city).includes(normSearch)) ||
+            (prop.address && normalizeCity(prop.address).includes(normSearch));
         
         const isMyProperty = !prop.isGlobalCityProperty && prop.status !== 'draft';
         const isGeneralPool = prop.isGlobalCityProperty;
@@ -797,7 +801,7 @@ export default function Properties() {
                                         {prop.isGlobalCityProperty && (
                                             <div className="absolute inset-0 z-20 pointer-events-none flex items-start justify-center pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                 <span className="bg-cyan-600/90 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
-                                                    🔍 נכס שהמערת איתרה
+                                                    🔍 נכס שהמערכת איתרה
                                                 </span>
                                             </div>
                                         )}
@@ -866,9 +870,12 @@ export default function Properties() {
                                                         <h3 className="font-bold text-lg text-slate-800 line-clamp-1">{prop.address}</h3>
                                                         <span className="font-bold text-lg text-blue-600">₪{(prop.price || 0).toLocaleString()}</span>
                                                     </div>
-                                                    <p className="text-sm text-slate-500 font-medium mb-4 flex items-center gap-1.5">
+                                                    <p className="text-sm text-slate-500 font-medium mb-4 flex items-center gap-1.5 flex-wrap">
                                                         <Building2 size={14} className="text-slate-400" />
-                                                        {prop.city || 'עיר לא צוינה'} {prop.rooms ? `• ${prop.rooms} חדרים` : ''}
+                                                        {prop.city || 'עיר לא צוינה'} 
+                                                        {` • ${translatePropertyKind(prop.kind || prop.propertyType)}`}
+                                                        {prop.rooms ? ` • ${prop.rooms} חדרים` : ''}
+                                                        {prop.parkingSpots != null ? ` • ${prop.parkingSpots} חניות` : ''}
                                                     </p>
                                                 </>
                                             )}
@@ -880,8 +887,20 @@ export default function Properties() {
                                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">הסוכן המטפל</p>
                                                     <div className="flex items-center justify-between bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                                                         <div className="flex items-center gap-2 truncate">
-                                                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">
-                                                                {agent?.name ? agent.name.charAt(0) : <UserIcon size={12} />}
+                                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold border border-slate-100 shrink-0">
+                                                                {prop.isGlobalCityProperty ? (
+                                                                    (agency?.logoUrl || agency?.settings?.logoUrl) ? (
+                                                                        <img src={agency.logoUrl || agency?.settings?.logoUrl} alt="Office" className="w-full h-full object-contain" />
+                                                                    ) : (
+                                                                        <Building size={12} />
+                                                                    )
+                                                                ) : (
+                                                                    agent?.photoURL ? (
+                                                                        <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        agent?.name ? agent.name.charAt(0) : <UserIcon size={12} />
+                                                                    )
+                                                                )}
                                                             </div>
                                                             <span className="text-xs font-semibold text-slate-700 truncate">{agent?.name || '---'}</span>
                                                         </div>
@@ -934,8 +953,30 @@ export default function Properties() {
                                         {/* Card Footer Actions */}
                                         <div className="px-4 pb-4 pt-2 flex items-center gap-2 border-t border-slate-100 mt-3 flex-wrap">
                                             {prop.isGlobalCityProperty ? (
-                                                <div className={`flex-1 w-full text-center py-1.5 px-2 border rounded-lg text-xs font-bold ${listingStyle.badgeBg}`}>
-                                                    {listingStyle.badgeEmoji} {listingStyle.badgeLabel}
+                                                <div className="flex items-center gap-2 w-full">
+                                                    {(agency?.officePhone || agency?.billing?.ownerPhone) && (
+                                                        <>
+                                                            <a
+                                                                href={`tel:${agency?.officePhone || agency?.billing?.ownerPhone}`}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                                                                title="התקשר למנהל המשרד"
+                                                            >
+                                                                <Phone size={13} />
+                                                                שיחה
+                                                            </a>
+                                                            <a
+                                                                href={`https://wa.me/${formatPhoneForWhatsApp(agency?.officePhone || agency?.billing?.ownerPhone)}?text=${encodeURIComponent(`היי ${agency?.name || 'מנהל'}, שמי ${leads.find(l => l.id === prop.leadId)?.name || userData?.name || ''}, אשמח לתאם שיחה טלפונית לגבי הנכס ב${prop.address}`)}`}
+                                                                target="_blank" rel="noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                                                                title="שלח ווטסאפ למנהל"
+                                                            >
+                                                                <MessageCircle size={13} />
+                                                                ווטסאפ
+                                                            </a>
+                                                        </>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <button
@@ -986,7 +1027,7 @@ export default function Properties() {
                                                 className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                             />
                                         </th>
-                                        {['כתובת', 'סוג', 'מחיר', 'חדרים ושטח', 'בלעדיות', 'סוכן', 'לקוח', 'פעולות'].map((h) => (
+                                        {['כתובת', 'סוג', 'מחיר', 'חדרים ושטח', 'חניות', 'בלעדיות', 'סוכן', 'לקוח', 'פעולות'].map((h) => (
                                             <th key={h} className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                                                 {h}
                                             </th>
@@ -1042,9 +1083,14 @@ export default function Properties() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
-                                                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${prop.kind === 'מסחרי' ? 'bg-orange-50 text-orange-600' : prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                        {prop.kind === 'מסחרי' ? 'מסחרי' : prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${prop.type === 'sale' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                            {prop.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-slate-600">
+                                                            {translatePropertyKind(prop.kind || prop.propertyType)}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
                                                     <span className="block text-sm font-bold text-slate-700">₪{prop.price.toLocaleString()}</span>
@@ -1052,6 +1098,12 @@ export default function Properties() {
                                                 <td className="px-4 py-4 align-top">
                                                     <div className="text-sm text-slate-600">
                                                         {prop.rooms ? `${prop.rooms} חדרים` : '-'}
+                                                        {prop.sqm ? ` • ${prop.sqm} מ״ר` : ''}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4 align-top">
+                                                    <div className="text-sm text-slate-600">
+                                                        {prop.parkingSpots != null ? prop.parkingSpots : '-'}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
@@ -1068,13 +1120,53 @@ export default function Properties() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
-                                                    <div className="text-sm font-medium text-slate-700">{agent?.name || 'לא משויך'}</div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full overflow-hidden bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold border border-slate-100 shrink-0">
+                                                            {prop.isGlobalCityProperty ? (
+                                                                (agency?.logoUrl || agency?.settings?.logoUrl) ? (
+                                                                    <img src={agency.logoUrl || agency?.settings?.logoUrl} alt="Office" className="w-full h-full object-contain" />
+                                                                ) : (
+                                                                    <Building size={12} />
+                                                                )
+                                                            ) : (
+                                                                agent?.photoURL ? (
+                                                                    <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    agent?.name ? agent.name.charAt(0) : <UserIcon size={12} />
+                                                                )
+                                                            )}
+                                                        </div>
+                                                        <div className="text-sm font-medium text-slate-700">
+                                                            {prop.isGlobalCityProperty ? 'מאגר ציבורי' : (agent?.name || 'לא משויך')}
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
                                                     <div className="text-sm font-medium text-slate-700">{client?.name || '-'}</div>
                                                 </td>
                                                 <td className="px-4 py-4 align-top">
                                                     <div className="flex items-center gap-2">
+                                                        {prop.isGlobalCityProperty && (agency?.officePhone || agency?.billing?.ownerPhone) && (
+                                                            <>
+                                                                <a
+                                                                    href={`tel:${agency?.officePhone || agency?.billing?.ownerPhone}`}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg transition-colors shrink-0"
+                                                                    title="התקשר למנהל"
+                                                                >
+                                                                    <Phone size={14} />
+                                                                </a>
+                                                                <a
+                                                                    href={`https://wa.me/${formatPhoneForWhatsApp(agency?.officePhone || agency?.billing?.ownerPhone)}?text=${encodeURIComponent(`היי ${agency?.name || 'מנהל'}, שמי ${leads.find(l => l.id === prop.leadId)?.name || userData?.name || ''}, אשמח לתאם שיחה טלפונית לגבי הנכס ב${prop.address}`)}`}
+                                                                    target="_blank" rel="noreferrer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 rounded-lg transition-colors shrink-0"
+                                                                    title="שלח ווטסאפ למנהל"
+                                                                >
+                                                                    <MessageCircle size={14} />
+                                                                </a>
+                                                            </>
+                                                        )}
                                                         {prop.listingType === 'external' && prop.externalAgentPhone && (
                                                             <a
                                                                 href={`https://wa.me/${formatPhoneForWhatsApp(prop.externalAgentPhone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${prop.city || ''} (${prop.rooms || ''} חדרים, ₪${(prop.price || 0).toLocaleString()}). יש לי לקוח שזה בדיוק מתאים לו. רלוונטי לשת״פ?`)}`}
@@ -1186,6 +1278,7 @@ export default function Properties() {
                     property={selectedProperty}
                     agents={agents}
                     leads={leads}
+                    agency={agency}
                     onClose={() => setSelectedProperty(null)}
                     onCreateDeal={(prop) => {
                         setSelectedProperty(null); // Close details modal

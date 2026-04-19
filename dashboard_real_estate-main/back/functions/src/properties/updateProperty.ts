@@ -40,25 +40,47 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
     // ── Load property and verify ownership ─────────────────────────────────────
     let propertyRef = db.doc(`properties/${propertyId}`);
     let propertySnap = await propertyRef.get();
+    let actualPropertyId = propertyId;
 
-    // If it doesn't exist in properties, it might be a global property awaiting import
-    if (!propertySnap.exists && cityName) {
+    // Check if the user is a super admin
+    const superAdminSnap = await db.doc(`superAdmins/${authData.uid}`).get();
+    const isSuperAdmin = superAdminSnap.exists;
+
+    // Check if we own this property
+    const isOwned = propertySnap.exists && propertySnap.data()?.agencyId === authData.agencyId;
+
+    if (!isOwned && cityName) {
+        // It's not ours or doesn't exist. Check if it's a global property.
         const globalRef = db.doc(`cities/${cityName}/properties/${propertyId}`);
         const globalSnap = await globalRef.get();
 
         if (globalSnap.exists) {
-            const globalData = globalSnap.data()!;
-            // Create a private agency-specific copy
-            await propertyRef.set({
-                ...globalData,
-                agencyId: authData.agencyId,
-                isGlobalCityProperty: false, // It's no longer just a global reference
-                importedFromGlobal: true,
-                createdAt: globalData.createdAt ?? FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                status: 'active'
-            });
-            propertySnap = await propertyRef.get();
+            // If it's a super admin, we allow direct update to the global property
+            if (isSuperAdmin) {
+                propertyRef = globalRef;
+                propertySnap = globalSnap;
+            } else {
+                // Regular user: Import to their private collection as a NEW document
+                console.log(`[updateProperty] Importing global property ${propertyId} as a new document for agency ${authData.agencyId}`);
+                
+                const globalData = globalSnap.data()!;
+                const newPropertyRef = db.collection('properties').doc();
+                actualPropertyId = newPropertyRef.id;
+                
+                await newPropertyRef.set({
+                    ...globalData,
+                    agencyId: authData.agencyId,
+                    isGlobalCityProperty: false,
+                    importedFromGlobal: true,
+                    originalGlobalId: propertyId,
+                    createdAt: globalData.createdAt ?? FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    status: 'active'
+                });
+                
+                propertyRef = newPropertyRef;
+                propertySnap = await propertyRef.get();
+            }
         }
     }
 
@@ -68,7 +90,8 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
 
     const propertyData = propertySnap.data()!;
 
-    if (authData.agencyId !== propertyData.agencyId) {
+    // Permission check: Must be owner OR Super Admin (Super Admin can edit anything)
+    if (!isSuperAdmin && authData.agencyId !== propertyData.agencyId) {
         throw new HttpsError('permission-denied', 'You do not have access to this property.');
     }
 
@@ -89,5 +112,5 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
         updatedAt: FieldValue.serverTimestamp()
     });
 
-    return { success: true };
+    return { success: true, propertyId: actualPropertyId };
 });

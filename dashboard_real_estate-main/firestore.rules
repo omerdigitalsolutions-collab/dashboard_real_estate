@@ -128,20 +128,32 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/expenses/{expenseId} {
       allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
-      allow create, update: if isAuthed() && (isSuperAdmin() || (isAgencyAdmin(agencyId)
-          && isPositiveNumber(request.resource.data.amount)
-          && isNonEmptyString(request.resource.data.category)
-          && request.resource.data.date != null));
-      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
+      allow create: if isAuthed() && (inAgency(agencyId) && (
+          isPositiveNumber(request.resource.data.amount) &&
+          isNonEmptyString(request.resource.data.category) &&
+          request.resource.data.date != null
+      ));
+      allow update: if isAuthed() && (isSuperAdmin() || (inAgency(agencyId) && (
+          isAdmin() || resource.data.createdBy == request.auth.uid
+      )));
+      allow delete: if isAuthed() && (isSuperAdmin() || (inAgency(agencyId) && (
+          isAdmin() || resource.data.createdBy == request.auth.uid
+      )));
     }
 
     match /agencies/{agencyId}/incomes/{incomeId} {
       allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
-      allow create, update: if isAuthed() && (isSuperAdmin() || (isAgencyAdmin(agencyId)
-          && isPositiveNumber(request.resource.data.amount)
-          && isNonEmptyString(request.resource.data.title)
-          && request.resource.data.date != null));
-      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
+      allow create: if isAuthed() && (inAgency(agencyId) && (
+          isPositiveNumber(request.resource.data.amount) &&
+          isNonEmptyString(request.resource.data.title) &&
+          request.resource.data.date != null
+      ));
+      allow update: if isAuthed() && (isSuperAdmin() || (inAgency(agencyId) && (
+          isAdmin() || resource.data.createdBy == request.auth.uid
+      )));
+      allow delete: if isAuthed() && (isSuperAdmin() || (inAgency(agencyId) && (
+          isAdmin() || resource.data.createdBy == request.auth.uid
+      )));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -394,7 +406,7 @@ service cloud.firestore {
     // City/area reference data — public read, admin write
     match /cities/{cityId} {
       allow read: if isAuthed();
-      allow create, update, delete: if isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     match /userTokens/{document=**} {
@@ -403,7 +415,7 @@ service cloud.firestore {
 
     match /cities/{cityId}/properties/{propertyId} {
       allow read: if isAuthed();
-      allow create, update, delete: if isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     // Anti-abuse trial phone registry — Cloud Functions (Admin SDK) only
@@ -431,5 +443,14 @@ service cloud.firestore {
     match /_rate_limits/{document=**} {
       allow read, write: if false;
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // BOT SECURITY COLLECTIONS — Admin SDK (Cloud Functions) only
+    // ══════════════════════════════════════════════════════════════════════════
+    match /whatsapp_sessions/{doc} { allow read, write: if false; }
+    match /whatsapp_blocklist/{doc} { allow read, write: if false; }
+    match /whatsapp_suspicious/{doc} { allow read, write: if false; }
+    match /whatsapp_audit_log/{doc} { allow read, write: if false; }
+    match /processed_messages/{doc} { allow read, write: if false; }
   }
 }

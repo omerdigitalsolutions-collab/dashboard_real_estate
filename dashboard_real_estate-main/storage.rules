@@ -53,6 +53,12 @@ service firebase.storage {
         );
     }
 
+    function isSuperAdmin() {
+      return request.auth != null && (
+        firestore.exists(/databases/(default)/documents/superAdmins/$(request.auth.uid))
+      );
+    }
+
     // 1. Agency Logo — Admin / Owner only
     // Allows both agencies/{agencyId}/logo.{ext} AND agencies/{agencyId}/logo/{fileName}
     match /agencies/{agencyId}/{fileName} {
@@ -178,6 +184,21 @@ service firebase.storage {
       allow delete: if request.auth != null
                     && request.auth.token.agencyId == agencyId
                     && (request.auth.token.role == 'admin' || request.auth.token.role == 'owner');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GLOBAL / PUBLIC STORAGE
+    // ══════════════════════════════════════════════════════════════════════════
+    match /global/properties/{propertyId}/{mediaType}/{fileName} {
+      allow read: if true; // Public media is readable by all
+
+      // Only Super Admins can add/update/delete global property media
+      allow create, update, delete: if isSuperAdmin()
+                                    && request.resource.size < (mediaType == 'videos' ? 200 : 10) * 1024 * 1024
+                                    && (
+                                      (mediaType == 'images' && request.resource.contentType.matches('image/.*'))
+                                      || (mediaType == 'videos' && request.resource.contentType.matches('video/.*'))
+                                    );
     }
   }
 }

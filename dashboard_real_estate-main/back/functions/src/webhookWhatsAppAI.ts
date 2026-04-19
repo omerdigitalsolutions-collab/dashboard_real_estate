@@ -27,8 +27,8 @@ import * as admin from 'firebase-admin';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { defineSecret } from 'firebase-functions/params';
-import { handleWeBotReply } from './handleWeBotReply';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { processInboundMessage } from './whatsapp/botPipeline';
 
 // ─── Firebase Secrets ─────────────────────────────────────────────────────────
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
@@ -221,6 +221,18 @@ export const webhookWhatsAppAI = onRequest(
                 return;
             }
 
+            // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery)
+            const idMessageEarly: string | undefined = body?.idMessage;
+            if (idMessageEarly) {
+                const processedRef = db.collection('processed_messages').doc(idMessageEarly);
+                const alreadyDone = await processedRef.get();
+                if (alreadyDone.exists) return;
+                await processedRef.set({
+                    processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    instance: idInstance,
+                });
+            }
+
             // Resolve Agency
             const agencyId = await resolveAgencyByInstance(idInstance);
             if (!agencyId) {
@@ -382,7 +394,20 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
 
             if (isBotActive) {
                 const creds = await getGreenApiCredentials(agencyId, masterKey.value());
-                if (creds) await handleWeBotReply(agencyId, leadId, localPhone, textMessage, geminiApiKey.value(), creds, idMessage, inboundMsgRef.id);
+                if (creds) {
+                    const { waChatId } = normalisePhone(rawSender);
+                    await processInboundMessage({
+                        phone: localPhone,
+                        waChatId,
+                        text: textMessage,
+                        agencyId,
+                        leadId,
+                        geminiApiKey: geminiApiKey.value(),
+                        creds,
+                        idMessage,
+                        inboundMsgDocId: inboundMsgRef.id,
+                    });
+                }
             }
         } catch (err) { console.error('[Webhook] ❌ Fatal error:', err); }
     }

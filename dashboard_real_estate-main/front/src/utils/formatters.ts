@@ -37,3 +37,29 @@ export function formatPrice(value: number | string | undefined | null, showSymbo
     const formatted = num.toLocaleString('he-IL');
     return showSymbol ? `₪${formatted}` : formatted;
 }
+
+/**
+ * Translates English property types to Hebrew.
+ */
+export function translatePropertyKind(kind?: string): string {
+    if (!kind) return '-';
+    
+    const mapping: Record<string, string> = {
+        'apartment': 'דירה',
+        'house': 'בית פרטי',
+        'private_house': 'בית פרטי',
+        'penthouse': 'פנטהאוז',
+        'studio': 'סטודיו',
+        'duplex': 'דופלקס',
+        'garden_apartment': 'דירת גן',
+        'commercial': 'מסחרי',
+        'plot': 'מגרש',
+        'office': 'משרד',
+        'warehouse': 'מחסן',
+        'villa': 'וילה',
+        'cottage': 'קוטג׳'
+    };
+    
+    return mapping[kind.toLowerCase()] || kind;
+}
+

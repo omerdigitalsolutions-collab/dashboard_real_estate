@@ -174,16 +174,17 @@ export async function updateProperty(
     propertyId: string,
     updates: Partial<Omit<Property, 'id' | 'agencyId'>>,
     cityHint?: string
-): Promise<void> {
+): Promise<string> {
     console.log(`[propertyService] updateProperty called for ${propertyId}`, { cityHint, updates });
     const functions = getFunctions(undefined, 'europe-west1');
-    const updateFn = httpsCallable<{ propertyId: string; updates: any; cityName?: string }, { success: boolean }>(
+    const updateFn = httpsCallable<{ propertyId: string; updates: any; cityName?: string }, { success: boolean; propertyId: string }>(
         functions,
         'properties-updateProperty'
     );
     try {
-        await updateFn({ propertyId, updates, cityName: cityHint });
-        console.log(`[propertyService] updateProperty success for ${propertyId}`);
+        const result = await updateFn({ propertyId, updates, cityName: cityHint });
+        console.log(`[propertyService] updateProperty success for ${propertyId}`, result.data);
+        return result.data.propertyId || propertyId;
     } catch (err) {
         console.error(`[propertyService] updateProperty FAILED for ${propertyId}:`, err);
         throw err;
@@ -234,14 +235,21 @@ export async function deleteProperty(propertyId: string): Promise<void> {
 export async function uploadPropertyImages(
     agencyId: string,
     propertyId: string,
-    imageFiles: File[]
+    imageFiles: File[],
+    isGlobal?: boolean,
+    isSuperAdmin?: boolean
 ): Promise<string[]> {
     if (!imageFiles || imageFiles.length === 0) return [];
 
     const uploadPromises = imageFiles.map(async (file) => {
         const ext = file.name.split('.').pop() ?? 'jpg';
         const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-        const storageRef = ref(storage, `agencies/${agencyId}/properties/${propertyId}/images/${uniqueFilename}`);
+        
+        const path = (isGlobal && isSuperAdmin) 
+            ? `global/properties/${propertyId}/images/${uniqueFilename}`
+            : `agencies/${agencyId}/properties/${propertyId}/images/${uniqueFilename}`;
+            
+        const storageRef = ref(storage, path);
         const snapshot = await uploadBytes(storageRef, file);
         return getDownloadURL(snapshot.ref);
     });
@@ -252,11 +260,18 @@ export async function uploadPropertyImages(
 export async function uploadPropertyVideo(
     agencyId: string,
     propertyId: string,
-    videoFile: File
+    videoFile: File,
+    isGlobal?: boolean,
+    isSuperAdmin?: boolean
 ): Promise<string> {
     const ext = videoFile.name.split('.').pop() ?? 'mp4';
     const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-    const storageRef = ref(storage, `agencies/${agencyId}/properties/${propertyId}/videos/${uniqueFilename}`);
+    
+    const path = (isGlobal && isSuperAdmin)
+        ? `global/properties/${propertyId}/videos/${uniqueFilename}`
+        : `agencies/${agencyId}/properties/${propertyId}/videos/${uniqueFilename}`;
+        
+    const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, videoFile);
     return getDownloadURL(snapshot.ref);
 }

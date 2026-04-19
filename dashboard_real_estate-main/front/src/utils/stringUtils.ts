@@ -7,10 +7,7 @@ export function normalizeCity(city: string | null | undefined): string {
     
     return city
         .toLowerCase()
-        .trim()
-        .replace(/[-'`"|/\\,.]/g, ' ') // Replace hyphens, quotes, pipes, slashes, and other separators with spaces
-        .replace(/\s+/g, ' ')           // Collapse multiple spaces into one
-        .trim();
+        .replace(/[^a-z0-9\u0590-\u05FF]/g, ''); // Remove everything except letters and numbers
 }
 
 /**
@@ -27,7 +24,7 @@ export function isCityMatch(desiredCities: string[], propertyCity: string): bool
         const normDesired = normalizeCity(desired);
         if (!normDesired) return false;
         
-        // Match if one contains the other (e.g. "תל אביב" vs "תל אביב יפו")
+        // Match if one contains the other (bidirectional)
         return normProp.includes(normDesired) || normDesired.includes(normProp);
     });
 }

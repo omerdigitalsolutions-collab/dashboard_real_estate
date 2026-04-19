@@ -224,6 +224,14 @@ export interface Property {
     // External agency details
     externalAgencyName?: string;
     externalContactName?: string;
+
+    // Global import fields
+    parkingSpots?: number;
+    agentName?: string;
+    contactName?: string;
+    contactPhone?: string;
+    hasAgent?: boolean;
+    listingId?: string;
 }
 
 export interface PendingLead {

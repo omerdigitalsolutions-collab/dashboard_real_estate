@@ -2,13 +2,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
+import { useAgency } from '../hooks/useFirestoreData';
 import { calculatePipelineStats } from '../utils/analytics';
-import { Wallet, ChevronDown, ChevronUp, UploadCloud, PieChart as PieChartIcon, TrendingDown, TrendingUp, FileText, FileSpreadsheet, Plus, X, RefreshCw, Tag, Trash2 } from 'lucide-react';
+import { Wallet, ChevronDown, ChevronUp, UploadCloud, PieChart as PieChartIcon, TrendingDown, TrendingUp, FileText, FileSpreadsheet, Plus, X, RefreshCw, Tag, Trash2, Pencil } from 'lucide-react';
 import AiExpenseImporter from '../components/dashboard/AiExpenseImporter';
 import { exportPnLToExcel, exportPnLToPDF, PnLReportData } from '../utils/pnlExport';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'react-hot-toast';
-import { collection, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 const CATEGORY_HEBREW: Record<string, string> = {
@@ -70,9 +71,10 @@ interface ManualIncome {
 const FALLBACK_COLOR = '#64748b';
 
 export default function ProfitAndLossDashboard() {
-    const { expenses, loading: expensesLoading, addExpense, deleteExpense } = useExpenses();
+    const { expenses, loading: expensesLoading, addExpense, deleteExpense, updateExpense } = useExpenses();
     const { deals, loading: dataLoading } = useLiveDashboardData();
     const { userData } = useAuth();
+    const { agency } = useAgency();
     const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12' | '60' | 'custom'>('1');
     const today = new Date();
     const [customRange, setCustomRange] = useState({
@@ -85,6 +87,7 @@ export default function ProfitAndLossDashboard() {
     // ── Add-Entry Panel state ──────────────────────────────────────────────────
     const [showAddPanel, setShowAddPanel] = useState(false);
     const [entryType, setEntryType] = useState<'expense' | 'income'>('expense');
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [customCategoryInput, setCustomCategoryInput] = useState('');
     const [showCustomInput, setShowCustomInput] = useState(false);
@@ -120,6 +123,22 @@ export default function ProfitAndLossDashboard() {
         setForm({ title: '', amount: '', category: '', date: new Date().toISOString().split('T')[0], isRecurring: false });
         setShowCustomInput(false);
         setCustomCategoryInput('');
+        setEditingId(null);
+    };
+
+    const handleEdit = (item: any, type: 'expense' | 'income') => {
+        const itemDate = item.date?.toDate ? item.date.toDate() : (item.date ? new Date(item.date) : new Date());
+        setEntryType(type);
+        setEditingId(item.id);
+        setForm({
+            title: item.title || item.description || '',
+            amount: item.amount.toString(),
+            category: item.category || '',
+            date: itemDate.toISOString().split('T')[0],
+            isRecurring: item.isRecurring || false
+        });
+        setShowAddPanel(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSave = async () => {
@@ -132,26 +151,50 @@ export default function ProfitAndLossDashboard() {
         try {
             const dateTs = Timestamp.fromDate(new Date(form.date));
             if (entryType === 'expense') {
-                await addExpense({
-                    title: form.title.trim(),
-                    amount,
-                    category: form.category,
-                    date: dateTs,
-                    isRecurring: form.isRecurring,
-                });
-                toast.success('ההוצאה נשמרה בהצלחה!');
+                if (editingId) {
+                    await updateExpense(editingId, {
+                        title: form.title.trim(),
+                        amount,
+                        category: form.category,
+                        date: dateTs,
+                        isRecurring: form.isRecurring,
+                    });
+                    toast.success('ההוצאה עודכנה בהצלחה!');
+                } else {
+                    await addExpense({
+                        title: form.title.trim(),
+                        amount,
+                        category: form.category,
+                        date: dateTs,
+                        isRecurring: form.isRecurring,
+                    });
+                    toast.success('ההוצאה נשמרה בהצלחה!');
+                }
             } else {
-                const ref = collection(db, 'agencies', userData!.agencyId, 'incomes');
-                await addDoc(ref, {
-                    title: form.title.trim(),
-                    amount,
-                    category: form.category,
-                    date: dateTs,
-                    isRecurring: form.isRecurring,
-                    createdAt: serverTimestamp(),
-                    createdBy: userData!.uid,
-                });
-                toast.success('ההכנסה נשמרה בהצלחה!');
+                if (editingId) {
+                    const ref = doc(db, 'agencies', userData!.agencyId, 'incomes', editingId);
+                    await updateDoc(ref, {
+                        title: form.title.trim(),
+                        amount,
+                        category: form.category,
+                        date: dateTs,
+                        isRecurring: form.isRecurring,
+                        updatedAt: serverTimestamp(),
+                    });
+                    toast.success('ההכנסה עודכנה בהצלחה!');
+                } else {
+                    const ref = collection(db, 'agencies', userData!.agencyId, 'incomes');
+                    await addDoc(ref, {
+                        title: form.title.trim(),
+                        amount,
+                        category: form.category,
+                        date: dateTs,
+                        isRecurring: form.isRecurring,
+                        createdAt: serverTimestamp(),
+                        createdBy: userData!.uid,
+                    });
+                    toast.success('ההכנסה נשמרה בהצלחה!');
+                }
             }
             resetForm();
             setShowAddPanel(false);
@@ -177,8 +220,14 @@ export default function ProfitAndLossDashboard() {
 
     const handleDeleteIncome = async (id: string) => {
         if (!userData?.agencyId) return;
-        await deleteDoc(doc(db, 'agencies', userData.agencyId, 'incomes', id));
-        toast.success('ההכנסה הידנית נמחקה');
+        if (!window.confirm('למחוק את ההכנסה הידנית?')) return;
+        try {
+            await deleteDoc(doc(db, 'agencies', userData.agencyId, 'incomes', id));
+            toast.success('ההכנסה הידנית נמחקה');
+        } catch (e) {
+            console.error(e);
+            toast.error('שגיאה בתהליך המחיקה');
+        }
     };
 
     const toggleCategory = (category: string) => {
@@ -363,9 +412,10 @@ export default function ProfitAndLossDashboard() {
 
         const reportData: PnLReportData = {
             // @ts-ignore
-            agencyName: userData?.agencyName || 'homer Real Estate',
+            agencyName: agency?.agencyName || userData?.agencyName || 'homer Real Estate',
             // @ts-ignore
-            agencyLogo: userData?.agencyLogo || '',
+            agencyLogo: agency?.settings?.logoUrl || userData?.agencyLogo || '',
+            userLogo: userData?.photoURL || '',
             dateRangeLabel,
             totalRevenue: income,
             totalExpenses,
@@ -555,35 +605,37 @@ export default function ProfitAndLossDashboard() {
                 <div className="bg-slate-900/80 border border-cyan-500/30 rounded-2xl p-6 shadow-2xl shadow-cyan-500/10 animate-in slide-in-from-top-4 duration-300">
                     <div className="flex items-center justify-between mb-5">
                         <h3 className="text-lg font-black text-white flex items-center gap-2">
-                            <Plus className="w-5 h-5 text-cyan-400" />
-                            הוספת רשומה חדשה
+                            {editingId ? <Pencil className="w-5 h-5 text-cyan-400" /> : <Plus className="w-5 h-5 text-cyan-400" />}
+                            {editingId ? 'עריכת רשומה' : 'הוספת רשומה חדשה'}
                         </h3>
                         <button onClick={() => { setShowAddPanel(false); resetForm(); }} className="text-slate-400 hover:text-white transition-colors">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    {/* Type Toggle */}
-                    <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 w-max mb-6">
-                        <button
-                            onClick={() => { setEntryType('expense'); setForm(f => ({ ...f, category: '' })); }}
-                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'expense'
-                                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
-                                : 'text-slate-400 hover:text-white'
-                                }`}
-                        >
-                            <TrendingDown className="w-4 h-4" /> הוצאה
-                        </button>
-                        <button
-                            onClick={() => { setEntryType('income'); setForm(f => ({ ...f, category: '' })); }}
-                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'income'
-                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                                : 'text-slate-400 hover:text-white'
-                                }`}
-                        >
-                            <TrendingUp className="w-4 h-4" /> הכנסה
-                        </button>
-                    </div>
+                    {/* Type Toggle - Hide if editing */}
+                    {!editingId && (
+                        <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 w-max mb-6">
+                            <button
+                                onClick={() => { setEntryType('expense'); setForm(f => ({ ...f, category: '' })); }}
+                                className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'expense'
+                                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
+                                    : 'text-slate-400 hover:text-white'
+                                    }`}
+                            >
+                                <TrendingDown className="w-4 h-4" /> הוצאה
+                            </button>
+                            <button
+                                onClick={() => { setEntryType('income'); setForm(f => ({ ...f, category: '' })); }}
+                                className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all ${entryType === 'income'
+                                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                    : 'text-slate-400 hover:text-white'
+                                    }`}
+                            >
+                                <TrendingUp className="w-4 h-4" /> הכנסה
+                            </button>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {/* Title */}
@@ -707,8 +759,8 @@ export default function ProfitAndLossDashboard() {
                             disabled={saving}
                             className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:opacity-60 text-white px-8 py-3 rounded-xl font-black text-sm transition-all shadow-lg shadow-cyan-500/20"
                         >
-                            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                            {saving ? 'שומר...' : `שמור ${entryType === 'expense' ? 'הוצאה' : 'הכנסה'}`}
+                            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : (editingId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />)}
+                            {saving ? 'שומר...' : (editingId ? 'עדכן רשומה' : `שמור ${entryType === 'expense' ? 'הוצאה' : 'הכנסה'}`)}
                         </button>
                     </div>
                 </div>
@@ -796,18 +848,31 @@ export default function ProfitAndLossDashboard() {
                                                                             {item.timesMultiplied > 1 && <span className="text-xs text-slate-500 font-normal ml-2">(x{item.timesMultiplied} חוד')</span>}
                                                                         </td>
                                                                         <td className="py-3 text-right">
-                                                                            <button
-                                                                                onClick={async () => {
-                                                                                    if (!window.confirm('למחוק את ההוצאה?')) return;
-                                                                                    try {
-                                                                                        await deleteExpense(item.id);
-                                                                                        toast.success('ההוצאה נמחקה');
-                                                                                    } catch (e) { console.error(e); }
-                                                                                }}
-                                                                                className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all"
-                                                                            >
-                                                                                <Trash2 className="w-4 h-4" />
-                                                                            </button>
+                                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                                                <button
+                                                                                    onClick={() => handleEdit(item, 'expense')}
+                                                                                    className="text-slate-400 hover:text-cyan-400 p-1"
+                                                                                    title="ערוך"
+                                                                                >
+                                                                                    <Pencil className="w-4 h-4" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={async () => {
+                                                                                        if (!window.confirm('למחוק את ההוצאה?')) return;
+                                                                                        try {
+                                                                                            await deleteExpense(item.id);
+                                                                                            toast.success('ההוצאה נמחקה');
+                                                                                        } catch (e) { 
+                                                                                            console.error(e);
+                                                                                            toast.error('שגיאה במחיקה');
+                                                                                        }
+                                                                                    }}
+                                                                                    className="text-slate-400 hover:text-rose-400 p-1"
+                                                                                    title="מחק"
+                                                                                >
+                                                                                    <Trash2 className="w-4 h-4" />
+                                                                                </button>
+                                                                            </div>
                                                                         </td>
                                                                     </tr>
                                                                 ))}

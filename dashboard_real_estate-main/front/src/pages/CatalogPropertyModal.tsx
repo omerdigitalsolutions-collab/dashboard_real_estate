@@ -1,4 +1,5 @@
-import { X, MapPin, Bed, Maximize, Layers, Car, Wind, Shield, ArrowUpRight } from 'lucide-react';
+import { X, MapPin, Bed, Maximize, Layers, Car, Wind, Shield, ArrowUpRight, ChevronLeft, ChevronRight, Fullscreen, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface CatalogPropertyModalProps {
     property: any | null;
@@ -14,7 +15,41 @@ const AMENITY_ICONS: { key: string; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function CatalogPropertyModal({ property, agencyPhone, onClose }: CatalogPropertyModalProps) {
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+
     if (!property) return null;
+
+    const images = property.images || [];
+    const hasImages = images.length > 0;
+
+    // Keyboard navigation
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (isImageFullscreen) {
+                if (e.key === 'ArrowRight') {
+                    setActiveImageIndex(prev => (prev - 1 + images.length) % images.length);
+                } else if (e.key === 'ArrowLeft') {
+                    setActiveImageIndex(prev => (prev + 1) % images.length);
+                } else if (e.key === 'Escape') {
+                    setIsImageFullscreen(false);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isImageFullscreen, images.length]);
+
+    const nextImage = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setActiveImageIndex(prev => (prev + 1) % images.length);
+    };
+
+    const prevImage = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setActiveImageIndex(prev => (prev - 1 + images.length) % images.length);
+    };
 
     const displayAddress = [property.address, property.city].filter(Boolean).join(', ') || 'מיקום לא צוין';
     const activeAmenities = AMENITY_ICONS.filter(a => property[a.key]);
@@ -53,14 +88,54 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                     </button>
                 </div>
 
-                {/* Hero image */}
-                {property.images && property.images.length > 0 && (
-                    <div className="h-52 overflow-hidden">
+                {/* Hero image / Carousel */}
+                {hasImages ? (
+                    <div className="relative h-64 overflow-hidden group bg-slate-100">
                         <img
-                            src={property.images[0]}
+                            src={images[activeImageIndex]}
                             alt={displayAddress}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-all duration-500"
                         />
+                        
+                        {/* Overlay Controls */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
+                            <button
+                                onClick={() => setIsImageFullscreen(true)}
+                                className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white p-2 rounded-lg transition-colors"
+                            >
+                                <Fullscreen size={18} />
+                            </button>
+                        </div>
+
+                        {images.length > 1 && (
+                            <>
+                                <button
+                                    onClick={prevImage}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-black/30 hover:bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <button
+                                    onClick={nextImage}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-black/30 hover:bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+                                    {images.map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'bg-white w-5' : 'bg-white/40 w-1.5'}`}
+                                        />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                    <div className="h-48 bg-slate-50 flex flex-col items-center justify-center text-slate-300 gap-2 border-b border-slate-100">
+                        <ImageIcon size={40} />
+                        <span className="text-xs font-medium">אין תמונות להצגה</span>
                     </div>
                 )}
 
@@ -129,6 +204,53 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                     <div className="h-2" />
                 </div>
             </div>
+
+            {/* Fullscreen Image Lightbox */}
+            {isImageFullscreen && hasImages && (
+                <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col" dir="ltr">
+                    <div className="flex justify-end p-4">
+                        <button onClick={() => setIsImageFullscreen(false)} className="text-white/70 hover:text-white p-2 transition-colors">
+                            <X size={32} />
+                        </button>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center p-4">
+                        <img
+                            src={images[activeImageIndex]}
+                            alt="Fullscreen"
+                            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-all duration-300"
+                        />
+
+                        {/* Fullscreen Navigation */}
+                        {images.length > 1 && (
+                            <>
+                                <button
+                                    onClick={prevImage}
+                                    className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-16 sm:h-16 bg-white/5 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all group"
+                                >
+                                    <ChevronLeft size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                                <button
+                                    onClick={nextImage}
+                                    className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-16 sm:h-16 bg-white/5 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all group"
+                                >
+                                    <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-2 overflow-x-auto max-w-full px-4 scrollbar-hide">
+                                    {images.map((img, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setActiveImageIndex(i)}
+                                            className={`w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${i === activeImageIndex ? 'border-white' : 'border-transparent opacity-40 hover:opacity-100'}`}
+                                        >
+                                            <img src={img} alt={`Thumb ${i}`} className="w-full h-full object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
