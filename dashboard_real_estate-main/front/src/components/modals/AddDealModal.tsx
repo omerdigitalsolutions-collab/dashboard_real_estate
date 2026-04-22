@@ -72,7 +72,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
 
     // Derived helpers
     const displayPrice = propertyMode === 'select'
-        ? (properties.find(p => p.id === propertyId)?.price || 0)
+        ? (properties.find(p => p.id === propertyId)?.financials?.price || 0)
         : (parseFloat(newPropertyPrice) || 0);
 
     const base = propertyMode === 'none' 
@@ -145,7 +145,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                     type: 'buyer',
                     source: 'manual',
                     assignedAgentId: assignedAgentId || null
-                });
+                }) as { id: string };
                 finalBuyerId = buyerRef.id;
             }
 
@@ -158,19 +158,18 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                     type: 'seller',
                     source: 'manual',
                     assignedAgentId: assignedAgentId || null
-                });
+                }) as { id: string };
                 finalSellerId = sellerRef.id;
             }
 
             // 3. Create Property if needed
             if (propertyMode === 'create') {
                 finalPropertyId = await addProperty(userData.agencyId, {
-                    city: newPropertyCity,
-                    address: newPropertyAddress,
-                    price: parseFloat(newPropertyPrice) || 0,
-                    type: newPropertyType as 'sale' | 'rent',
-                    kind: 'דירה', // Default kind
-                    ...(assignedAgentId ? { agentId: assignedAgentId } : {})
+                    address: { city: newPropertyCity, fullAddress: `${newPropertyAddress} ${newPropertyCity}`.trim() },
+                    transactionType: newPropertyType === 'rent' ? 'rent' : 'forsale',
+                    propertyType: 'דירה',
+                    financials: { price: parseFloat(newPropertyPrice) || 0 },
+                    ...(assignedAgentId ? { management: { assignedAgentId } } : {})
                 });
             }
 
@@ -316,7 +315,7 @@ export default function AddDealModal({ isOpen, onClose, prefilledLead }: AddDeal
                                     <option value="" disabled>בחר נכס מהרשימה...</option>
                                     {properties.map(property => (
                                         <option key={property.id} value={property.id}>
-                                            {property.address} {property.price ? `- ₪${property.price.toLocaleString()}` : ''}
+                                            {property.address?.fullAddress} {property.financials?.price ? `- ₪${property.financials.price.toLocaleString()}` : ''}
                                         </option>
                                     ))}
                                 </select>

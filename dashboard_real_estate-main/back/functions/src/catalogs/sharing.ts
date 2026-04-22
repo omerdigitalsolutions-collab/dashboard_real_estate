@@ -31,8 +31,14 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
     const agencyDoc = await db.doc(`agencies/${agencyId}`).get();
     const agencyData = agencyDoc.data() ?? {};
     const agencyName: string = agencyData.agencyName || agencyData.name || '';
-    const agencyLogoUrl: string = agencyData.settings?.logoUrl || '';
-    const agencyPhone: string = agencyData.officePhone || agencyData.whatsappIntegration?.phoneNumber || '';
+    const agencyLogoUrl: string = agencyData.settings?.logoUrl || agencyData.logoUrl || '';
+    const callerPhone: string = callerDoc.data()?.phone || '';
+    const agencyPhone: string =
+        agencyData.officePhone ||
+        agencyData.billing?.ownerPhone ||
+        agencyData.whatsappIntegration?.phoneNumber ||
+        agencyData.phone ||
+        callerPhone || '';
 
     // ── Fetch Lead requirements ──────────────────────────────────────────────────
     let leadRequirements: Record<string, any> | null = null;

@@ -144,10 +144,9 @@ async function loadChatHistory(leadId, limit = 20, excludeDocId) {
 }
 // ─── findMatchingPropertiesForBot ─────────────────────────────────────────────
 async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
-    var _a;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
     const agencySnap = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
         .get();
     const agencyProps = agencySnap.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
@@ -171,10 +170,17 @@ async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
     const matches = [];
     for (const prop of all) {
         const mp = {
-            id: prop.id, city: prop.city, neighborhood: prop.neighborhood,
-            price: prop.price, rooms: prop.rooms, type: prop.type,
-            hasElevator: prop.hasElevator, hasParking: prop.hasParking,
-            hasBalcony: prop.hasBalcony, hasSafeRoom: prop.hasSafeRoom,
+            id: prop.id,
+            city: ((_b = prop.address) === null || _b === void 0 ? void 0 : _b.city) || prop.city,
+            neighborhood: ((_c = prop.address) === null || _c === void 0 ? void 0 : _c.neighborhood) || prop.neighborhood,
+            street: ((_d = prop.address) === null || _d === void 0 ? void 0 : _d.street) || prop.street,
+            price: (_f = (_e = prop.financials) === null || _e === void 0 ? void 0 : _e.price) !== null && _f !== void 0 ? _f : prop.price,
+            rooms: prop.rooms,
+            transactionType: prop.transactionType || prop.type || 'forsale',
+            hasElevator: (_h = (_g = prop.features) === null || _g === void 0 ? void 0 : _g.hasElevator) !== null && _h !== void 0 ? _h : prop.hasElevator,
+            hasParking: (_k = (_j = prop.features) === null || _j === void 0 ? void 0 : _j.hasParking) !== null && _k !== void 0 ? _k : prop.hasParking,
+            hasBalcony: (_m = (_l = prop.features) === null || _l === void 0 ? void 0 : _l.hasBalcony) !== null && _m !== void 0 ? _m : prop.hasBalcony,
+            hasMamad: (_p = (_o = prop.features) === null || _o === void 0 ? void 0 : _o.hasMamad) !== null && _p !== void 0 ? _p : prop.hasSafeRoom,
         };
         const result = (0, matchingEngine_1.evaluateMatch)(mp, requirements);
         if (result)
@@ -194,7 +200,12 @@ async function updateChatState(leadId, state, extra = {}) {
 // ─── sendBotMessage ───────────────────────────────────────────────────────────
 async function sendBotMessage(integration, customerPhone, leadId, text) {
     const isSent = await (0, whatsappService_1.sendWhatsAppMessage)(integration, customerPhone, text);
-    console.log(`[WeBot] Reply ${isSent ? '✅' : '❌'} to ${customerPhone}`);
+    if (!isSent) {
+        console.error(`[WeBot] ❌ Failed to send message to ${customerPhone} — instance=${integration.idInstance} text_preview="${text.substring(0, 50)}"`);
+    }
+    else {
+        console.log(`[WeBot] ✅ Sent to ${customerPhone}`);
+    }
     if (isSent) {
         await db.collection(`leads/${leadId}/messages`).add({
             text,
@@ -245,11 +256,16 @@ async function notifyAgentOrAdmin(targetPhone, message, creds) {
 }
 // ─── createCRMNotification ────────────────────────────────────────────────────
 async function createCRMNotification(agencyId, leadId, leadName, type, actionType, details) {
-    await db.collection('notifications').add({
-        agencyId, leadId, leadName, type, actionType, details,
-        isRead: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    try {
+        await db.collection('notifications').add({
+            agencyId, leadId, leadName, type, actionType, details,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    }
+    catch (err) {
+        console.error('[WeBot] createCRMNotification failed:', err);
+    }
 }
 // ─── findAgentPhone / findAdminPhone ─────────────────────────────────────────
 async function findAgentPhone(agencyId, assignedAgentId) {
@@ -290,7 +306,8 @@ async function extractSellerInfo(message, geminiApiKey) {
             propertyType: parsed.propertyType || undefined,
         };
     }
-    catch (_a) {
+    catch (err) {
+        console.warn('[WeBot] extractSellerInfo failed (Gemini/parse error):', err);
         return {};
     }
 }
@@ -305,7 +322,8 @@ async function extractTimePreference(message, geminiApiKey) {
         const parsed = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
         return parsed.timeText || message.trim();
     }
-    catch (_a) {
+    catch (err) {
+        console.warn('[WeBot] extractTimePreference failed (Gemini/parse error):', err);
         return message.trim();
     }
 }
@@ -313,23 +331,22 @@ async function extractTimePreference(message, geminiApiKey) {
 async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState = 'IDLE') {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // RAG: active properties for this agency
-    const propSnap = await db.collection('properties')
-        .where('agencyId', '==', agencyId)
+    const propSnap = await db
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
-        .orderBy('createdAt', 'desc')
         .limit(15)
         .get();
     const ragProperties = propSnap.docs.map(doc => {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const d = doc.data();
         return {
             id: doc.id,
-            title: d.title || d.propertyType || 'נכס',
-            address: d.street || d.address || d.neighborhood || '',
-            city: d.city || '',
-            rooms: (_a = d.rooms) !== null && _a !== void 0 ? _a : 0,
-            price: (_b = d.price) !== null && _b !== void 0 ? _b : 0,
-            description: d.description || '',
+            title: d.propertyType || 'נכס',
+            address: ((_a = d.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || ((_b = d.address) === null || _b === void 0 ? void 0 : _b.street) || '',
+            city: ((_c = d.address) === null || _c === void 0 ? void 0 : _c.city) || '',
+            rooms: (_d = d.rooms) !== null && _d !== void 0 ? _d : 0,
+            price: (_g = (_f = (_e = d.financials) === null || _e === void 0 ? void 0 : _e.price) !== null && _f !== void 0 ? _f : d.price) !== null && _g !== void 0 ? _g : 0,
+            description: ((_h = d.management) === null || _h === void 0 ? void 0 : _h.descriptions) || '',
         };
     });
     const agencyName = agencyData.agencyName || agencyData.name || 'הסוכנות שלנו';

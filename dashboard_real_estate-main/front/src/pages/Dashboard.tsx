@@ -310,6 +310,7 @@ export default function Dashboard() {
             */}
       <div dir="ltr" ref={gridWrapperRef} className="w-full">
         <ResponsiveGridLayout
+          {...({ isDraggable: isEditing && !isMobile } as any)}
           width={gridWidth}
           layouts={{
             lg: memoizedLayout,
@@ -323,7 +324,6 @@ export default function Dashboard() {
           rowHeight={80}
           margin={[16, 16]}
           containerPadding={[0, 0]}
-          isDraggable={isEditing && !isMobile}
           isResizable={isEditing && !isMobile}
           onLayoutChange={(layout: any) => handleLayoutChange(layout)}
         >

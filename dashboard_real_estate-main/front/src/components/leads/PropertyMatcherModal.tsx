@@ -96,27 +96,27 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
             )}
 
             <div className="w-20 h-20 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden relative border border-slate-100">
-                {(property.imageUrls && property.imageUrls.length > 0) || (property.images && property.images.length > 0) ? (
+                {(property.media?.images && property.media.images.length > 0) ? (
                     <img
-                        src={(property.imageUrls && property.imageUrls.length > 0) ? property.imageUrls[0] : (property.images && property.images[0])}
-                        alt={property.address}
+                        src={property.media.images[0]}
+                        alt={property.address?.fullAddress}
                         className="w-full h-full object-cover"
                     />
                 ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100" />
                 )}
-                {property.neighborhood && (
+                {property.address?.neighborhood && (
                     <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] py-0.5 text-center font-bold">
-                        {property.neighborhood}
+                        {property.address.neighborhood}
                     </div>
                 )}
             </div>
 
             <div className="flex-1 flex flex-col justify-center">
                 <h3 className="font-bold text-slate-800 leading-tight mb-1 pr-6 text-sm">
-                    {(property.address || 'כתובת חסויה')}{property.city ? `, ${property.city}` : ''}
+                    {(property.address?.fullAddress || 'כתובת חסויה')}{property.address?.city ? `, ${property.address.city}` : ''}
                 </h3>
-                <p className="text-sm font-semibold text-blue-600 mb-2">₪{property.price.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-blue-600 mb-2">₪{property.financials?.price?.toLocaleString()}</p>
                 <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
                     {property.rooms && (
                         <span className="flex items-center gap-1">
@@ -124,7 +124,7 @@ function PropertyThumb({ property, selected, onToggle, onRemove, onQuickShare, o
                             {property.rooms} חד׳
                         </span>
                     )}
-                    {property.type === 'rent' ? (
+                    {property.transactionType === 'rent' ? (
                         <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">להשכרה</span>
                     ) : (
                         <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">למכירה</span>
@@ -297,8 +297,8 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
         const q = searchQuery.trim().toLowerCase();
         return allProperties.filter(p =>
             !q ||
-            p.address.toLowerCase().includes(q) ||
-            (p.city ?? '').toLowerCase().includes(q)
+            (p.address?.fullAddress ?? '').toLowerCase().includes(q) ||
+            (p.address?.city ?? '').toLowerCase().includes(q)
         );
     }, [allProperties, searchQuery]);
 
@@ -334,7 +334,7 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
 
     const handleQuickShare = (prop: Property) => {
         const url = `https://homer.management/properties?id=${prop.id}`;
-        const waMsg = encodeURIComponent(`היי ${lead.name}, הנה פרטים על נכס מעניין ב${prop.city}: ${url}`);
+        const waMsg = encodeURIComponent(`היי ${lead.name}, הנה פרטים על נכס מעניין ב${prop.address?.city ?? ''}: ${url}`);
         window.open(`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}?text=${waMsg}`, '_blank', 'noopener,noreferrer');
     };
 
@@ -704,15 +704,15 @@ export default function PropertyMatcherModal({ lead, allProperties, onClose, onS
                                                 className="bg-white border border-dashed border-slate-200 hover:border-blue-400 rounded-2xl p-4 flex items-center gap-3 cursor-pointer transition-all hover:shadow-sm group"
                                             >
                                                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden">
-                                                    {p.imageUrls?.[0] ? (
-                                                        <img src={p.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                                                    {p.media?.images?.[0] ? (
+                                                        <img src={p.media.images[0]} alt="" className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full bg-slate-200" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-slate-700 truncate">{p.address}</p>
-                                                    <p className="text-xs text-blue-600 font-bold">₪{p.price.toLocaleString()}</p>
+                                                    <p className="text-sm font-semibold text-slate-700 truncate">{p.address?.fullAddress}</p>
+                                                    <p className="text-xs text-blue-600 font-bold">₪{p.financials?.price?.toLocaleString()}</p>
                                                 </div>
                                                 <Plus size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
                                             </div>

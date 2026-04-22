@@ -108,29 +108,34 @@ async function handlePropertyRouting(
   if (words.length === 0) return false;
 
   const propSnap = await db
-    .collection('properties')
-    .where('agencyId', '==', agencyId)
+    .collection('agencies').doc(agencyId).collection('properties')
     .where('status', '==', 'active')
     .limit(50)
     .get();
 
   const matched = propSnap.docs.find((doc) => {
     const d = doc.data();
-    const haystack = `${d.address || ''} ${d.street || ''} ${d.city || ''} ${d.neighborhood || ''}`.toLowerCase();
+    const addrObj = d.address;
+    const haystack = [
+      typeof addrObj === 'object' ? addrObj?.fullAddress : addrObj,
+      addrObj?.street,
+      addrObj?.city,
+      addrObj?.neighborhood,
+    ].filter(Boolean).join(' ').toLowerCase();
     return words.some((w) => haystack.includes(w.toLowerCase()));
   });
 
   if (!matched) return false;
 
   const prop = matched.data();
-  const assignedAgentId: string | null = prop.agentId || null;
+  const assignedAgentId: string | null = prop.management?.assignedAgentId || prop.agentId || null;
   const toIntl = (p: string) => `${p.replace(/^0/, '972')}@c.us`;
 
   if (prop.isExclusive && assignedAgentId) {
     const agentDoc = await db.collection('users').doc(assignedAgentId).get();
     const agentPhone: string | null = agentDoc.data()?.phone || agentDoc.data()?.phoneNumber || null;
     if (agentPhone) {
-      const desc = prop.address || prop.city || 'נכס';
+      const desc = prop.address?.fullAddress || prop.address?.city || prop.city || 'נכס';
       await sendDirect(
         creds,
         toIntl(agentPhone),
@@ -157,7 +162,7 @@ async function handlePropertyRouting(
       await sendDirect(
         creds,
         toIntl(adminPhone),
-        `🏠 *ליד חדש מהבוט*\nטלפון: ${phone}\nשאל על: ${prop.address || prop.city || 'נכס'}\n\nהודעה:\n"${text}"`,
+        `🏠 *ליד חדש מהבוט*\nטלפון: ${phone}\nשאל על: ${prop.address?.fullAddress || prop.address?.city || prop.city || 'נכס'}\n\nהודעה:\n"${text}"`,
       );
     }
   }
@@ -211,17 +216,20 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
     await writeAuditLog(phone, agencyId, 'inbound', sanitized);
   }
 
-  // 5. Security session TTL
+  // 5. Security session TTL (rolling 24h — expires 24h after last message, not after creation)
   const session = await getOrCreateSession(phone, agencyId);
+  const lastActive = session.lastMessageAt
+    ? (session.lastMessageAt as admin.firestore.Timestamp).toMillis()
+    : 0;
   const isExpired =
     session.status === 'expired' ||
-    (session.expiresAt && (session.expiresAt as admin.firestore.Timestamp).toMillis() < Date.now());
+    (Date.now() - lastActive > SESSION_TTL_MS);
 
   if (isExpired) {
     const agencyDoc = await db.collection('agencies').doc(agencyId).get();
     const agencyPhone = agencyDoc.data()?.phone || agencyDoc.data()?.phoneNumber || '';
     await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);
-    await db.collection('whatsapp_sessions').doc(phone).update({ status: 'expired' });
+    await db.collection('whatsapp_sessions').doc(phone).delete();
     return;
   }
 

@@ -45,6 +45,11 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [isSearching, setIsSearching] = useState(false);
     const suggestionsRef = useRef<HTMLDivElement>(null);
 
+    const [desiredNeighborhoods, setDesiredNeighborhoods] = useState<string[]>([]);
+    const [neighborhoodInput, setNeighborhoodInput] = useState('');
+    const [desiredStreets, setDesiredStreets] = useState<string[]>([]);
+    const [streetInput, setStreetInput] = useState('');
+
     const [maxBudget, setMaxBudget] = useState('');
     const [transactionType, setTransactionType] = useState<'sale' | 'rent'>('sale');
     const [urgency, setUrgency] = useState<'immediate' | '1-3_months' | '3-6_months' | 'flexible'>('flexible');
@@ -83,7 +88,10 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
 
     const resetForm = () => {
         setName(''); setPhone(''); setSource('אחר'); setLeadType('buyer'); setActiveFormTab('personal');
-        setDesiredCities([]); setCityQuery(''); setSuggestions([]); setMaxBudget(''); setTransactionType('sale'); setUrgency('flexible');
+        setDesiredCities([]); setCityQuery(''); setSuggestions([]);
+        setDesiredNeighborhoods([]); setNeighborhoodInput('');
+        setDesiredStreets([]); setStreetInput('');
+        setMaxBudget(''); setTransactionType('sale'); setUrgency('flexible');
         setMinRooms(''); setMaxRooms(''); setMinSizeSqf(''); setFloorMin(''); setFloorMax(''); setPropertyKind([]);
         setMustHaveElevator(false); setMustHaveParking(false); setMustHaveBalcony(false); setMustHaveSafeRoom(false);
         setCondition('any');
@@ -178,13 +186,15 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                     assignedAgentId: assignedTo === '' ? null : assignedTo,
                     requirements: {
                         desiredCity: desiredCities.length > 0 ? desiredCities : [],
+                        desiredNeighborhoods: desiredNeighborhoods.length > 0 ? desiredNeighborhoods : undefined,
+                        desiredStreet: desiredStreets.length > 0 ? desiredStreets : undefined,
                         maxBudget: maxBudget ? parseFloat(maxBudget) : null,
                         minRooms: minRooms ? parseInt(minRooms) : null,
                         maxRooms: maxRooms ? parseInt(maxRooms) : null,
                         minSizeSqf: minSizeSqf ? parseInt(minSizeSqf) : null,
                         floorMin: floorMin ? parseInt(floorMin) : null,
                         floorMax: floorMax ? parseInt(floorMax) : null,
-                        dealType: transactionType,
+                        transactionType,
                         propertyType: propertyKind,
                         mustHaveElevator,
                         mustHaveParking,
@@ -380,8 +390,9 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         <MapPin size={12} className="text-blue-500" />
                                         מיקום ותקציב
                                     </div>
-                                    <div className="relative" ref={suggestionsRef}>
-                                        <label className={labelCls}>אזורים מבוקשים (עיר, שכונה או רחוב)</label>
+                                    {/* City — Google Maps */}
+                                <div className="relative" ref={suggestionsRef}>
+                                        <label className={labelCls}>עיר (חיפוש Google Maps)</label>
                                         <div className="relative">
                                             <input
                                                 value={cityQuery}
@@ -389,12 +400,10 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') {
                                                         e.preventDefault();
-                                                        if (cityQuery.trim()) {
-                                                            addCityTag(cityQuery.trim());
-                                                        }
+                                                        if (cityQuery.trim()) addCityTag(cityQuery.trim());
                                                     }
                                                 }}
-                                                placeholder="חפש עיר, שכונה... (לחץ Enter להוספה)"
+                                                placeholder="חפש עיר... (לחץ Enter להוספה)"
                                                 className={inputCls}
                                                 autoComplete="off"
                                             />
@@ -404,34 +413,91 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                                 </div>
                                             )}
                                         </div>
-
-                                        {/* Suggestions Dropdown */}
                                         {suggestions.length > 0 && (
                                             <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                                                 {suggestions.map((s, i) => {
                                                     const mainText = s.structured_formatting?.main_text || s.display_name || s.description || '';
                                                     return (
-                                                        <li
-                                                            key={i}
-                                                            onClick={() => addCityTag(mainText)}
-                                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
-                                                        >
+                                                        <li key={i} onClick={() => addCityTag(mainText)}
+                                                            className="px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors">
                                                             {mainText}
                                                         </li>
                                                     );
                                                 })}
                                             </ul>
                                         )}
-
-                                        {/* Activity Chips */}
                                         {desiredCities.length > 0 && (
                                             <div className="flex flex-wrap gap-1.5 mt-2.5">
                                                 {desiredCities.map(city => (
                                                     <span key={city} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-100 animate-in zoom-in-95">
                                                         {city}
-                                                        <button type="button" onClick={() => removeCityTag(city)} className="hover:text-red-500 transition-colors">
-                                                            <X size={12} />
-                                                        </button>
+                                                        <button type="button" onClick={() => removeCityTag(city)} className="hover:text-red-500 transition-colors"><X size={12} /></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Neighborhood — free text */}
+                                    <div>
+                                        <label className={labelCls}>שכונה (טקסט חופשי, עד 15 תווים)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                value={neighborhoodInput}
+                                                onChange={e => setNeighborhoodInput(e.target.value.slice(0, 15))}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const val = neighborhoodInput.trim();
+                                                        if (val && !desiredNeighborhoods.includes(val)) {
+                                                            setDesiredNeighborhoods(prev => [...prev, val]);
+                                                        }
+                                                        setNeighborhoodInput('');
+                                                    }
+                                                }}
+                                                placeholder="לדוג׳ רמת אביב (Enter להוספה)"
+                                                className={inputCls}
+                                                maxLength={15}
+                                            />
+                                        </div>
+                                        {desiredNeighborhoods.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                {desiredNeighborhoods.map(n => (
+                                                    <span key={n} className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-100 animate-in zoom-in-95">
+                                                        {n}
+                                                        <button type="button" onClick={() => setDesiredNeighborhoods(prev => prev.filter(x => x !== n))} className="hover:text-red-500 transition-colors"><X size={12} /></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Street — free text */}
+                                    <div>
+                                        <label className={labelCls}>רחוב (טקסט חופשי, עד 15 תווים)</label>
+                                        <input
+                                            value={streetInput}
+                                            onChange={e => setStreetInput(e.target.value.slice(0, 15))}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = streetInput.trim();
+                                                    if (val && !desiredStreets.includes(val)) {
+                                                        setDesiredStreets(prev => [...prev, val]);
+                                                    }
+                                                    setStreetInput('');
+                                                }
+                                            }}
+                                            placeholder="לדוג׳ הרצל (Enter להוספה)"
+                                            className={inputCls}
+                                            maxLength={15}
+                                        />
+                                        {desiredStreets.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                                {desiredStreets.map(s => (
+                                                    <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold border border-purple-100 animate-in zoom-in-95">
+                                                        {s}
+                                                        <button type="button" onClick={() => setDesiredStreets(prev => prev.filter(x => x !== s))} className="hover:text-red-500 transition-colors"><X size={12} /></button>
                                                     </span>
                                                 ))}
                                             </div>

@@ -10,7 +10,7 @@ interface AddTaskModalProps {
     isOpen: boolean;
     onClose: () => void;
     leads?: { id: string, name: string }[];
-    properties?: { id: string, address: string }[];
+    properties?: { id: string, address: string | { fullAddress?: string; city?: string } }[];
     agents?: AppUser[];
 }
 
@@ -78,7 +78,8 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                 if (relatedEntityType === 'lead') {
                     entityName = leads.find(l => l.id === relatedEntityId)?.name || '';
                 } else if (relatedEntityType === 'property') {
-                    entityName = properties.find(p => p.id === relatedEntityId)?.address || '';
+                    const addr = properties.find(p => p.id === relatedEntityId)?.address;
+                    entityName = typeof addr === 'string' ? addr : (addr?.fullAddress || addr?.city || '');
                 }
 
                 taskData.relatedTo = {
@@ -272,7 +273,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                                     >
                                         <option value="">בחירת נכס מרשימה...</option>
                                         {properties.map(p => (
-                                            <option key={p.id} value={p.id}>{p.address}</option>
+                                            <option key={p.id} value={p.id}>{typeof p.address === 'string' ? p.address : (p.address?.fullAddress || p.address?.city || p.id)}</option>
                                         ))}
                                     </select>
                                 )}

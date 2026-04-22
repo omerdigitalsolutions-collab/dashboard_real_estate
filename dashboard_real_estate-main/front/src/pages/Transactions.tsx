@@ -63,8 +63,8 @@ export default function Transactions() {
         const lead = leads.find(l => l.id === d.leadId);
         const searchLower = search.toLowerCase();
         return (
-          prop?.address?.toLowerCase().includes(searchLower) ||
-          prop?.city?.toLowerCase().includes(searchLower) ||
+          prop?.address?.fullAddress?.toLowerCase().includes(searchLower) ||
+          prop?.address?.city?.toLowerCase().includes(searchLower) ||
           lead?.name?.toLowerCase().includes(searchLower) ||
           lead?.phone?.includes(search)
         );
@@ -131,7 +131,7 @@ export default function Transactions() {
     };
     const getPropertyDetails = (propertyId: string) => {
       const match = properties.find(p => p.id === propertyId);
-      return match ? `${match.city || ''}, ${match.address || ''}`.replace(/^, |, $/g, '').trim() : '---';
+      return match ? `${match.address?.city || ''}, ${match.address?.fullAddress || ''}`.replace(/^, |, $/g, '').trim() : '---';
     };
 
     const csvData = (deals as any[]).map(deal => {
@@ -141,7 +141,7 @@ export default function Transactions() {
       const agentLookupId = deal.agentId || deal.createdBy;
       const agentName = agentLookupId ? getAgentName(agentLookupId) : '---';
 
-      const propPrice = properties.find(p => p.id === deal.propertyId)?.price || 0;
+      const propPrice = properties.find(p => p.id === deal.propertyId)?.financials?.price || 0;
 
       const row = [
         deal.id || deal.propertyId || '---',

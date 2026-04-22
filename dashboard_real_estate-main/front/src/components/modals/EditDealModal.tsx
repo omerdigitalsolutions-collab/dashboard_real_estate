@@ -46,10 +46,10 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
 
             // Try to reverse-calculate the commission percentage based on the property price if available
             const prop = properties.find(p => p.id === deal.propertyId);
-            if (prop && prop.price > 0 && deal.projectedCommission > 0) {
+            if (prop && (prop.financials?.price ?? 0) > 0 && deal.projectedCommission > 0) {
                 const isVat = deal.isVatIncluded || false;
                 const base = isVat ? deal.projectedCommission : (deal.projectedCommission / 1.18);
-                const perc = (base / prop.price) * 100;
+                const perc = (base / (prop.financials?.price ?? 1)) * 100;
                 setCommissionPercentage(perc.toFixed(2));
             } else {
                 setCommissionPercentage('2'); // Fallback default
@@ -64,7 +64,7 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
     }, [isOpen, deal, properties]);
 
     // Derived helpers
-    const displayPrice = properties.find(p => p.id === propertyId)?.price || 0;
+    const displayPrice = properties.find(p => p.id === propertyId)?.financials?.price || 0;
     const baseValue = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
     const calculatedCommission = includeVat ? baseValue : baseValue * 1.18;
     const netCommission = includeVat ? baseValue / 1.18 : baseValue;
@@ -221,7 +221,7 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
                             <option value="" disabled>בחר נכס מהרשימה...</option>
                             {properties.map(property => (
                                 <option key={property.id} value={property.id}>
-                                    {property.address} {property.price ? `- ₪${property.price.toLocaleString()}` : ''}
+                                    {property.address?.fullAddress} {property.financials?.price ? `- ₪${property.financials.price.toLocaleString()}` : ''}
                                 </option>
                             ))}
                         </select>

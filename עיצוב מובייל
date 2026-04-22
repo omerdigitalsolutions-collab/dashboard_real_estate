@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react';
+import { Menu, X, Plus, Bell } from 'lucide-react';
+// ייבוא הרכיבים שלך (הנחתי את השמות לפי הסטנדרט, עדכן בהתאם לפרויקט)
+import Sidebar from './Sidebar'; 
+import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user } = useAuth(); // או כל דרך שבה אתה שולף את פרטי המשתמש
+  const location = useLocation();
+
+  // סגירת התפריט אוטומטית במובייל בעת מעבר בין עמודים (שינוי Route)
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // מניעת גלילה של המסך האחורי כשהתפריט פתוח
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [isMobileMenuOpen]);
+
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden" dir="rtl">
+      
+      {/* ========================================
+        1. Mobile Backdrop (מסך החשכה)
+        ========================================
+      */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* ========================================
+        2. Sidebar (תפריט צד)
+        ========================================
+        במובייל: צף מעל המסך מימין. במסכים גדולים: מקובע למקומו.
+      */}
+      <aside 
+        className={`
+          fixed inset-y-0 right-0 z-50 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col
+          md:relative md:translate-x-0 md:shadow-none md:border-l md:border-gray-200
+          ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
+        `}
+      >
+        {/* כפתור סגירה פנימי למובייל בלבד */}
+        <div className="flex items-center justify-between p-4 md:hidden border-b border-gray-100">
+          <span className="font-bold text-slate-800 text-lg">תפריט</span>
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* כאן יושב רכיב ה-Sidebar האמיתי שלך שמכיל את הלינקים */}
+        <div className="flex-1 overflow-y-auto">
+           <Sidebar />
+        </div>
+      </aside>
+
+      {/* ========================================
+        3. Main Content Wrapper
+        ========================================
+      */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* ========================================
+          4. Top Header (הדר עליון)
+          ========================================
+        */}
+        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sm:px-6 z-30">
+          
+          {/* צד ימין של ההדר: כפתור תפריט למובייל + כותרת/לוגו */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 -mr-2 text-gray-600 hover:bg-gray-100 rounded-lg md:hidden"
+            >
+              <Menu size={24} />
+            </button>
+            
+            {/* נסתיר את שם הסוכנות במסכים ממש קטנים כדי לחסוך מקום */}
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-bold text-slate-800">
+                {user?.agencyName || 'hOMER CRM'}
+              </h1>
+            </div>
+          </div>
+
+          {/* צד שמאל של ההדר: כפתור הוספה, התראות ופרופיל */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            
+            {/* כפתור הוספה מהירה (פלוס) */}
+            <button className="flex items-center justify-center bg-blue-600 text-white p-2 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+              <Plus size={20} />
+              <span className="hidden sm:inline-block mr-2 font-medium">הוסף חדש</span>
+            </button>
+
+            {/* התראות */}
+            <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors relative">
+              <Bell size={20} />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+            </button>
+
+            {/* תמונת פרופיל (נסתיר את השם במובייל) */}
+            <div className="flex items-center gap-2 border-r pr-4 ml-1 sm:ml-0 border-gray-200">
+               <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold overflow-hidden border border-gray-300">
+                 {user?.photoURL ? (
+                   <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                 ) : (
+                   user?.displayName?.charAt(0) || 'U'
+                 )}
+               </div>
+               <span className="hidden md:block text-sm font-medium text-gray-700">
+                 {user?.displayName}
+               </span>
+            </div>
+
+          </div>
+        </header>
+
+        {/* ========================================
+          5. Page Content (תוכן העמוד)
+          ========================================
+        */}
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardLayout; 
+
+
+הקוד המעודכן ל-Leads.tsx
+TypeScript
+import React, { useState } from 'react';
+import { Plus, Search, Filter, Phone, MapPin, MoreVertical, Upload } from 'lucide-react';
+// import { useLeads } from '../hooks/useLeads'; 
+
+const Leads = () => {
+  // const { leads, loading } = useLeads();
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // נתוני דמה להמחשה
+  const mockLeads = [
+    { id: '1', name: 'יוסי כהן', phone: '050-1234567', interest: 'דירת 5 חדרים', location: 'תל אביב, צפון ישן', status: 'חדש', budget: '₪4.5M' },
+    { id: '2', name: 'מיכל ישראלי', phone: '052-9876543', interest: 'פנטהאוז להשקעה', location: 'רמת גן', status: 'במשא ומתן', budget: '₪3.2M' },
+  ];
+
+  return (
+    <div className="relative min-h-[calc(100vh-4rem)] pb-20 md:pb-0">
+      
+      {/* ========================================
+        1. Header & Filters (מותאם למובייל)
+        ======================================== */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">ניהול לידים</h1>
+          <p className="text-gray-500 text-sm">נהל את כל הלקוחות והמתעניינים שלך במקום אחד</p>
+        </div>
+
+        {/* פעולות ראשיות בדסקטופ (יוסתר במובייל לטובת כפתור צף) */}
+        <div className="hidden md:flex gap-3">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50">
+            <Upload size={18} />
+            ייבוא לידים
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            <Plus size={18} />
+            ליד חדש
+          </button>
+        </div>
+      </div>
+
+      {/* חיפוש ופילטרים - נגלל אופקית במובייל */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="חיפוש לפי שם, טלפון או נכס..." 
+              className="w-full pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+          
+          {/* פילטרים מהירים - גלילה אופקית (Horizontal Scroll) במובייל */}
+          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-auto">
+            {['הכל', 'חדשים', 'בטיפול', 'במשא ומתן', 'סגורים'].map(status => (
+              <button key={status} className="whitespace-nowrap px-4 py-1.5 rounded-full border border-gray-200 bg-gray-50 text-sm font-medium text-gray-600 hover:border-blue-500 hover:text-blue-600 focus:bg-blue-50 focus:border-blue-500 focus:text-blue-700 transition-colors">
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================
+        2. Desktop View (Table) - מוסתר במובייל
+        ======================================== */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full text-right">
+          <thead className="bg-slate-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-sm font-semibold text-gray-600">שם הלקוח</th>
+              <th className="px-6 py-3 text-sm font-semibold text-gray-600">טלפון</th>
+              <th className="px-6 py-3 text-sm font-semibold text-gray-600">מתעניין ב...</th>
+              <th className="px-6 py-3 text-sm font-semibold text-gray-600">סטטוס</th>
+              <th className="px-6 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {mockLeads.map(lead => (
+              <tr key={lead.id} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                <td className="px-6 py-4 font-medium text-slate-800">{lead.name}</td>
+                <td className="px-6 py-4 text-gray-600" dir="ltr">{lead.phone}</td>
+                <td className="px-6 py-4 text-gray-600">{lead.interest}</td>
+                <td className="px-6 py-4">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {lead.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-left">
+                  <button className="text-gray-400 hover:text-gray-600"><MoreVertical size={20} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ========================================
+        3. Mobile View (Cards) - מוסתר בדסקטופ
+        ======================================== */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {mockLeads.map(lead => (
+          <div key={lead.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">{lead.name}</h3>
+                <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {lead.status}
+                </span>
+              </div>
+              <button className="text-gray-400 hover:bg-gray-100 p-1 rounded-full">
+                <MoreVertical size={20} />
+              </button>
+            </div>
+            
+            <div className="flex flex-col gap-2 mt-2 pt-3 border-t border-gray-50 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <Phone size={16} className="text-blue-500" />
+                <span dir="ltr">{lead.phone}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Search size={16} className="text-orange-500" />
+                <span>{lead.interest} • עד {lead.budget}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin size={16} className="text-green-500" />
+                <span>{lead.location}</span>
+              </div>
+            </div>
+            
+            {/* כפתור פעולה מהיר במובייל לכל כרטיסייה */}
+            <div className="mt-2 pt-2 flex gap-2">
+              <a href={`https://wa.me/972${lead.phone.replace(/\D/g, '').substring(1)}`} target="_blank" rel="noreferrer" className="flex-1 bg-green-50 text-green-700 py-2 rounded-lg text-center font-medium text-sm hover:bg-green-100 transition-colors">
+                שלח וואטסאפ
+              </a>
+              <button className="flex-1 bg-slate-50 text-slate-700 py-2 rounded-lg text-center font-medium text-sm hover:bg-slate-100 transition-colors">
+                פרטים מלאים
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ========================================
+        4. Mobile Floating Action Button (FAB)
+        ======================================== */}
+      {/* בממשקים בעברית (RTL), נהוג לשים את כפתור הפעולה בצד שמאל למטה */}
+      <button className="md:hidden fixed bottom-6 left-6 w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all z-40">
+        <Plus size={28} />
+      </button>
+
+    </div>
+  );
+};
+
+export default Leads;
+מה שחשוב לקחת מכאן לארכיטקטורה:
+הסתרות באמצעות Tailwind: התגים hidden md:block ו-md:hidden מבצעים את המעבר המושלם בין הטבלה לכרטיסיות בלי שורת JS אחת שמאזינה לשינוי גודל מסך. זה סופר יעיל (Performant).
+
+עיצוב הכרטיסייה למובייל: שים לב שהוספתי בכרטיסיית המובייל כפתורי פעולה מהירים בתחתית (כמו לשלוח ווצאפ ישירות מתוך הרשימה). זה קריטי לסוכן שמקבל ליד כשהוא נוהג או בשטח.
+
+ה-FAB (כפתור ההוספה הצף): קיבעתי אותו שמאלה למטה (left-6) כדי להתאים ל-RTL. כמו כן הוספתי pb-20 (Padding Bottom) לקונטיינר הראשי במובייל, כדי שכשתגלול עד סוף הרשימה, הכפתור הצף לא יסתיר את הליד האחרון.
+
+אופטימיזציה לטקסט (dir="ltr"): הוספתי הגדרת dir="ltr" במקומות שבהם מופיע מספר טלפון, כדי למנוע את הבעיה הנפוצה שבה המקף (-) קופץ לצד הלא נכון של המספר במסכים בעברית.
+
+שנעבור לשלב הבא בתוכנית (התאמת ה-Dashboard.tsx והווידג'טים למסכי מובייל)?
+
+
+
+
+npm run dev --prefix frontֿֿֿ
+
+
+cd dashboard_real_estate-main && npm run front

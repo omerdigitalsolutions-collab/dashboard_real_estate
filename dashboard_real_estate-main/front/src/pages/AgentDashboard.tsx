@@ -200,7 +200,7 @@ function AgentDealsChart({ deals, agencySettings }: { deals: Deal[]; agencySetti
                         </Pie>
                         <Tooltip
                             contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: 12, color: '#fff', fontSize: 12 }}
-                            formatter={(v: any, name: string) => [v + ' עסקאות', name]}
+                            formatter={(v: any, name: string | undefined) => [v + ' עסקאות', name ?? '']}
                         />
                     </PieChart>
                 </ResponsiveContainer>
@@ -270,7 +270,7 @@ function AgentLeadsChart({ leads }: { leads: Lead[] }) {
 
 export default function AgentDashboard() {
     const { userData } = useAuth();
-    const { deals, leads, properties, agencySettings, loading } = useLiveDashboardData();
+    const { deals, leads, properties, tasks, agencySettings, loading } = useLiveDashboardData();
     const { data: agents } = useAgents();
 
     const uid = userData?.uid;
@@ -278,7 +278,7 @@ export default function AgentDashboard() {
     // Filter all data to this agent only
     const myDeals = useMemo(() => deals.filter(d => d.createdBy === uid || d.agentId === uid), [deals, uid]);
     const myLeads = useMemo(() => leads.filter(l => l.assignedAgentId === uid), [leads, uid]);
-    const myProperties = useMemo(() => properties.filter(p => p.agentId === uid && !p.isGlobalCityProperty), [properties, uid]);
+    const myProperties = useMemo(() => properties.filter(p => p.management?.assignedAgentId === uid && !p.isGlobalCityProperty), [properties, uid]);
 
     // KPIs
     const totalPotential = useMemo(() => myDeals.filter(d => d.stage !== 'won').reduce((s, d) => s + (d.projectedCommission || 0), 0), [myDeals]);
@@ -342,7 +342,7 @@ export default function AgentDashboard() {
                     <AgentRevenueChart deals={myDeals} />
                 </div>
                 <div>
-                    <TaskDashboardWidget />
+                    <TaskDashboardWidget tasks={tasks} onAddClick={() => {}} />
                 </div>
             </div>
 
@@ -354,7 +354,7 @@ export default function AgentDashboard() {
                         הנכסים שלי במפה
                     </h2>
                     <div style={{ height: 380 }} className="rounded-2xl overflow-hidden border border-slate-800">
-                        <PropertyMap properties={myProperties} />
+                        <PropertyMap />
                     </div>
                 </div>
             )}

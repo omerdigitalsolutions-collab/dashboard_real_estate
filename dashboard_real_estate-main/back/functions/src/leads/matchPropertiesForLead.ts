@@ -113,15 +113,14 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
 
     // ── Fetch active properties from Agency ──────────────────────────────────────
     const agencySnapshot = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
         .get();
 
     const agencyProperties = agencySnapshot.docs.map(doc => ({
         id: doc.id,
         isExclusivity: true,
-        collectionPath: 'properties',
+        collectionPath: `agencies/${agencyId}/properties`,
         ...doc.data(),
     })) as Array<Record<string, any>>;
 
@@ -147,14 +146,28 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
 
                 return citySnap.docs.map(doc => {
                     const data = doc.data();
+                    // Cities collection still uses flat schema — normalize for matching engine
                     return {
                         id: doc.id,
                         isExclusivity: false,
                         collectionPath: `cities/${cityName}/properties`,
-                        address: data.street || data.address || 'כתובת חסויה',
-                        type: data.type || 'sale',
+                        // Normalize to new nested paths so matching engine works uniformly
+                        address: {
+                            city: data.city || cityName,
+                            street: data.street || '',
+                            neighborhood: data.neighborhood || '',
+                            fullAddress: data.address || data.street || 'כתובת חסויה',
+                        },
+                        transactionType: data.transactionType || data.type || 'forsale',
+                        financials: { price: data.price || 0 },
+                        features: {
+                            hasElevator: data.hasElevator ?? null,
+                            hasParking: data.hasParking ?? null,
+                            hasBalcony: data.hasBalcony ?? null,
+                            hasMamad: data.hasSafeRoom ?? null,
+                        },
                         ...data,
-                        city: data.city || cityName, // Ensure city is set for matching engine
+                        city: data.city || cityName,
                     };
                 });
             } catch (err) {
@@ -176,15 +189,16 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
         // Prepare property for matching engine
         const matchingProp: MatchingProperty = {
             id: prop.id,
-            city: prop.city,
-            neighborhood: prop.neighborhood,
-            price: prop.price,
+            city: prop.address?.city || prop.city,
+            neighborhood: prop.address?.neighborhood || prop.neighborhood,
+            street: prop.address?.street || prop.street,
+            price: prop.financials?.price ?? prop.price,
             rooms: prop.rooms,
-            type: prop.type,
-            hasElevator: prop.hasElevator,
-            hasParking: prop.hasParking,
-            hasBalcony: prop.hasBalcony,
-            hasSafeRoom: prop.hasSafeRoom
+            transactionType: prop.transactionType || prop.type || 'forsale',
+            hasElevator: prop.features?.hasElevator ?? prop.hasElevator,
+            hasParking: prop.features?.hasParking ?? prop.hasParking,
+            hasBalcony: prop.features?.hasBalcony ?? prop.hasBalcony,
+            hasMamad: prop.features?.hasMamad ?? prop.hasSafeRoom,
         };
 
         const result = evaluateMatch(matchingProp, req);
@@ -194,6 +208,7 @@ export const matchPropertiesForLead = onCall({ cors: true }, async (request) => 
                 matchScore: result.matchScore,
                 category: result.category,
                 isNeighborhoodMatch: result.isNeighborhoodMatch,
+                isStreetMatch: result.isStreetMatch,
                 requiresVerification: result.requiresVerification
             });
         }

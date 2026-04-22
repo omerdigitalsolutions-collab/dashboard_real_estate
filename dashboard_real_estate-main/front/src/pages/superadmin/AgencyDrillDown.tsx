@@ -98,8 +98,7 @@ export default function AgencyDrillDown() {
                 const qUsers = query(usersRef, where('agencyId', '==', agencyId));
 
                 // 3. Fetch Properties
-                const propsRef = collection(db, 'properties');
-                const qProps = query(propsRef, where('agencyId', '==', agencyId));
+                const qProps = collection(db, 'agencies', agencyId, 'properties');
 
                 // 4. Fetch Leads
                 const leadsRef = collection(db, 'leads');
@@ -472,12 +471,12 @@ export default function AgencyDrillDown() {
                                 {properties.slice(0, 5).map(p => (
                                     <div key={p.id} className="flex flex-col gap-1 p-3 hover:bg-slate-800/50 rounded-xl transition-colors">
                                         <div className="flex items-center justify-between">
-                                            <p className="text-sm font-semibold text-slate-200 truncate">{p.address}</p>
-                                            <span className="text-xs font-bold text-white bg-slate-800 px-2 py-0.5 rounded shadow-sm">{formatCurrency(p.price)}</span>
+                                            <p className="text-sm font-semibold text-slate-200 truncate">{p.address?.fullAddress}</p>
+                                            <span className="text-xs font-bold text-white bg-slate-800 px-2 py-0.5 rounded shadow-sm">{formatCurrency(p.financials?.price ?? 0)}</span>
                                         </div>
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {p.city}</span>
-                                            <span className="flex items-center gap-1"><Home className="w-3 h-3" /> {p.type}</span>
+                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {p.address?.city}</span>
+                                            <span className="flex items-center gap-1"><Home className="w-3 h-3" /> {p.transactionType}</span>
                                         </div>
                                     </div>
                                 ))}

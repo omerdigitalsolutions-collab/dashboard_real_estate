@@ -63,8 +63,8 @@ export default function InventorySnapshot({ timeRange, onClick }: InventorySnaps
     });
 
     // For sale / rent distribution among the recruited properties
-    const forSale = newInPeriod.filter(p => p.type === 'sale').length;
-    const forRent = newInPeriod.filter(p => p.type === 'rent').length;
+    const forSale = newInPeriod.filter(p => p.transactionType === 'forsale').length;
+    const forRent = newInPeriod.filter(p => p.transactionType === 'rent').length;
 
     const pieData = [
         { name: 'למכירה', value: forSale, color: '#10b981' },

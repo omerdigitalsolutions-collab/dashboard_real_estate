@@ -33,13 +33,14 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
     }
 
     // 2. Security Check: Only allow fetching properties that are actually in this catalog
-    // We Map IDs to their collection paths as stored in the catalog document
+    const agencyId: string = catalogData.agencyId || '';
+    const defaultPath = agencyId ? `agencies/${agencyId}/properties` : 'properties';
     const allowedMap = new Map<string, string>();
     (catalogData.propertyIds || []).forEach((p: any) => {
         if (typeof p === 'string') {
-            allowedMap.set(p, 'properties');
+            allowedMap.set(p, defaultPath);
         } else if (p && p.id) {
-            allowedMap.set(p.id, p.collectionPath || 'properties');
+            allowedMap.set(p.id, p.collectionPath || defaultPath);
         }
     });
 
@@ -72,27 +73,49 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
 
             for (const doc of snap.docs) {
                 const data = doc.data();
-                const images = (data.imageUrls as string[] | undefined) || (data.images as string[] | undefined);
-                const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
+                // Support both new nested schema and legacy flat schema (cities collection)
+                const images: string[] =
+                    data.media?.images ||
+                    data.imageUrls ||
+                    data.images ||
+                    [];
+                const finalImages = images.length > 0 ? images : [PLACEHOLDER_IMAGE];
+
+                const city = data.address?.city || data.city || '';
+                const fullAddress = data.address?.fullAddress ||
+                    (typeof data.address === 'string' ? data.address : null) ||
+                    data.street || 'כתובת חסויה';
+                const price = data.financials?.price ?? data.price ?? 0;
+                const description = data.management?.descriptions || data.description || null;
+                const transactionType = data.transactionType || data.type || 'forsale';
+                // Strip agentName: "true" bug
+                const rawAgentName = data.agentName;
+                const agentName = data.listingType === 'exclusive' && rawAgentName && rawAgentName !== 'true'
+                    ? String(rawAgentName) : '';
 
                 liveProperties.push({
                     ...data,
                     id: doc.id,
-                    address: data.street || data.address || 'כתובת חסויה',
-                    city: data.city || '',
-                    price: data.price || 0,
+                    // Normalised flat fields for frontend display
+                    address: fullAddress,
+                    city,
+                    price,
                     rooms: data.rooms || null,
-                    sqm: data.sqm || null,
+                    squareMeters: data.squareMeters || data.sqm || null,
                     floor: data.floor || null,
                     images: finalImages,
-                    type: data.type || 'sale',
-                    kind: data.kind || null,
+                    transactionType,
+                    propertyType: data.propertyType || data.kind || null,
                     listingType: data.listingType || null,
-                    description: data.description || null,
+                    description,
                     createdAt: data.createdAt || null,
-                    agentName: data.listingType === 'exclusive' ? (data.agentName || '') : '',
-                    // Keep agent phone only for exclusive listings so the contact button can reach the right agent
+                    agentName,
                     agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '',
+                    // Pass through nested objects for richer display
+                    features: data.features || null,
+                    financials: data.financials || { price },
+                    media: { ...data.media, images: finalImages },
+                    management: data.management || null,
                 });
             }
         }

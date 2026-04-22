@@ -33,7 +33,7 @@ export const superAdminGetAgencyUsage = functions.https.onCall({ cors: true }, a
 
         // ── Task B: Firestore Document Counts ─────────────────────────────────
         const [propertiesSnap, leadsSnap, dealsSnap, usersSnap] = await Promise.all([
-            db.collection('properties').where('agencyId', '==', targetAgencyId).count().get(),
+            db.collection('agencies').doc(targetAgencyId).collection('properties').count().get(),
             db.collection('leads').where('agencyId', '==', targetAgencyId).count().get(),
             db.collection('deals').where('agencyId', '==', targetAgencyId).count().get(),
             db.collection('users').where('agencyId', '==', targetAgencyId).count().get(),

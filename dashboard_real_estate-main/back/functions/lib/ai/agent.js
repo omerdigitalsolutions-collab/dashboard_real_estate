@@ -50,9 +50,8 @@ exports.askAgencyAgent = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 
         const agencyId = authData.agencyId;
         const db = admin.firestore();
         // 2. Query Properties
-        const propertiesSnapshot = await db.collection('properties')
-            .where('agencyId', '==', agencyId)
-            .where('status', 'in', ['active', 'sold', 'rented']) // Fetch basic active ones or just without filter
+        const propertiesSnapshot = await db.collection('agencies').doc(agencyId).collection('properties')
+            .where('status', 'in', ['active', 'sold', 'rented'])
             .limit(50)
             .get();
         const propertiesContext = propertiesSnapshot.docs.map(doc => {

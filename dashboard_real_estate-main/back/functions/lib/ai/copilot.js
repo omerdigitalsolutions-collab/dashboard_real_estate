@@ -121,11 +121,11 @@ async function getTopAgent(db, agencyId) {
     return { topAgent: top, totalAgentsWithWonDeals: Object.keys(agentTotals).length };
 }
 async function getHighestCommissionProperty(db, agencyId) {
+    var _a, _b, _c, _d, _e;
     const snapshot = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
-        .orderBy('price', 'desc')
+        .orderBy('financials.price', 'desc')
         .limit(1)
         .get();
     if (snapshot.empty) {
@@ -135,10 +135,10 @@ async function getHighestCommissionProperty(db, agencyId) {
     const d = doc.data();
     return {
         id: doc.id,
-        address: `${d.street}, ${d.city}`,
-        price: d.price,
+        address: ((_a = d.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || `${((_b = d.address) === null || _b === void 0 ? void 0 : _b.street) || ''}, ${((_c = d.address) === null || _c === void 0 ? void 0 : _c.city) || ''}`,
+        price: (_e = (_d = d.financials) === null || _d === void 0 ? void 0 : _d.price) !== null && _e !== void 0 ? _e : d.price,
         rooms: d.rooms,
-        type: d.type,
+        transactionType: d.transactionType,
         status: d.status,
     };
 }
@@ -166,7 +166,7 @@ async function getLeadStats(db, agencyId) {
 async function getSummaryStats(db, agencyId) {
     const { start, end } = currentMonthBounds();
     const [propertiesSnap, leadsSnap, dealsSnap] = await Promise.all([
-        db.collection('properties').where('agencyId', '==', agencyId).where('status', '==', 'active').get(),
+        db.collection('agencies').doc(agencyId).collection('properties').where('status', '==', 'active').get(),
         db.collection('leads').where('agencyId', '==', agencyId).get(),
         db.collection('deals')
             .where('agencyId', '==', agencyId)
@@ -310,16 +310,21 @@ exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const [propertiesSnap, leadsSnap, dealsSnap, agentsSnap] = await Promise.all([
-            db.collection('properties').where('agencyId', '==', agencyId).limit(100).get(),
+            db.collection('agencies').doc(agencyId).collection('properties').limit(100).get(),
             db.collection('leads').where('agencyId', '==', agencyId).get(),
             db.collection('deals').where('agencyId', '==', agencyId).where('stage', '==', 'Won').get(),
             db.collection('users').where('agencyId', '==', agencyId).get()
         ]);
         // Transform into compact representation
         const properties = propertiesSnap.docs.map(d => {
-            var _a;
+            var _a, _b, _c, _d, _e, _f;
             const data = d.data();
-            return { id: d.id, address: `${data.street}, ${data.city}`, price: data.price, createdAt: (_a = data.createdAt) === null || _a === void 0 ? void 0 : _a.toDate() };
+            return {
+                id: d.id,
+                address: ((_a = data.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || `${((_b = data.address) === null || _b === void 0 ? void 0 : _b.street) || ''}, ${((_c = data.address) === null || _c === void 0 ? void 0 : _c.city) || ''}`,
+                price: (_e = (_d = data.financials) === null || _d === void 0 ? void 0 : _d.price) !== null && _e !== void 0 ? _e : data.price,
+                createdAt: (_f = data.createdAt) === null || _f === void 0 ? void 0 : _f.toDate(),
+            };
         });
         const leadsStatusCount = {};
         const leadsSourceCount = {};

@@ -21,7 +21,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     // Initialize from userData on mount or when userData changes
     useEffect(() => {
         if (userData) {
-            setPreferences(userData.preferences || {});
+            setPreferences(userData.Preferences || {});
         } else {
             setPreferences(null);
         }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCatalogWithQueries, getLiveCatalogProperties, saveCatalogLikes, SharedCatalog } from '../services/catalogService';
-import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Maximize2, Phone, X, CheckCircle2, DollarSign, Zap, Car, Wind, Shield, Clock } from 'lucide-react';
+import { MapPin, Bed, MessageCircle, Home, Heart, ChevronLeft, ChevronRight, Layers, Maximize, Maximize2, Phone, X, CheckCircle2, DollarSign, Zap, Car, Wind, Shield, Clock, Video } from 'lucide-react';
 import CatalogPropertyModal from './CatalogPropertyModal';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
@@ -34,11 +34,51 @@ function conditionLabel(val?: string) {
 }
 
 // ─── Image Carousel ───────────────────────────────────────────────────────────
-function ImageCarousel({ images, alt, onZoom }: { images: string[]; alt: string; onZoom?: (url: string) => void }) {
+function ImageCarousel({ images, videos = [], alt, onZoom }: { images: string[]; videos?: string[]; alt: string; onZoom?: (url: string) => void }) {
     const [current, setCurrent] = useState(0);
+    const [currentVideo, setCurrentVideo] = useState(0);
     const imgs = images.slice(0, 5);
 
     if (imgs.length === 0) {
+        if (videos.length > 0) {
+            return (
+                <div className="relative h-52 bg-black overflow-hidden rounded-t-2xl group">
+                    <video
+                        key={videos[currentVideo]}
+                        src={videos[currentVideo]}
+                        controls
+                        playsInline
+                        className="w-full h-full object-contain"
+                        onClick={e => e.stopPropagation()}
+                    />
+                    {videos.length > 1 && (
+                        <>
+                            <button
+                                onClick={e => { e.stopPropagation(); setCurrentVideo(i => (i - 1 + videos.length) % videos.length); }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                            >
+                                <ChevronLeft size={14} />
+                            </button>
+                            <button
+                                onClick={e => { e.stopPropagation(); setCurrentVideo(i => (i + 1) % videos.length); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                            >
+                                <ChevronRight size={14} />
+                            </button>
+                            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex gap-1 pointer-events-none">
+                                {videos.map((_, i) => (
+                                    <div key={i} className={`h-1 rounded-full transition-all ${i === currentVideo ? 'bg-white w-5' : 'bg-white/50 w-1.5'}`} />
+                                ))}
+                            </div>
+                        </>
+                    )}
+                    <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-black/50 text-white text-xs font-semibold px-2 py-0.5 rounded-lg pointer-events-none">
+                        <Video size={10} />
+                        <span>{currentVideo + 1}/{videos.length}</span>
+                    </div>
+                </div>
+            );
+        }
         return (
             <div className="h-52 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-300 rounded-t-2xl">
                 <Home size={36} />
@@ -457,7 +497,12 @@ export default function SharedCatalogPage() {
                             >
                                 {/* Image */}
                                 <div className="relative">
-                                    <ImageCarousel images={property.images || []} alt={streetName} onZoom={setZoomedImage} />
+                                    <ImageCarousel
+                                        images={property.images || []}
+                                        videos={property.videoUrls || (property.videoUrl ? [property.videoUrl] : [])}
+                                        alt={streetName}
+                                        onZoom={setZoomedImage}
+                                    />
 
                                     {/* Top badges */}
                                     <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
@@ -529,6 +574,26 @@ export default function SharedCatalogPage() {
                                         <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-50 pt-3 mt-auto line-clamp-2">
                                             {property.description}
                                         </p>
+                                    )}
+
+                                    {/* Agent / Agency branding */}
+                                    {((property.listingType === 'exclusive' && property.agentName) || agencyLogoUrl || agencyName) && (
+                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
+                                            {property.listingType === 'exclusive' && property.agentName ? (
+                                                <>
+                                                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                        <span className="text-[9px] font-black text-blue-600">
+                                                            {property.agentName.charAt(0)}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-xs text-slate-500 font-semibold truncate">{property.agentName}</span>
+                                                </>
+                                            ) : agencyLogoUrl ? (
+                                                <img src={agencyLogoUrl} alt={agencyName || ''} className="h-5 w-auto max-w-[70px] object-contain shrink-0" />
+                                            ) : (
+                                                <span className="text-xs text-slate-400 font-medium truncate">{agencyName}</span>
+                                            )}
+                                        </div>
                                     )}
 
                                     {/* Action buttons: Call + WhatsApp */}
@@ -630,17 +695,19 @@ export default function SharedCatalogPage() {
             </footer>
 
             {/* ── Floating WhatsApp CTA ─────────────────────────────────────── */}
-            <div className="fixed bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-6 pt-10 bg-gradient-to-t from-[#f5f6fa] via-[#f5f6fa]/90 to-transparent z-50 pointer-events-none">
-                <a
-                    href={waLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-[#25D366] hover:bg-[#1fbc5a] text-white flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-base shadow-xl shadow-[#25D366]/30 transition-all active:scale-95 pointer-events-auto"
-                >
-                    <MessageCircle size={22} />
-                    <span>דבר איתנו בוואטסאפ</span>
-                </a>
-            </div>
+            {agencyPhone && (
+                <div className="fixed bottom-0 left-0 right-0 max-w-5xl mx-auto px-4 pb-6 pt-10 bg-gradient-to-t from-[#f5f6fa] via-[#f5f6fa]/90 to-transparent z-50 pointer-events-none">
+                    <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-[#25D366] hover:bg-[#1fbc5a] text-white flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-base shadow-xl shadow-[#25D366]/30 transition-all active:scale-95 pointer-events-auto"
+                    >
+                        <MessageCircle size={22} />
+                        <span>דבר איתנו בוואטסאפ</span>
+                    </a>
+                </div>
+            )}
         </div>
     );
 }

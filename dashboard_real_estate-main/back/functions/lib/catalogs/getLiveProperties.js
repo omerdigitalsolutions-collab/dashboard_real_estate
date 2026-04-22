@@ -12,6 +12,7 @@ const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059e
  * Validates the requested property IDs against the actual catalog document.
  */
 exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g;
     const { catalogId, propertyIds } = request.data;
     if (!catalogId)
         throw new https_1.HttpsError('invalid-argument', 'catalogId is required.');
@@ -28,14 +29,15 @@ exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) 
         throw new https_1.HttpsError('permission-denied', 'Catalog has expired.');
     }
     // 2. Security Check: Only allow fetching properties that are actually in this catalog
-    // We Map IDs to their collection paths as stored in the catalog document
+    const agencyId = catalogData.agencyId || '';
+    const defaultPath = agencyId ? `agencies/${agencyId}/properties` : 'properties';
     const allowedMap = new Map();
     (catalogData.propertyIds || []).forEach((p) => {
         if (typeof p === 'string') {
-            allowedMap.set(p, 'properties');
+            allowedMap.set(p, defaultPath);
         }
         else if (p && p.id) {
-            allowedMap.set(p.id, p.collectionPath || 'properties');
+            allowedMap.set(p.id, p.collectionPath || defaultPath);
         }
     });
     const requestedItems = propertyIds.filter(p => {
@@ -63,11 +65,29 @@ exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) 
             const snap = await db.collection(path).where('__name__', 'in', chunk).get();
             for (const doc of snap.docs) {
                 const data = doc.data();
-                const images = data.imageUrls || data.images;
-                const finalImages = (images && images.length > 0) ? images : [PLACEHOLDER_IMAGE];
-                liveProperties.push(Object.assign(Object.assign({}, data), { id: doc.id, address: data.street || data.address || 'כתובת חסויה', city: data.city || '', price: data.price || 0, rooms: data.rooms || null, sqm: data.sqm || null, floor: data.floor || null, images: finalImages, type: data.type || 'sale', kind: data.kind || null, listingType: data.listingType || null, description: data.description || null, createdAt: data.createdAt || null, agentName: data.listingType === 'exclusive' ? (data.agentName || '') : '', 
-                    // Keep agent phone only for exclusive listings so the contact button can reach the right agent
-                    agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '' }));
+                // Support both new nested schema and legacy flat schema (cities collection)
+                const images = ((_a = data.media) === null || _a === void 0 ? void 0 : _a.images) ||
+                    data.imageUrls ||
+                    data.images ||
+                    [];
+                const finalImages = images.length > 0 ? images : [PLACEHOLDER_IMAGE];
+                const city = ((_b = data.address) === null || _b === void 0 ? void 0 : _b.city) || data.city || '';
+                const fullAddress = ((_c = data.address) === null || _c === void 0 ? void 0 : _c.fullAddress) ||
+                    (typeof data.address === 'string' ? data.address : null) ||
+                    data.street || 'כתובת חסויה';
+                const price = (_f = (_e = (_d = data.financials) === null || _d === void 0 ? void 0 : _d.price) !== null && _e !== void 0 ? _e : data.price) !== null && _f !== void 0 ? _f : 0;
+                const description = ((_g = data.management) === null || _g === void 0 ? void 0 : _g.descriptions) || data.description || null;
+                const transactionType = data.transactionType || data.type || 'forsale';
+                // Strip agentName: "true" bug
+                const rawAgentName = data.agentName;
+                const agentName = data.listingType === 'exclusive' && rawAgentName && rawAgentName !== 'true'
+                    ? String(rawAgentName) : '';
+                liveProperties.push(Object.assign(Object.assign({}, data), { id: doc.id, 
+                    // Normalised flat fields for frontend display
+                    address: fullAddress, city,
+                    price, rooms: data.rooms || null, squareMeters: data.squareMeters || data.sqm || null, floor: data.floor || null, images: finalImages, transactionType, propertyType: data.propertyType || data.kind || null, listingType: data.listingType || null, description, createdAt: data.createdAt || null, agentName, agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '', 
+                    // Pass through nested objects for richer display
+                    features: data.features || null, financials: data.financials || { price }, media: Object.assign(Object.assign({}, data.media), { images: finalImages }), management: data.management || null }));
             }
         }
     }

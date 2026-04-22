@@ -109,12 +109,17 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
-    const [imageUrls, setImageUrls] = useState<string[]>(property.imageUrls || []);
-    const [videoUrl, setVideoUrl] = useState<string | undefined>(property.videoUrl);
+    const [imageUrls, setImageUrls] = useState<string[]>(property.media?.images || []);
+    const [videoUrl, setVideoUrl] = useState<string | undefined>(property.media?.videoTourUrl ?? undefined);
+    const initVideoUrls = (): string[] => {
+        if (property.media?.videoTourUrl) return [property.media.videoTourUrl];
+        return [];
+    };
+    const [videoUrls, setVideoUrls] = useState<string[]>(initVideoUrls);
 
     // Description Edit State
     const [isEditingDescription, setIsEditingDescription] = useState(false);
-    const [editedDescription, setEditedDescription] = useState(property.description || property.rawDescription || '');
+    const [editedDescription, setEditedDescription] = useState(property.management?.descriptions || property.rawDescription || '');
     const [isSavingDescription, setIsSavingDescription] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
@@ -122,13 +127,33 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
 
+    // Debug: log description fields for global city properties to diagnose Jerusalem issue
+    useEffect(() => {
+        if (property.isGlobalCityProperty) {
+            console.log('[PropertyDetails] description debug', {
+                id: property.id,
+                city: property.address?.city,
+                description: property.management?.descriptions?.substring(0, 120),
+                rawDescription: property.rawDescription?.substring(0, 120),
+                descriptionTruthy: !!property.management?.descriptions,
+                rawDescriptionTruthy: !!property.rawDescription,
+                descriptionTrimmed: property.management?.descriptions?.trim()?.substring(0, 120),
+            });
+        }
+    }, [property]);
+
     // Sync state when property prop changes
     useEffect(() => {
-        setEditedDescription(property.description || property.rawDescription || '');
-        if (property.imageUrls) {
-            setImageUrls(property.imageUrls);
+        setEditedDescription(property.management?.descriptions || property.rawDescription || '');
+        if (property.media?.images) {
+            setImageUrls(property.media.images);
         }
-        setVideoUrl(property.videoUrl);
+        setVideoUrl(property.media?.videoTourUrl ?? undefined);
+        if (property.media?.videoTourUrl) {
+            setVideoUrls([property.media.videoTourUrl]);
+        } else {
+            setVideoUrls([]);
+        }
     }, [property]);
     // Add keyboard navigation
     useEffect(() => {
@@ -159,13 +184,17 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     };
 
     const hasImages = imageUrls.length > 0;
+    const hasVideos = videoUrls.length > 0;
     const images = imageUrls;
+    // For primary media: images take priority, then first video acts as primary
+    const primaryVideoAsCover = !hasImages && hasVideos;
 
     const externalUrl = property.yad2Link || property.externalLink;
     const isYad2Link = !!externalUrl?.startsWith('https://www.yad2.co.il/');
     const externalButtonText = isYad2Link ? 'לינק למודעה ביד 2' : 'מדלן';
+    const displayDescription = property.management?.descriptions?.trim() || property.rawDescription?.trim();
 
-    const isRent = property.type === 'rent';
+    const isRent = property.transactionType === 'rent';
     const typeLabel = isRent ? 'להשכרה' : 'למכירה';
     const typeColor = isRent ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100';
 
@@ -205,7 +234,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
             );
             const combinedUrls = [...imageUrls, ...newUrls];
             setImageUrls(combinedUrls);
-            await updateProperty(property.id, { imageUrls: combinedUrls }, property.isGlobalCityProperty ? property.city : undefined);
+            await updateProperty(property.id, { media: { images: combinedUrls } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             toast.success('התמונות הועלו בהצלחה ✓');
         } catch (error) {
             console.error('Error uploading images:', error);
@@ -221,7 +250,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         try {
             const newImages = imageUrls.filter((_, i) => i !== index);
             setImageUrls(newImages);
-            await updateProperty(property.id, { imageUrls: newImages }, property.isGlobalCityProperty ? property.city : undefined);
+            await updateProperty(property.id, { media: { images: newImages } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             
             // Adjust active index if needed
             if (activeImageIndex >= newImages.length) {
@@ -250,7 +279,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         setImageUrls(newImages);
         
         try {
-            await updateProperty(property.id, { imageUrls: newImages }, property.isGlobalCityProperty ? property.city : undefined);
+            await updateProperty(property.id, { media: { images: newImages } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             // Sync active index to the moved image
             if (activeImageIndex === oldIndex) {
                 setActiveImageIndex(newIndex);
@@ -267,7 +296,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
 
     const handleAgentChange = async (newAgentId: string) => {
         try {
-            await updateProperty(property.id, { agentId: newAgentId }, property.isGlobalCityProperty ? property.city : undefined);
+            await updateProperty(property.id, { management: { assignedAgentId: newAgentId } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             toast.success('סוכן מוקצה עודכן בהצלחה ✓');
         } catch (err) {
             console.error('Error updating agent:', err);
@@ -292,7 +321,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const handleImportToMyProperties = async () => {
         try {
             setIsImporting(true);
-            const newId = await updateProperty(property.id, {}, property.city);
+            const newId = await updateProperty(property.id, {}, property.address?.city);
             if (newId !== property.id) {
                 toast.success('הנכס נוסף למלאי שלך בהצלחה! ✓');
                 onClose();
@@ -308,6 +337,11 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !userData?.agencyId) return;
+
+        if (videoUrls.length >= 3) {
+            toast.error('ניתן להוסיף עד 3 סרטונים לנכס.');
+            return;
+        }
 
         if (file.size > 200 * 1024 * 1024) {
             toast.error('הסרטון גדול מדי. מקסימום 200MB.');
@@ -328,8 +362,10 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                 property.isGlobalCityProperty,
                 isSuperAdmin
             );
-            setVideoUrl(url);
-            await updateProperty(property.id, { videoUrl: url }, property.isGlobalCityProperty ? property.city : undefined);
+            const newVideoUrls = [...videoUrls, url];
+            setVideoUrls(newVideoUrls);
+            setVideoUrl(newVideoUrls[0]); // keep legacy field in sync
+            await updateProperty(property.id, { media: { images: imageUrls, videoTourUrl: newVideoUrls[0] || null } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             toast.success('הסרטון הועלה בהצלחה ✓');
         } catch (error) {
             console.error('Error uploading video:', error);
@@ -340,11 +376,13 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         }
     };
 
-    const handleDeleteVideo = async () => {
+    const handleDeleteVideo = async (index: number) => {
         if (!confirm('האם אתה בטוח שברצונך למחוק את הסרטון?')) return;
         try {
-            setVideoUrl(undefined);
-            await updateProperty(property.id, { videoUrl: null }, property.isGlobalCityProperty ? property.city : undefined);
+            const newVideoUrls = videoUrls.filter((_, i) => i !== index);
+            setVideoUrls(newVideoUrls);
+            setVideoUrl(newVideoUrls[0]);
+            await updateProperty(property.id, { media: { images: imageUrls, videoTourUrl: newVideoUrls[0] || null } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             toast.success('הסרטון נמחק בהצלחה');
         } catch (error) {
             console.error('Error deleting video:', error);
@@ -363,7 +401,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const handleSaveDescription = async () => {
         try {
             setIsSavingDescription(true);
-            const newId = await updateProperty(property.id, { description: editedDescription }, property.isGlobalCityProperty ? property.city : undefined);
+            const newId = await updateProperty(property.id, { management: { descriptions: editedDescription } }, property.isGlobalCityProperty ? property.address?.city : undefined);
             
             if (newId !== property.id) {
                 toast.success('הנכס נוסף למלאי הפרטי שלך! ✓');
@@ -398,7 +436,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     )
                                 ) : (
                                     (() => {
-                                        const agent = agents.find(a => a.uid === property.agentId);
+                                        const agent = agents.find(a => a.uid === property.management?.assignedAgentId || a.id === property.management?.assignedAgentId);
                                         return agent?.photoURL ? (
                                             <img src={agent.photoURL} alt={agent.name} className="w-full h-full object-cover" />
                                         ) : (
@@ -415,11 +453,11 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                             </div>
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900 leading-tight">
-                                    {property.address}
+                                    {property.address?.fullAddress}
                                 </h2>
                                 <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
                                     <MapPin size={14} />
-                                    {property.city || 'עיר לא מוזנת'}
+                                    {property.address?.city || 'עיר לא מוזנת'}
                                 </p>
                             </div>
                         </div>
@@ -463,7 +501,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                     </div>
 
                     <div className="overflow-y-auto flex-1 p-6 pretty-scroll">
-                        {/* Selected Image Banner */}
+                        {/* Selected Image Banner OR First Video as cover */}
                         {hasImages ? (
                             <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-6 group bg-slate-100 border border-slate-200">
                                 <img
@@ -514,7 +552,19 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     </div>
                                 ) : null}
                             </div>
+                        ) : primaryVideoAsCover ? (
+                            // No images — show first video as cover
+                            <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-6 bg-black border border-slate-200">
+                                <video
+                                    src={videoUrls[0]}
+                                    controls
+                                    playsInline
+                                    className="w-full h-full object-contain"
+                                    preload="metadata"
+                                />
+                            </div>
                         ) : (
+                            // No images, no videos
                             <div className="w-full aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 mb-6 relative">
                                 <ImageIcon size={48} className="mb-3 opacity-50" />
                                 <p className="text-sm font-medium">אין תמונות לנכס זה</p>
@@ -603,38 +653,55 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                             onChange={handleVideoUpload}
                         />
 
-                        {/* Video Section */}
+                        {/* Video Section — up to 3 videos */}
                         <div className="mb-6">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">סרטון נכס</span>
-                                {videoUrl ? (
-                                    <button
-                                        onClick={handleDeleteVideo}
-                                        disabled={property.isGlobalCityProperty}
-                                        className="text-xs font-semibold text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
-                                    >
-                                        <Trash2 size={12} />
-                                        מחק סרטון
-                                    </button>
-                                ) : (!property.isGlobalCityProperty || isSuperAdmin) && (
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">סרטוני נכס ({videoUrls.length}/3)</span>
+                                {(!property.isGlobalCityProperty || isSuperAdmin) && videoUrls.length < 3 && (
                                     <button
                                         onClick={() => videoInputRef.current?.click()}
                                         disabled={isUploadingVideo}
                                         className="text-xs font-semibold text-blue-600 hover:bg-blue-100 px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                                     >
                                         {isUploadingVideo ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />}
-                                        {isUploadingVideo ? 'מעלה סרטון...' : 'העלה סרטון'}
+                                        {isUploadingVideo ? 'מעלה סרטון...' : 'הוסף סרטון'}
                                     </button>
                                 )}
                             </div>
-                            {videoUrl ? (
-                                <div className="w-full rounded-2xl overflow-hidden bg-black border border-slate-200">
-                                    <video
-                                        src={videoUrl}
-                                        controls
-                                        className="w-full max-h-72 object-contain"
-                                        preload="metadata"
-                                    />
+                            {videoUrls.length > 0 ? (
+                                <div className="flex flex-col gap-3">
+                                    {videoUrls.map((vUrl, vIdx) => (
+                                        <div key={vIdx} className="relative w-full rounded-2xl overflow-hidden bg-black border border-slate-200 group">
+                                            <video
+                                                src={vUrl}
+                                                controls
+                                                className="w-full max-h-72 object-contain"
+                                                preload="metadata"
+                                            />
+                                            {(!property.isGlobalCityProperty || isSuperAdmin) && (
+                                                <button
+                                                    onClick={() => handleDeleteVideo(vIdx)}
+                                                    className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 text-xs font-semibold flex items-center gap-1"
+                                                >
+                                                    <Trash2 size={12} />
+                                                    מחק
+                                                </button>
+                                            )}
+                                            <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-full pointer-events-none">
+                                                סרטון {vIdx + 1}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {/* Add more slot */}
+                                    {(!property.isGlobalCityProperty || isSuperAdmin) && videoUrls.length < 3 && (
+                                        <div
+                                            onClick={() => { if (!isUploadingVideo) videoInputRef.current?.click(); }}
+                                            className="w-full h-16 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center gap-2 text-slate-400 cursor-pointer hover:bg-slate-100 hover:border-blue-300 hover:text-blue-500 transition-all"
+                                        >
+                                            {isUploadingVideo ? <Loader2 size={18} className="animate-spin" /> : <Video size={18} />}
+                                            <span className="text-xs font-medium">{isUploadingVideo ? 'מעלה סרטון...' : `הוסף סרטון נוסף (${videoUrls.length}/3)`}</span>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div
@@ -652,7 +719,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     ) : (
                                         <VideoOff size={24} className="mb-1 opacity-50" />
                                     )}
-                                    <p className="text-xs font-medium">{isUploadingVideo ? 'מעלה סרטון...' : 'לחץ להעלאת סרטון (עד 200MB)'}</p>
+                                    <p className="text-xs font-medium">{isUploadingVideo ? 'מעלה סרטון...' : 'לחץ להעלאת סרטון (עד 200MB, מקסימום 3)'}</p>
                                 </div>
                             )}
                         </div>
@@ -661,7 +728,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">מחיר</div>
-                                <div className="text-lg font-bold text-slate-900">₪{property.price.toLocaleString()}</div>
+                                <div className="text-lg font-bold text-slate-900">₪{property.financials?.price?.toLocaleString()}</div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">סוג עסקה</div>
@@ -673,16 +740,16 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">סוג נכס</div>
-                                <div className="text-base font-bold text-slate-900">{translatePropertyKind(property.kind || property.propertyType)}</div>
+                                <div className="text-base font-bold text-slate-900">{translatePropertyKind(property.propertyType)}</div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                 <div className="text-xs font-semibold text-slate-500 mb-1">חדרים</div>
                                 <div className="text-base font-bold text-slate-900">{property.rooms || '-'}</div>
                             </div>
-                            {property.parkingSpots != null && (
+                            {property.features?.parkingSpots != null && (
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <div className="text-xs font-semibold text-slate-500 mb-1">חניות</div>
-                                    <div className="text-base font-bold text-slate-900">{property.parkingSpots}</div>
+                                    <div className="text-base font-bold text-slate-900">{property.features?.parkingSpots}</div>
                                 </div>
                             )}
                         </div>
@@ -694,16 +761,16 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     פרטים מהמאגר הציבורי (Full Public Data)
                                 </h3>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                    {property.street && (
+                                    {property.address?.street && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">כתובת מדויקת (Street)</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.street}</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.address.street}</span>
                                         </div>
                                     )}
-                                    {property.neighborhood && (
+                                    {property.address?.neighborhood && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">שכונה</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.neighborhood}</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.address.neighborhood}</span>
                                         </div>
                                     )}
                                     {property.propertyType && (
@@ -721,66 +788,59 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                         </div>
                                     )}
 
-                                    {property.sqm && (
+                                    {property.squareMeters && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">שטח (מ"ר)</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.sqm}</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.squareMeters}</span>
                                         </div>
                                     )}
-                                    {property.agentName && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">שם סוכן / סוכנות</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.agentName}</span>
-                                        </div>
-                                    )}
-                                    {property.contactName && (
+                                    {property.contactName ? (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">שם איש קשר</span>
                                             <span className="text-sm font-semibold text-slate-700">{property.contactName}</span>
                                         </div>
-                                    )}
+                                    ) : (property.yad2Link || property.externalLink) ? (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">לינק למודעה</span>
+                                            <a href={property.yad2Link || property.externalLink} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-600 hover:underline">
+                                                {isYad2Link ? 'צפה ביד 2' : 'צפה במודעה'}
+                                            </a>
+                                        </div>
+                                    ) : null}
                                     {property.contactPhone && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">טלפון איש קשר</span>
                                             <span className="text-sm font-semibold text-slate-700">{property.contactPhone}</span>
                                         </div>
                                     )}
-                                    {property.parkingSpots !== undefined && (
+                                    {property.features?.parkingSpots !== undefined && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">חניות</span>
-                                            <span className="text-sm font-semibold text-slate-700">{property.parkingSpots}</span>
+                                            <span className="text-sm font-semibold text-slate-700">{property.features.parkingSpots}</span>
                                         </div>
                                     )}
-                                    {property.hasBalcony !== undefined && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מרפסת</span>
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasBalcony ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasBalcony ? 'כן' : 'לא'}</span>
-                                        </div>
-                                    )}
-                                    {property.hasElevator !== undefined && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מעלית</span>
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasElevator ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasElevator ? 'כן' : 'לא'}</span>
-                                        </div>
-                                    )}
-                                    {property.hasSafeRoom !== undefined && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">ממ"ד</span>
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasSafeRoom ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasSafeRoom ? 'כן' : 'לא'}</span>
-                                        </div>
-                                    )}
-                                    {property.hasAgent !== undefined && (
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">יש תיווך</span>
-                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasAgent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasAgent ? 'כן' : 'לא'}</span>
-                                        </div>
-                                    )}
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">מרפסת</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasBalcony ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasBalcony ? 'כן' : 'לא'}</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">מעלית</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasElevator ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasElevator ? 'כן' : 'לא'}</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">ממ"ד</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasMamad ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasMamad ? 'כן' : 'לא'}</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">יש תיווך</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasAgent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasAgent ? 'כן' : 'לא'}</span>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
                         {/* Property Contact Section */}
-                        {(property.isGlobalCityProperty || property.agentId || property.contactPhone) && (
+                        {(property.isGlobalCityProperty || property.management?.assignedAgentId || property.contactPhone) && (
                             <div className="mb-8 p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                                 <div className="text-right">
                                     <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
@@ -790,14 +850,14 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     <p className="text-xs text-slate-500">
                                         {property.isGlobalCityProperty 
                                             ? 'לתיאום פגישה או בירור פרטים נוספים על הנכס'
-                                            : `פנה ל${agents.find(a => a.uid === property.agentId)?.name || 'הסוכן'} למידע נוסף`}
+                                            : `פנה ל${agents.find(a => a.uid === property.management?.assignedAgentId || a.id === property.management?.assignedAgentId)?.name || 'הסוכן'} למידע נוסף`}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-3 w-full sm:w-auto">
                                     {(() => {
-                                        const phone = property.isGlobalCityProperty 
+                                        const phone = property.isGlobalCityProperty
                                             ? (agency?.officePhone || agency?.billing?.ownerPhone)
-                                            : (agents.find(a => a.uid === property.agentId)?.phone || property.contactPhone);
+                                            : (agents.find(a => a.uid === property.management?.assignedAgentId || a.id === property.management?.assignedAgentId)?.phone || property.contactPhone);
                                         
                                         if (!phone) return null;
 
@@ -811,7 +871,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                                     שיחה
                                                 </a>
                                                 <a
-                                                    href={`https://wa.me/${formatPhoneForWhatsApp(phone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${property.address}${property.city ? `, ${property.city}` : ''}. אשמח לקבל פרטים נוספים.`)}`}
+                                                    href={`https://wa.me/${formatPhoneForWhatsApp(phone)}?text=${encodeURIComponent(`היי, ראיתי את הנכס שפרסמת ב${property.address?.fullAddress}${property.address?.city ? `, ${property.address.city}` : ''}. אשמח לקבל פרטים נוספים.`)}`}
                                                     target="_blank" rel="noreferrer"
                                                     className="flex-1 sm:flex-initial flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-200"
                                                 >
@@ -850,7 +910,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                         <button
                                             onClick={() => {
                                                 setIsEditingDescription(false);
-                                                setEditedDescription(property.description || property.rawDescription || '');
+                                                setEditedDescription(property.management?.descriptions || property.rawDescription || '');
                                             }}
                                             disabled={isSavingDescription}
                                             className="text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 px-3 py-1 rounded-lg transition-colors disabled:opacity-50"
@@ -879,7 +939,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     autoFocus
                                 />
                             ) : (
-                                (property.description || property.rawDescription) ? (
+                                displayDescription ? (
                                     <div
                                         className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors group relative"
                                         onClick={() => {
@@ -891,7 +951,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                         }}
                                     >
                                         <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                                            {property.description || property.rawDescription}
+                                            {displayDescription}
                                         </p>
                                         <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm border border-slate-200 rounded p-1.5 text-slate-400 pointer-events-none">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
@@ -948,7 +1008,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                 </label>
                                 <select
                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                                    value={property.agentId || ""}
+                                    value={property.management?.assignedAgentId || ""}
                                     disabled={property.isGlobalCityProperty}
                                     onChange={(e) => handleAgentChange(e.target.value)}
                                 >
@@ -978,8 +1038,8 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
 
                         <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
                             <div>מזהה נכס: <span className="font-mono">{property.id?.slice(0, 8)}</span></div>
-                            {property.daysOnMarket !== undefined && (
-                                <div>בשוק: {property.daysOnMarket} ימים</div>
+                            {property.createdAt && (
+                                <div>נוסף: {(property.createdAt as any).toDate?.().toLocaleDateString('he-IL') ?? ''}</div>
                             )}
                         </div>
 
@@ -1050,12 +1110,12 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                     isOpen={showAddMeetingModal}
                     onClose={() => setShowAddMeetingModal(false)}
                     initialData={{
-                        summary: `פגישה בנכס: ${property.address}`,
-                        location: property.address,
-                        description: `פגישה לסיור בנכס: ${property.address}\nמחיר: ₪${property.price.toLocaleString()}\nעיר: ${property.city}`,
+                        summary: `פגישה בנכס: ${property.address?.fullAddress}`,
+                        location: property.address?.fullAddress,
+                        description: `פגישה לסיור בנכס: ${property.address?.fullAddress}\nמחיר: ₪${property.financials?.price?.toLocaleString()}\nעיר: ${property.address?.city}`,
                         relatedEntityType: 'property',
                         relatedEntityId: property.id,
-                        relatedEntityName: property.address
+                        relatedEntityName: property.address?.fullAddress
                     }}
                 />
             )}

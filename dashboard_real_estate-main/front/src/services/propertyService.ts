@@ -9,30 +9,59 @@ import {
     serverTimestamp,
     writeBatch,
     documentId,
-    onSnapshot
+    onSnapshot,
+    CollectionReference
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage } from '../config/firebase';
 import { Property, PropertyStatus } from '../types';
 
-const COLLECTION = 'properties';
+// ─── Collection Helper ────────────────────────────────────────────────────────
+
+const agencyPropsCol = (agencyId: string): CollectionReference =>
+    collection(db, 'agencies', agencyId, 'properties');
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 export interface NewPropertyData {
-    address: string;
-    city: string;
-    type: 'sale' | 'rent' | 'commercial';
-    kind: string;      // e.g. דירה, בית פרטי, פנטהאוז, מסחרי
-    price: number;
+    address: {
+        city: string;
+        street?: string;
+        number?: string;
+        neighborhood?: string;
+        fullAddress?: string;
+    };
+    transactionType: 'forsale' | 'rent';
+    propertyType: string;
     rooms?: number;
     floor?: number;
-    agentId?: string;
-    lat?: number;
-    lng?: number;
-    description?: string;
-    images?: string[];
+    totalFloors?: number;
+    squareMeters?: number;
+    features?: {
+        hasElevator?: boolean;
+        hasParking?: boolean;
+        parkingSpots?: number;
+        hasBalcony?: boolean;
+        hasMamad?: boolean;
+        hasStorage?: boolean;
+        isRenovated?: boolean;
+        isFurnished?: boolean;
+        hasAirConditioning?: boolean;
+    };
+    financials: {
+        price: number;
+        originalPrice?: number;
+    };
+    media?: {
+        mainImage?: string;
+        images?: string[];
+        videoTourUrl?: string;
+    };
+    management?: {
+        assignedAgentId?: string;
+        descriptions?: string;
+    };
     isExclusive?: boolean;
     listingType?: 'private' | 'exclusive' | 'external';
     imageFiles?: File[];
@@ -42,8 +71,7 @@ export interface NewPropertyData {
 }
 
 /**
- * Adds a new property for the given agency.
- * Auto-injects agencyId, status:'active', daysOnMarket:0, and createdAt.
+ * Adds a new property for the given agency in the subcollection.
  */
 export async function addProperty(
     agencyId: string,
@@ -51,18 +79,61 @@ export async function addProperty(
 ): Promise<string> {
     const { imageFiles, ...restData } = data;
 
-    // 1. Create the Property document first to get the ID
-    const docRef = await addDoc(collection(db, COLLECTION), {
-        ...restData,
+    const city = restData.address.city?.trim() ?? '';
+    const street = restData.address.street ?? '';
+    const fullAddress = restData.address.fullAddress || `${street} ${city}`.trim();
+
+    const docRef = await addDoc(agencyPropsCol(agencyId), {
         agencyId,
+        transactionType: restData.transactionType,
+        propertyType: restData.propertyType || '',
         status: 'active',
-        daysOnMarket: 0,
+        rooms: restData.rooms ?? null,
+        floor: restData.floor ?? null,
+        totalFloors: restData.totalFloors ?? null,
+        squareMeters: restData.squareMeters ?? null,
+        address: {
+            city,
+            street,
+            number: restData.address.number ?? '',
+            neighborhood: restData.address.neighborhood ?? '',
+            fullAddress,
+        },
+        features: {
+            hasElevator: restData.features?.hasElevator ?? null,
+            hasParking: restData.features?.hasParking ?? null,
+            parkingSpots: restData.features?.parkingSpots ?? null,
+            hasBalcony: restData.features?.hasBalcony ?? null,
+            hasMamad: restData.features?.hasMamad ?? null,
+            hasStorage: restData.features?.hasStorage ?? null,
+            isRenovated: restData.features?.isRenovated ?? null,
+            isFurnished: restData.features?.isFurnished ?? null,
+            hasAirConditioning: restData.features?.hasAirConditioning ?? null,
+        },
+        financials: {
+            price: restData.financials.price,
+            originalPrice: restData.financials.originalPrice ?? null,
+        },
+        media: {
+            mainImage: restData.media?.mainImage ?? null,
+            images: restData.media?.images ?? [],
+            videoTourUrl: restData.media?.videoTourUrl ?? null,
+        },
+        management: {
+            assignedAgentId: restData.management?.assignedAgentId ?? null,
+            descriptions: restData.management?.descriptions ?? null,
+        },
+        isExclusive: restData.isExclusive ?? false,
+        listingType: restData.listingType ?? null,
+        leadId: restData.leadId ?? null,
+        originalSource: restData.originalSource ?? null,
+        externalLink: restData.externalLink ?? null,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
     });
 
     const propertyId = docRef.id;
 
-    // 2. Upload images if provided
     if (imageFiles && imageFiles.length > 0) {
         const uploadPromises = imageFiles.map(async (file) => {
             const ext = file.name.split('.').pop() ?? 'jpg';
@@ -73,9 +144,7 @@ export async function addProperty(
         });
 
         const imageUrls = await Promise.all(uploadPromises);
-
-        // 3. Update the document with the image URLs
-        await updateDoc(docRef, { imageUrls });
+        await updateDoc(docRef, { 'media.images': imageUrls });
     }
 
     return propertyId;
@@ -85,25 +154,17 @@ export async function addProperty(
 
 /**
  * Fetches all properties that belong to the given agency.
- * Optionally filter by status, agentId, or type.
  */
 export async function getPropertiesByAgency(
     agencyId: string,
     filters?: {
         status?: PropertyStatus;
-        agentId?: string;
     }
 ): Promise<Property[]> {
-    let q = query(
-        collection(db, COLLECTION),
-        where('agencyId', '==', agencyId)
-    );
+    let q = query(agencyPropsCol(agencyId));
 
     if (filters?.status) {
         q = query(q, where('status', '==', filters.status));
-    }
-    if (filters?.agentId) {
-        q = query(q, where('agentId', '==', filters.agentId));
     }
 
     const snap = await getDocs(q);
@@ -111,20 +172,15 @@ export async function getPropertiesByAgency(
 }
 
 /**
- * getLiveProperties — Real-time listener for properties.
+ * getLiveProperties — Real-time listener for agency properties.
  */
 export function getLiveProperties(
     agencyId: string,
     callback: (properties: Property[]) => void,
     onError?: (err: Error) => void
 ): () => void {
-    const q = query(
-        collection(db, COLLECTION),
-        where('agencyId', '==', agencyId)
-    );
-
     return onSnapshot(
-        q,
+        agencyPropsCol(agencyId),
         (snap) => {
             const properties = snap.docs.map(
                 (d) => ({ id: d.id, ...d.data() } as Property)
@@ -136,24 +192,21 @@ export function getLiveProperties(
 }
 
 /**
- * Fetches multiple properties by their IDs.
- * Because Firestore's `in` query accepts a maximum of 10 items, the IDs are chunked into groups of 10.
+ * Fetches multiple properties by their IDs within an agency's subcollection.
  */
 export async function getPropertiesByIds(agencyId: string, propertyIds: string[]): Promise<Property[]> {
     if (!propertyIds || propertyIds.length === 0) return [];
 
     const uniqueIds = Array.from(new Set(propertyIds));
-    const chunks = [];
+    const chunks: string[][] = [];
 
-    // Split into chunks of 10
     for (let i = 0; i < uniqueIds.length; i += 10) {
         chunks.push(uniqueIds.slice(i, i + 10));
     }
 
     const promises = chunks.map(async (chunk) => {
         const q = query(
-            collection(db, COLLECTION),
-            where('agencyId', '==', agencyId),
+            agencyPropsCol(agencyId),
             where(documentId(), 'in', chunk)
         );
         const snap = await getDocs(q);
@@ -167,8 +220,7 @@ export async function getPropertiesByIds(agencyId: string, propertyIds: string[]
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 /**
- * Partially updates a property document.
- * Only the fields present in `updates` are modified.
+ * Partially updates a property document via the backend Cloud Function.
  */
 export async function updateProperty(
     propertyId: string,
@@ -193,20 +245,20 @@ export async function updateProperty(
 
 /**
  * Merges duplicate properties into a primary one.
- * Deletes the specified duplicates and updates the primary property with merged data.
  */
 export async function mergeProperties(
+    agencyId: string,
     primaryId: string,
     duplicateIds: string[],
     mergedData: Partial<Property>
 ): Promise<void> {
     const batch = writeBatch(db);
 
-    const primaryRef = doc(db, COLLECTION, primaryId);
+    const primaryRef = doc(agencyPropsCol(agencyId), primaryId);
     batch.update(primaryRef, { ...mergedData, updatedAt: serverTimestamp() });
 
     duplicateIds.forEach(id => {
-        const dupRef = doc(db, COLLECTION, id);
+        const dupRef = doc(agencyPropsCol(agencyId), id);
         batch.delete(dupRef);
     });
 
@@ -216,12 +268,7 @@ export async function mergeProperties(
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 /**
- * Permanently deletes a property document.
- * Prefer soft-deletes (status = 'withdrawn') in production.
- */
-/**
- * Permanently deletes a property document.
- * Calls the backend Cloud Function for security and data integrity.
+ * Calls the backend Cloud Function to delete a property.
  */
 export async function deleteProperty(propertyId: string): Promise<void> {
     const functions = getFunctions(undefined, 'europe-west1');
@@ -244,11 +291,11 @@ export async function uploadPropertyImages(
     const uploadPromises = imageFiles.map(async (file) => {
         const ext = file.name.split('.').pop() ?? 'jpg';
         const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-        
-        const path = (isGlobal && isSuperAdmin) 
+
+        const path = (isGlobal && isSuperAdmin)
             ? `global/properties/${propertyId}/images/${uniqueFilename}`
             : `agencies/${agencyId}/properties/${propertyId}/images/${uniqueFilename}`;
-            
+
         const storageRef = ref(storage, path);
         const snapshot = await uploadBytes(storageRef, file);
         return getDownloadURL(snapshot.ref);
@@ -266,11 +313,11 @@ export async function uploadPropertyVideo(
 ): Promise<string> {
     const ext = videoFile.name.split('.').pop() ?? 'mp4';
     const uniqueFilename = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-    
+
     const path = (isGlobal && isSuperAdmin)
         ? `global/properties/${propertyId}/videos/${uniqueFilename}`
         : `agencies/${agencyId}/properties/${propertyId}/videos/${uniqueFilename}`;
-        
+
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, videoFile);
     return getDownloadURL(snapshot.ref);

@@ -530,7 +530,7 @@ export default function Leads() {
                                         className="flex items-center gap-1.5 text-xs text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-lg transition-colors border border-blue-500/20"
                                       >
                                         <Home size={12} className="text-blue-400" />
-                                        <span className="font-bold truncate max-w-[150px]">{sellerProperty.address}</span>
+                                        <span className="font-bold truncate max-w-[150px]">{sellerProperty.address?.fullAddress}</span>
                                       </button>
                                     );
                                   }
@@ -667,7 +667,7 @@ export default function Leads() {
                         <span className="text-slate-400 font-medium truncate">
                           {activeTab === 'buyer' 
                             ? `${lead.requirements?.desiredCity?.join(', ') || 'כל עיר'} • עד ₪${lead.requirements?.maxBudget?.toLocaleString() || 'לא צוין'}`
-                            : properties?.find(p => p.leadId === lead.id)?.address || 'אין נכס משוייך'
+                            : properties?.find(p => p.leadId === lead.id)?.address?.fullAddress || 'אין נכס משוייך'
                           }
                         </span>
                       </div>

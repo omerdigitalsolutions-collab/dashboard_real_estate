@@ -66,7 +66,7 @@ async function getMatchingCityNames(desiredCities) {
     return resolved;
 }
 exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -101,11 +101,10 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
     }
     // ── Fetch active properties from Agency ──────────────────────────────────────
     const agencySnapshot = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
         .get();
-    const agencyProperties = agencySnapshot.docs.map(doc => (Object.assign({ id: doc.id, isExclusivity: true, collectionPath: 'properties' }, doc.data())));
+    const agencyProperties = agencySnapshot.docs.map(doc => (Object.assign({ id: doc.id, isExclusivity: true, collectionPath: `agencies/${agencyId}/properties` }, doc.data())));
     // ── Fetch global properties from 'cities' collections ───────────────────────
     let globalProperties = [];
     const req = requirements !== null && requirements !== void 0 ? requirements : {};
@@ -123,8 +122,22 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
                 if (citySnap.empty)
                     return [];
                 return citySnap.docs.map(doc => {
+                    var _a, _b, _c, _d;
                     const data = doc.data();
-                    return Object.assign(Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, address: data.street || data.address || 'כתובת חסויה', type: data.type || 'sale' }, data), { city: data.city || cityName });
+                    // Cities collection still uses flat schema — normalize for matching engine
+                    return Object.assign(Object.assign({ id: doc.id, isExclusivity: false, collectionPath: `cities/${cityName}/properties`, 
+                        // Normalize to new nested paths so matching engine works uniformly
+                        address: {
+                            city: data.city || cityName,
+                            street: data.street || '',
+                            neighborhood: data.neighborhood || '',
+                            fullAddress: data.address || data.street || 'כתובת חסויה',
+                        }, transactionType: data.transactionType || data.type || 'forsale', financials: { price: data.price || 0 }, features: {
+                            hasElevator: (_a = data.hasElevator) !== null && _a !== void 0 ? _a : null,
+                            hasParking: (_b = data.hasParking) !== null && _b !== void 0 ? _b : null,
+                            hasBalcony: (_c = data.hasBalcony) !== null && _c !== void 0 ? _c : null,
+                            hasMamad: (_d = data.hasSafeRoom) !== null && _d !== void 0 ? _d : null,
+                        } }, data), { city: data.city || cityName });
                 });
             }
             catch (err) {
@@ -142,19 +155,20 @@ exports.matchPropertiesForLead = (0, https_1.onCall)({ cors: true }, async (requ
         // Prepare property for matching engine
         const matchingProp = {
             id: prop.id,
-            city: prop.city,
-            neighborhood: prop.neighborhood,
-            price: prop.price,
+            city: ((_c = prop.address) === null || _c === void 0 ? void 0 : _c.city) || prop.city,
+            neighborhood: ((_d = prop.address) === null || _d === void 0 ? void 0 : _d.neighborhood) || prop.neighborhood,
+            street: ((_e = prop.address) === null || _e === void 0 ? void 0 : _e.street) || prop.street,
+            price: (_g = (_f = prop.financials) === null || _f === void 0 ? void 0 : _f.price) !== null && _g !== void 0 ? _g : prop.price,
             rooms: prop.rooms,
-            type: prop.type,
-            hasElevator: prop.hasElevator,
-            hasParking: prop.hasParking,
-            hasBalcony: prop.hasBalcony,
-            hasSafeRoom: prop.hasSafeRoom
+            transactionType: prop.transactionType || prop.type || 'forsale',
+            hasElevator: (_j = (_h = prop.features) === null || _h === void 0 ? void 0 : _h.hasElevator) !== null && _j !== void 0 ? _j : prop.hasElevator,
+            hasParking: (_l = (_k = prop.features) === null || _k === void 0 ? void 0 : _k.hasParking) !== null && _l !== void 0 ? _l : prop.hasParking,
+            hasBalcony: (_o = (_m = prop.features) === null || _m === void 0 ? void 0 : _m.hasBalcony) !== null && _o !== void 0 ? _o : prop.hasBalcony,
+            hasMamad: (_q = (_p = prop.features) === null || _p === void 0 ? void 0 : _p.hasMamad) !== null && _q !== void 0 ? _q : prop.hasSafeRoom,
         };
         const result = (0, matchingEngine_1.evaluateMatch)(matchingProp, req);
         if (result) {
-            matches.push(Object.assign(Object.assign({}, prop), { matchScore: result.matchScore, category: result.category, isNeighborhoodMatch: result.isNeighborhoodMatch, requiresVerification: result.requiresVerification }));
+            matches.push(Object.assign(Object.assign({}, prop), { matchScore: result.matchScore, category: result.category, isNeighborhoodMatch: result.isNeighborhoodMatch, isStreetMatch: result.isStreetMatch, requiresVerification: result.requiresVerification }));
         }
     }
     // Sort by matchScore descending

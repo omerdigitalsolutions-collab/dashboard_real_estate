@@ -125,10 +125,10 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
         if (id !== 'none') {
             const prop = properties.find(p => p.id === id);
             if (prop) {
-                setLocation(`${prop.address}${prop.city ? `, ${prop.city}` : ''}`);
+                setLocation(`${prop.address?.fullAddress}${prop.address?.city ? `, ${prop.address.city}` : ''}`);
                 if (!summary || summary.includes('פגישה')) {
                     const lead = leads.find(l => l.id === selectedLeadId);
-                    setSummary(`פגישה בנכס: ${prop.address} ${lead ? `(עם ${lead.name})` : ''}`);
+                    setSummary(`פגישה בנכס: ${prop.address?.fullAddress} ${lead ? `(עם ${lead.name})` : ''}`);
                 }
             }
         }
@@ -439,7 +439,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                             <option value="none">-- בחר נכס (אופציונלי) --</option>
                                             {properties.map(p => (
                                                 <option key={p.id} value={p.id}>
-                                                    {p.address} {p.city ? `, ${p.city}` : ''}
+                                                    {p.address?.fullAddress} {p.address?.city ? `, ${p.address.city}` : ''}
                                                 </option>
                                             ))}
                                         </select>

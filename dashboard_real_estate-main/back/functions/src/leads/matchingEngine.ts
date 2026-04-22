@@ -6,6 +6,7 @@ const ROOMS_TOLERANCE = 0.5;
 export interface MatchingRequirements {
     desiredCity?: string[];
     desiredNeighborhoods?: string[];
+    desiredStreet?: string[];
     maxBudget?: number | null;
     minRooms?: number | null;
     maxRooms?: number | null;
@@ -26,19 +27,21 @@ export interface MatchingProperty {
     id: string;
     city?: string;
     neighborhood?: string | null;
+    street?: string | null;
     price: number;
     rooms?: number | null;
-    type: 'sale' | 'rent';
+    transactionType: 'forsale' | 'rent' | 'sale'; // 'sale' kept for legacy global-city docs
     hasElevator?: boolean | null;
     hasParking?: boolean | null;
     hasBalcony?: boolean | null;
-    hasSafeRoom?: boolean | null;
+    hasMamad?: boolean | null;   // was: hasSafeRoom
 }
 
 export interface MatchResult {
     matchScore: number;
     category: 'high' | 'medium';
     isNeighborhoodMatch: boolean;
+    isStreetMatch: boolean;
     requiresVerification: string[];
 }
 
@@ -58,8 +61,8 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
     if (wantedTypes.length > 0) {
         // Normalize property type for comparison (handles Hebrew variants like
         // "קניה"/"קנייה", "למכירה", "להשכרה", "שכירות")
-        const pType = (property.type || '').toString().toLowerCase();
-        const isSale = pType === 'sale' || pType.includes('מכיר') || pType.includes('קני');
+        const pType = (property.transactionType || '').toString().toLowerCase();
+        const isSale = pType === 'forsale' || pType === 'sale' || pType.includes('מכיר') || pType.includes('קני');
         const isRent = pType === 'rent' || pType.includes('שכיר') || pType.includes('שכר');
 
         const typeMatch = wantedTypes.some(t => {
@@ -71,10 +74,11 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
         if (!typeMatch) return null;
     }
 
-    // ── 2. Location (City + Neighborhood) ─────────────────────────────────────
+    // ── 2. Location (City + Neighborhood + Street) ────────────────────────────
     const desiredCities = req.desiredCity || [];
     const desiredNeighborhoods = req.desiredNeighborhoods || [];
-    const hasLocationConstraint = desiredCities.length > 0 || desiredNeighborhoods.length > 0;
+    const desiredStreets = req.desiredStreet || [];
+    const hasLocationConstraint = desiredCities.length > 0 || desiredNeighborhoods.length > 0 || desiredStreets.length > 0;
 
     if (!isCityMatch(desiredCities, property.city || '')) {
         return null;
@@ -82,6 +86,7 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
 
     let neighborhoodScore = 1.0;
     let isNeighborhoodMatch = false;
+    let isStreetMatch = false;
 
     if (desiredNeighborhoods.length > 0) {
         if (property.neighborhood) {
@@ -114,10 +119,39 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
         isNeighborhoodMatch = true;
     }
 
+    // Street sub-scoring: refines location within the neighborhood
+    let streetScore = 1.0;
+    if (desiredStreets.length > 0) {
+        if (property.street) {
+            const propStreet = property.street.toLowerCase().trim();
+            const found = desiredStreets.some(q => {
+                const qLower = (q || '').toLowerCase().trim();
+                if (!qLower) return false;
+                return qLower.includes(propStreet) || propStreet.includes(qLower);
+            });
+            if (found) {
+                streetScore = 1.0;
+                isStreetMatch = true;
+            } else {
+                streetScore = 0.5;
+            }
+        } else {
+            streetScore = 0.6;
+            requiresVerification.push('street');
+        }
+    } else {
+        isStreetMatch = true;
+    }
+
+    // Combine neighborhood + street into a single location score
+    const locationScore = desiredStreets.length > 0
+        ? neighborhoodScore * 0.6 + streetScore * 0.4
+        : neighborhoodScore;
+
     if (hasLocationConstraint) {
         const locationWeight = weights.location || 1;
         totalPossibleWeight += locationWeight;
-        weightedPoints += neighborhoodScore * locationWeight;
+        weightedPoints += locationScore * locationWeight;
     }
 
     // ── 3. Price ──────────────────────────────────────────────────────────────
@@ -169,7 +203,7 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
         { reqField: 'mustHaveElevator', propField: 'hasElevator', label: 'hasElevator' },
         { reqField: 'mustHaveParking', propField: 'hasParking', label: 'hasParking' },
         { reqField: 'mustHaveBalcony', propField: 'hasBalcony', label: 'hasBalcony' },
-        { reqField: 'mustHaveSafeRoom', propField: 'hasSafeRoom', label: 'hasSafeRoom' },
+        { reqField: 'mustHaveSafeRoom', propField: 'hasMamad', label: 'hasMamad' },
     ] as const;
 
     const requiredAmenities = amenityChecks.filter(a => (req as any)[a.reqField] === true);
@@ -205,6 +239,7 @@ export function evaluateMatch(property: MatchingProperty, requirements: Matching
         matchScore,
         category,
         isNeighborhoodMatch,
+        isStreetMatch,
         requiresVerification
     };
 }

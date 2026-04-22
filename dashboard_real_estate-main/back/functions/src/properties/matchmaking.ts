@@ -52,8 +52,8 @@ async function runAgencyMatchmaking(
     propertyData: admin.firestore.DocumentData,
     agencyId: string,
 ) {
-    const propertyCity = propertyData.city;
-    const propertyPrice = propertyData.price;
+    const propertyCity = propertyData.address?.city || propertyData.city;
+    const propertyPrice = propertyData.financials?.price ?? propertyData.price;
 
     if (!agencyId || !propertyCity || propertyPrice === undefined) {
         console.log(`Matchmaking skipped for ${propertyId}: Missing city, price, or agencyId.`);
@@ -63,14 +63,15 @@ async function runAgencyMatchmaking(
     const matchingProp: MatchingProperty = {
         id: propertyId,
         city: propertyCity,
-        neighborhood: propertyData.neighborhood || null,
+        neighborhood: propertyData.address?.neighborhood || propertyData.neighborhood || null,
+        street: propertyData.address?.street || propertyData.street || null,
         price: propertyPrice,
         rooms: propertyData.rooms ?? null,
-        type: propertyData.type,
-        hasElevator: propertyData.hasElevator ?? null,
-        hasParking: propertyData.hasParking ?? null,
-        hasBalcony: propertyData.hasBalcony ?? null,
-        hasSafeRoom: propertyData.hasSafeRoom ?? null,
+        transactionType: propertyData.transactionType || propertyData.type || 'forsale',
+        hasElevator: propertyData.features?.hasElevator ?? propertyData.hasElevator ?? null,
+        hasParking: propertyData.features?.hasParking ?? propertyData.hasParking ?? null,
+        hasBalcony: propertyData.features?.hasBalcony ?? propertyData.hasBalcony ?? null,
+        hasMamad: propertyData.features?.hasMamad ?? propertyData.hasSafeRoom ?? null,
     };
 
     const leadsSnap = await db.collection('leads')
@@ -143,12 +144,12 @@ async function runAgencyMatchmaking(
         agencyId,
         property: {
             id: propertyId,
-            source: propertyData.source ?? 'manual',
+            source: (typeof propertyData.source === 'string' ? propertyData.source : propertyData.source?.origin) ?? 'manual',
             city: propertyCity,
             price: propertyPrice,
             rooms: propertyData.rooms ?? undefined,
-            type: propertyData.type,
-            address: propertyData.address,
+            transactionType: propertyData.transactionType || propertyData.type,
+            address: propertyData.address?.fullAddress || propertyData.address,
         },
         matchedLeads,
     });
@@ -160,14 +161,14 @@ async function runAgencyMatchmaking(
  * same agency and emits deterministic alerts (idempotent on retries).
  */
 export const onPropertyCreatedMatchmaking = onDocumentCreated(
-    { document: 'properties/{propertyId}', secrets: newPropertyAlertSecrets },
+    { document: 'agencies/{agencyId}/properties/{propertyId}', secrets: newPropertyAlertSecrets },
     async (event) => {
         const propertyId = event.params.propertyId;
+        const agencyId = event.params.agencyId;
         const propertySnap = event.data;
         if (!propertySnap) return;
 
         const propertyData = propertySnap.data();
-        const agencyId = propertyData.agencyId;
 
         try {
             await runAgencyMatchmaking(propertyId, propertyData, agencyId);
@@ -214,9 +215,10 @@ export const onGlobalPropertyCreatedMatchmaking = onDocumentCreated(
         if (!propertySnap) return;
 
         const propertyData = propertySnap.data();
-        const propertyPrice = propertyData.price;
+        // Cities collection docs still use flat schema
+        const propertyPrice = propertyData.financials?.price ?? propertyData.price;
         const propertyRooms = propertyData.rooms;
-        const propertyType = propertyData.type;
+        const propertyType = propertyData.transactionType || propertyData.type;
 
         if (!propertyPrice || !propertyType) {
             console.log(`Global matchmaking skipped for ${propertyId}: Missing price or type.`);
@@ -225,15 +227,16 @@ export const onGlobalPropertyCreatedMatchmaking = onDocumentCreated(
 
         const matchingProp: MatchingProperty = {
             id: propertyId,
-            city: propertyData.city || cityName,
-            neighborhood: propertyData.neighborhood || null,
+            city: propertyData.address?.city || propertyData.city || cityName,
+            neighborhood: propertyData.address?.neighborhood || propertyData.neighborhood || null,
+            street: propertyData.address?.street || propertyData.street || null,
             price: propertyPrice,
             rooms: propertyRooms ?? null,
-            type: propertyType,
-            hasElevator: propertyData.hasElevator ?? null,
-            hasParking: propertyData.hasParking ?? null,
-            hasBalcony: propertyData.hasBalcony ?? null,
-            hasSafeRoom: propertyData.hasSafeRoom ?? null,
+            transactionType: propertyType,
+            hasElevator: propertyData.features?.hasElevator ?? propertyData.hasElevator ?? null,
+            hasParking: propertyData.features?.hasParking ?? propertyData.hasParking ?? null,
+            hasBalcony: propertyData.features?.hasBalcony ?? propertyData.hasBalcony ?? null,
+            hasMamad: propertyData.features?.hasMamad ?? propertyData.hasSafeRoom ?? null,
         };
 
         try {

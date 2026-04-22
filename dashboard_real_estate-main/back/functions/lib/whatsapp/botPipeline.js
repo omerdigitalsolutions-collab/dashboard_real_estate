@@ -92,7 +92,7 @@ async function getOrCreateSession(phone, agencyId) {
 // ─── Property-specific routing ─────────────────────────────────────────────────
 // Returns true if the message was handled (conversation should not continue to AI bot).
 async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const propertyKeywords = ['רחוב', 'כתובת', 'נכס ב', 'דירה ב', 'הנכס ב', 'פרויקט', 'מגדל', 'גוש', 'חלקה', 'קומה'];
     if (!propertyKeywords.some((kw) => text.includes(kw)))
         return false;
@@ -100,26 +100,31 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
     if (words.length === 0)
         return false;
     const propSnap = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
         .limit(50)
         .get();
     const matched = propSnap.docs.find((doc) => {
         const d = doc.data();
-        const haystack = `${d.address || ''} ${d.street || ''} ${d.city || ''} ${d.neighborhood || ''}`.toLowerCase();
+        const addrObj = d.address;
+        const haystack = [
+            typeof addrObj === 'object' ? addrObj === null || addrObj === void 0 ? void 0 : addrObj.fullAddress : addrObj,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.street,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.city,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.neighborhood,
+        ].filter(Boolean).join(' ').toLowerCase();
         return words.some((w) => haystack.includes(w.toLowerCase()));
     });
     if (!matched)
         return false;
     const prop = matched.data();
-    const assignedAgentId = prop.agentId || null;
+    const assignedAgentId = ((_a = prop.management) === null || _a === void 0 ? void 0 : _a.assignedAgentId) || prop.agentId || null;
     const toIntl = (p) => `${p.replace(/^0/, '972')}@c.us`;
     if (prop.isExclusive && assignedAgentId) {
         const agentDoc = await db.collection('users').doc(assignedAgentId).get();
-        const agentPhone = ((_a = agentDoc.data()) === null || _a === void 0 ? void 0 : _a.phone) || ((_b = agentDoc.data()) === null || _b === void 0 ? void 0 : _b.phoneNumber) || null;
+        const agentPhone = ((_b = agentDoc.data()) === null || _b === void 0 ? void 0 : _b.phone) || ((_c = agentDoc.data()) === null || _c === void 0 ? void 0 : _c.phoneNumber) || null;
         if (agentPhone) {
-            const desc = prop.address || prop.city || 'נכס';
+            const desc = ((_d = prop.address) === null || _d === void 0 ? void 0 : _d.fullAddress) || ((_e = prop.address) === null || _e === void 0 ? void 0 : _e.city) || prop.city || 'נכס';
             await sendDirect(creds, toIntl(agentPhone), `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${phone}\nשאל על: ${desc}\n\nהודעה:\n"${text}"`);
             await sendDirect(creds, waChatId, 'מעביר אותך לסוכן שאחראי על הנכס — הוא יחזור אליך בהקדם. 🏡');
             return true;
@@ -134,9 +139,9 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
         .limit(1)
         .get();
     if (!adminSnap.empty) {
-        const adminPhone = ((_c = adminSnap.docs[0].data()) === null || _c === void 0 ? void 0 : _c.phone) || ((_d = adminSnap.docs[0].data()) === null || _d === void 0 ? void 0 : _d.phoneNumber) || null;
+        const adminPhone = ((_f = adminSnap.docs[0].data()) === null || _f === void 0 ? void 0 : _f.phone) || ((_g = adminSnap.docs[0].data()) === null || _g === void 0 ? void 0 : _g.phoneNumber) || null;
         if (adminPhone) {
-            await sendDirect(creds, toIntl(adminPhone), `🏠 *ליד חדש מהבוט*\nטלפון: ${phone}\nשאל על: ${prop.address || prop.city || 'נכס'}\n\nהודעה:\n"${text}"`);
+            await sendDirect(creds, toIntl(adminPhone), `🏠 *ליד חדש מהבוט*\nטלפון: ${phone}\nשאל על: ${((_h = prop.address) === null || _h === void 0 ? void 0 : _h.fullAddress) || ((_j = prop.address) === null || _j === void 0 ? void 0 : _j.city) || prop.city || 'נכס'}\n\nהודעה:\n"${text}"`);
         }
     }
     await sendDirect(creds, waChatId, 'פנינו לנציג שיחזור אליך בהקדם. 🏡');
@@ -178,15 +183,18 @@ async function processInboundMessage(params) {
     else {
         await writeAuditLog(phone, agencyId, 'inbound', sanitized);
     }
-    // 5. Security session TTL
+    // 5. Security session TTL (rolling 24h — expires 24h after last message, not after creation)
     const session = await getOrCreateSession(phone, agencyId);
+    const lastActive = session.lastMessageAt
+        ? session.lastMessageAt.toMillis()
+        : 0;
     const isExpired = session.status === 'expired' ||
-        (session.expiresAt && session.expiresAt.toMillis() < Date.now());
+        (Date.now() - lastActive > SESSION_TTL_MS);
     if (isExpired) {
         const agencyDoc = await db.collection('agencies').doc(agencyId).get();
         const agencyPhone = ((_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.phone) || ((_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.phoneNumber) || '';
         await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);
-        await db.collection('whatsapp_sessions').doc(phone).update({ status: 'expired' });
+        await db.collection('whatsapp_sessions').doc(phone).delete();
         return;
     }
     // 6. Property-specific routing

@@ -576,17 +576,35 @@ function buildPropertyDefaults(
     createdBy: string,
     extra?: Partial<Record<string, any>>
 ): Record<string, any> {
+    const lat = extra?.lat || null;
+    const lng = extra?.lng || null;
     return {
-        address: row.address || row.propertyName || 'לא צויין רחוב',
-        city: row.city || 'לא צויינה עיר',
-        type: row.type || 'sale',
-        kind: row.kind || 'דירה',
-        price: row.price || 1,
+        agencyId,
+        transactionType: row.type === 'rent' ? 'rent' : 'forsale',
+        propertyType: row.kind || 'דירה',
+        status: extra?.status || 'active',
         rooms: row.rooms ?? null,
         floor: row.floor ?? null,
-        sqm: row.sqm ?? null,
-        description: row.description ? String(row.description).trim() : null,
-        notes: row.notes ? String(row.notes).trim() : null,
+        squareMeters: row.sqm ?? null,
+        address: {
+            city: row.city || 'לא צויינה עיר',
+            fullAddress: row.address || row.propertyName || 'לא צויין רחוב',
+            neighborhood: row.neighborhood || null,
+            ...(lat && lng ? { coords: { lat, lng } } : {}),
+        },
+        features: {
+            hasElevator: row.hasElevator ?? null,
+            hasParking: row.hasParking ?? null,
+            hasBalcony: row.hasBalcony ?? null,
+            hasMamad: row.hasSafeRoom ?? null,
+            hasAirConditioning: row.hasAirCondition ?? null,
+        },
+        financials: { price: row.price || 1 },
+        media: { images: [] },
+        management: {
+            assignedAgentId: agentId,
+            descriptions: row.description ? String(row.description).trim() : null,
+        },
         isExclusive: row.isExclusive !== undefined ? !!row.isExclusive : true,
         listingType: row.listingType || (row.isExclusive === false ? 'private' : 'exclusive'),
         exclusivityEndDate: row.exclusivityEndDate
@@ -594,31 +612,11 @@ function buildPropertyDefaults(
                 ? Timestamp.fromDate(new Date(row.exclusivityEndDate))
                 : row.exclusivityEndDate)
             : null,
-        agencyId,
-        agentId,
         createdBy,
-        status: 'active',
-        daysOnMarket: 0,
-        lat: extra?.lat || 31.5,
-        lng: extra?.lng || 34.75,
-        location: { lat: extra?.lat || 31.5, lng: extra?.lng || 34.75 },
-        geocode: {
-            lat: extra?.lat || 31.5,
-            lng: extra?.lng || 34.75,
-            formattedAddress: extra?.formattedAddress || `${row.address ?? row.propertyName ?? ''}, ${row.city ?? ''}`,
-            source: extra?.lat ? 'google_import' : 'placeholder',
-            lastUpdated: serverTimestamp(),
-        },
+        notes: row.notes ? String(row.notes).trim() : null,
         ...(row.customData ? { customData: row.customData } : {}),
         condition: row.condition || null,
-        floorsTotal: row.floorsTotal ?? null,
-        hasElevator: row.hasElevator ?? null,
-        hasParking: row.hasParking ?? null,
-        hasBalcony: row.hasBalcony ?? null,
-        hasSafeRoom: row.hasSafeRoom ?? null,
-        hasBars: row.hasBars ?? null,
-        hasAirCondition: row.hasAirCondition ?? null,
-        neighborhood: row.neighborhood || null,
+        totalFloors: row.floorsTotal ?? null,
         externalAgencyName: row.externalAgencyName || null,
         externalContactName: row.externalContactName || null,
         createdAt: serverTimestamp(),
@@ -738,10 +736,10 @@ export async function importProperties(
     const existingDocsMap = new Map<string, string>();
 
     if (strategy !== 'always_create') {
-        const snap = await getDocs(query(collection(db, 'properties'), where('agencyId', '==', agencyId)));
+        const snap = await getDocs(collection(db, 'agencies', agencyId, 'properties'));
         snap.docs.forEach((d) => {
             const data = d.data();
-            const key = `${String(data.address ?? '').trim().toLowerCase()}|${String(data.city ?? '').trim().toLowerCase()}`;
+            const key = `${String(data.address?.fullAddress ?? data.address ?? '').trim().toLowerCase()}|${String(data.address?.city ?? data.city ?? '').trim().toLowerCase()}`;
             existingKeys.add(key);
             existingDocsMap.set(key, d.id);
         });
@@ -769,16 +767,16 @@ export async function importProperties(
 
             if (strategy === 'update' && existingKeys.has(key)) {
                 const existingId = existingDocsMap.get(key)!;
-                const ref = doc(db, 'properties', existingId);
-                const updateData: any = { 
-                    ...row, 
-                    agentId: resolvedAgentId, 
+                const ref = doc(db, 'agencies', agencyId, 'properties', existingId);
+                const updateData: any = {
+                    ...row,
+                    'management.assignedAgentId': resolvedAgentId,
                     updatedAt: serverTimestamp(),
-                    ...(geo ? { lat: geo.lat, lng: geo.lng, location: { lat: geo.lat, lng: geo.lng } } : {})
+                    ...(geo ? { 'address.coords': { lat: geo.lat, lng: geo.lng } } : {})
                 };
                 batch.update(ref, updateData);
             } else {
-                const ref = doc(collection(db, 'properties'));
+                const ref = doc(collection(db, 'agencies', agencyId, 'properties'));
                 batch.set(ref, buildPropertyDefaults(row, agencyId, resolvedAgentId, createdBy, geo ? {
                     lat: geo.lat,
                     lng: geo.lng,
@@ -843,7 +841,7 @@ export async function importMixed(
             });
 
             // 2. Property — link to owner lead
-            const propertyRef = doc(collection(db, 'properties'));
+            const propertyRef = doc(collection(db, 'agencies', agencyId, 'properties'));
             batch.set(propertyRef, buildPropertyDefaults(row, agencyId, createdBy, createdBy, {
                 ownerId: leadRef.id,
                 ...(geo ? { lat: geo.lat, lng: geo.lng, formattedAddress: geo.formatted } : {})
@@ -875,10 +873,10 @@ export async function importDeals(
 
     // Pre-load existing properties (address|city → id) for deduplication
     const existingPropertiesMap = new Map<string, string>();
-    const propSnap = await getDocs(query(collection(db, 'properties'), where('agencyId', '==', agencyId)));
+    const propSnap = await getDocs(collection(db, 'agencies', agencyId, 'properties'));
     propSnap.docs.forEach((d) => {
         const data = d.data();
-        const key = `${String(data.address ?? '').trim().toLowerCase()}|${String(data.city ?? '').trim().toLowerCase()}`;
+        const key = `${String(data.address?.fullAddress ?? data.address ?? '').trim().toLowerCase()}|${String(data.address?.city ?? data.city ?? '').trim().toLowerCase()}`;
         existingPropertiesMap.set(key, d.id);
     });
 
@@ -901,7 +899,7 @@ export async function importDeals(
             const propKey = `${String(row.propertyName ?? '').trim().toLowerCase()}|${String(row.city ?? '').trim().toLowerCase()}`;
             let propertyId = existingPropertiesMap.get(propKey);
             if (!propertyId) {
-                const propertyRef = doc(collection(db, 'properties'));
+                const propertyRef = doc(collection(db, 'agencies', agencyId, 'properties'));
                 propertyId = propertyRef.id;
                 batch.set(propertyRef, buildPropertyDefaults(
                     { ...row, address: row.propertyName },

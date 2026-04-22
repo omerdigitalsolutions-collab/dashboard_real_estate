@@ -32,12 +32,10 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
             // Or prioritize active > exclusive > oldest.
             // For simplicity, let's keep the user's requested 'oldest' as primary, or the one with images.
             const sorted = [...props].sort((a, b) => {
-                // If one has images and the other doesn't, prefer images.
-                const aImages = a.imageUrls?.length || 0;
-                const bImages = b.imageUrls?.length || 0;
+                const aImages = a.media?.images?.length || 0;
+                const bImages = b.media?.images?.length || 0;
                 if (aImages !== bImages) return bImages - aImages;
-
-                return a.price - b.price; // Or sort by whatever
+                return (a.financials?.price ?? 0) - (b.financials?.price ?? 0);
             });
 
             const primary = sorted[0];
@@ -45,21 +43,19 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
 
             // 2. Merge data
             // Collect all unique images
-            const allImageUrls = new Set<string>();
+            const allImages = new Set<string>();
             props.forEach(p => {
-                if (p.imageUrls) {
-                    p.imageUrls.forEach(url => allImageUrls.add(url));
-                }
+                p.media?.images?.forEach((url: string) => allImages.add(url));
             });
 
             const mergedData: Partial<Property> = {
-                imageUrls: Array.from(allImageUrls),
+                media: { images: Array.from(allImages) },
             };
 
             // Keep the best description
-            if (!primary.description) {
-                const bestDesc = props.find(p => p.description)?.description;
-                if (bestDesc) mergedData.description = bestDesc;
+            if (!primary.management?.descriptions) {
+                const bestDesc = props.find(p => p.management?.descriptions)?.management?.descriptions;
+                if (bestDesc) mergedData.management = { ...mergedData.management, descriptions: bestDesc };
             }
 
             // Exclusivity fallback
@@ -69,7 +65,7 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
             }
 
             const duplicateIds = duplicates.map(d => d.id);
-            await mergeProperties(primary.id, duplicateIds, mergedData);
+            await mergeProperties(primary.agencyId, primary.id, duplicateIds, mergedData);
 
             onMerged();
         } catch (err: any) {
@@ -123,9 +119,9 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                             <div key={group.signature} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
                                 <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
                                     <div>
-                                        <h3 className="font-bold text-slate-800">{firstProp.address}, {firstProp.city}</h3>
+                                        <h3 className="font-bold text-slate-800">{firstProp.address?.fullAddress}, {firstProp.address?.city}</h3>
                                         <div className="text-xs text-slate-500 font-medium mt-0.5">
-                                            {firstProp.rooms} חדרים {firstProp.sqm ? ` • ${firstProp.sqm} מ"ר` : ''} • {group.properties.length} כפילויות תועדו
+                                            {firstProp.rooms} חדרים {firstProp.squareMeters ? ` • ${firstProp.squareMeters} מ"ר` : ''} • {group.properties.length} כפילויות תועדו
                                         </div>
                                     </div>
                                     <button
@@ -140,12 +136,12 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/50">
                                     {group.properties.map(p => (
                                         <div key={p.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-2 relative">
-                                            {p.imageUrls && p.imageUrls.length > 0 ? (
+                                            {p.media?.images && p.media.images.length > 0 ? (
                                                 <div className="relative h-24 rounded-lg overflow-hidden bg-slate-100">
-                                                    <img src={p.imageUrls[0]} alt="Prop" className="w-full h-full object-cover" />
+                                                    <img src={p.media.images[0]} alt="Prop" className="w-full h-full object-cover" />
                                                     <div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
-                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.kind === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                            {p.status === 'draft' ? 'טיוטה' : p.kind === 'מסחרי' ? 'מסחרי' : p.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.propertyType === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                            {p.status === 'draft' ? 'טיוטה' : p.propertyType === 'מסחרי' ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -153,16 +149,16 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                                                 <div className="relative h-24 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center text-xs text-slate-400">
                                                     אין תמונה
                                                     <div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
-                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.kind === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.type === 'sale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                            {p.status === 'draft' ? 'טיוטה' : p.kind === 'מסחרי' ? 'מסחרי' : p.type === 'sale' ? 'למכירה' : 'להשכרה'}
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.propertyType === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                            {p.status === 'draft' ? 'טיוטה' : p.propertyType === 'מסחרי' ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                                                         </span>
                                                     </div>
                                                 </div>
                                             )}
                                             <div>
-                                                <div className="font-bold text-slate-800">₪{p.price.toLocaleString()}</div>
+                                                <div className="font-bold text-slate-800">₪{p.financials?.price?.toLocaleString()}</div>
                                                 <div className="text-[10px] text-slate-400 mt-1">
-                                                    סוכן: {p.agentId || 'לא משויך'}
+                                                    סוכן: {p.management?.assignedAgentId || 'לא משויך'}
                                                 </div>
                                                 <div className="text-[10px] text-slate-400">
                                                     מצב: {p.status} {p.listingType ? `(${p.listingType})` : ''}

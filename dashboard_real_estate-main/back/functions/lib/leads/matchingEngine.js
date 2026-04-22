@@ -19,8 +19,8 @@ function evaluateMatch(property, requirements) {
     if (wantedTypes.length > 0) {
         // Normalize property type for comparison (handles Hebrew variants like
         // "קניה"/"קנייה", "למכירה", "להשכרה", "שכירות")
-        const pType = (property.type || '').toString().toLowerCase();
-        const isSale = pType === 'sale' || pType.includes('מכיר') || pType.includes('קני');
+        const pType = (property.transactionType || '').toString().toLowerCase();
+        const isSale = pType === 'forsale' || pType === 'sale' || pType.includes('מכיר') || pType.includes('קני');
         const isRent = pType === 'rent' || pType.includes('שכיר') || pType.includes('שכר');
         const typeMatch = wantedTypes.some(t => {
             const tl = (t || '').toString().toLowerCase();
@@ -33,15 +33,17 @@ function evaluateMatch(property, requirements) {
         if (!typeMatch)
             return null;
     }
-    // ── 2. Location (City + Neighborhood) ─────────────────────────────────────
+    // ── 2. Location (City + Neighborhood + Street) ────────────────────────────
     const desiredCities = req.desiredCity || [];
     const desiredNeighborhoods = req.desiredNeighborhoods || [];
-    const hasLocationConstraint = desiredCities.length > 0 || desiredNeighborhoods.length > 0;
+    const desiredStreets = req.desiredStreet || [];
+    const hasLocationConstraint = desiredCities.length > 0 || desiredNeighborhoods.length > 0 || desiredStreets.length > 0;
     if (!(0, stringUtils_1.isCityMatch)(desiredCities, property.city || '')) {
         return null;
     }
     let neighborhoodScore = 1.0;
     let isNeighborhoodMatch = false;
+    let isStreetMatch = false;
     if (desiredNeighborhoods.length > 0) {
         if (property.neighborhood) {
             const propNeighborhood = property.neighborhood.toLowerCase().trim();
@@ -75,10 +77,41 @@ function evaluateMatch(property, requirements) {
     else {
         isNeighborhoodMatch = true;
     }
+    // Street sub-scoring: refines location within the neighborhood
+    let streetScore = 1.0;
+    if (desiredStreets.length > 0) {
+        if (property.street) {
+            const propStreet = property.street.toLowerCase().trim();
+            const found = desiredStreets.some(q => {
+                const qLower = (q || '').toLowerCase().trim();
+                if (!qLower)
+                    return false;
+                return qLower.includes(propStreet) || propStreet.includes(qLower);
+            });
+            if (found) {
+                streetScore = 1.0;
+                isStreetMatch = true;
+            }
+            else {
+                streetScore = 0.5;
+            }
+        }
+        else {
+            streetScore = 0.6;
+            requiresVerification.push('street');
+        }
+    }
+    else {
+        isStreetMatch = true;
+    }
+    // Combine neighborhood + street into a single location score
+    const locationScore = desiredStreets.length > 0
+        ? neighborhoodScore * 0.6 + streetScore * 0.4
+        : neighborhoodScore;
     if (hasLocationConstraint) {
         const locationWeight = weights.location || 1;
         totalPossibleWeight += locationWeight;
-        weightedPoints += neighborhoodScore * locationWeight;
+        weightedPoints += locationScore * locationWeight;
     }
     // ── 3. Price ──────────────────────────────────────────────────────────────
     if (req.maxBudget != null && req.maxBudget > 0) {
@@ -124,7 +157,7 @@ function evaluateMatch(property, requirements) {
         { reqField: 'mustHaveElevator', propField: 'hasElevator', label: 'hasElevator' },
         { reqField: 'mustHaveParking', propField: 'hasParking', label: 'hasParking' },
         { reqField: 'mustHaveBalcony', propField: 'hasBalcony', label: 'hasBalcony' },
-        { reqField: 'mustHaveSafeRoom', propField: 'hasSafeRoom', label: 'hasSafeRoom' },
+        { reqField: 'mustHaveSafeRoom', propField: 'hasMamad', label: 'hasMamad' },
     ];
     const requiredAmenities = amenityChecks.filter(a => req[a.reqField] === true);
     if (requiredAmenities.length > 0) {
@@ -158,6 +191,7 @@ function evaluateMatch(property, requirements) {
         matchScore,
         category,
         isNeighborhoodMatch,
+        isStreetMatch,
         requiresVerification
     };
 }

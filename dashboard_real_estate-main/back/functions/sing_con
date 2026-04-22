@@ -1,0 +1,323 @@
+כדי שהמערכת תעבוד בצורה מושלמת בסגנון "DocuSign", ריכזתי לך כאן את כל חלקי הקוד המרכזיים – מה-Backend ועד ה-Front.
+
+המערכת בנויה על: React (Frontend), Firebase Functions (Backend), וספריית pdf-lib לעריכת מסמכים.
+
+1.
+ה-Cloud Function המלאה (signDeal)
+כך זה צריך להיראות בתוך קובץ ה-index.js או ה-functions.js שלך בתיקיית ה-Functions:
+
+JavaScript
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
+const { PDFDocument } = require("pdf-lib");
+const fetch = require("node-fetch");
+
+exports.signDeal = onCall(async (request) => {
+  // 1. חילוץ הנתונים שהגיעו מה-Frontend
+  const { agencyId, dealId, signature, fields, uiContainer } = request.data;
+  const userId = request.auth?.uid;
+
+  // בדיקות תקינות בסיסיות
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "רק משתמשים מחוברים יכולים לחתום.");
+  }
+  if (!uiContainer || !uiContainer.width || !uiContainer.height) {
+    throw new HttpsError("invalid-argument", "חסרות מידות המסך (uiContainer) הנדרשות לחישוב מיקום החתימה.");
+  }
+
+  try {
+    const db = admin.firestore();
+    const dealRef = db.collection("agencies").doc(agencyId).collection("deals").doc(dealId);
+    const dealDoc = await dealRef.get();
+    
+    if (!dealDoc.exists) {
+        throw new HttpsError("not-found", "העסקה לא נמצאה.");
+    }
+    
+    const dealData = dealDoc.data();
+
+    // 2. הורדת ה-PDF המקורי מה-Storage
+    const pdfBytes = await fetch(dealData.contract.pdfUrl).then(res => res.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    
+    // 3. הכנת תמונת החתימה (המרת ה-Base64 שחזר מ-SignatureCanvas)
+    const base64Data = signature.replace(/^data:image\/\w+;base64,/, "");
+    const signatureImageBytes = Buffer.from(base64Data, "base64");
+    const signatureImage = await pdfDoc.embedPng(signatureImageBytes);
+    
+    // 4. צריבת החתימה בעזרת החישוב המתמטי
+    const pages = pdfDoc.getPages();
+    
+    // גודל החתימה הרצוי בפיקסלים על המסך (כפי שמוגדר ב-UI)
+    const uiSignatureWidth = 120;
+    const uiSignatureHeight = 50;
+
+    fields.forEach(field => {
+      if (field.type === 'signature') {
+        // מציאת העמוד הרלוונטי (מערך מתחיל מ-0, דפים מ-1)
+        const pageIndex = (field.page || 1) - 1;
+        if (pageIndex < 0 || pageIndex >= pages.length) return;
+        
+        const page = pages[pageIndex];
+        const { width: pdfWidth, height: pdfHeight } = page.getSize();
+
+        // אלגוריתם יחס ההמרה (Scale)
+        const scaleX = pdfWidth / uiContainer.width;
+        const scaleY = pdfHeight / uiContainer.height;
+
+        const finalSigWidth = uiSignatureWidth * scaleX;
+        const finalSigHeight = uiSignatureHeight * scaleY;
+
+        // המרת קואורדינטות והיפוך ציר ה-Y
+        const finalX = field.x * scaleX;
+        const finalY = pdfHeight - (field.y * scaleY) - finalSigHeight;
+
+        // "ציור" התמונה על גבי ה-PDF האמיתי
+        page.drawImage(signatureImage, {
+          x: finalX,
+          y: finalY,
+          width: finalSigWidth,
+          height: finalSigHeight,
+        });
+      }
+    });
+
+    // 5. שמירת ה-PDF החתום בחזרה ל-Firebase Storage
+    const modifiedPdfBytes = await pdfDoc.save();
+    const filename = `agencies/${agencyId}/deals/${dealId}/signed_contract_${Date.now()}.pdf`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(filename);
+    
+    await file.save(modifiedPdfBytes, { 
+        contentType: "application/pdf",
+        metadata: {
+            metadata: {
+                signedBy: userId,
+                dealId: dealId
+            }
+        }
+    });
+    
+    // יצירת URL לגישה לקובץ החתום
+    const signedUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+
+    // 6. עדכון מסמך העסקה (Deal) ב-Firestore
+    await dealRef.update({
+      "contract.signedPdfUrl": signedUrl,
+      "contract.status": "signed",
+      "status": "active", // העסקה הופכת לפעילה עם חתימת החוזה
+      "metadata.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+      "metadata.signedAt": admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return { success: true, url: signedUrl };
+
+  } catch (error) {
+    console.error("Error signing deal:", error);
+    throw new HttpsError("internal", "אירעה שגיאה בעת עיבוד החתימה: " + error.message);
+  }
+});
+דגש לחיבור ב-Frontend
+כאשר הלקוח מסיים לחתום בדף SignaturePage.tsx ולוחץ על "שמור/אשר", הקריאה לפונקציה צריכה להכיל את מידות המסך שבו הוצג המסמך בזמן העריכה של הסוכן.
+
+זה ייראה כך בצד הלקוח (בקריאה ל-Cloud Function):
+
+JavaScript
+const response = await signDealFunction({
+  agencyId: "...",
+  dealId: "...",
+  signature: signatureData, // מחרוזת ה-Base64 מה-Canvas
+  fields: dealData.contract.fields, // השדות שנשמרו מה-Editor
+  uiContainer: {
+    width: 595, // הרוחב הווירטואלי שקבעת בקומפוננטת העורך
+    height: 842 // הגובה הווירטואלי שקבעת
+  }
+});
+
+2. ה-Frontend: קומפוננטת "קשקוש" (SignatureCanvas.tsx)
+הרכיב שמאפשר ללקוח לחתום עם העכבר או האצבע.
+
+TypeScript
+import React, { useRef, useState } from 'react';
+
+export function SignatureCanvas({ onSignatureChange }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const startDrawing = (e) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+    setIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    ctx.beginPath();
+    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    ctx?.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx?.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    const dataURL = canvasRef.current?.toDataURL();
+    onSignatureChange(dataURL); // שליחת ה-Base64 לאבא
+  };
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      onMouseDown={startDrawing} 
+      onMouseMove={draw} 
+      onMouseUp={stopDrawing}
+      className="border-2 border-dashed w-full h-40 bg-white cursor-crosshair"
+    />
+  );
+}
+3. ה-Frontend: ניהול גרסאות ושמירה (contractService.ts)
+הלוגיקה ששומרת חוזה חדש או מעדכנת קיים, תוך שמירת גרסה אחת אחורה ומניעת מחיקה.
+
+TypeScript
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
+
+export const saveContractUpdate = async (agencyId, contractId, newData) => {
+  const contractRef = doc(db, `agencies/${agencyId}/contracts`, contractId);
+  const snap = await getDoc(contractRef);
+  const currentData = snap.data();
+
+  // מניעת עריכה אם חתום
+  if (currentData?.status === 'signed') throw new Error("חוזה חתום לא ניתן לעריכה");
+
+  // גיבוי גרסה קודמת
+  const lastVersion = {
+    content: currentData.content,
+    fields: currentData.fields,
+    updatedAt: currentData.updatedAt
+  };
+
+  return await updateDoc(contractRef, {
+    ...newData,
+    lastVersion, // שמירת הגרסה הישנה בתוך המסמך
+    updatedAt: serverTimestamp()
+  });
+};
+4. חוקי אבטחה (Firestore Rules)
+כדי לוודא שסוכנים לא יכולים למחוק חוזים לעולם.
+
+JavaScript
+match /agencies/{agencyId}/contracts/{contractId} {
+  allow read, create, update: if request.auth != null;
+  allow delete: if false; // חסימה מוחלטת של מחיקה
+}
+5. 
+****
+
+עורך החוזים (לסוכן): ממשק Drag & Drop
+השתמשתי ב-react-draggable כדי לאפשר לסוכן למקם את השדות על גבי דף החוזה.    
+import React, { useState, useRef } from 'react';
+import Draggable from 'react-draggable';
+import { Type, PenTool, Calendar, User, Save } from 'lucide-react';
+
+// סוגי השדות שאפשר להוסיף
+const FIELD_TYPES = [
+  { id: 'signature', label: 'חתימה', icon: <PenTool size={16} />, color: 'bg-blue-500' },
+  { id: 'agent_name', label: 'שם סוכן', icon: <User size={16} />, color: 'bg-green-500' },
+  { id: 'client_name', label: 'שם לקוח', icon: <User size={16} />, color: 'bg-orange-500' },
+  { id: 'date', label: 'תאריך', icon: <Calendar size={16} />, color: 'bg-purple-500' },
+];
+
+export function ContractEditor({ pdfUrl, onSave }) {
+  const [fields, setFields] = useState([]);
+  const containerRef = useRef(null);
+
+  const addField = (type) => {
+    const newField = {
+      id: Date.now(),
+      type: type.id,
+      label: type.label,
+      x: 50, // מיקום התחלתי
+      y: 50,
+      page: 1
+    };
+    setFields([...fields, newField]);
+  };
+
+  const handleStop = (id, data) => {
+    setFields(fields.map(f => f.id === id ? { ...f, x: data.x, y: data.y } : f));
+  };
+
+  return (
+    <div className="flex h-[800px] bg-gray-100 p-4 gap-4 overflow-hidden">
+      {/* סרגל כלים בצד */}
+      <div className="w-64 bg-white p-4 rounded-lg shadow-md flex flex-col gap-3">
+        <h3 className="font-bold mb-2">גרור שדות למסמך</h3>
+        {FIELD_TYPES.map(type => (
+          <button
+            key={type.id}
+            onClick={() => addField(type)}
+            className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition"
+          >
+            {type.icon}
+            <span>{type.label}</span>
+          </button>
+        ))}
+        <button 
+          onClick={() => onSave(fields)}
+          className="mt-auto bg-black text-white p-3 rounded-lg flex items-center justify-center gap-2"
+        >
+          <Save size={18} /> שמור תבנית
+        </button>
+      </div>
+
+      {/* אזור המסמך */}
+      <div 
+        ref={containerRef}
+        className="flex-1 relative bg-white shadow-inner overflow-auto flex justify-center p-8"
+      >
+        <div className="relative border shadow-2xl bg-white w-[595px] h-[842px]"> {/* גודל A4 בפיקסלים */}
+          {/* כאן תבוא התצוגה של ה-PDF המקורי */}
+          <div className="absolute inset-0 flex items-center justify-center text-gray-300 pointer-events-none">
+             תצוגת PDF מקורי (רקע)
+          </div>
+
+          {/* שכבת השדות הדינמיים */}
+          {fields.map((field) => (
+            <Draggable
+              key={field.id}
+              bounds="parent"
+              defaultPosition={{ x: field.x, y: field.y }}
+              onStop={(e, data) => handleStop(field.id, data)}
+            >
+              <div className={`absolute cursor-move p-2 rounded shadow-sm text-white text-xs flex items-center gap-2 ${
+                FIELD_TYPES.find(t => t.id === field.type)?.color
+              }`}>
+                <PenTool size={12} />
+                {field.label}
+              </div>
+            </Draggable>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+ה-Flow המלא ב-Front (SignaturePage.tsx)
+איך הלקוח רואה את הכל ביחד:
+
+טעינה: המערכת מושכת את נתוני ה-Deal וה-Contract.
+
+תצוגה: הלקוח רואה PDF (Preview) עם סימון איפה עליו לחתום.
+
+חתימה: הלקוח חותם ב-SignatureCanvas.
+
+שליחה: בלחיצה על "אישור", הפרונט קורא ל-Cloud Function signDeal.
+
+סיום: המערכת מציגה הודעת הצלחה ומאפשרת להוריד את ה-PDF החתום.

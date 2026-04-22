@@ -24,7 +24,8 @@ interface NotifyParams {
         city?: string;
         price?: number;
         rooms?: number;
-        type?: string;
+        transactionType?: string;
+        type?: string;           // legacy fallback
         address?: string;
     };
     matchedLeads: MatchedLead[];
@@ -42,7 +43,8 @@ function buildMessage(
     matchCount: number,
 ): string {
     const sourceLabel = SOURCE_LABEL[property.source] ?? 'מקור חיצוני';
-    const typeLabel = property.type === 'rent' ? 'להשכרה' : 'למכירה';
+    const txType = property.transactionType || property.type;
+    const typeLabel = txType === 'rent' ? 'להשכרה' : 'למכירה';
     const location = property.city || property.address || 'לא ידוע';
     const price = property.price ? `${property.price.toLocaleString('he-IL')}₪` : 'מחיר לא ידוע';
     const rooms = property.rooms ? `${property.rooms} חד׳` : '';
@@ -61,7 +63,8 @@ function buildMessage(
 
 function buildEmailHtml(property: NotifyParams['property'], matchCount: number, recipientName?: string): string {
     const sourceLabel = SOURCE_LABEL[property.source] ?? 'מקור חיצוני';
-    const typeLabel = property.type === 'rent' ? 'להשכרה' : 'למכירה';
+    const txType2 = property.transactionType || property.type;
+    const typeLabel = txType2 === 'rent' ? 'להשכרה' : 'למכירה';
     const location = property.city || property.address || 'לא ידוע';
     const price = property.price ? `${property.price.toLocaleString('he-IL')} ₪` : 'מחיר לא ידוע';
     const rooms = property.rooms ? `${property.rooms} חדרים` : '';

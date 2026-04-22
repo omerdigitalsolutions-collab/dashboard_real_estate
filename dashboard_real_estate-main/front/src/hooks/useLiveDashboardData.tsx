@@ -93,8 +93,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         // 1. Properties Query
         const qProperties = query(
-            collection(db, 'properties'),
-            where('agencyId', '==', agencyId)
+            collection(db, 'agencies', agencyId, 'properties')
         );
 
         let unsubProperties = () => { };

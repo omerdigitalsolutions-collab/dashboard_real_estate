@@ -37,47 +37,48 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
         throw new HttpsError('invalid-argument', 'updates object must not be empty.');
     }
 
+    const agencyId = authData.agencyId;
+
     // ── Load property and verify ownership ─────────────────────────────────────
-    let propertyRef = db.doc(`properties/${propertyId}`);
+    let propertyRef = db.collection('agencies').doc(agencyId).collection('properties').doc(propertyId);
     let propertySnap = await propertyRef.get();
     let actualPropertyId = propertyId;
 
-    // Check if the user is a super admin
     const superAdminSnap = await db.doc(`superAdmins/${authData.uid}`).get();
     const isSuperAdmin = superAdminSnap.exists;
 
-    // Check if we own this property
-    const isOwned = propertySnap.exists && propertySnap.data()?.agencyId === authData.agencyId;
-
-    if (!isOwned && cityName) {
-        // It's not ours or doesn't exist. Check if it's a global property.
+    if (!propertySnap.exists && cityName) {
+        // Not in our agency subcollection — check if it's a global city property
         const globalRef = db.doc(`cities/${cityName}/properties/${propertyId}`);
         const globalSnap = await globalRef.get();
 
         if (globalSnap.exists) {
-            // If it's a super admin, we allow direct update to the global property
             if (isSuperAdmin) {
-                propertyRef = globalRef;
+                propertyRef = globalRef as any;
                 propertySnap = globalSnap;
             } else {
-                // Regular user: Import to their private collection as a NEW document
-                console.log(`[updateProperty] Importing global property ${propertyId} as a new document for agency ${authData.agencyId}`);
-                
+                // Import global property into agency subcollection
+                console.log(`[updateProperty] Importing global property ${propertyId} for agency ${agencyId}`);
                 const globalData = globalSnap.data()!;
-                const newPropertyRef = db.collection('properties').doc();
+                const newPropertyRef = db.collection('agencies').doc(agencyId).collection('properties').doc();
                 actualPropertyId = newPropertyRef.id;
-                
+
+                // Migrate global flat doc to new nested schema on import
+                const { migratePropertyDoc } = await import('../utils/propertyMigrator');
+                const migratedData = migratePropertyDoc({ ...globalData, agencyId }, globalSnap.id);
+                const { id: _id, ...storedData } = migratedData as any;
+
                 await newPropertyRef.set({
-                    ...globalData,
-                    agencyId: authData.agencyId,
+                    ...storedData,
+                    agencyId,
                     isGlobalCityProperty: false,
                     importedFromGlobal: true,
                     originalGlobalId: propertyId,
                     createdAt: globalData.createdAt ?? FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
-                    status: 'active'
+                    status: 'active',
                 });
-                
+
                 propertyRef = newPropertyRef;
                 propertySnap = await propertyRef.get();
             }
@@ -90,8 +91,8 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
 
     const propertyData = propertySnap.data()!;
 
-    // Permission check: Must be owner OR Super Admin (Super Admin can edit anything)
-    if (!isSuperAdmin && authData.agencyId !== propertyData.agencyId) {
+    // Permission check: own agency OR super admin
+    if (!isSuperAdmin && propertyData.agencyId && propertyData.agencyId !== agencyId) {
         throw new HttpsError('permission-denied', 'You do not have access to this property.');
     }
 

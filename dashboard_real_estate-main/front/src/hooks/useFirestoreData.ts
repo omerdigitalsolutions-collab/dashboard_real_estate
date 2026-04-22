@@ -73,7 +73,31 @@ function useAgencyCollection<T>(
 
 // ─── Specific High-Level Hooks ────────────────────────────────────────────────
 
-export const useProperties = () => useAgencyCollection<Property>('properties');
+export function useProperties() {
+    const { userData } = useAuth();
+    const agencyId = userData?.agencyId;
+
+    const [data, setData] = useState<Property[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (!agencyId) { setData([]); setLoading(false); return; }
+        const colRef = collection(db, 'agencies', agencyId, 'properties');
+        const q = query(colRef);
+        let unsub = () => {};
+        try {
+            unsub = onSnapshot(q, (snap) => {
+                setData(snap.docs.map(d => ({ ...(d.data() as any), id: d.id }) as Property));
+                setLoading(false);
+                setError(null);
+            }, (err) => { setError(err); setLoading(false); });
+        } catch (e: any) { setError(e); setLoading(false); }
+        return () => unsub();
+    }, [agencyId]);
+
+    return { data, loading, error };
+}
 export const useDeals = () => useAgencyCollection<Deal>('deals');
 export const useLeads = () => useAgencyCollection<Lead>('leads');   // sorted client-side below
 export const useAgents = () => {

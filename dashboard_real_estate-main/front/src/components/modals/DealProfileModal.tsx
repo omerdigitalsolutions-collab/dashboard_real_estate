@@ -39,10 +39,10 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
 
                 {/* Header (Property Image + Title overlay) */}
                 <div className="relative h-48 md:h-64 bg-slate-800 shrink-0">
-                    {property?.images && property.images.length > 0 ? (
+                    {property?.media?.images && property.media.images.length > 0 ? (
                         <img
-                            src={property.images[0]}
-                            alt={property.address}
+                            src={property.media.images[0]}
+                            alt={property.address?.fullAddress}
                             className="w-full h-full object-cover opacity-60"
                         />
                     ) : (
@@ -80,11 +80,11 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
                                 )}
                             </div>
                             <h2 className="text-2xl md:text-3xl font-black text-white drop-shadow-md">
-                                {property?.address || 'נכס לא משויך'}
+                                {property?.address?.fullAddress || 'נכס לא משויך'}
                             </h2>
-                            {property?.city && (
+                            {property?.address?.city && (
                                 <p className="text-slate-300 flex items-center gap-1 mt-1 text-sm font-medium">
-                                    <MapPin size={14} /> {property.city}
+                                    <MapPin size={14} /> {property.address.city}
                                 </p>
                             )}
                         </div>
@@ -242,10 +242,10 @@ export default function DealProfileModal({ deal, buyer, seller, property, stages
                                         </div>
                                         <div>
                                             <div className="text-sm font-bold text-slate-900">
-                                                {property.type === 'sale' ? 'למכירה' : 'להשכרה'} / {property.rooms} חדרים
+                                                {property.transactionType === 'rent' ? 'להשכרה' : 'למכירה'} / {property.rooms} חדרים
                                             </div>
                                             <p className="text-sm text-slate-500 mt-0.5 font-semibold">
-                                                ₪{property.price.toLocaleString()}
+                                                ₪{property.financials?.price?.toLocaleString()}
                                             </p>
                                         </div>
                                     </div>

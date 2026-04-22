@@ -196,35 +196,28 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PROPERTIES
-    // Security note: create/update/delete go through Cloud Functions which use
-    // validateUserAuth() to inject the agencyId server-side. Direct client
-    // creates are allowed only if the user is already in the agency (for
-    // scenarios where the function might fail gracefully). The important guard
-    // is that Server-Side injection overwrites any client-provided agencyId.
+    // PROPERTIES (subcollection under agency)
+    // Path: agencies/{agencyId}/properties/{propId}
+    // agencyId is enforced by path — no need to check the field inside the doc.
     // ══════════════════════════════════════════════════════════════════════════
-    match /properties/{propertyId} {
-      allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
+    match /agencies/{agencyId}/properties/{propId} {
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
 
-      // Writes go through Cloud Functions normally, but direct client creates
-      // are allowed for authenticated agency members (e.g. batch import from ImportModal)
-      // if they set the correct agencyId and billing is active.
+      // Direct client creates allowed for agency members (e.g. batch import).
       allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
+          && inAgency(agencyId)
           && isBillingActiveForCaller();
 
-      // Admins can update any property. Agents can only update properties they own.
+      // Admins can update any property. Agents can only update their own.
       allow update: if isAuthed()
-          && inAgency(resource.data.agencyId)
-          && agencyIdUnchanged()
+          && inAgency(agencyId)
           && isBillingActiveForCaller()
-          && (isAdmin() || resource.data.agentId == request.auth.uid);
+          && (isAdmin() || resource.data.management.get('assignedAgentId', null) == request.auth.uid);
 
-      // Admins can delete any property. Agents can only delete properties they own.
-      // Note: normally goes through deleteProperty Cloud Function, but this allows direct deletes for owned properties.
+      // Admins can delete any property. Agents can only delete their own.
       allow delete: if isAuthed()
-          && inAgency(resource.data.agencyId)
-          && (isAdmin() || resource.data.agentId == request.auth.uid);
+          && inAgency(agencyId)
+          && (isAdmin() || resource.data.management.get('assignedAgentId', null) == request.auth.uid);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

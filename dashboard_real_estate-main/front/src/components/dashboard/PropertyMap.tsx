@@ -58,26 +58,28 @@ function getGoogleMarkerIcon(listingType: 'sale' | 'rent', kind?: string): googl
 
 // ─── Popup Content (Internal Component) ────────────────────────────────────────
 function PropertyPopup({ p, onClose }: { p: Property; onClose: () => void }) {
-    const isRent = p.type === 'rent';
+    const isRent = p.transactionType === 'rent';
     const color = isRent
         ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
         : 'text-cyan-600 bg-cyan-50 border-cyan-100';
     const label = isRent ? 'להשכרה' : 'למכירה';
+    const price = p.financials?.price ?? 0;
     const priceFormatted = isRent
-        ? `₪${p.price.toLocaleString()}/חודש`
-        : `₪${(p.price / 1_000_000).toFixed(2)}M`;
+        ? `₪${price.toLocaleString()}/חודש`
+        : `₪${(price / 1_000_000).toFixed(2)}M`;
+    const coords = p.address?.coords;
 
     return (
-        <InfoWindow position={{ lat: p.lat!, lng: p.lng! }} onCloseClick={onClose}>
+        <InfoWindow position={{ lat: coords?.lat ?? 0, lng: coords?.lng ?? 0 }} onCloseClick={onClose}>
             <div className="text-right p-1 min-w-[200px]" dir="rtl">
-                <p className="font-bold text-slate-800 text-sm leading-snug mb-1">{p.address}</p>
-                {p.city && <p className="text-xs text-slate-500 mb-2">{p.city}</p>}
+                <p className="font-bold text-slate-800 text-sm leading-snug mb-1">{p.address?.fullAddress}</p>
+                {p.address?.city && <p className="text-xs text-slate-500 mb-2">{p.address.city}</p>}
                 <div className="flex items-center justify-between gap-2 mt-2">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
                     <span className="text-sm font-bold text-slate-900">{priceFormatted}</span>
                 </div>
                 {p.rooms && (
-                    <p className="text-xs text-slate-500 mt-1">{p.rooms} חדרים • {p.sqm || '?'} מ"ר</p>
+                    <p className="text-xs text-slate-500 mt-1">{p.rooms} חדרים • {p.squareMeters || '?'} מ"ר</p>
                 )}
             </div>
         </InfoWindow>
@@ -138,11 +140,12 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
             }
         } catch { /* ignore */ }
 
-        const propertyWithCoords = properties.find(p => p.lat && p.lng);
+        const propertyWithCoords = properties.find(p => p.address?.coords?.lat && p.address?.coords?.lng);
         if (propertyWithCoords) {
-            setMapCenter({ lat: propertyWithCoords.lat!, lng: propertyWithCoords.lng! });
+            const c = propertyWithCoords.address!.coords!;
+            setMapCenter({ lat: c.lat, lng: c.lng });
             setMapZoom(13);
-            setCenterLabel(propertyWithCoords.city || propertyWithCoords.address || '');
+            setCenterLabel(propertyWithCoords.address?.city || propertyWithCoords.address?.fullAddress || '');
         } else {
             setMapCenter(ISRAEL_CENTER);
             setMapZoom(9);
@@ -155,9 +158,9 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userData?.agencyId, properties.length]);
 
-    const geoProps = useMemo(() => properties.filter(p => p.lat && p.lng), [properties]);
-    const saleCount = geoProps.filter(p => p.type === 'sale').length;
-    const rentCount = geoProps.filter(p => p.type === 'rent').length;
+    const geoProps = useMemo(() => properties.filter(p => p.address?.coords?.lat && p.address?.coords?.lng), [properties]);
+    const saleCount = geoProps.filter(p => p.transactionType === 'forsale').length;
+    const rentCount = geoProps.filter(p => p.transactionType === 'rent').length;
 
     const mapContent = (fullscreen: boolean) => (
         <div className={`flex flex-col ${fullscreen ? 'h-full' : ''}`} style={fullscreen ? {} : { height }}>
@@ -244,8 +247,8 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
                         {geoProps.map(p => (
                             <MarkerF
                                 key={p.id}
-                                position={{ lat: p.lat!, lng: p.lng! }}
-                                icon={getGoogleMarkerIcon(p.type as 'sale' | 'rent', p.kind)}
+                                position={{ lat: p.address!.coords!.lat, lng: p.address!.coords!.lng }}
+                                icon={getGoogleMarkerIcon(p.transactionType === 'rent' ? 'rent' : 'sale', p.propertyType)}
                                 onClick={() => setSelectedProperty(p)}
                             />
                         ))}

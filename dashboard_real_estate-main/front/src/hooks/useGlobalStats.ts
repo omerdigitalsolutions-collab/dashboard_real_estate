@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
     collection,
+    collectionGroup,
     getDocs,
     query,
     Timestamp,
@@ -160,7 +161,7 @@ export function useGlobalStats(): GlobalStats {
 
                 // ── 3. Properties (active only) ────────────────────────────────
                 const propsSnap = await getDocs(
-                    query(collection(db, 'properties'))
+                    query(collectionGroup(db, 'properties'))
                 );
                 const activeProps = propsSnap.docs.filter(
                     (d) => d.data().status === 'active'

@@ -76,9 +76,9 @@ async function commitWrites(writes) {
     }
 }
 async function runAgencyMatchmaking(propertyId, propertyData, agencyId) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    const propertyCity = propertyData.city;
-    const propertyPrice = propertyData.price;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+    const propertyCity = ((_a = propertyData.address) === null || _a === void 0 ? void 0 : _a.city) || propertyData.city;
+    const propertyPrice = (_c = (_b = propertyData.financials) === null || _b === void 0 ? void 0 : _b.price) !== null && _c !== void 0 ? _c : propertyData.price;
     if (!agencyId || !propertyCity || propertyPrice === undefined) {
         console.log(`Matchmaking skipped for ${propertyId}: Missing city, price, or agencyId.`);
         return;
@@ -86,14 +86,15 @@ async function runAgencyMatchmaking(propertyId, propertyData, agencyId) {
     const matchingProp = {
         id: propertyId,
         city: propertyCity,
-        neighborhood: propertyData.neighborhood || null,
+        neighborhood: ((_d = propertyData.address) === null || _d === void 0 ? void 0 : _d.neighborhood) || propertyData.neighborhood || null,
+        street: ((_e = propertyData.address) === null || _e === void 0 ? void 0 : _e.street) || propertyData.street || null,
         price: propertyPrice,
-        rooms: (_a = propertyData.rooms) !== null && _a !== void 0 ? _a : null,
-        type: propertyData.type,
-        hasElevator: (_b = propertyData.hasElevator) !== null && _b !== void 0 ? _b : null,
-        hasParking: (_c = propertyData.hasParking) !== null && _c !== void 0 ? _c : null,
-        hasBalcony: (_d = propertyData.hasBalcony) !== null && _d !== void 0 ? _d : null,
-        hasSafeRoom: (_e = propertyData.hasSafeRoom) !== null && _e !== void 0 ? _e : null,
+        rooms: (_f = propertyData.rooms) !== null && _f !== void 0 ? _f : null,
+        transactionType: propertyData.transactionType || propertyData.type || 'forsale',
+        hasElevator: (_j = (_h = (_g = propertyData.features) === null || _g === void 0 ? void 0 : _g.hasElevator) !== null && _h !== void 0 ? _h : propertyData.hasElevator) !== null && _j !== void 0 ? _j : null,
+        hasParking: (_m = (_l = (_k = propertyData.features) === null || _k === void 0 ? void 0 : _k.hasParking) !== null && _l !== void 0 ? _l : propertyData.hasParking) !== null && _m !== void 0 ? _m : null,
+        hasBalcony: (_q = (_p = (_o = propertyData.features) === null || _o === void 0 ? void 0 : _o.hasBalcony) !== null && _p !== void 0 ? _p : propertyData.hasBalcony) !== null && _q !== void 0 ? _q : null,
+        hasMamad: (_t = (_s = (_r = propertyData.features) === null || _r === void 0 ? void 0 : _r.hasMamad) !== null && _s !== void 0 ? _s : propertyData.hasSafeRoom) !== null && _t !== void 0 ? _t : null,
     };
     const leadsSnap = await db.collection('leads')
         .where('agencyId', '==', agencyId)
@@ -159,12 +160,12 @@ async function runAgencyMatchmaking(propertyId, propertyData, agencyId) {
         agencyId,
         property: {
             id: propertyId,
-            source: (_f = propertyData.source) !== null && _f !== void 0 ? _f : 'manual',
+            source: (_v = (typeof propertyData.source === 'string' ? propertyData.source : (_u = propertyData.source) === null || _u === void 0 ? void 0 : _u.origin)) !== null && _v !== void 0 ? _v : 'manual',
             city: propertyCity,
             price: propertyPrice,
-            rooms: (_g = propertyData.rooms) !== null && _g !== void 0 ? _g : undefined,
-            type: propertyData.type,
-            address: propertyData.address,
+            rooms: (_w = propertyData.rooms) !== null && _w !== void 0 ? _w : undefined,
+            transactionType: propertyData.transactionType || propertyData.type,
+            address: ((_x = propertyData.address) === null || _x === void 0 ? void 0 : _x.fullAddress) || propertyData.address,
         },
         matchedLeads,
     });
@@ -174,13 +175,13 @@ async function runAgencyMatchmaking(propertyId, propertyData, agencyId) {
  * Runs the shared weighted matching engine against every active lead in the
  * same agency and emits deterministic alerts (idempotent on retries).
  */
-exports.onPropertyCreatedMatchmaking = (0, firestore_1.onDocumentCreated)({ document: 'properties/{propertyId}', secrets: newPropertyAlert_1.newPropertyAlertSecrets }, async (event) => {
+exports.onPropertyCreatedMatchmaking = (0, firestore_1.onDocumentCreated)({ document: 'agencies/{agencyId}/properties/{propertyId}', secrets: newPropertyAlert_1.newPropertyAlertSecrets }, async (event) => {
     const propertyId = event.params.propertyId;
+    const agencyId = event.params.agencyId;
     const propertySnap = event.data;
     if (!propertySnap)
         return;
     const propertyData = propertySnap.data();
-    const agencyId = propertyData.agencyId;
     try {
         await runAgencyMatchmaking(propertyId, propertyData, agencyId);
     }
@@ -212,31 +213,33 @@ exports.onWhatsappPropertyCreatedMatchmaking = (0, firestore_1.onDocumentCreated
  * runs the weighted matching engine, and generates alerts for high/medium matches.
  */
 exports.onGlobalPropertyCreatedMatchmaking = (0, firestore_1.onDocumentCreated)({ document: 'cities/{cityName}/properties/{propertyId}', secrets: newPropertyAlert_1.newPropertyAlertSecrets }, async (event) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
     const cityName = event.params.cityName;
     const propertyId = event.params.propertyId;
     const propertySnap = event.data;
     if (!propertySnap)
         return;
     const propertyData = propertySnap.data();
-    const propertyPrice = propertyData.price;
+    // Cities collection docs still use flat schema
+    const propertyPrice = (_b = (_a = propertyData.financials) === null || _a === void 0 ? void 0 : _a.price) !== null && _b !== void 0 ? _b : propertyData.price;
     const propertyRooms = propertyData.rooms;
-    const propertyType = propertyData.type;
+    const propertyType = propertyData.transactionType || propertyData.type;
     if (!propertyPrice || !propertyType) {
         console.log(`Global matchmaking skipped for ${propertyId}: Missing price or type.`);
         return;
     }
     const matchingProp = {
         id: propertyId,
-        city: propertyData.city || cityName,
-        neighborhood: propertyData.neighborhood || null,
+        city: ((_c = propertyData.address) === null || _c === void 0 ? void 0 : _c.city) || propertyData.city || cityName,
+        neighborhood: ((_d = propertyData.address) === null || _d === void 0 ? void 0 : _d.neighborhood) || propertyData.neighborhood || null,
+        street: ((_e = propertyData.address) === null || _e === void 0 ? void 0 : _e.street) || propertyData.street || null,
         price: propertyPrice,
         rooms: propertyRooms !== null && propertyRooms !== void 0 ? propertyRooms : null,
-        type: propertyType,
-        hasElevator: (_a = propertyData.hasElevator) !== null && _a !== void 0 ? _a : null,
-        hasParking: (_b = propertyData.hasParking) !== null && _b !== void 0 ? _b : null,
-        hasBalcony: (_c = propertyData.hasBalcony) !== null && _c !== void 0 ? _c : null,
-        hasSafeRoom: (_d = propertyData.hasSafeRoom) !== null && _d !== void 0 ? _d : null,
+        transactionType: propertyType,
+        hasElevator: (_h = (_g = (_f = propertyData.features) === null || _f === void 0 ? void 0 : _f.hasElevator) !== null && _g !== void 0 ? _g : propertyData.hasElevator) !== null && _h !== void 0 ? _h : null,
+        hasParking: (_l = (_k = (_j = propertyData.features) === null || _j === void 0 ? void 0 : _j.hasParking) !== null && _k !== void 0 ? _k : propertyData.hasParking) !== null && _l !== void 0 ? _l : null,
+        hasBalcony: (_p = (_o = (_m = propertyData.features) === null || _m === void 0 ? void 0 : _m.hasBalcony) !== null && _o !== void 0 ? _o : propertyData.hasBalcony) !== null && _p !== void 0 ? _p : null,
+        hasMamad: (_s = (_r = (_q = propertyData.features) === null || _q === void 0 ? void 0 : _q.hasMamad) !== null && _r !== void 0 ? _r : propertyData.hasSafeRoom) !== null && _s !== void 0 ? _s : null,
     };
     try {
         // 1. Find all potential city names that leads might be using to refer to this city

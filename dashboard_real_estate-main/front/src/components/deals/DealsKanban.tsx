@@ -77,15 +77,15 @@ function DealCard({
             }}
             className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm group hover:border-blue-300 hover:shadow-md transition-all relative ${isOverlay ? 'rotate-2 shadow-2xl cursor-grabbing' : 'cursor-grab'} ${onClick ? 'cursor-pointer hover:bg-slate-50' : ''}`}
         >
-            {property?.images?.[0] && (
+            {property?.media?.images?.[0] && (
                 <div className="w-full h-32 rounded-lg mb-4 bg-slate-100 overflow-hidden relative">
-                    <img src={property.images[0]} alt={property.address} className="w-full h-full object-cover" />
+                    <img src={property.media.images[0]} alt={property.address?.fullAddress} className="w-full h-full object-cover" />
                 </div>
             )}
 
             <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1 min-w-0">
-                    <p className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={property?.address || 'נכס לא ידוע'}>{property?.address || 'נכס לא ידוע'}</p>
+                    <p className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={property?.address?.fullAddress || 'נכס לא ידוע'}>{property?.address?.fullAddress || 'נכס לא ידוע'}</p>
                     {buyer || seller ? (
                         <div className="flex flex-col mt-0.5">
                             {buyer && (
@@ -206,7 +206,7 @@ import DealProfileModal from '../modals/DealProfileModal';
 export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
     const { userData } = useAuth();
     const isAgent = userData?.role === 'agent';
-    const currentUid = userData?.uid;
+    const currentUid = userData?.uid ?? undefined;
 
     const { deals: liveDealsHook, leads, properties, agencySettings } = useLiveDashboardData();
     const liveDeals = dealsProps ?? liveDealsHook;

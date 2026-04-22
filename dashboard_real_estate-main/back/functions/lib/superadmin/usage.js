@@ -65,7 +65,7 @@ exports.superAdminGetAgencyUsage = functions.https.onCall({ cors: true }, async 
         const storageMB = parseFloat((storageBytes / (1024 * 1024)).toFixed(2));
         // ── Task B: Firestore Document Counts ─────────────────────────────────
         const [propertiesSnap, leadsSnap, dealsSnap, usersSnap] = await Promise.all([
-            db.collection('properties').where('agencyId', '==', targetAgencyId).count().get(),
+            db.collection('agencies').doc(targetAgencyId).collection('properties').count().get(),
             db.collection('leads').where('agencyId', '==', targetAgencyId).count().get(),
             db.collection('deals').where('agencyId', '==', targetAgencyId).count().get(),
             db.collection('users').where('agencyId', '==', targetAgencyId).count().get(),

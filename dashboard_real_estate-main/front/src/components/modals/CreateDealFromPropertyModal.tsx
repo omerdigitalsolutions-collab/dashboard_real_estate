@@ -40,7 +40,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
     const [selectedBuyerId, setSelectedBuyerId] = useState<string>('');
     const [selectedSellerId, setSelectedSellerId] = useState<string>('');
     const [commissionPercentage, setCommissionPercentage] = useState('2');
-    const [assignedAgentId, setAssignedAgentId] = useState<string>(properties[0]?.agentId || '');
+    const [assignedAgentId, setAssignedAgentId] = useState<string>(properties[0]?.management?.assignedAgentId || '');
     const [includeVat, setIncludeVat] = useState(false);
 
     const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
             setSelectedBuyerId('');
             setSelectedSellerId('');
             setCommissionPercentage('2');
-            setAssignedAgentId(properties[0]?.agentId || '');
+            setAssignedAgentId(properties[0]?.management?.assignedAgentId || '');
             setIncludeVat(false);
             setErrorMsg('');
         }
@@ -75,7 +75,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
 
             // Create a deal for each property
             const creations = properties.map(property => {
-                const displayPrice = property.price || 0;
+                const displayPrice = property.financials?.price || 0;
                 const base = (displayPrice * (parseFloat(commissionPercentage) || 0)) / 100;
                 const calculatedCommission = includeVat ? base : base * 1.18;
 
@@ -122,7 +122,7 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
                                 {properties.length > 1 ? `יצירת ${properties.length} עסקאות` : 'יצירת עסקה לנכס'}
                             </h2>
                             <p className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-xs">
-                                {properties.length > 1 ? `עבור ${properties.length} נכסים נבחרים` : (properties[0]?.address || 'נכס')}
+                                {properties.length > 1 ? `עבור ${properties.length} נכסים נבחרים` : (properties[0]?.address?.fullAddress || 'נכס')}
                             </p>
                         </div>
                     </div>
@@ -219,11 +219,11 @@ export default function CreateDealFromPropertyModal({ properties, leads, agents,
                                 </div>
                                 כולל מע"מ (18%)
                             </button>
-                            {properties.length === 1 && properties[0].price > 0 && (
+                            {properties.length === 1 && (properties[0].financials?.price ?? 0) > 0 && (
                                 <span className="text-[10px] text-slate-400 font-medium italic">
-                                    {includeVat 
-                                        ? `(נטו: ₪${Math.round((properties[0].price * (parseFloat(commissionPercentage) || 0) / 100) / 1.18).toLocaleString()})` 
-                                        : `(סופי: ₪${Math.round((properties[0].price * (parseFloat(commissionPercentage) || 0) / 100) * 1.18).toLocaleString()})`}
+                                    {includeVat
+                                        ? `(נטו: ₪${Math.round(((properties[0].financials?.price ?? 0) * (parseFloat(commissionPercentage) || 0) / 100) / 1.18).toLocaleString()})`
+                                        : `(סופי: ₪${Math.round(((properties[0].financials?.price ?? 0) * (parseFloat(commissionPercentage) || 0) / 100) * 1.18).toLocaleString()})`}
                                 </span>
                             )}
                         </div>

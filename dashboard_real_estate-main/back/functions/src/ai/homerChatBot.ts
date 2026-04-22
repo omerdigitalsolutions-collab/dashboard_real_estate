@@ -209,17 +209,20 @@ async function execQueryLeads(db: admin.firestore.Firestore, agencyId: string, a
 }
 
 async function execQueryProperties(db: admin.firestore.Firestore, agencyId: string) {
-    const snap = await db.collection('properties')
-        .where('agencyId', '==', agencyId)
+    const snap = await db.collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
-        .orderBy('price', 'desc')
+        .orderBy('financials.price', 'desc')
         .limit(5)
         .get();
 
     return {
         topMostExpensiveActiveProperties: snap.docs.map(doc => {
             const d = doc.data();
-            return { address: `${d.street}, ${d.city}`, price: d.price, type: d.type };
+            return {
+                address: d.address?.fullAddress || `${d.address?.street || ''}, ${d.address?.city || ''}`,
+                price: d.financials?.price ?? d.price,
+                transactionType: d.transactionType,
+            };
         }),
     };
 }
@@ -465,17 +468,17 @@ async function execQueryLeadMatches(db: admin.firestore.Firestore, agencyId: str
     const lead = leadDoc.data()!;
     const req = lead.requirements || {};
 
-    let query: admin.firestore.Query = db.collection('properties')
-        .where('agencyId', '==', agencyId)
+    let query: admin.firestore.Query = db.collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active');
-    
-    if (req.maxBudget) query = query.where('price', '<=', req.maxBudget);
-    
-    const snap = await query.limit(10).get();
+
+    const snap = await query.limit(50).get();
     let matches = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+    if (req.maxBudget) {
+        matches = matches.filter((p: any) => (p.financials?.price ?? p.price ?? 0) <= req.maxBudget);
+    }
     if (req.desiredCity && req.desiredCity.length > 0) {
-        matches = matches.filter((p: any) => req.desiredCity.includes(p.city));
+        matches = matches.filter((p: any) => req.desiredCity.includes(p.address?.city || p.city));
     }
     if (req.minRooms) {
         matches = matches.filter((p: any) => (p.rooms || 0) >= req.minRooms);
@@ -483,7 +486,11 @@ async function execQueryLeadMatches(db: admin.firestore.Firestore, agencyId: str
 
     return {
         leadName: lead.name,
-        topMatches: matches.slice(0, 5).map((p: any) => ({ address: p.address, price: p.price, rooms: p.rooms }))
+        topMatches: matches.slice(0, 5).map((p: any) => ({
+            address: p.address?.fullAddress || p.address?.city || '',
+            price: p.financials?.price ?? p.price,
+            rooms: p.rooms,
+        }))
     };
 }
 
@@ -491,7 +498,7 @@ async function execSearchEntity(db: admin.firestore.Firestore, agencyId: string,
     const q = args.query.toLowerCase();
     
     const leadsSnap = await db.collection('leads').where('agencyId', '==', agencyId).get();
-    const propsSnap = await db.collection('properties').where('agencyId', '==', agencyId).get();
+    const propsSnap = await db.collection('agencies').doc(agencyId).collection('properties').get();
 
     const results: Array<{ type: string; id: string; name?: string; address?: string }> = [];
 
@@ -504,8 +511,10 @@ async function execSearchEntity(db: admin.firestore.Firestore, agencyId: string,
 
     propsSnap.forEach(doc => {
         const d = doc.data();
-        if (d.address?.toLowerCase().includes(q) || d.city?.toLowerCase().includes(q)) {
-            results.push({ type: 'property', address: d.address, id: doc.id });
+        const addr = d.address?.fullAddress || d.address?.city || '';
+        const city = d.address?.city || '';
+        if (addr.toLowerCase().includes(q) || city.toLowerCase().includes(q)) {
+            results.push({ type: 'property', address: addr, id: doc.id });
         }
     });
 

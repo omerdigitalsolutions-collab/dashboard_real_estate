@@ -101,10 +101,9 @@ async function getTopAgent(db: admin.firestore.Firestore, agencyId: string) {
 
 async function getHighestCommissionProperty(db: admin.firestore.Firestore, agencyId: string) {
     const snapshot = await db
-        .collection('properties')
-        .where('agencyId', '==', agencyId)
+        .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
-        .orderBy('price', 'desc')
+        .orderBy('financials.price', 'desc')
         .limit(1)
         .get();
 
@@ -116,10 +115,10 @@ async function getHighestCommissionProperty(db: admin.firestore.Firestore, agenc
     const d = doc.data();
     return {
         id: doc.id,
-        address: `${d.street}, ${d.city}`,
-        price: d.price,
+        address: d.address?.fullAddress || `${d.address?.street || ''}, ${d.address?.city || ''}`,
+        price: d.financials?.price ?? d.price,
         rooms: d.rooms,
-        type: d.type,
+        transactionType: d.transactionType,
         status: d.status,
     };
 }
@@ -152,7 +151,7 @@ async function getSummaryStats(db: admin.firestore.Firestore, agencyId: string) 
     const { start, end } = currentMonthBounds();
 
     const [propertiesSnap, leadsSnap, dealsSnap] = await Promise.all([
-        db.collection('properties').where('agencyId', '==', agencyId).where('status', '==', 'active').get(),
+        db.collection('agencies').doc(agencyId).collection('properties').where('status', '==', 'active').get(),
         db.collection('leads').where('agencyId', '==', agencyId).get(),
         db.collection('deals')
             .where('agencyId', '==', agencyId)
@@ -319,7 +318,7 @@ export const getSmartInsights = onCall(
             const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
             const [propertiesSnap, leadsSnap, dealsSnap, agentsSnap] = await Promise.all([
-                db.collection('properties').where('agencyId', '==', agencyId).limit(100).get(),
+                db.collection('agencies').doc(agencyId).collection('properties').limit(100).get(),
                 db.collection('leads').where('agencyId', '==', agencyId).get(),
                 db.collection('deals').where('agencyId', '==', agencyId).where('stage', '==', 'Won').get(),
                 db.collection('users').where('agencyId', '==', agencyId).get()
@@ -328,7 +327,12 @@ export const getSmartInsights = onCall(
             // Transform into compact representation
             const properties = propertiesSnap.docs.map(d => {
                 const data = d.data();
-                return { id: d.id, address: `${data.street}, ${data.city}`, price: data.price, createdAt: data.createdAt?.toDate() };
+                return {
+                    id: d.id,
+                    address: data.address?.fullAddress || `${data.address?.street || ''}, ${data.address?.city || ''}`,
+                    price: data.financials?.price ?? data.price,
+                    createdAt: data.createdAt?.toDate(),
+                };
             });
 
             const leadsStatusCount: Record<string, number> = {};

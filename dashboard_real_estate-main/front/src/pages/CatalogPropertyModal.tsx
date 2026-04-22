@@ -1,4 +1,4 @@
-import { X, MapPin, Bed, Maximize, Layers, Car, Wind, Shield, ArrowUpRight, ChevronLeft, ChevronRight, Fullscreen, Image as ImageIcon } from 'lucide-react';
+import { X, MapPin, Bed, Maximize, Layers, Car, Wind, Shield, ArrowUpRight, ChevronLeft, ChevronRight, Fullscreen, Image as ImageIcon, Video, Phone, MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface CatalogPropertyModalProps {
@@ -16,15 +16,17 @@ const AMENITY_ICONS: { key: string; label: string; icon: React.ReactNode }[] = [
 
 export default function CatalogPropertyModal({ property, agencyPhone, onClose }: CatalogPropertyModalProps) {
     const [activeImageIndex, setActiveImageIndex] = useState(0);
+    const [activeVideoIndex, setActiveVideoIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
 
-    if (!property) return null;
-
-    const images = property.images || [];
+    const images = property?.images || [];
     const hasImages = images.length > 0;
+    const videos: string[] = property?.videoUrls || (property?.videoUrl ? [property.videoUrl] : []);
+    const hasVideos = videos.length > 0;
 
-    // Keyboard navigation
+    // Keyboard navigation — must be before early return to satisfy Rules of Hooks
     useEffect(() => {
+        if (!property) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (isImageFullscreen) {
                 if (e.key === 'ArrowRight') {
@@ -39,7 +41,9 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isImageFullscreen, images.length]);
+    }, [isImageFullscreen, images.length, property]);
+
+    if (!property) return null;
 
     const nextImage = (e?: React.MouseEvent) => {
         e?.stopPropagation();
@@ -88,7 +92,7 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                     </button>
                 </div>
 
-                {/* Hero image / Carousel */}
+                {/* Hero media / Carousel */}
                 {hasImages ? (
                     <div className="relative h-64 overflow-hidden group bg-slate-100">
                         <img
@@ -96,7 +100,7 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                             alt={displayAddress}
                             className="w-full h-full object-cover transition-all duration-500"
                         />
-                        
+
                         {/* Overlay Controls */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-end p-3">
                             <button
@@ -122,7 +126,7 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                                     <ChevronRight size={20} />
                                 </button>
                                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
-                                    {images.map((_, i) => (
+                                    {images.map((_: string, i: number) => (
                                         <div
                                             key={i}
                                             className={`h-1.5 rounded-full transition-all ${i === activeImageIndex ? 'bg-white w-5' : 'bg-white/40 w-1.5'}`}
@@ -131,6 +135,41 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                                 </div>
                             </>
                         )}
+                    </div>
+                ) : hasVideos ? (
+                    <div className="relative bg-black overflow-hidden group">
+                        <video
+                            key={videos[activeVideoIndex]}
+                            src={videos[activeVideoIndex]}
+                            controls
+                            playsInline
+                            className="w-full max-h-72 object-contain"
+                        />
+                        {videos.length > 1 && (
+                            <>
+                                <button
+                                    onClick={e => { e.stopPropagation(); setActiveVideoIndex(i => (i - 1 + videos.length) % videos.length); }}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <button
+                                    onClick={e => { e.stopPropagation(); setActiveVideoIndex(i => (i + 1) % videos.length); }}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5 pointer-events-none">
+                                    {videos.map((_, i) => (
+                                        <div key={i} className={`h-1.5 rounded-full transition-all ${i === activeVideoIndex ? 'bg-white w-5' : 'bg-white/40 w-1.5'}`} />
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        <div className="absolute top-3 right-3 z-20 flex items-center gap-1 bg-black/50 text-white text-xs font-semibold px-2 py-1 rounded-lg pointer-events-none">
+                            <Video size={11} />
+                            <span>סרטון {activeVideoIndex + 1}/{videos.length}</span>
+                        </div>
                     </div>
                 ) : (
                     <div className="h-48 bg-slate-50 flex flex-col items-center justify-center text-slate-300 gap-2 border-b border-slate-100">
@@ -200,6 +239,51 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                         </div>
                     )}
 
+                    {/* Videos section — only when images exist (otherwise shown as hero) */}
+                    {hasImages && hasVideos && (
+                        <div className="border-t border-slate-100 pt-4">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                <Video size={12} />
+                                סרטוני נכס ({videos.length}/3)
+                            </p>
+                            <div className="space-y-3">
+                                {videos.map((url, i) => (
+                                    <div key={i}>
+                                        <p className="text-xs text-slate-400 mb-1">סרטון {i + 1}</p>
+                                        <video
+                                            src={url}
+                                            controls
+                                            playsInline
+                                            className="w-full rounded-xl bg-black"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Contact buttons */}
+                    {agencyPhone && (
+                        <div className="border-t border-slate-100 pt-4 flex gap-3">
+                            <a
+                                href={`tel:${agencyPhone}`}
+                                className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm py-3 rounded-2xl transition-colors"
+                            >
+                                <Phone size={16} />
+                                התקשר
+                            </a>
+                            <a
+                                href={`https://wa.me/${agencyPhone.replace(/\D/g, '').replace(/^0/, '972')}?text=${encodeURIComponent(`היי, אני מתעניין/ת בנכס ב${property.address || ''}`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1fbc5a] text-white font-bold text-sm py-3 rounded-2xl transition-colors"
+                            >
+                                <MessageCircle size={16} />
+                                וואצאפ
+                            </a>
+                        </div>
+                    )}
+
                     {/* Bottom spacing for mobile safe area */}
                     <div className="h-2" />
                 </div>
@@ -236,7 +320,7 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                                     <ChevronRight size={32} className="opacity-50 group-hover:opacity-100 transition-opacity" />
                                 </button>
                                 <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-2 overflow-x-auto max-w-full px-4 scrollbar-hide">
-                                    {images.map((img, i) => (
+                                    {images.map((img: string, i: number) => (
                                         <button
                                             key={i}
                                             onClick={() => setActiveImageIndex(i)}

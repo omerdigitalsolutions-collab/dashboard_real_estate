@@ -52,7 +52,8 @@ const SOURCE_LABEL = {
 function buildMessage(property, matchCount) {
     var _a;
     const sourceLabel = (_a = SOURCE_LABEL[property.source]) !== null && _a !== void 0 ? _a : 'מקור חיצוני';
-    const typeLabel = property.type === 'rent' ? 'להשכרה' : 'למכירה';
+    const txType = property.transactionType || property.type;
+    const typeLabel = txType === 'rent' ? 'להשכרה' : 'למכירה';
     const location = property.city || property.address || 'לא ידוע';
     const price = property.price ? `${property.price.toLocaleString('he-IL')}₪` : 'מחיר לא ידוע';
     const rooms = property.rooms ? `${property.rooms} חד׳` : '';
@@ -67,7 +68,8 @@ function buildMessage(property, matchCount) {
 function buildEmailHtml(property, matchCount, recipientName) {
     var _a;
     const sourceLabel = (_a = SOURCE_LABEL[property.source]) !== null && _a !== void 0 ? _a : 'מקור חיצוני';
-    const typeLabel = property.type === 'rent' ? 'להשכרה' : 'למכירה';
+    const txType2 = property.transactionType || property.type;
+    const typeLabel = txType2 === 'rent' ? 'להשכרה' : 'למכירה';
     const location = property.city || property.address || 'לא ידוע';
     const price = property.price ? `${property.price.toLocaleString('he-IL')} ₪` : 'מחיר לא ידוע';
     const rooms = property.rooms ? `${property.rooms} חדרים` : '';

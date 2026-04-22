@@ -267,7 +267,10 @@ export const webhookWhatsAppAI = onRequest(
                 else if (messageData.typeMessage === 'fileMessage') textMessage = '[קובץ]';
             }
 
-            if (!rawSender || !textMessage) return;
+            if (!rawSender || !textMessage) {
+                console.log(`[Webhook] ⏭️ Skipping — rawSender: '${rawSender}', type: '${messageData.typeMessage}', textMessage: '${textMessage?.substring(0, 30)}'`);
+                return;
+            }
             const { localPhone } = normalisePhone(rawSender);
 
             // Scenario A: Groups

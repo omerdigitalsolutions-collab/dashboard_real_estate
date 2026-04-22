@@ -46,6 +46,8 @@ export interface Agency {
         monitoredGroups?: { id: string, name: string }[];
     };
     isWhatsappConnected?: boolean;
+    joinCode?: string;
+    isJoinCodeEnabled?: boolean;
     createdAt: Timestamp;
 }
 
@@ -123,6 +125,8 @@ export interface Lead {
     requirements: {
         desiredCity: string[];
         desiredNeighborhoods?: string[];
+        desiredStreet?: string[];
+        transactionType?: 'sale' | 'rent' | 'forsale';
         maxBudget: number | null;
         minRooms: number | null;
         maxRooms: number | null;
@@ -152,8 +156,6 @@ export interface Lead {
 }
 
 // ─── Properties ───────────────────────────────────────────────────────────────
-export type PropertyType = 'sale' | 'rent' | 'commercial';
-
 export type PropertyStatus =
     | 'active'
     | 'pending'
@@ -161,77 +163,86 @@ export type PropertyStatus =
     | 'rented'
     | 'expired'
     | 'withdrawn'
-    | 'draft'; // Added for WhatsApp group parsed drafts
+    | 'draft';
 
 export interface Property {
     id: string;
     agencyId: string;
-    agentId: string; // uid of the responsible agent
-    address: string;
-    city?: string;
-    type: PropertyType;
-    kind?: string;
-    price: number;
-    rooms?: number;
-    sqm?: number;
+    transactionType: 'forsale' | 'rent';
+    propertyType: string;
     status: PropertyStatus;
-    exclusivityEndDate?: Timestamp | null;
+    rooms?: number | null;
+    floor?: number | null;
+    totalFloors?: number | null;
+    squareMeters?: number | null;
     isExclusive?: boolean;
-    daysOnMarket: number;
-    description?: string;
-    street?: string;
-    neighborhood?: string;
-    propertyType?: string;
+    exclusivityEndDate?: Timestamp | null;
     ingestedAt?: any;
     source?: string;
-    floor?: number | null;
+    listingType?: 'exclusive' | 'external' | 'private';
+    isGlobalCityProperty?: boolean;
+    importedFromGlobal?: boolean;
+    originalGlobalId?: string;
+    readonly?: boolean;
+    yad2Link?: string;
+    leadId?: string;
 
+    address: {
+        city: string;
+        street?: string;
+        number?: string;
+        neighborhood?: string;
+        fullAddress: string;
+        coords?: {
+            lat: number;
+            lng: number;
+        };
+    };
 
-    // Draft properties (WhatsApp parsing)
+    features: {
+        hasElevator?: boolean | null;
+        hasParking?: boolean | null;
+        parkingSpots?: number | null;
+        hasBalcony?: boolean | null;
+        hasMamad?: boolean | null;
+        hasStorage?: boolean | null;
+        isRenovated?: boolean | null;
+        isFurnished?: boolean | null;
+        hasAirConditioning?: boolean | null;
+    };
+
+    financials: {
+        price: number;
+        originalPrice?: number | null;
+    };
+
+    media: {
+        mainImage?: string | null;
+        images?: string[];
+        videoTourUrl?: string | null;
+    };
+
+    management: {
+        assignedAgentId?: string | null;
+        descriptions?: string | null;
+    };
+
+    // WhatsApp / external draft fields
     rawDescription?: string;
     groupId?: string;
     externalAgentPhone?: string;
     externalAgentName?: string;
-    street?: string;
-    neighborhood?: string;
-    floor?: number;
-    description?: string;
-    originalSource?: string;
-    externalLink?: string;
-
-    images?: string[];
-    imageUrls?: string[];
-    videoUrl?: string;
-    lat?: number;
-    lng?: number;
-    leadId?: string;
-    listingType?: 'exclusive' | 'external' | 'private';
-    agencyName?: string;
-    yad2Link?: string;
-    isGlobalCityProperty?: boolean;
-    readonly?: boolean;
-
-    // Amenities and detailed metadata
-    condition?: string;
-    floorsTotal?: number;
-    hasElevator?: boolean;
-    hasParking?: boolean;
-    hasBalcony?: boolean;
-    hasSafeRoom?: boolean;
-    hasBars?: boolean;
-    hasAirCondition?: boolean;
-
-    // External agency details
     externalAgencyName?: string;
     externalContactName?: string;
-
-    // Global import fields
-    parkingSpots?: number;
-    agentName?: string;
     contactName?: string;
     contactPhone?: string;
-    hasAgent?: boolean;
+    originalSource?: string;
+    externalLink?: string;
     listingId?: string;
+    hasAgent?: boolean;
+
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
 }
 
 export interface PendingLead {
@@ -306,6 +317,7 @@ export interface SharedCatalog {
     leadRequirements?: {
         desiredCity?: string[];
         desiredNeighborhoods?: string[];
+        desiredStreet?: string[];
         maxBudget?: number | null;
         minRooms?: number | null;
         maxRooms?: number | null;

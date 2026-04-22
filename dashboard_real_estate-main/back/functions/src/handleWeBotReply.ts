@@ -149,8 +149,7 @@ async function findMatchingPropertiesForBot(
   topN = 10,
 ): Promise<Array<{ id: string; [key: string]: any }>> {
   const agencySnap = await db
-    .collection('properties')
-    .where('agencyId', '==', agencyId)
+    .collection('agencies').doc(agencyId).collection('properties')
     .where('status', '==', 'active')
     .get();
   const agencyProps = agencySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -176,10 +175,17 @@ async function findMatchingPropertiesForBot(
 
   for (const prop of all) {
     const mp: MatchingProperty = {
-      id: prop.id, city: prop.city, neighborhood: prop.neighborhood,
-      price: prop.price, rooms: prop.rooms, type: prop.type,
-      hasElevator: prop.hasElevator, hasParking: prop.hasParking,
-      hasBalcony: prop.hasBalcony, hasSafeRoom: prop.hasSafeRoom,
+      id: prop.id,
+      city: prop.address?.city || prop.city,
+      neighborhood: prop.address?.neighborhood || prop.neighborhood,
+      street: prop.address?.street || prop.street,
+      price: prop.financials?.price ?? prop.price,
+      rooms: prop.rooms,
+      transactionType: prop.transactionType || prop.type || 'forsale',
+      hasElevator: prop.features?.hasElevator ?? prop.hasElevator,
+      hasParking: prop.features?.hasParking ?? prop.hasParking,
+      hasBalcony: prop.features?.hasBalcony ?? prop.hasBalcony,
+      hasMamad: prop.features?.hasMamad ?? prop.hasSafeRoom,
     };
     const result = evaluateMatch(mp, requirements);
     if (result) matches.push({ ...prop, matchScore: result.matchScore, category: result.category });
@@ -212,7 +218,11 @@ async function sendBotMessage(
   text: string,
 ): Promise<void> {
   const isSent = await sendWhatsAppMessage(integration, customerPhone, text);
-  console.log(`[WeBot] Reply ${isSent ? '✅' : '❌'} to ${customerPhone}`);
+  if (!isSent) {
+    console.error(`[WeBot] ❌ Failed to send message to ${customerPhone} — instance=${integration.idInstance} text_preview="${text.substring(0, 50)}"`);
+  } else {
+    console.log(`[WeBot] ✅ Sent to ${customerPhone}`);
+  }
   if (isSent) {
     await db.collection(`leads/${leadId}/messages`).add({
       text,
@@ -287,11 +297,15 @@ async function createCRMNotification(
   actionType: 'assign_agent' | 'contact_seller',
   details: Record<string, any>,
 ): Promise<void> {
-  await db.collection('notifications').add({
-    agencyId, leadId, leadName, type, actionType, details,
-    isRead: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  try {
+    await db.collection('notifications').add({
+      agencyId, leadId, leadName, type, actionType, details,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error('[WeBot] createCRMNotification failed:', err);
+  }
 }
 
 // ─── findAgentPhone / findAdminPhone ─────────────────────────────────────────
@@ -338,7 +352,10 @@ async function extractSellerInfo(
       address:      parsed.address      || undefined,
       propertyType: parsed.propertyType || undefined,
     };
-  } catch { return {}; }
+  } catch (err) {
+    console.warn('[WeBot] extractSellerInfo failed (Gemini/parse error):', err);
+    return {};
+  }
 }
 
 // ─── extractTimePreference ────────────────────────────────────────────────────
@@ -354,7 +371,10 @@ async function extractTimePreference(message: string, geminiApiKey: string): Pro
     );
     const parsed = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
     return parsed.timeText || message.trim();
-  } catch { return message.trim(); }
+  } catch (err) {
+    console.warn('[WeBot] extractTimePreference failed (Gemini/parse error):', err);
+    return message.trim();
+  }
 }
 
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
@@ -373,22 +393,21 @@ async function runBuyerFlow(
   currentState:   ChatState = 'IDLE',
 ): Promise<void> {
   // RAG: active properties for this agency
-  const propSnap = await db.collection('properties')
-    .where('agencyId', '==', agencyId)
+  const propSnap = await db
+    .collection('agencies').doc(agencyId).collection('properties')
     .where('status', '==', 'active')
-    .orderBy('createdAt', 'desc')
     .limit(15)
     .get();
   const ragProperties = propSnap.docs.map(doc => {
     const d = doc.data();
     return {
       id:          doc.id,
-      title:       d.title || d.propertyType || 'נכס',
-      address:     d.street || d.address || d.neighborhood || '',
-      city:        d.city || '',
+      title:       d.propertyType || 'נכס',
+      address:     d.address?.fullAddress || d.address?.street || '',
+      city:        d.address?.city || '',
       rooms:       d.rooms ?? 0,
-      price:       d.price ?? 0,
-      description: d.description || '',
+      price:       d.financials?.price ?? d.price ?? 0,
+      description: d.management?.descriptions || '',
     };
   });
 

@@ -136,7 +136,8 @@ export default function VerifyPhonePage() {
                         auth.currentUser?.email || '',
                         data.fullName,
                         normalizePhoneIL(phone)!,
-                        data.agencyName
+                        data.agencyName,
+                        data.legalConsent || { acceptedAt: new Date().toISOString(), version: '1.0' }
                     );
 
                     const newAgencyId = result.agencyId;

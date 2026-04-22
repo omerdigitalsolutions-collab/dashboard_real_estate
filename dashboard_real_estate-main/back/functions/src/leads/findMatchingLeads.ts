@@ -23,13 +23,28 @@ const db = getFirestore();
 export interface IngestedProperty {
     id?: string;
     agencyId?: string;
-    address: string;
-    city: string;
-    neighborhood?: string | null;  // Added neighborhood
-    price: number;
+    // New nested schema
+    address?: {
+        city?: string;
+        street?: string;
+        neighborhood?: string;
+        fullAddress?: string;
+    };
+    // Legacy flat fields (for backward compat during transition)
+    city?: string;
+    neighborhood?: string | null;
+    financials?: { price?: number };
+    price?: number;
+    transactionType?: string;
+    type?: string;
     rooms?: number | null;
-    type: 'sale' | 'rent';
     sellerPhone?: string | null;
+    features?: {
+        hasElevator?: boolean | null;
+        hasParking?: boolean | null;
+        hasBalcony?: boolean | null;
+        hasMamad?: boolean | null;
+    };
     hasElevator?: boolean | null;
     hasParking?: boolean | null;
     hasBalcony?: boolean | null;
@@ -114,10 +129,13 @@ async function checkDuplicate(property: IngestedProperty, agencyId: string): Pro
     cutoff.setDate(cutoff.getDate() - DEDUP_DAYS);
     const cutoffTs = Timestamp.fromDate(cutoff);
 
+    const propsCol = db.collection('agencies').doc(agencyId).collection('properties');
+    const price = property.financials?.price ?? property.price;
+    const fullAddress = property.address?.fullAddress ?? '';
+
     // Check 1: same sellerPhone within 14 days
     if (property.sellerPhone) {
-        const phoneSnap = await db.collection('properties')
-            .where('agencyId', '==', agencyId)
+        const phoneSnap = await propsCol
             .where('sellerPhone', '==', property.sellerPhone)
             .where('createdAt', '>=', cutoffTs)
             .limit(1)
@@ -126,16 +144,17 @@ async function checkDuplicate(property: IngestedProperty, agencyId: string): Pro
         if (!phoneSnap.empty) return true;
     }
 
-    // Check 2: same address + price within 14 days
-    const addrSnap = await db.collection('properties')
-        .where('agencyId', '==', agencyId)
-        .where('address', '==', property.address)
-        .where('price', '==', property.price)
-        .where('createdAt', '>=', cutoffTs)
-        .limit(1)
-        .get();
+    // Check 2: same fullAddress + price within 14 days
+    if (fullAddress && price != null) {
+        const addrSnap = await propsCol
+            .where('address.fullAddress', '==', fullAddress)
+            .where('financials.price', '==', price)
+            .where('createdAt', '>=', cutoffTs)
+            .limit(1)
+            .get();
 
-    if (!addrSnap.empty) return true;
+        if (!addrSnap.empty) return true;
+    }
 
     return false;
 }
@@ -172,15 +191,16 @@ import { evaluateMatch, MatchingProperty } from './matchingEngine';
 function evaluateLead(property: IngestedProperty, lead: any): MatchedLead | null {
     const matchingProp: MatchingProperty = {
         id: property.id || 'temp-id',
-        city: property.city,
-        neighborhood: property.neighborhood,
-        price: property.price,
+        city: property.address?.city ?? property.city,
+        neighborhood: property.address?.neighborhood ?? property.neighborhood,
+        street: property.address?.street,
+        price: property.financials?.price ?? property.price ?? 0,
         rooms: property.rooms,
-        type: property.type,
-        hasElevator: property.hasElevator,
-        hasParking: property.hasParking,
-        hasBalcony: property.hasBalcony,
-        hasSafeRoom: property.hasSafeRoom
+        transactionType: (property.transactionType || property.type || 'forsale') as any,
+        hasElevator: property.features?.hasElevator ?? property.hasElevator,
+        hasParking: property.features?.hasParking ?? property.hasParking,
+        hasBalcony: property.features?.hasBalcony ?? property.hasBalcony,
+        hasMamad: property.features?.hasMamad ?? property.hasSafeRoom,
     };
     const res = evaluateMatch(matchingProp, lead.requirements);
     if (!res) return null;

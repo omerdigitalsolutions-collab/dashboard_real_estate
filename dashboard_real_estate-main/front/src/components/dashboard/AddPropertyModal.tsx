@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { X, Building2, MapPin, Home, DollarSign, Users } from 'lucide-react';
-import { Property, PropertyType } from '../../types';
+import { Property } from '../../types';
 import { cityCoordinates, ISRAEL_CITIES } from '../../utils/constants';
 import { useAgents } from '../../hooks/useFirestoreData';
 
 interface AddPropertyModalProps {
     onClose: () => void;
-    onAdd: (property: Partial<Property>) => void; // Uses Partial because id/agencyId will be added by backend
+    onAdd: (property: Partial<Property>) => void;
 }
 
 const propertyCategories = ['דירה', 'פנטהאוז', 'וילה', 'קרקע', 'מסחרי'];
@@ -15,10 +15,10 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
     const { data: agentOptions } = useAgents();
 
     const [form, setForm] = useState({
-        address: '',
+        street: '',
         city: 'תל אביב',
         category: 'דירה',
-        type: 'sale' as PropertyType,
+        transactionType: 'forsale' as 'forsale' | 'rent',
         price: '',
         rooms: '',
         sqm: '',
@@ -35,7 +35,7 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
 
     const validate = () => {
         const e: Record<string, string> = {};
-        if (!form.address.trim()) e.address = 'נדרשת כתובת';
+        if (!form.street.trim()) e.street = 'נדרשת כתובת';
         if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) e.price = 'נדרש מחיר תקין';
         if (!form.rooms || isNaN(Number(form.rooms))) e.rooms = 'נדרש מספר חדרים';
         if (!form.sqm || isNaN(Number(form.sqm))) e.sqm = 'נדרש גודל במ"ר';
@@ -50,18 +50,30 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
         const coords = cityCoordinates[form.city] ?? cityCoordinates['אחר'];
         const jitter = () => (Math.random() - 0.5) * 4;
 
-        const newProperty: Partial<Property> & { category?: string } = {
-            address: form.address,
-            city: form.city,
-            type: form.type,
-            price: Number(form.price),
+        const newProperty: Partial<Property> = {
+            transactionType: form.transactionType,
+            propertyType: form.category,
             rooms: Number(form.rooms),
+            floor: Number(form.floor) || null,
+            squareMeters: Number(form.sqm) || null,
             status: 'active',
-            daysOnMarket: 0,
-            agentId: form.agentId || (agentOptions[0]?.uid ?? 'unassigned'),
-            lat: coords.x + jitter(), // Will map to mapX in DealsPipeline unfortunately, need to reconcile later
-            lng: coords.y + jitter(), // Will map to mapY in DealsPipeline 
-            category: form.category || undefined, // Added temporarily
+            address: {
+                city: form.city,
+                street: form.street,
+                fullAddress: `${form.street} ${form.city}`.trim(),
+                coords: {
+                    lat: coords.x + jitter(),
+                    lng: coords.y + jitter(),
+                },
+            },
+            financials: {
+                price: Number(form.price),
+            },
+            features: {},
+            media: { images: [] },
+            management: {
+                assignedAgentId: form.agentId || (agentOptions[0]?.uid ?? null) || null,
+            },
         };
 
         onAdd(newProperty);
@@ -115,11 +127,11 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-2">סוג מודעה</label>
                         <div className="flex gap-2">
-                            {[{ v: 'sale', label: 'למכירה', color: 'bg-blue-600' }, { v: 'rent', label: 'להשכרה', color: 'bg-violet-600' }].map(opt => (
+                            {[{ v: 'forsale', label: 'למכירה', color: 'bg-blue-600' }, { v: 'rent', label: 'להשכרה', color: 'bg-violet-600' }].map(opt => (
                                 <button
                                     key={opt.v}
-                                    onClick={() => set('type', opt.v)}
-                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${form.type === opt.v ? `${opt.color} text-white shadow-sm` : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                    onClick={() => set('transactionType', opt.v)}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${form.transactionType === opt.v ? `${opt.color} text-white shadow-sm` : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                                 >
                                     {opt.label}
                                 </button>
@@ -134,12 +146,12 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                                 <MapPin size={11} className="inline ml-1" />כתובת
                             </label>
                             <input
-                                value={form.address}
-                                onChange={e => set('address', e.target.value)}
+                                value={form.street}
+                                onChange={e => set('street', e.target.value)}
                                 placeholder="רחוב הרצל 42"
-                                className={inputClass('address')}
+                                className={inputClass('street')}
                             />
-                            {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
+                            {errors.street && <p className="text-xs text-red-500 mt-1">{errors.street}</p>}
                         </div>
                         <div className="relative">
                             <label className="block text-xs font-semibold text-slate-500 mb-1.5">עיר</label>
@@ -154,7 +166,6 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                             />
                             {errors.city && <p className="text-xs text-red-500 mt-1">{errors.city}</p>}
 
-                            {/* Autocomplete Dropdown */}
                             {errors.cityFocus === 'true' && form.city.trim() && (
                                 <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
                                     {ISRAEL_CITIES
@@ -199,13 +210,13 @@ export default function AddPropertyModal({ onClose, onAdd }: AddPropertyModalPro
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                             <DollarSign size={11} className="inline ml-1" />
-                            {form.type === 'sale' ? 'מחיר מכירה (₪)' : 'שכירות חודשית (₪)'}
+                            {form.transactionType === 'forsale' ? 'מחיר מכירה (₪)' : 'שכירות חודשית (₪)'}
                         </label>
                         <input
                             type="number"
                             value={form.price}
                             onChange={e => set('price', e.target.value)}
-                            placeholder={form.type === 'sale' ? '1,500,000' : '7,500'}
+                            placeholder={form.transactionType === 'forsale' ? '1,500,000' : '7,500'}
                             className={inputClass('price')}
                         />
                         {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}

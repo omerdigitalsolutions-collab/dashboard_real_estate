@@ -313,25 +313,29 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
             }
 
             await addProperty(userData.agencyId, {
-                address: selectedAddress ? selectedAddress.address : addressQuery.trim(),
-                city: city.trim(),
-                type,
-                kind,
-                price: parsedPrice,
+                address: {
+                    city: city.trim(),
+                    fullAddress: selectedAddress ? selectedAddress.address : addressQuery.trim(),
+                    ...(lat && lng ? { coords: { lat, lng } } : {}),
+                },
+                transactionType: type === 'sale' ? 'forsale' : 'rent',
+                propertyType: kind,
+                financials: { price: parsedPrice },
                 ...(rooms ? { rooms: parseFloat(rooms) } : {}),
-                ...(sqm ? { sqm: parseFloat(sqm) } : {}),
+                ...(sqm ? { squareMeters: parseFloat(sqm) } : {}),
                 ...(floor ? { floor: parseFloat(floor) } : {}),
-                ...(lat && lng ? { lat, lng } : {}),
-                ...(description ? { description: description.trim() } : {}),
-                ...(importedImages.length > 0 ? { images: importedImages } : {}),
+                management: {
+                    assignedAgentId: userData.uid || '',
+                    ...(description ? { descriptions: description.trim() } : {}),
+                },
+                media: { images: importedImages },
                 isExclusive: listingType === 'exclusive',
                 listingType,
                 ...(listingType === 'exclusive' && imageFiles.length > 0 ? { imageFiles } : {}),
                 ...(leadId ? { leadId } : {}),
-                agentId: userData.uid || '',
                 originalSource: originalSource.trim(),
                 externalLink: externalLink.trim(),
-            });
+            } as any);
             showToast('הנכס נוסף בהצלחה ✓');
             resetForm();
             setTimeout(onClose, 1200);

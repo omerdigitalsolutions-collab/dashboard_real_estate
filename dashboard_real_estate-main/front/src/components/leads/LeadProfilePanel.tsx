@@ -673,10 +673,10 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                                     className="flex items-center gap-4 bg-slate-800/40 border border-slate-800 hover:border-rose-500/30 rounded-2xl p-3 hover:bg-slate-800 transition-all group"
                                                 >
                                                     <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700">
-                                                        {(prop.images?.[0]) ? (
+                                                        {(prop.media?.images?.[0]) ? (
                                                             <img
-                                                                src={prop.images[0]}
-                                                                alt={prop.address}
+                                                                src={prop.media.images[0]}
+                                                                alt={prop.address?.fullAddress}
                                                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                                             />
                                                         ) : (
@@ -686,8 +686,8 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-black text-slate-100 truncate mb-1">{prop.address}</p>
-                                                        <p className="text-xs font-black text-rose-400 tracking-tight">₪{prop.price.toLocaleString()}</p>
+                                                        <p className="text-sm font-black text-slate-100 truncate mb-1">{prop.address?.fullAddress}</p>
+                                                        <p className="text-xs font-black text-rose-400 tracking-tight">₪{prop.financials?.price?.toLocaleString()}</p>
                                                     </div>
                                                     <div className="text-slate-600 group-hover:text-rose-400 transition-colors bg-slate-800 p-2 rounded-xl border border-slate-700">
                                                         <ArrowRightLeft size={16} />

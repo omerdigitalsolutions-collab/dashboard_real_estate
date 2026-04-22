@@ -31,16 +31,18 @@ const labelCls = 'block text-xs font-semibold text-slate-500 mb-1.5';
 export default function EditPropertyModal({ property, isOpen, onClose, onSuccess }: EditPropertyModalProps) {
     const { data: agents } = useAgents();
 
-    const [address, setAddress] = useState(property.address);
-    const [city, setCity] = useState(property.city ?? '');
-    const [type, setType] = useState<'sale' | 'rent' | 'commercial'>(property.type);
-    const [kind, setKind] = useState(property.kind ?? '');
-    const [price, setPrice] = useState(property.price.toString());
+    const [address, setAddress] = useState(property.address?.fullAddress ?? '');
+    const [city, setCity] = useState(property.address?.city ?? '');
+    const [transactionType, setTransactionType] = useState<'forsale' | 'rent'>(
+        property.transactionType === 'rent' ? 'rent' : 'forsale'
+    );
+    const [kind, setKind] = useState(property.propertyType ?? '');
+    const [price, setPrice] = useState((property.financials?.price ?? 0).toString());
     const [rooms, setRooms] = useState(property.rooms?.toString() ?? '');
-    const [sqm, setSqm] = useState(property.sqm?.toString() ?? '');
+    const [sqm, setSqm] = useState(property.squareMeters?.toString() ?? '');
     const [status, setStatus] = useState(property.status);
-    const [agentId, setAgentId] = useState(property.agentId ?? '');
-    const [description, setDescription] = useState(property.description ?? '');
+    const [agentId, setAgentId] = useState(property.management?.assignedAgentId ?? '');
+    const [description, setDescription] = useState(property.management?.descriptions ?? '');
     const isWhatsappProperty = property.source === 'whatsapp_group' || property.listingType === 'external';
     const [listingType, setListingType] = useState<'private' | 'exclusive' | 'external'>(
         isWhatsappProperty ? 'external' : (property.listingType || (property.isExclusive ? 'exclusive' : 'private'))
@@ -151,26 +153,31 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
 
         setLoading(true);
         try {
+            const finalStreet = selectedAddress?.address ?? address.trim();
+            const finalCity = selectedAddress?.city ?? city.trim();
             await updateProperty(property.id, {
-                address: selectedAddress ? selectedAddress.address : address.trim(),
-                city: city.trim(),
-                type,
-                kind,
-                price: parsedPrice,
+                address: {
+                    city: finalCity,
+                    street: finalStreet,
+                    fullAddress: `${finalStreet} ${finalCity}`.trim(),
+                    ...(selectedAddress?.lat && selectedAddress?.lng ? {
+                        coords: { lat: selectedAddress.lat, lng: selectedAddress.lng }
+                    } : {}),
+                },
+                transactionType,
+                propertyType: kind,
+                financials: { price: parsedPrice },
                 rooms: (rooms && !isNaN(parseFloat(rooms))) ? parseFloat(rooms) : 0,
-                sqm: (sqm && !isNaN(parseFloat(sqm))) ? parseFloat(sqm) : 0,
+                squareMeters: (sqm && !isNaN(parseFloat(sqm))) ? parseFloat(sqm) : 0,
                 status,
-                agentId: agentId || property.agentId,
-                description: (description || "").trim(),
+                management: {
+                    assignedAgentId: agentId || property.management?.assignedAgentId || null,
+                    descriptions: (description || "").trim() || null,
+                },
                 listingType,
                 isExclusive: listingType === 'exclusive',
                 originalSource: originalSource.trim(),
                 externalLink: externalLink.trim(),
-                ...(selectedAddress?.lat && selectedAddress?.lng ? { 
-                    lat: selectedAddress.lat, 
-                    lng: selectedAddress.lng,
-                    location: { lat: selectedAddress.lat, lng: selectedAddress.lng }
-                } : {}),
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
             toast.success('הנכס עודכן בהצלחה ✓');
@@ -199,7 +206,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         </div>
                         <div>
                             <h2 className="text-base font-bold text-slate-900">עריכת נכס</h2>
-                            <p className="text-xs text-slate-400">{property.address}</p>
+                            <p className="text-xs text-slate-400">{property.address?.fullAddress}</p>
                         </div>
                     </div>
                     <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
@@ -214,9 +221,9 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         <div>
                             <label className={labelCls}>סוג עסקה</label>
                             <div className="flex bg-slate-100 p-1 rounded-xl">
-                                {[{ val: 'sale', label: 'למכירה' }, { val: 'rent', label: 'להשכרה' }].map(t => (
-                                    <button key={t.val} type="button" onClick={() => setType(t.val as 'sale' | 'rent')}
-                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${type === t.val ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                {[{ val: 'forsale', label: 'למכירה' }, { val: 'rent', label: 'להשכרה' }].map(t => (
+                                    <button key={t.val} type="button" onClick={() => setTransactionType(t.val as 'forsale' | 'rent')}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${transactionType === t.val ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                     >{t.label}</button>
                                 ))}
                             </div>

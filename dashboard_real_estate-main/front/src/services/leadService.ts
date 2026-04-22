@@ -68,12 +68,12 @@ export const matchPropertiesForLead = (leadRequirements: Lead['requirements'], a
     return allProperties.filter(property => {
         if (property.status !== 'active') return false;
 
-        if (!isCityMatch(leadRequirements.desiredCity || [], property.city || '')) {
+        if (!isCityMatch(leadRequirements.desiredCity || [], property.address?.city || '')) {
             return false;
         }
 
         if (leadRequirements.maxBudget != null && leadRequirements.maxBudget > 0) {
-            if ((property.price ?? Infinity) > leadRequirements.maxBudget) return false;
+            if ((property.financials?.price ?? Infinity) > leadRequirements.maxBudget) return false;
         }
 
         if (leadRequirements.minRooms != null && leadRequirements.minRooms > 0) {
@@ -82,7 +82,7 @@ export const matchPropertiesForLead = (leadRequirements: Lead['requirements'], a
 
         const propertyTypes = leadRequirements.propertyType ?? [];
         if (propertyTypes.length > 0) {
-            if (!propertyTypes.includes(property.type)) return false;
+            if (!propertyTypes.includes(property.transactionType)) return false;
         }
 
         return true;

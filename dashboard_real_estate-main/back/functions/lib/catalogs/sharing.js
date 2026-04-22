@@ -5,7 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const db = (0, firestore_1.getFirestore)();
 exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
@@ -26,18 +26,23 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
     const agencyDoc = await db.doc(`agencies/${agencyId}`).get();
     const agencyData = (_b = agencyDoc.data()) !== null && _b !== void 0 ? _b : {};
     const agencyName = agencyData.agencyName || agencyData.name || '';
-    const agencyLogoUrl = ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.logoUrl) || '';
-    const agencyPhone = agencyData.officePhone || ((_d = agencyData.whatsappIntegration) === null || _d === void 0 ? void 0 : _d.phoneNumber) || '';
+    const agencyLogoUrl = ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.logoUrl) || agencyData.logoUrl || '';
+    const callerPhone = ((_d = callerDoc.data()) === null || _d === void 0 ? void 0 : _d.phone) || '';
+    const agencyPhone = agencyData.officePhone ||
+        ((_e = agencyData.billing) === null || _e === void 0 ? void 0 : _e.ownerPhone) ||
+        ((_f = agencyData.whatsappIntegration) === null || _f === void 0 ? void 0 : _f.phoneNumber) ||
+        agencyData.phone ||
+        callerPhone || '';
     // ── Fetch Lead requirements ──────────────────────────────────────────────────
     let leadRequirements = null;
     if (leadId) {
         try {
             const leadDoc = await db.doc(`leads/${leadId}`).get();
             if (leadDoc.exists) {
-                leadRequirements = ((_e = leadDoc.data()) === null || _e === void 0 ? void 0 : _e.requirements) || null;
+                leadRequirements = ((_g = leadDoc.data()) === null || _g === void 0 ? void 0 : _g.requirements) || null;
             }
         }
-        catch ( /* non-critical */_f) { /* non-critical */ }
+        catch ( /* non-critical */_h) { /* non-critical */ }
     }
     const catalogRef = db.collection('shared_catalogs').doc();
     const now = new Date();

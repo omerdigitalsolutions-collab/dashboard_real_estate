@@ -237,16 +237,20 @@ async function execQueryLeads(db, agencyId, args) {
     };
 }
 async function execQueryProperties(db, agencyId) {
-    const snap = await db.collection('properties')
-        .where('agencyId', '==', agencyId)
+    const snap = await db.collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
-        .orderBy('price', 'desc')
+        .orderBy('financials.price', 'desc')
         .limit(5)
         .get();
     return {
         topMostExpensiveActiveProperties: snap.docs.map(doc => {
+            var _a, _b, _c, _d, _e;
             const d = doc.data();
-            return { address: `${d.street}, ${d.city}`, price: d.price, type: d.type };
+            return {
+                address: ((_a = d.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || `${((_b = d.address) === null || _b === void 0 ? void 0 : _b.street) || ''}, ${((_c = d.address) === null || _c === void 0 ? void 0 : _c.city) || ''}`,
+                price: (_e = (_d = d.financials) === null || _d === void 0 ? void 0 : _d.price) !== null && _e !== void 0 ? _e : d.price,
+                transactionType: d.transactionType,
+            };
         }),
     };
 }
@@ -464,28 +468,35 @@ async function execQueryLeadMatches(db, agencyId, args) {
         return { error: 'Lead not found.' };
     const lead = leadDoc.data();
     const req = lead.requirements || {};
-    let query = db.collection('properties')
-        .where('agencyId', '==', agencyId)
+    let query = db.collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active');
-    if (req.maxBudget)
-        query = query.where('price', '<=', req.maxBudget);
-    const snap = await query.limit(10).get();
+    const snap = await query.limit(50).get();
     let matches = snap.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+    if (req.maxBudget) {
+        matches = matches.filter((p) => { var _a, _b, _c; return ((_c = (_b = (_a = p.financials) === null || _a === void 0 ? void 0 : _a.price) !== null && _b !== void 0 ? _b : p.price) !== null && _c !== void 0 ? _c : 0) <= req.maxBudget; });
+    }
     if (req.desiredCity && req.desiredCity.length > 0) {
-        matches = matches.filter((p) => req.desiredCity.includes(p.city));
+        matches = matches.filter((p) => { var _a; return req.desiredCity.includes(((_a = p.address) === null || _a === void 0 ? void 0 : _a.city) || p.city); });
     }
     if (req.minRooms) {
         matches = matches.filter((p) => (p.rooms || 0) >= req.minRooms);
     }
     return {
         leadName: lead.name,
-        topMatches: matches.slice(0, 5).map((p) => ({ address: p.address, price: p.price, rooms: p.rooms }))
+        topMatches: matches.slice(0, 5).map((p) => {
+            var _a, _b, _c, _d;
+            return ({
+                address: ((_a = p.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || ((_b = p.address) === null || _b === void 0 ? void 0 : _b.city) || '',
+                price: (_d = (_c = p.financials) === null || _c === void 0 ? void 0 : _c.price) !== null && _d !== void 0 ? _d : p.price,
+                rooms: p.rooms,
+            });
+        })
     };
 }
 async function execSearchEntity(db, agencyId, args) {
     const q = args.query.toLowerCase();
     const leadsSnap = await db.collection('leads').where('agencyId', '==', agencyId).get();
-    const propsSnap = await db.collection('properties').where('agencyId', '==', agencyId).get();
+    const propsSnap = await db.collection('agencies').doc(agencyId).collection('properties').get();
     const results = [];
     leadsSnap.forEach(doc => {
         var _a, _b;
@@ -495,10 +506,12 @@ async function execSearchEntity(db, agencyId, args) {
         }
     });
     propsSnap.forEach(doc => {
-        var _a, _b;
+        var _a, _b, _c;
         const d = doc.data();
-        if (((_a = d.address) === null || _a === void 0 ? void 0 : _a.toLowerCase().includes(q)) || ((_b = d.city) === null || _b === void 0 ? void 0 : _b.toLowerCase().includes(q))) {
-            results.push({ type: 'property', address: d.address, id: doc.id });
+        const addr = ((_a = d.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || ((_b = d.address) === null || _b === void 0 ? void 0 : _b.city) || '';
+        const city = ((_c = d.address) === null || _c === void 0 ? void 0 : _c.city) || '';
+        if (addr.toLowerCase().includes(q) || city.toLowerCase().includes(q)) {
+            results.push({ type: 'property', address: addr, id: doc.id });
         }
     });
     return { results: results.slice(0, 5) };
