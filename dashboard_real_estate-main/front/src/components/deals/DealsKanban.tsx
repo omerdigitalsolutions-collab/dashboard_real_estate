@@ -147,7 +147,7 @@ function DealCard({
                 <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-2 py-1 rounded-md" title="ימים מאז עדכון אחרון">
                     <Clock size={12} />
                     <span className="text-xs font-semibold">
-                        {deal.createdAt ? Math.floor((Date.now() - deal.createdAt.toMillis()) / (1000 * 60 * 60 * 24)) : 0} ימים
+                        {deal.createdAt ? Math.floor((Date.now() - (deal.createdAt.toMillis ? deal.createdAt.toMillis() : (deal.createdAt instanceof Date ? deal.createdAt.getTime() : (deal.createdAt as any).seconds * 1000))) / (1000 * 60 * 60 * 24)) : 0} ימים
                     </span>
                 </div>
             </div>

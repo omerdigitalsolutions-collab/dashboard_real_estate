@@ -453,8 +453,8 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         if (completed.length === 0) return;
 
         const sorted = [...completed].sort((a, b) => {
-            const timeA = a.completedAt?.toMillis ? a.completedAt.toMillis() : 0;
-            const timeB = b.completedAt?.toMillis ? b.completedAt.toMillis() : 0;
+            const timeA = a.completedAt?.toMillis ? a.completedAt.toMillis() : (a.completedAt instanceof Date ? a.completedAt.getTime() : (a.completedAt as any)?.seconds * 1000 || 0);
+            const timeB = b.completedAt?.toMillis ? b.completedAt.toMillis() : (b.completedAt instanceof Date ? b.completedAt.getTime() : (b.completedAt as any)?.seconds * 1000 || 0);
             return timeB - timeA; // newest first
         });
 
@@ -469,7 +469,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         // 2. Delete older than 48 hours from the kept items
         sorted.slice(0, 10).forEach(t => {
-            const completedTime = t.completedAt?.toMillis ? t.completedAt.toMillis() : 0;
+            const completedTime = t.completedAt?.toMillis ? t.completedAt.toMillis() : (t.completedAt instanceof Date ? t.completedAt.getTime() : (t.completedAt as any)?.seconds * 1000 || 0);
             if (completedTime > 0 && now - completedTime > FORTY_EIGHT_HOURS) {
                 if (!toDelete.includes(t.id)) toDelete.push(t.id);
             }

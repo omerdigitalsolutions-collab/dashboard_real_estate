@@ -67,7 +67,11 @@ export default function OperationsCenter() {
                         </div>
                         {tasks
                             .filter(t => !t.isCompleted)
-                            .sort((a, b) => (a.dueDate?.toMillis() || 0) - (b.dueDate?.toMillis() || 0))
+                            .sort((a, b) => {
+                                const tA = a.dueDate?.toMillis ? a.dueDate.toMillis() : (a.dueDate instanceof Date ? a.dueDate.getTime() : 0);
+                                const tB = b.dueDate?.toMillis ? b.dueDate.toMillis() : (b.dueDate instanceof Date ? b.dueDate.getTime() : 0);
+                                return tA - tB;
+                            })
                             .map(task => {
                                 return (
                                     <div

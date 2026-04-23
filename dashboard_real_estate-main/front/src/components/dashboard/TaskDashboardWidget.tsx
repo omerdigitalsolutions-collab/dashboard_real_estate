@@ -148,7 +148,7 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
 
                                         <div className="flex items-center gap-3 mt-2 text-xs">
                                             {task.isCompleted ? (
-                                                <span className="text-slate-500 text-[11px]">בוצע ב-{format(task.completedAt?.toDate() || new Date(), 'd MMM', { locale: he })}</span>
+                                                <span className="text-slate-500 text-[11px]">בוצע ב-{format(task.completedAt?.toDate ? task.completedAt.toDate() : (task.completedAt instanceof Date ? task.completedAt : new Date((task.completedAt as any)?.seconds * 1000 || Date.now())), 'd MMM', { locale: he })}</span>
                                             ) : (
                                                 <span className={`flex items-center gap-1 ${due.color}`}>
                                                     <DueIcon size={12} />
