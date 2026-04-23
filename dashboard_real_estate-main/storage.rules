@@ -187,6 +187,39 @@ service firebase.storage {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // CONTRACT PDFs
+    // Original templates — uploaded by agency admins via ContractEditor.
+    // Signed copies — written by the signDeal Cloud Function (Admin SDK bypass).
+    // Both are readable publicly so the iframe preview and download links work.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Original PDF templates uploaded by the agent
+    match /agencies/{agencyId}/contracts/originals/{fileName} {
+      // Public read: required for iframe preview in editor and signing page,
+      // and for the Cloud Function to fetch the bytes via plain fetch().
+      allow read: if true;
+
+      // Any agent in the agency can upload template PDFs (20 MB max)
+      allow create: if request.auth != null
+                    && request.auth.token.agencyId == agencyId
+                    && request.resource.size < 20 * 1024 * 1024
+                    && request.resource.contentType == 'application/pdf';
+
+      // No client-side update or delete — templates are immutable once linked
+      allow update, delete: if false;
+    }
+
+    // Signed PDFs produced by the signDeal Cloud Function
+    // (Admin SDK writes bypass these rules — we only need read access here)
+    match /agencies/{agencyId}/signed_contracts/{dealId}/{fileName} {
+      // Public read: needed for the signed PDF download link shown to both parties
+      allow read: if true;
+
+      // Writes are Admin SDK only — no client rule needed
+      allow write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // GLOBAL / PUBLIC STORAGE
     // ══════════════════════════════════════════════════════════════════════════
     match /global/properties/{propertyId}/{mediaType}/{fileName} {

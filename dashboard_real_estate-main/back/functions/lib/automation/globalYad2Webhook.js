@@ -198,7 +198,16 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
             const sourceLabel = detectedSource === 'yad2' ? 'yad2_alert' :
                 detectedSource === 'madlan' ? 'madlan_alert' :
                     'email_alert';
-            batch.set(propRef, Object.assign(Object.assign({}, prop), { city: normalizedCityName, street: streetStr, source: sourceLabel, siteSource: detectedSource, type: resolvedDealType, isPublic: true, createdAt: new Date(), ingestedAt: new Date(), listingType: prop.listingType === 'cooperation' ? 'external' : 'private' }), { merge: true });
+            const transactionType = resolvedDealType === 'rent' ? 'rent' : 'forsale';
+            batch.set(propRef, Object.assign(Object.assign(Object.assign({ 
+                // Flat fields for backward-compat queries
+                city: normalizedCityName, street: streetStr, price: priceNum, isPublic: true, source: sourceLabel, siteSource: detectedSource, 
+                // New nested schema
+                transactionType, propertyType: prop.propertyType || '', rooms: typeof prop.rooms === 'number' ? prop.rooms : null, floor: prop.floor != null ? Number(prop.floor) || null : null, squareMeters: prop.sqm != null ? Number(prop.sqm) || null : null, address: Object.assign({ fullAddress: streetStr ? `${streetStr}, ${normalizedCityName}` : normalizedCityName, city: normalizedCityName, street: streetStr }, (prop.neighborhood ? { neighborhood: String(prop.neighborhood) } : {})), features: {}, financials: {
+                    price: priceNum,
+                }, media: {
+                    images: [],
+                }, management: Object.assign({}, (prop.agencyName ? { agentName: String(prop.agencyName) } : {})) }, (prop.agencyName ? { agentName: String(prop.agencyName) } : {})), (prop.yad2Link ? { listingUrl: String(prop.yad2Link) } : {})), { listingType: prop.listingType === 'cooperation' ? 'external' : 'private', createdAt: new Date(), ingestedAt: new Date() }), { merge: true });
             count++;
         }
         if (count > 0) {

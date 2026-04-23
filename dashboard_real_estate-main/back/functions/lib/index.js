@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInviteInfo = exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.getInviteInfo = exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -52,6 +52,8 @@ const calendar_1 = require("./calendar");
 // ── Deals Module ──────────────────────────────────────────────────────────────
 const addDeal_1 = require("./deals/addDeal");
 const updateDeal_1 = require("./deals/updateDeal");
+// ── Contracts Module ───────────────────────────────────────────────────────────
+const signDeal_1 = require("./contracts/signDeal");
 // ── Automation Module ──────────────────────────────────────────────────────────
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ exports.superadmin = {
     superAdminConsolidateCityV2: globalImport_1.superAdminConsolidateCityV2
 };
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
+exports.contracts = { signDeal: signDeal_1.signDeal };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp };
 var stripeWebhook_1 = require("./stripeWebhook");

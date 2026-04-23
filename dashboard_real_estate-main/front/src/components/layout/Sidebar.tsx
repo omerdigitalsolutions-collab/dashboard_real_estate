@@ -7,7 +7,8 @@ import {
   Settings,
   X,
   Sparkles,
-  Clock
+  Clock,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/', label: 'לוח בקרה', icon: LayoutDashboard, roles: ['admin'] },
   { to: '/leads', label: 'לידים', icon: Users },
   { to: '/transactions', label: 'עסקאות', icon: ArrowLeftRight },
+  { to: '/contracts', label: 'חוזים', icon: FileText, roles: ['admin'] },
   { to: '/agents', label: 'סוכנים', icon: UserCheck, roles: ['admin'] },
   { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['admin'] },
 ];

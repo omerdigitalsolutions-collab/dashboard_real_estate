@@ -515,8 +515,8 @@ export default function SharedCatalogPage() {
 
                                     {/* Type badge bottom-left */}
                                     <div className="absolute bottom-2.5 left-2.5 z-20">
-                                        <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg shadow backdrop-blur-sm ${property.type === 'rent' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
-                                            {property.type === 'rent' ? 'להשכרה' : 'למכירה'}
+                                        <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg shadow backdrop-blur-sm ${property.transactionType === 'rent' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
+                                            {property.transactionType === 'rent' ? 'להשכרה' : 'למכירה'}
                                         </span>
                                     </div>
 
@@ -544,7 +544,7 @@ export default function SharedCatalogPage() {
                                     {/* Price */}
                                     <div className="text-2xl font-black text-slate-900 mb-3 tracking-tight">
                                         ₪{(property.price || 0).toLocaleString()}
-                                        {property.type === 'rent' && <span className="text-sm font-medium text-slate-400 mr-1">/חודש</span>}
+                                        {property.transactionType === 'rent' && <span className="text-sm font-medium text-slate-400 mr-1">/חודש</span>}
                                     </div>
 
                                     {/* Specs */}
@@ -555,10 +555,10 @@ export default function SharedCatalogPage() {
                                                 {property.rooms} חד'
                                             </span>
                                         )}
-                                        {property.sqm && (
+                                        {property.squareMeters && (
                                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-lg">
                                                 <Maximize size={11} className="text-slate-400" />
-                                                {property.sqm} מ"ר
+                                                {property.squareMeters} מ"ר
                                             </span>
                                         )}
                                         {property.floor !== undefined && property.floor !== null && (

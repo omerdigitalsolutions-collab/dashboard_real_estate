@@ -86,31 +86,74 @@ export const superAdminImportGlobalPropertiesV2 = functions.https.onCall({
 
                 const propRef = cityRef.collection('properties').doc(docId);
 
-                // Normalize imageUrl → imageUrls array (limit to 3)
-                let imageUrls: string[] = [];
+                // Normalize images (support imageUrls array or single imageUrl)
+                let images: string[] = [];
                 if (Array.isArray(prop.imageUrls)) {
-                    imageUrls = (prop.imageUrls as any[]).map(String).filter(Boolean);
+                    images = (prop.imageUrls as any[]).map(String).filter(Boolean);
                 } else if (typeof prop.imageUrl === 'string' && prop.imageUrl.trim()) {
-                    imageUrls = [prop.imageUrl.trim()];
+                    images = [prop.imageUrl.trim()];
                 }
-                imageUrls = imageUrls.slice(0, 3);
 
-                // Strip raw/redundant fields from spread
-                const {
-                    imageUrl: _iu, imageUrls: _ius, listingUrl, cityHebrew: _ch,
-                    listingDescription: _ld, streetName: _sn, address: _addr,
-                    hasSecureRoom: _hsr, parking: _pk,
-                    ...restProp
-                } = prop as any;
+                // Strip agentName "| true" bug
+                const rawAgentName: string = prop.agentName || '';
+                const agentName = rawAgentName.replace(/\|\s*true\s*$/i, '').trim() || null;
+
+                // Resolve transaction type
+                const transactionType: 'forsale' | 'rent' = prop.type === 'rent' ? 'rent' : 'forsale';
+
+                const listingUrl = prop.listingUrl || prop.yad2Link || '';
 
                 batch.set(propRef, {
-                    ...restProp,
+                    // Flat fields kept for backward-compat queries
                     city: normalizedCity,
                     street: street,
-                    ...(imageUrls.length > 0 ? { imageUrls } : {}),
-                    ...(listingUrl ? { listingUrl: String(listingUrl).trim() } : {}),
-                    source: "super_admin_excel",
+                    price: price,
                     isPublic: true,
+                    source: "super_admin_excel",
+
+                    // New nested schema
+                    transactionType,
+                    propertyType: prop.kind || prop.propertyType || '',
+                    rooms: prop.rooms != null ? Number(prop.rooms) || null : null,
+                    floor: prop.floor != null ? Number(prop.floor) || null : null,
+                    squareMeters: prop.sqm != null ? Number(prop.sqm) || null : null,
+
+                    address: {
+                        fullAddress: street ? `${street}, ${normalizedCity}` : normalizedCity,
+                        city: normalizedCity,
+                        street: street,
+                        ...(prop.neighborhood ? { neighborhood: String(prop.neighborhood) } : {}),
+                    },
+
+                    features: {
+                        ...(prop.hasElevator != null ? { hasElevator: Boolean(prop.hasElevator) } : {}),
+                        ...(prop.hasParking != null ? { hasParking: Boolean(prop.hasParking) } : {}),
+                        ...(prop.parkingSpots != null ? { parkingSpots: Number(prop.parkingSpots) || 0 } : {}),
+                        ...(prop.hasBalcony != null ? { hasBalcony: Boolean(prop.hasBalcony) } : {}),
+                        ...(prop.hasSafeRoom != null ? { hasMamad: Boolean(prop.hasSafeRoom) } : {}),
+                    },
+
+                    financials: {
+                        price,
+                    },
+
+                    media: {
+                        images,
+                    },
+
+                    management: {
+                        ...(prop.description ? { descriptions: String(prop.description).trim() } : {}),
+                        ...(agentName ? { agentName } : {}),
+                    },
+
+                    // Keep as flat fields for display/contact
+                    ...(agentName ? { agentName } : {}),
+                    ...(prop.contactPhone ? { contactPhone: String(prop.contactPhone) } : {}),
+                    ...(prop.contactName ? { contactName: String(prop.contactName) } : {}),
+                    ...(prop.notes ? { notes: String(prop.notes) } : {}),
+                    ...(listingUrl ? { listingUrl: String(listingUrl).trim() } : {}),
+                    ...(prop.listingType ? { listingType: prop.listingType } : {}),
+
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 }, { merge: true });

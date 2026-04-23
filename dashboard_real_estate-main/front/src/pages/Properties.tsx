@@ -221,8 +221,19 @@ export default function Properties() {
                 let bVal: any = b[sortConfig.key];
 
                 if (sortConfig.key === 'createdAt') {
-                    aVal = a.createdAt?.toMillis() || 0;
-                    bVal = b.createdAt?.toMillis() || 0;
+                    const toMs = (ts: any) => {
+                        if (!ts) return 0;
+                        if (typeof ts.toMillis === 'function') return ts.toMillis();
+                        if (ts.seconds != null) return ts.seconds * 1000;
+                        if (ts._seconds != null) return ts._seconds * 1000;
+                        if (typeof ts === 'number') return ts;
+                        return 0;
+                    };
+                    aVal = toMs(a.createdAt);
+                    bVal = toMs(b.createdAt);
+                } else if (sortConfig.key === 'price') {
+                    aVal = (a.financials as any)?.price ?? (a as any).price ?? 0;
+                    bVal = (b.financials as any)?.price ?? (b as any).price ?? 0;
                 }
 
                 if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;

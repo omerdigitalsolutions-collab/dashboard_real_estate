@@ -157,6 +157,26 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // CONTRACTS & DIGITAL SIGNATURES
+    // Agents (authenticated) create and manage templates.
+    // Anonymous users (clients) can read and fill in field values via direct links.
+    // No deletes allowed (immutable archive).
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/contracts/{contractId} {
+      // Authenticated agency members and anonymous users (via signing link) can read
+      allow read: if request.auth != null;
+      // Any authenticated agent in the agency can create templates
+      allow create: if inAgency(agencyId) && isBillingActiveForCaller();
+
+      // Authenticated users (including anonymous) can update field values
+      // Prevents updates after contract is completed (immutable once signed)
+      allow update: if request.auth != null && resource.data.status != 'completed';
+
+      // Deletes are prohibited — contracts are archived forever
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // USERS
     // ══════════════════════════════════════════════════════════════════════════
     match /users/{userId} {

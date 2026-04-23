@@ -12,7 +12,8 @@
  */
 
 const admin = require('firebase-admin');
-const serviceAccount = require('./firebase-key.json');
+const path = require('path');
+const serviceAccount = require(path.join(__dirname, '..', 'firebase-key.json'));
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -28,6 +29,26 @@ if (dryRun) {
 }
 if (deleteSource) {
   console.log('🗑️  DELETE SOURCE MODE — old docs will be deleted after migration');
+}
+
+/**
+ * Strip undefined values recursively (Firestore doesn't accept undefined)
+ */
+function stripUndefined(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(item => stripUndefined(item)).filter(item => item !== undefined);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj)
+      .reduce((acc, [key, value]) => {
+        const cleaned = stripUndefined(value);
+        if (cleaned !== undefined) {
+          acc[key] = cleaned;
+        }
+        return acc;
+      }, {});
+  }
+  return obj === null ? null : obj;
 }
 
 /**
@@ -59,7 +80,7 @@ function migratePropertyDoc(oldData, id) {
     ...rest
   } = oldData;
 
-  return {
+  const doc = {
     id,
     agencyId,
     transactionType: type === 'rent' ? 'rent' : (type === 'sale' ? 'forsale' : 'forsale'),
@@ -68,16 +89,16 @@ function migratePropertyDoc(oldData, id) {
       city: city || '',
       street: street || '',
       fullAddress: address || `${street || ''} ${city || ''}`.trim(),
-      neighborhood: neighborhood || undefined,
+      ...(neighborhood ? { neighborhood } : {}),
       ...(lat && lng ? { coords: { lat, lng } } : {}),
     },
     features: {
-      hasElevator: hasElevator ?? null,
-      hasParking: hasParking ?? null,
-      parkingSpots: parkingSpots ?? null,
-      hasBalcony: hasBalcony ?? null,
-      hasMamad: hasSafeRoom ?? null,
-      hasAirConditioning: hasAirCondition ?? null,
+      ...(hasElevator !== undefined ? { hasElevator } : {}),
+      ...(hasParking !== undefined ? { hasParking } : {}),
+      ...(parkingSpots !== undefined ? { parkingSpots } : {}),
+      ...(hasBalcony !== undefined ? { hasBalcony } : {}),
+      ...(hasSafeRoom !== undefined ? { hasMamad: hasSafeRoom } : {}),
+      ...(hasAirCondition !== undefined ? { hasAirConditioning: hasAirCondition } : {}),
     },
     financials: {
       price: price || 0,
@@ -86,12 +107,15 @@ function migratePropertyDoc(oldData, id) {
       images: imageUrls || images || [],
     },
     management: {
-      assignedAgentId: agentId || null,
-      descriptions: description && description !== 'true' ? description : null,
+      ...(agentId ? { assignedAgentId: agentId } : {}),
+      ...(description && description !== 'true' ? { descriptions: description } : {}),
     },
-    squareMeters: sqm || null,
+    ...(sqm ? { squareMeters: sqm } : {}),
     ...rest, // Keep all other fields (status, createdAt, etc.)
   };
+
+  // Strip any remaining undefined values
+  return stripUndefined(doc);
 }
 
 async function migrateProperties() {

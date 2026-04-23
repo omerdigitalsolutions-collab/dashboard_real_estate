@@ -17,6 +17,21 @@ function currentMonthBounds() {
     return { start, end };
 }
 
+/**
+ * Safely converts a Firestore value to a Date object.
+ * Handles Timestamps, native Dates, and serialized Timestamp objects.
+ */
+function safeToDate(ts: any): Date | null {
+    if (!ts) return null;
+    if (typeof ts.toDate === 'function') return ts.toDate();
+    if (ts instanceof Date) return ts;
+    if (ts && typeof ts === 'object' && '_seconds' in ts) {
+        return new Date(ts._seconds * 1000 + (ts._nanoseconds || 0) / 1000000);
+    }
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 // ── Tool definitions for the Gemini model ─────────────────────────────────────
 const tools: Tool[] = [
     {
@@ -331,7 +346,7 @@ export const getSmartInsights = onCall(
                     id: d.id,
                     address: data.address?.fullAddress || `${data.address?.street || ''}, ${data.address?.city || ''}`,
                     price: data.financials?.price ?? data.price,
-                    createdAt: data.createdAt?.toDate(),
+                    createdAt: safeToDate(data.createdAt),
                 };
             });
 
@@ -345,7 +360,7 @@ export const getSmartInsights = onCall(
             });
 
             const currentMonthDeals = dealsSnap.docs.map(d => d.data()).filter(d => {
-                const date = d.updatedAt?.toDate() || new Date(0);
+                const date = safeToDate(d.updatedAt) || new Date(0);
                 return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
             });
 

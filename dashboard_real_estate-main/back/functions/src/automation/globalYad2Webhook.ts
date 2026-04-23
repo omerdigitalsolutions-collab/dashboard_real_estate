@@ -199,17 +199,52 @@ export const webhookProcessGlobalYad2Email = onRequest({
                 detectedSource === 'madlan' ? 'madlan_alert' :
                 'email_alert';
 
+            const transactionType: 'forsale' | 'rent' = resolvedDealType === 'rent' ? 'rent' : 'forsale';
+
             batch.set(propRef, {
-                ...prop,
+                // Flat fields for backward-compat queries
                 city: normalizedCityName,
                 street: streetStr,
-                source: sourceLabel,
-                siteSource: detectedSource,   // 'yad2' | 'madlan' | 'unknown'
-                type: resolvedDealType,        // 'sale' | 'rent'
+                price: priceNum,
                 isPublic: true,
+                source: sourceLabel,
+                siteSource: detectedSource,
+
+                // New nested schema
+                transactionType,
+                propertyType: prop.propertyType || '',
+                rooms: typeof prop.rooms === 'number' ? prop.rooms : null,
+                floor: prop.floor != null ? Number(prop.floor) || null : null,
+                squareMeters: prop.sqm != null ? Number(prop.sqm) || null : null,
+
+                address: {
+                    fullAddress: streetStr ? `${streetStr}, ${normalizedCityName}` : normalizedCityName,
+                    city: normalizedCityName,
+                    street: streetStr,
+                    ...(prop.neighborhood ? { neighborhood: String(prop.neighborhood) } : {}),
+                },
+
+                features: {},
+
+                financials: {
+                    price: priceNum,
+                },
+
+                media: {
+                    images: [],
+                },
+
+                management: {
+                    ...(prop.agencyName ? { agentName: String(prop.agencyName) } : {}),
+                },
+
+                // Keep flat display fields
+                ...(prop.agencyName ? { agentName: String(prop.agencyName) } : {}),
+                ...(prop.yad2Link ? { listingUrl: String(prop.yad2Link) } : {}),
+                listingType: prop.listingType === 'cooperation' ? 'external' : 'private',
+
                 createdAt: new Date(),
                 ingestedAt: new Date(),
-                listingType: prop.listingType === 'cooperation' ? 'external' : 'private',
             }, { merge: true });
 
             count++;

@@ -46,7 +46,7 @@ import { getLiveProperties as catalogsGetLiveProperties } from './catalogs/getLi
 import { triggerSystemAlert } from './alerts/triggers';
 
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
-import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, whatsappWebhook, syncLeadChat } from './whatsapp';
+import { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, getGroups, disconnectWhatsApp, syncLeadChat } from './whatsapp';
 
 // ── AI Module ──────────────────────────────────────────────────────────────────
 import { askAgencyAgent } from './ai/agent';
@@ -61,6 +61,9 @@ import { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, 
 // ── Deals Module ──────────────────────────────────────────────────────────────
 import { addDeal } from './deals/addDeal';
 import { updateDeal, deleteDeal } from './deals/updateDeal';
+
+// ── Contracts Module ───────────────────────────────────────────────────────────
+import { signDeal } from './contracts/signDeal';
 
 // ── Automation Module ──────────────────────────────────────────────────────────
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
@@ -108,7 +111,7 @@ export const properties = { getLiveProperties, addProperty, updateProperty, dele
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };
-export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, syncLeadChat, getGroups, disconnectWhatsApp, whatsappWebhook };
+export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, syncLeadChat, getGroups, disconnectWhatsApp };
 export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot };
 export const calendar = { getAuthUrl, handleOAuthCallback, createEvent, deleteEvent, disconnect, listEvents };
 export const automation = { webhookProcessGlobalYad2Email };
@@ -131,6 +134,8 @@ export const superadmin = {
 };
 
 export const deals = { addDeal, updateDeal, deleteDeal };
+
+export const contracts = { signDeal };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 

@@ -32,17 +32,6 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.superAdminConsolidateCityV2 = exports.superAdminGetImportMappingV2 = exports.superAdminImportGlobalPropertiesV2 = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
@@ -121,18 +110,29 @@ exports.superAdminImportGlobalPropertiesV2 = functions.https.onCall({
                     lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
                 }, { merge: true });
                 const propRef = cityRef.collection('properties').doc(docId);
-                // Normalize imageUrl → imageUrls array (limit to 3)
-                let imageUrls = [];
+                // Normalize images (support imageUrls array or single imageUrl)
+                let images = [];
                 if (Array.isArray(prop.imageUrls)) {
-                    imageUrls = prop.imageUrls.map(String).filter(Boolean);
+                    images = prop.imageUrls.map(String).filter(Boolean);
                 }
                 else if (typeof prop.imageUrl === 'string' && prop.imageUrl.trim()) {
-                    imageUrls = [prop.imageUrl.trim()];
+                    images = [prop.imageUrl.trim()];
                 }
-                imageUrls = imageUrls.slice(0, 3);
-                // Strip raw/redundant fields from spread
-                const _a = prop, { imageUrl: _iu, imageUrls: _ius, listingUrl, cityHebrew: _ch, listingDescription: _ld, streetName: _sn, address: _addr, hasSecureRoom: _hsr, parking: _pk } = _a, restProp = __rest(_a, ["imageUrl", "imageUrls", "listingUrl", "cityHebrew", "listingDescription", "streetName", "address", "hasSecureRoom", "parking"]);
-                batch.set(propRef, Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, restProp), { city: normalizedCity, street: street }), (imageUrls.length > 0 ? { imageUrls } : {})), (listingUrl ? { listingUrl: String(listingUrl).trim() } : {})), { source: "super_admin_excel", isPublic: true, createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
+                // Strip agentName "| true" bug
+                const rawAgentName = prop.agentName || '';
+                const agentName = rawAgentName.replace(/\|\s*true\s*$/i, '').trim() || null;
+                // Resolve transaction type
+                const transactionType = prop.type === 'rent' ? 'rent' : 'forsale';
+                const listingUrl = prop.listingUrl || prop.yad2Link || '';
+                batch.set(propRef, Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ 
+                    // Flat fields kept for backward-compat queries
+                    city: normalizedCity, street: street, price: price, isPublic: true, source: "super_admin_excel", 
+                    // New nested schema
+                    transactionType, propertyType: prop.kind || prop.propertyType || '', rooms: prop.rooms != null ? Number(prop.rooms) || null : null, floor: prop.floor != null ? Number(prop.floor) || null : null, squareMeters: prop.sqm != null ? Number(prop.sqm) || null : null, address: Object.assign({ fullAddress: street ? `${street}, ${normalizedCity}` : normalizedCity, city: normalizedCity, street: street }, (prop.neighborhood ? { neighborhood: String(prop.neighborhood) } : {})), features: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (prop.hasElevator != null ? { hasElevator: Boolean(prop.hasElevator) } : {})), (prop.hasParking != null ? { hasParking: Boolean(prop.hasParking) } : {})), (prop.parkingSpots != null ? { parkingSpots: Number(prop.parkingSpots) || 0 } : {})), (prop.hasBalcony != null ? { hasBalcony: Boolean(prop.hasBalcony) } : {})), (prop.hasSafeRoom != null ? { hasMamad: Boolean(prop.hasSafeRoom) } : {})), financials: {
+                        price,
+                    }, media: {
+                        images,
+                    }, management: Object.assign(Object.assign({}, (prop.description ? { descriptions: String(prop.description).trim() } : {})), (agentName ? { agentName } : {})) }, (agentName ? { agentName } : {})), (prop.contactPhone ? { contactPhone: String(prop.contactPhone) } : {})), (prop.contactName ? { contactName: String(prop.contactName) } : {})), (prop.notes ? { notes: String(prop.notes) } : {})), (listingUrl ? { listingUrl: String(listingUrl).trim() } : {})), (prop.listingType ? { listingType: prop.listingType } : {})), { createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
             });
             await batch.commit();
             totalInserted += chunk.length;

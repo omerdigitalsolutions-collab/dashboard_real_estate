@@ -48,6 +48,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
+        let isMounted = true;
         if (!userData?.agencyId || !userData?.uid) {
             setLoading(false);
             return;
@@ -66,14 +67,14 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         };
 
         const checkLoaded = () => {
-            if (loadedFlags.properties && loadedFlags.deals && loadedFlags.leads && loadedFlags.agency) {
+            if (isMounted && loadedFlags.properties && loadedFlags.deals && loadedFlags.leads && loadedFlags.agency) {
                 setLoading(false);
             }
         };
 
         // Safety fallback: if some collection is completely missing indices or fails silently
         const safetyTimeout = setTimeout(() => {
-            setLoading(false);
+            if (isMounted) setLoading(false);
         }, 2000);
 
         let currentAgencyProperties: Property[] = [];
@@ -81,6 +82,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let currentWhatsappProperties: Property[] = [];
 
         const updatePropertiesState = () => {
+            if (!isMounted) return;
             const merged = [...currentAgencyProperties, ...currentCityProperties, ...currentWhatsappProperties];
             const seen = new Set<string>();
             const deduped = merged.filter((p) => {
@@ -145,17 +147,23 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let unsubDeals = () => { };
         try {
             unsubDeals = onSnapshot(qDeals, (snap) => {
-                setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
-                loadedFlags.deals = true; checkLoaded();
+                if (isMounted) {
+                    setDeals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deal)));
+                    loadedFlags.deals = true; checkLoaded();
+                }
             }, (err) => {
                 console.error('[useLiveDashboardData] Deals Error:', err);
-                setError(err);
-                loadedFlags.deals = true; checkLoaded();
+                if (isMounted) {
+                    setError(err);
+                    loadedFlags.deals = true; checkLoaded();
+                }
             });
         } catch (e: any) {
             console.error('[useLiveDashboardData] Deals Sync Error:', e);
-            setError(e);
-            loadedFlags.deals = true; checkLoaded();
+            if (isMounted) {
+                setError(e);
+                loadedFlags.deals = true; checkLoaded();
+            }
         }
 
         // 5. Tasks Query (Only for current user)
@@ -168,14 +176,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let unsubTasks = () => { };
         try {
             unsubTasks = onSnapshot(qTasks, (snap) => {
-                setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppTask)));
+                if (isMounted) {
+                    setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppTask)));
+                }
             }, (err) => {
                 console.error('[useLiveDashboardData] Tasks Error:', err);
-                setError(err);
+                if (isMounted) setError(err);
             });
         } catch (e: any) {
             console.error('[useLiveDashboardData] Tasks Sync Error:', e);
-            setError(e);
+            if (isMounted) setError(e);
         }
 
         // 3.5. Leads Query (Sort client-side to avoid composite index requirement)
@@ -187,23 +197,29 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let unsubLeads = () => { };
         try {
             unsubLeads = onSnapshot(qLeads, (snap) => {
-                const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
-                rawLeads.sort((a, b) => {
-                    const tA = (a.createdAt as any)?.toMillis?.() || 0;
-                    const tB = (b.createdAt as any)?.toMillis?.() || 0;
-                    return tB - tA;
-                });
-                setLeads(rawLeads);
-                loadedFlags.leads = true; checkLoaded();
+                if (isMounted) {
+                    const rawLeads = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead));
+                    rawLeads.sort((a, b) => {
+                        const tA = (a.createdAt as any)?.toMillis?.() || 0;
+                        const tB = (b.createdAt as any)?.toMillis?.() || 0;
+                        return tB - tA;
+                    });
+                    setLeads(rawLeads);
+                    loadedFlags.leads = true; checkLoaded();
+                }
             }, (err) => {
                 console.error('Error fetching leads:', err);
-                setError(err);
-                loadedFlags.leads = true; checkLoaded();
+                if (isMounted) {
+                    setError(err);
+                    loadedFlags.leads = true; checkLoaded();
+                }
             });
         } catch (e: any) {
             console.error('Sync Error fetching leads:', e);
-            setError(e);
-            loadedFlags.leads = true; checkLoaded();
+            if (isMounted) {
+                setError(e);
+                loadedFlags.leads = true; checkLoaded();
+            }
         }
 
         // 4. Alerts Query (Targeted to user OR broadcast 'all')
@@ -241,22 +257,30 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         let unsubAlertsBroadcast = () => { };
         try {
             unsubAlertsPersonal = onSnapshot(qAlertsPersonal, (snap) => {
-                currentPersonalAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-                updateAlertsState();
-            }, (err) => setError(err));
+                if (isMounted) {
+                    currentPersonalAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
+                    updateAlertsState();
+                }
+            }, (err) => {
+                if (isMounted) setError(err);
+            });
         } catch (e: any) {
             console.error('Sync error on personal alerts', e);
-            setError(e);
+            if (isMounted) setError(e);
         }
 
         try {
             unsubAlertsBroadcast = onSnapshot(qAlertsBroadcast, (snap) => {
-                currentBroadcastAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
-                updateAlertsState();
-            }, (err) => setError(err));
+                if (isMounted) {
+                    currentBroadcastAlerts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Alert));
+                    updateAlertsState();
+                }
+            }, (err) => {
+                if (isMounted) setError(err);
+            });
         } catch (e: any) {
             console.error('Sync error on broadcast alerts', e);
-            setError(e);
+            if (isMounted) setError(e);
         }
 
         // 6. Agency Settings Query
@@ -267,7 +291,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         try {
             unsubAgency = onSnapshot(agencyRef, (snap) => {
-                if (snap.exists()) {
+                if (isMounted && snap.exists()) {
                     const data = snap.data();
                     const settings = data?.settings || {};
 
@@ -331,13 +355,32 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                                 console.log('[DEBUG cities] Subscribing to city:', city);
                                 const qCityProps = collection(db, 'cities', city, 'properties');
                                 const unsub = onSnapshot(qCityProps, (citySnap) => {
+                                    if (!isMounted) return;
                                     console.log('[DEBUG cities] Snapshot for city', city, '- docs count:', citySnap.docs.length);
                                     cityPropsMap[city] = citySnap.docs.map(doc => {
                                         const data = doc.data();
+                                        // Normalize old flat schema → new nested schema
+                                        const flatAddr = (typeof data.address === 'string' ? data.address : null) || data.street || 'כתובת חסויה';
+                                        const flatCity = data.city || city;
+                                        const normalizedAddress = (data.address && typeof data.address === 'object')
+                                            ? data.address
+                                            : {
+                                                fullAddress: flatAddr,
+                                                city: flatCity,
+                                                street: data.street || '',
+                                                ...(data.neighborhood ? { neighborhood: data.neighborhood } : {}),
+                                                ...(data.lat && data.lng ? { coords: { lat: data.lat, lng: data.lng } } : {}),
+                                            };
+                                        const normalizedImages = data.media?.images || data.imageUrls || data.images || [];
                                         return {
                                             id: doc.id,
-                                            address: data.street || data.address || 'כתובת חסויה',
                                             ...data,
+                                            address: normalizedAddress,
+                                            financials: data.financials || { price: data.price ?? 0 },
+                                            media: { ...(data.media || {}), images: normalizedImages },
+                                            transactionType: data.transactionType || (data.type === 'rent' ? 'rent' : 'forsale'),
+                                            propertyType: data.propertyType || data.kind || '',
+                                            squareMeters: data.squareMeters || data.sqm || null,
                                             isGlobalCityProperty: true,
                                             readonly: true
                                         } as Property;
@@ -351,20 +394,27 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                         }
                     }
                 }
-                loadedFlags.agency = true; checkLoaded();
+                if (isMounted) {
+                    loadedFlags.agency = true; checkLoaded();
+                }
             }, (err) => {
                 console.error('[useLiveDashboardData] Agency Error:', err);
-                setError(err);
-                loadedFlags.agency = true; checkLoaded();
+                if (isMounted) {
+                    setError(err);
+                    loadedFlags.agency = true; checkLoaded();
+                }
             });
         } catch (e: any) {
             console.error('[useLiveDashboardData] Agency Sync Error:', e);
-            setError(e);
-            loadedFlags.agency = true; checkLoaded();
+            if (isMounted) {
+                setError(e);
+                loadedFlags.agency = true; checkLoaded();
+            }
         }
 
 
         return () => {
+            isMounted = false;
             clearTimeout(safetyTimeout);
             unsubProperties();
             unsubWhatsappProperties();

@@ -56,7 +56,10 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
     };
 
     const displayAddress = [property.address, property.city].filter(Boolean).join(', ') || 'מיקום לא צוין';
-    const activeAmenities = AMENITY_ICONS.filter(a => property[a.key]);
+    const activeAmenities = AMENITY_ICONS.filter(a => {
+        const mamadKey = a.key === 'hasSafeRoom' ? 'hasMamad' : a.key;
+        return property[a.key] || property.features?.[a.key] || property.features?.[mamadKey];
+    });
 
     return (
         <div
@@ -80,8 +83,8 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                             <MapPin size={11} className="shrink-0" />
                             <span className="truncate font-medium">{displayAddress}</span>
                         </div>
-                        <span className={`inline-block px-2.5 py-0.5 text-[10px] font-black rounded-lg ${property.type === 'rent' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {property.type === 'rent' ? 'להשכרה' : 'למכירה'}
+                        <span className={`inline-block px-2.5 py-0.5 text-[10px] font-black rounded-lg ${property.transactionType === 'rent' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {property.transactionType === 'rent' ? 'להשכרה' : 'למכירה'}
                         </span>
                     </div>
                     <button
@@ -183,7 +186,7 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                     <div>
                         <p className="text-3xl font-black text-slate-900 tracking-tight">
                             ₪{(property.price || 0).toLocaleString()}
-                            {property.type === 'rent' && (
+                            {property.transactionType === 'rent' && (
                                 <span className="text-sm font-medium text-slate-400 mr-1">/חודש</span>
                             )}
                         </p>
@@ -197,10 +200,10 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                                 {property.rooms} חדרים
                             </span>
                         )}
-                        {property.sqm && (
+                        {(property.squareMeters || property.sqm) && (
                             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
                                 <Maximize size={13} className="text-slate-400" />
-                                {property.sqm} מ"ר
+                                {property.squareMeters || property.sqm} מ"ר
                             </span>
                         )}
                         {property.floor !== undefined && property.floor !== null && (

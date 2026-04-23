@@ -55,11 +55,11 @@
       ]
     },
     {
-      "collectionGroup": "private_credentials",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "available_instances",
+      "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "idInstance",
+          "fieldPath": "isActive",
           "order": "ASCENDING"
         }
       ]

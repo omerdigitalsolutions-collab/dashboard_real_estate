@@ -76,19 +76,20 @@ async function getOrCreateSession(
   phone: string,
   agencyId: string,
 ): Promise<admin.firestore.DocumentData & { id: string }> {
-  const ref = db.collection('whatsapp_sessions').doc(phone);
+  const sessionId = `${agencyId}_${phone}`;
+  const ref = db.collection('whatsapp_sessions').doc(sessionId);
   const now = admin.firestore.Timestamp.now();
   const snap = await ref.get();
 
   if (snap.exists) {
     await ref.update({ lastMessageAt: now });
-    return { id: snap.id, ...snap.data()! };
+    return { id: snap.id, ...snap.data()!, lastMessageAt: now };
   }
 
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + SESSION_TTL_MS);
   const session = { phone, agencyId, createdAt: now, lastMessageAt: now, expiresAt, status: 'active' };
   await ref.set(session);
-  return { id: phone, ...session };
+  return { id: sessionId, ...session };
 }
 
 // ─── Property-specific routing ─────────────────────────────────────────────────
@@ -105,7 +106,7 @@ async function handlePropertyRouting(
   if (!propertyKeywords.some((kw) => text.includes(kw))) return false;
 
   const words = text.split(/\s+/).filter((w) => w.length > 2);
-  if (words.length === 0) return false;
+  if (words.length < 2) return false;
 
   const propSnap = await db
     .collection('agencies').doc(agencyId).collection('properties')
@@ -229,7 +230,7 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
     const agencyDoc = await db.collection('agencies').doc(agencyId).get();
     const agencyPhone = agencyDoc.data()?.phone || agencyDoc.data()?.phoneNumber || '';
     await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);
-    await db.collection('whatsapp_sessions').doc(phone).delete();
+    await db.collection('whatsapp_sessions').doc(`${agencyId}_${phone}`).delete();
     return;
   }
 

@@ -7,8 +7,8 @@
  *   - formatPhoneForGreenAPI → phone normalisation
  *   - sendWhatsAppMessage   → Green API send wrapper
  *
- * NOTE: This project uses FLAT Firestore collections (leads, properties) with
- * an `agencyId` field — NOT the multi-tenant sub-collection pattern.
+ * NOTE: properties are stored in the agencies/{agencyId}/properties subcollection.
+ * leads remain in a flat top-level collection filtered by agencyId.
  * Keep all Firestore paths in webhookWhatsAppAI.ts, NOT here.
  */
 
@@ -47,9 +47,9 @@ export interface Property {
 // ─── 1. Prompt Builder ────────────────────────────────────────────────────────
 
 const TONE_MAP: Record<string, string> = {
-  professional:   'ענה בצורה רשמית, מקצועית, אדיבה ומכובדת.',
+  professional:   'ענה בצורה מקצועית, ענייניית וממוקדת. אל תשתמש באימוג׳ים של חיוכים. ניתן להשתמש רק באימוג׳ים פונקציונליים (📍🏠✅) כשהם מוסיפים בהירות.',
   friendly_emoji: "ענה בצורה קלילה, חברית, בגובה העיניים, ושלב אימוג'ים רלוונטיים.",
-  direct_sales:   'ענה בצורה קצרה, מכירתית, ודחוף בעדינות לקביעת פגישה בנכס.',
+  direct_sales:   'ענה בצורה קצרה, ממוקדת ומכירתית. הוביל לקביעת פגישה. אל תרחיב מעל הנדרש.',
 };
 
 const FALLBACK_MAP: Record<string, string> = {
@@ -111,7 +111,7 @@ export function buildWeBotPrompt(config: BotConfig, properties: Property[], agen
 שלב 3 — שליחת קטלוג:
   מיד לאחר שמירת הדרישות, קרא ל-create_catalog.
   הפונקציה תחזיר אובייקט JSON עם שדה url — אתה חייב לכלול את הקישור הזה מילה במילה בהודעתך ללקוח.
-  לדוגמה: "הכנתי לך קטלוג נכסים מותאם אישית 🏠: https://homer.management/catalog/..."
+  לדוגמה: "הכנתי עבורך קטלוג נכסים מותאם אישית: https://homer.management/catalog/..."
   לאחר שליחת הקטלוג, שאל אם הלקוח רוצה לקבוע שיחה עם יועץ נדל"ן.
 
 שלב 4 — קביעת פגישה/שיחה:
@@ -180,7 +180,7 @@ export async function createSharedCatalog(
   agencyData: admin.firestore.DocumentData,
   leadId: string,
   leadName: string,
-  propertyIds: string[]
+  propertyIds: Array<string | { id: string; collectionPath: string }>
 ): Promise<string> {
   const catalogRef = db.collection('shared_catalogs').doc();
 

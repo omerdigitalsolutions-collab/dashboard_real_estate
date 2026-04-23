@@ -121,37 +121,18 @@ function normalisePhone(rawSender) {
     return { localPhone: digits, waChatId };
 }
 // ─── Helper: Resolve agencyId from idInstance ─────────────────────────────────
+// Warm-instance cache — eliminates repeated Firestore reads for the same instance
+const instanceAgencyCache = new Map();
 async function resolveAgencyByInstance(idInstance) {
-    var _a, _b, _c;
-    // Primary: collectionGroup index query (requires deployed Firestore index)
-    try {
-        const snap = await db
-            .collectionGroup('private_credentials')
-            .where('idInstance', '==', idInstance)
-            .limit(1)
-            .get();
-        if (!snap.empty)
-            return (_b = (_a = snap.docs[0].ref.parent.parent) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : null;
-        return null;
-    }
-    catch (err) {
-        // code 9 = FAILED_PRECONDITION, typically means the index hasn't been deployed yet
-        if ((err === null || err === void 0 ? void 0 : err.code) !== 9)
-            throw err;
-        console.warn('[AI Bot] collectionGroup index not deployed — falling back to agency scan. Run: firebase deploy --only firestore:indexes');
-    }
-    // Fallback: scan agencies and check each private_credentials/whatsapp doc directly
-    const agenciesSnap = await db.collection('agencies').limit(100).get();
-    for (const agencyDoc of agenciesSnap.docs) {
-        const credsDoc = await agencyDoc.ref
-            .collection('private_credentials')
-            .doc('whatsapp')
-            .get();
-        if (credsDoc.exists && ((_c = credsDoc.data()) === null || _c === void 0 ? void 0 : _c.idInstance) === idInstance) {
-            return agencyDoc.id;
-        }
-    }
-    return null;
+    var _a;
+    const cached = instanceAgencyCache.get(idInstance);
+    if (cached)
+        return cached;
+    const doc = await db.collection('available_instances').doc(idInstance).get();
+    const agencyId = (doc.exists && ((_a = doc.data()) === null || _a === void 0 ? void 0 : _a.isActive)) ? doc.data().agencyId : null;
+    if (agencyId)
+        instanceAgencyCache.set(idInstance, agencyId);
+    return agencyId;
 }
 // ─── Helper: Send Green API Message ──────────────────────────────────────────
 async function sendGreenApiMessage(creds, waChatId, message) {
@@ -273,7 +254,7 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
             if (monitoredGroupIds.includes(chatId) && geminiApiKey.value()) {
                 try {
                     const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey.value());
-                    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+                    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
                     const prompt = `You are a real estate listing parser for Israeli B2B WhatsApp agent groups. Extract structured data from the following Hebrew/English message.
 
 Message: "${textMessage}"

@@ -183,8 +183,11 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
         instanceToken = creds.apiTokenInstance;
     }
     else {
-        // Allocate a new instance from the pool
-        const availableSnap = await db.collection('available_instances').limit(1).get();
+        // Allocate a new instance from the pool (isActive: false = free)
+        const availableSnap = await db.collection('available_instances')
+            .where('isActive', '==', false)
+            .limit(1)
+            .get();
         if (availableSnap.empty) {
             throw new https_1.HttpsError('resource-exhausted', 'No available WhatsApp instances at the moment. Please contact support.');
         }
@@ -194,8 +197,6 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
         instanceToken = instanceData.apiTokenInstance;
         // Encrypt the token
         const { encryptedToken, iv } = encryptToken(instanceToken, masterKey.value());
-        // ✅ FIX 1: FieldValue.delete() is NOT allowed inside set({}, {merge:true}).
-        //           We use set() for new fields, then update() separately for deletions.
         await db.runTransaction(async (t) => {
             t.set(credsRef, {
                 idInstance: instanceId,
@@ -203,18 +204,22 @@ exports.connectAgencyWhatsApp = (0, https_1.onCall)({
                 iv,
                 assignedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            // Set only new/updated fields — no FieldValue.delete() here
             t.set(agencyRef, {
                 whatsappIntegration: {
                     status: 'PENDING_SCAN',
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }
             }, { merge: true });
-            // Separate update() call to safely delete legacy greenApiKeys field
             t.update(agencyRef, {
                 greenApiKeys: admin.firestore.FieldValue.delete()
             });
-            t.delete(instanceDoc.ref);
+            // Mark instance as active in the registry (don't delete — keep for future lookups)
+            t.update(instanceDoc.ref, {
+                isActive: true,
+                agencyId,
+                assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+                apiTokenInstance: null,
+            });
         });
         console.log(`[WhatsApp] Allocated new instance ${instanceId} to agency ${agencyId}`);
     }
@@ -306,12 +311,13 @@ exports.disconnectAgencyWhatsApp = (0, https_1.onCall)({
     //       We must use update() for fields we want to delete, and set() only for new data.
     try {
         await db.runTransaction(async (t) => {
-            // Return plain-text keys to the pool (idInstance as doc ID ensures uniqueness)
+            // Return instance to pool by flipping isActive back to false
             const poolRef = db.collection('available_instances').doc(keys.idInstance);
-            t.set(poolRef, {
-                idInstance: keys.idInstance,
+            t.update(poolRef, {
+                isActive: false,
+                agencyId: null,
                 apiTokenInstance: keys.apiTokenInstance,
-                returnedAt: admin.firestore.FieldValue.serverTimestamp()
+                returnedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             // Delete the private credentials sub-document
             t.delete(credsRef);
@@ -791,11 +797,9 @@ exports.whatsappWebhook = (0, https_1.onRequest)({
         // ── Find the agency ───────────────────────────────────────────────────
         let agencyId;
         if (idInstance) {
-            const snap = await db.collectionGroup('private_credentials')
-                .where('idInstance', '==', idInstance)
-                .limit(1).get();
-            if (!snap.empty) {
-                agencyId = (_a = snap.docs[0].ref.parent.parent) === null || _a === void 0 ? void 0 : _a.id;
+            const registryDoc = await db.collection('available_instances').doc(idInstance).get();
+            if (registryDoc.exists && ((_a = registryDoc.data()) === null || _a === void 0 ? void 0 : _a.isActive)) {
+                agencyId = registryDoc.data().agencyId;
             }
         }
         else if (sessionName) {

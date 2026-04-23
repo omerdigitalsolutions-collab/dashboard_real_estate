@@ -277,6 +277,12 @@ export interface Deal {
     isVatIncluded?: boolean;
     createdAt: Timestamp;
     updatedAt?: Timestamp;
+    contract?: {
+        contractId: string;
+        pdfUrl: string;
+        signedPdfUrl?: string;
+        status: 'pending' | 'completed';
+    };
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
@@ -358,6 +364,40 @@ export interface Alert {
         type: 'deal' | 'lead' | 'property' | 'task';
     };
     createdAt?: Timestamp;
+}
+
+// ─── Contracts & Digital Signatures ──────────────────────────────────────────
+
+export interface FieldPosition {
+    x: number;       // normalized 0–1 (left edge, % of page width)
+    y: number;       // normalized 0–1 (top edge, % of page height)
+    width: number;   // normalized 0–1
+    height: number;  // normalized 0–1
+    page: number;    // 1-indexed
+}
+
+export interface Field {
+    id: string;
+    type: 'signature' | 'text' | 'date';
+    role: 'agent' | 'client';
+    label?: string;           // human-readable label (e.g., "Client Signature")
+    value?: string;           // base64 PNG for signature, plain string for text/date
+    required?: boolean;       // true if this field must be filled
+    position: FieldPosition;
+}
+
+export interface Contract {
+    id?: string;
+    agencyId: string;
+    dealId?: string;
+    source: 'pdf_upload';
+    originalFileUrl: string;  // original template PDF
+    signedPdfUrl?: string;
+    status: 'draft' | 'active' | 'completed';
+    fields: Field[];
+    createdBy: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────

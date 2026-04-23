@@ -5,6 +5,20 @@ import { useAuth } from '../context/AuthContext';
 import { Property, Deal, Lead, AppUser, AppTask, Alert, PendingLead } from '../types';
 
 /**
+ * Safely converts a Firestore value to a Date object.
+ */
+function safeToDate(ts: any): Date | null {
+    if (!ts) return null;
+    if (typeof ts.toDate === 'function') return ts.toDate();
+    if (ts instanceof Date) return ts;
+    if (ts && typeof ts === 'object' && '_seconds' in ts) {
+        return new Date(ts._seconds * 1000 + (ts._nanoseconds || 0) / 1000000);
+    }
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Generic real-time hook to subscribe to any Firestore collection 
  * and automatically filter by the current user's agencyId.
  */
@@ -19,6 +33,8 @@ function useAgencyCollection<T>(
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
+    // Memoize the query to prevent unnecessary re-subscriptions
+    // Note: additionalConstraints should be stable (e.g. from useMemo or useState in caller)
     useEffect(() => {
         if (!agencyId) {
             setData([]);
@@ -27,14 +43,16 @@ function useAgencyCollection<T>(
         }
 
         const colRef = collection(db, collectionName);
-        // Rule: EVERY query must be rigidly scoped to the agencyId.
         const q = query(colRef, where('agencyId', '==', agencyId), ...additionalConstraints);
 
+        let isMounted = true;
         let unsubscribe = () => { };
+
         try {
             unsubscribe = onSnapshot(
                 q,
                 (snapshot) => {
+                    if (!isMounted) return;
                     const results: T[] = snapshot.docs.map(doc => ({
                         ...(doc.data() as DocumentData),
                         id: doc.id,
@@ -45,6 +63,7 @@ function useAgencyCollection<T>(
                     setError(null);
                 },
                 (err) => {
+                    if (!isMounted) return;
                     // Firestore index errors contain a console link — always print the full message
                     if (err.message?.includes('index')) {
                         console.error(
@@ -60,13 +79,18 @@ function useAgencyCollection<T>(
                 }
             );
         } catch (e: any) {
-            console.error(`[useAgencyCollection] Synchronous error onSnapshot for ${collectionName}:`, e);
-            setError(e);
-            setLoading(false);
+            if (isMounted) {
+                console.error(`[useAgencyCollection] Synchronous error onSnapshot for ${collectionName}:`, e);
+                setError(e);
+                setLoading(false);
+            }
         }
 
-        return () => unsubscribe();
-    }, [agencyId, collectionName, JSON.stringify(additionalConstraints)]);
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
+    }, [agencyId, collectionName, additionalConstraints]); // Depend on constraints directly — caller MUST ensure stability
 
     return { data, loading, error };
 }
@@ -186,7 +210,8 @@ export function useRevenueData() {
             const timestampObj = deal.updatedAt || deal.createdAt;
             if (!timestampObj) return;
 
-            const date = timestampObj.toDate();
+            const date = safeToDate(timestampObj);
+            if (!date) return;
             const mIdx = date.getMonth();
             const yr = date.getFullYear();
 
@@ -217,8 +242,8 @@ export function useRecentActivityFeed() {
 
         // Add Leads
         leads.forEach(lead => {
-            if (lead.createdAt) {
-                const date = lead.createdAt.toDate();
+            const date = safeToDate(lead.createdAt);
+            if (date) {
                 items.push({
                     id: `lead_${lead.id}`,
                     type: 'lead',
@@ -232,8 +257,8 @@ export function useRecentActivityFeed() {
 
         // Add Deals
         deals.forEach(deal => {
-            if (deal.updatedAt) {
-                const date = deal.updatedAt.toDate();
+            const date = safeToDate(deal.updatedAt || deal.createdAt);
+            if (date) {
                 let statusMsg = 'התקדמות בעסקה';
                 if (deal.stage === 'offer') statusMsg = 'הוגשה הצעה לעסקה';
                 if (deal.stage === 'contract') statusMsg = 'עסקה נסגרה בהצלחה!';

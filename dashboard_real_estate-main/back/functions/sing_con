@@ -307,7 +307,158 @@ export function ContractEditor({ pdfUrl, onSave }) {
     </div>
   );
 }
+ֿֿ
 
+
+
+הכנתי עבורך את קובץ ה-Types המלא. הקוד כתוב בצורה מודולרית (בעזרת Union Types) כדי ש-TypeScript ייתן לך השלמה אוטומטית (Autocomplete) מושלמת גם ב-Frontend (React) וגם ב-Backend (Cloud Functions).מומלץ לשמור את הקובץ הזה בתיקייה משותפת (למשל shared/types/contract.ts) כדי ששני הצדדים של המערכת ידברו באותה השפה.TypeScript// types/contract.ts
+
+// --- Common Firebase Timestamp Type ---
+// Note: Import the actual Timestamp from 'firebase/firestore' (Client) 
+// or 'firebase-admin/firestore' (Admin/Backend) depending on where this is used.
+export interface Timestamp {
+  seconds: number;
+  nanoseconds: number;
+}
+
+// --- 1. Contracts ---
+export type ContractSource = 'pdf_upload' | 'template' | 'editor';
+export type ContractStatus = 'draft' | 'sent' | 'partially_signed' | 'signed' | 'completed';
+
+export interface ContractVersion {
+  versionId: string;
+  createdAt: Timestamp;
+  createdBy: string;
+  fieldsSnapshot: Field[];
+  documentSnapshot?: string;
+}
+
+export interface Contract {
+  id: string;
+  agencyId: string;
+  source: ContractSource;
+  
+  // Files
+  originalFileUrl?: string;
+  generatedPdfUrl?: string;
+  
+  // Editor/Template logic
+  documentHtml?: string;
+  
+  status: ContractStatus;
+  dealId?: string;
+  
+  // Metadata
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  
+  versions: ContractVersion[];
+}
+
+// --- 2. Fields ---
+export type FieldType = 'signature' | 'text' | 'date' | 'checkbox';
+export type SignerRole = 'agent' | 'client' | 'buyer' | 'seller';
+export type FieldStatus = 'empty' | 'filled' | 'signed';
+
+export interface FieldPosition {
+  x: number;       // Normalized 0-1 (Percentage from left)
+  y: number;       // Normalized 0-1 (Percentage from top)
+  width?: number;  // Normalized 0-1
+  height?: number; // Normalized 0-1
+  page: number;    // 1-indexed
+}
+
+export interface Field {
+  id: string;
+  type: FieldType;
+  role: SignerRole;
+  
+  // UI Display
+  label?: string;
+  placeholder?: string;
+  required: boolean;
+  
+  // Actual stored value
+  value?: string;
+  
+  // Placement (PDF)
+  position?: FieldPosition;
+  
+  // Binding for CRM auto-fill (Templates/Editor)
+  bindingKey?: string; 
+  
+  // State
+  status: FieldStatus;
+  filledBy?: string; // Signer ID
+  filledAt?: Timestamp;
+}
+
+// --- 3. Signers ---
+export type SignerStatus = 'pending' | 'viewed' | 'completed';
+export type VerificationMethod = 'none' | 'email' | 'sms_otp';
+
+export interface Signer {
+  id: string;
+  role: SignerRole;
+  
+  name?: string;
+  email?: string;
+  phone?: string;
+  
+  status: SignerStatus;
+  order?: number; // For multi-step signing (e.g., Client first, then Agent)
+  verificationMethod: VerificationMethod;
+  
+  signatureImage?: string; // Base64 or Storage URL
+  
+  signedAt?: Timestamp;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// --- 4. Signing Sessions ---
+export type SessionStatus = 'active' | 'completed' | 'expired';
+
+export interface SigningSession {
+  id: string;
+  contractId: string;
+  signerId: string;
+  
+  token: string;
+  expiresAt: Timestamp;
+  status: SessionStatus;
+  
+  createdAt: Timestamp;
+}
+
+// --- 5. Audit Trail ---
+export type AuditLogAction = 
+  | 'created' 
+  | 'sent' 
+  | 'viewed' 
+  | 'field_filled' 
+  | 'signed' 
+  | 'completed';
+
+export interface AuditLog {
+  id: string;
+  contractId: string;
+  signerId?: string;
+  action: AuditLogAction;
+  
+  metadata?: {
+    fieldId?: string;
+    value?: string;
+    [key: string]: any; // Allows for extensible logging
+  };
+  
+  ipAddress?: string;
+  userAgent?: string;
+  
+  createdAt: Timestamp;
+}
+טיפים להטמעה במערכת:ב-Cloud Functions (Node.js): תוכל לייבא את הקובץ הזה כדי לוודא שהפונקציה של הצריבה עובדת בדיוק עם הטיפוסים האלה (למשל, מוודאת ש-field.position.x הוא מספר בין $0$ ל-$1$).
 
 ה-Flow המלא ב-Front (SignaturePage.tsx)
 איך הלקוח רואה את הכל ביחד:

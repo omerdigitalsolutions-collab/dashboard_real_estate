@@ -30,6 +30,9 @@ import { Navigate } from 'react-router-dom';
 import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
+import ContractEditor from './pages/ContractEditor';
+import Contracts from './pages/Contracts';
+import SignaturePage from './pages/SignaturePage';
 import BillingLockScreen from './pages/BillingLockScreen';
 import PendingApproval from './pages/PendingApproval';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
@@ -137,6 +140,8 @@ function App() {
           <Route path="pnl" element={<ErrorBoundary><ProfitAndLossDashboard /></ErrorBoundary>} />
           <Route path="calendar" element={<ErrorBoundary><Calendar /></ErrorBoundary>} />
           <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="contracts" element={<ErrorBoundary><Contracts /></ErrorBoundary>} />
+          <Route path="contracts/:dealId/edit" element={<ErrorBoundary><ContractEditor /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>
               <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>
@@ -148,6 +153,9 @@ function App() {
             </SuperAdminRoute>
           } />
         </Route>
+
+        {/* Public contract signing — no auth required, uses anonymous Firebase Auth */}
+        <Route path="/sign/:agencyId/:contractId" element={<SignaturePage />} />
 
         {/* Catch-all route to redirect unknown paths to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

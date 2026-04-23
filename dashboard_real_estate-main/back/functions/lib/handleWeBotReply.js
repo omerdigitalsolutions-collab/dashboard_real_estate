@@ -50,6 +50,25 @@ const whatsappService_1 = require("./whatsappService");
 const matchingEngine_1 = require("./leads/matchingEngine");
 const eventManager_1 = require("./calendar/eventManager");
 const db = admin.firestore();
+async function withRetry(label, fn, retries = 2) {
+    var _a;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        }
+        catch (err) {
+            const isTransient = ((_a = err === null || err === void 0 ? void 0 : err.message) === null || _a === void 0 ? void 0 : _a.includes('fetch failed')) || (err === null || err === void 0 ? void 0 : err.code) === 'ECONNRESET' || (err === null || err === void 0 ? void 0 : err.code) === 'ETIMEDOUT';
+            if (isTransient && attempt < retries) {
+                const delay = 1500 * (attempt + 1);
+                console.warn(`[WeBot] ${label} — transient error (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms:`, err.message);
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw new Error('unreachable');
+}
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STATE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const RESET_KEYWORDS = ['התחל מחדש', 'תחל מחדש', 'reset', 'start over', 'מחדש'];
@@ -134,6 +153,10 @@ async function loadChatHistory(leadId, limit = 20, excludeDocId) {
             if (!text.trim())
                 continue;
             history.push({ role: d.direction === 'inbound' ? 'user' : 'model', parts: [{ text }] });
+        }
+        // Gemini requires history to start with 'user' role — strip any leading bot messages
+        while (history.length > 0 && history[0].role !== 'user') {
+            history.shift();
         }
         return history;
     }
@@ -227,6 +250,9 @@ async function classifyIntent(message, leadType, geminiApiKey) {
     // If existing seller lead writing again — stay in seller flow
     if (leadType === 'seller')
         return 'seller';
+    // Returning buyers skip the Gemini classification call entirely
+    if (leadType === 'buyer')
+        return 'buyer';
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
@@ -330,12 +356,14 @@ async function extractTimePreference(message, geminiApiKey) {
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
 async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState = 'IDLE') {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
-    // RAG: active properties for this agency
-    const propSnap = await db
-        .collection('agencies').doc(agencyId).collection('properties')
-        .where('status', '==', 'active')
-        .limit(15)
-        .get();
+    // RAG: active properties + chat history in parallel
+    const [propSnap, chatHistory] = await Promise.all([
+        db.collection('agencies').doc(agencyId).collection('properties')
+            .where('status', '==', 'active')
+            .limit(15)
+            .get(),
+        loadChatHistory(leadId, 20, currentMsgDocId),
+    ]);
     const ragProperties = propSnap.docs.map(doc => {
         var _a, _b, _c, _d, _e, _f, _g, _h;
         const d = doc.data();
@@ -352,10 +380,11 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
     const agencyName = agencyData.agencyName || agencyData.name || 'הסוכנות שלנו';
     const botConfig = mapWeBotConfig(agencyData.weBotConfig || {});
     const systemPrompt = (0, whatsappService_1.buildWeBotPrompt)(botConfig, ragProperties, agencyName);
-    const chatHistory = await loadChatHistory(leadId, 20, currentMsgDocId);
     const schedulingPrefix = currentState === 'SCHEDULING_CALL'
-        ? '⚠️ מצב נוכחי: קטלוג הנכסים כבר נשלח ללקוח. אם הלקוח רוצה לקבוע שיחה/פגישה — שאל תאריך ושעה מועדפים ואז קרא ל-schedule_meeting בלבד. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
-        : '';
+        ? '⚠️ מצב נוכחי: קטלוג הנכסים כבר נשלח ללקוח. אם הלקוח רוצה לקבוע שיחה/פגישה — שאל תאריך ושעה מועדפים ואז קרא ל-schedule_meeting בלבד. לאחר שהפגישה נקבעה שלח הודעת סיום חמה וחזור ל-IDLE. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
+        : currentState === 'ASKING_EXTRA_CRITERIA'
+            ? '⚠️ שלב: הלקוח ענה על שאלת "האם יש קריטריונים נוספים?". אם ציין קריטריונים — קרא ל-update_lead_requirements עם הדרישות המעודכנות ואז מיד ל-create_catalog. אם אין דרישות נוספות — קרא ישירות ל-create_catalog.\n\n'
+            : '';
     const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
@@ -364,11 +393,13 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         systemInstruction: schedulingPrefix + systemPrompt,
     });
     const chat = model.startChat({ history: chatHistory });
-    let chatResponse = await chat.sendMessage(incomingMessage);
+    let chatResponse = await withRetry('chat.sendMessage', () => chat.sendMessage(incomingMessage));
     let finalReply = '';
     let catalogCreated = false;
     let sentCatalogUrl = null;
     let iterCount = 0;
+    let requirementsJustSaved = false;
+    let meetingScheduled = false;
     while (iterCount < 5) {
         iterCount++;
         const fnCalls = (_c = (_b = (_a = chatResponse.response).functionCalls) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : [];
@@ -445,6 +476,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                 await notifyAgentOrAdmin(agentPhone, `🏠 *עדכון מהבוט*\nהלקוח ${leadName} קבע ${typeLabel} לתאריך ${date} בשעה ${time}.\nטלפון: ${customerPhone}`, greenApiCreds);
             }
             await updateChatState(leadId, 'IDLE');
+            meetingScheduled = true;
             functionResult = {
                 success: true,
                 message: calendarLink
@@ -481,30 +513,41 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             });
             await updateChatState(leadId, 'COLLECTING_REQS');
             console.log(`[WeBot] 📋 Requirements saved: lead=${leadId}`, requirements);
+            requirementsJustSaved = true;
             functionResult = { success: true };
             // ── create_catalog ────────────────────────────────────────────────────────
         }
         else if (call.name === 'create_catalog') {
-            const freshLead = await db.collection('leads').doc(leadId).get();
-            const reqs = ((_g = freshLead.data()) === null || _g === void 0 ? void 0 : _g.requirements) || {};
-            if (!((_h = reqs.desiredCity) === null || _h === void 0 ? void 0 : _h.length) && !reqs.maxBudget && !reqs.minRooms) {
+            if (requirementsJustSaved && currentState !== 'ASKING_EXTRA_CRITERIA') {
+                // Requirements were just saved in a non-extra-criteria turn — ask extra criteria first
                 functionResult = {
-                    success: false, reason: 'missing_requirements',
-                    message: 'לא נמצאו דרישות שמורות. יש לאסוף מהלקוח לפחות עיר + תקציב או חדרים.',
+                    success: false,
+                    reason: 'ask_extra_criteria_first',
+                    message: 'יש לשאול את הלקוח על קריטריונים נוספים לפני יצירת הקטלוג.',
                 };
             }
             else {
-                const matchedProperties = await findMatchingPropertiesForBot(agencyId, reqs, 10);
-                if (matchedProperties.length === 0) {
-                    functionResult = { success: false, reason: 'no_matches', message: 'לא נמצאו נכסים מתאימים לפי הדרישות.' };
+                const freshLead = await db.collection('leads').doc(leadId).get();
+                const reqs = ((_g = freshLead.data()) === null || _g === void 0 ? void 0 : _g.requirements) || {};
+                if (!((_h = reqs.desiredCity) === null || _h === void 0 ? void 0 : _h.length) && !reqs.maxBudget && !reqs.minRooms) {
+                    functionResult = {
+                        success: false, reason: 'missing_requirements',
+                        message: 'לא נמצאו דרישות שמורות. יש לאסוף מהלקוח לפחות עיר + תקציב או חדרים.',
+                    };
                 }
                 else {
-                    const propertyIds = matchedProperties.map(p => p.id);
-                    const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_j = freshLead.data()) === null || _j === void 0 ? void 0 : _j.name) || 'לקוח', propertyIds);
-                    catalogCreated = true;
-                    sentCatalogUrl = catalogUrl;
-                    console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyIds.length}`);
-                    functionResult = { success: true, url: catalogUrl, count: matchedProperties.length };
+                    const matchedProperties = await findMatchingPropertiesForBot(agencyId, reqs, 10);
+                    if (matchedProperties.length === 0) {
+                        functionResult = { success: false, reason: 'no_matches', message: 'לא נמצאו נכסים מתאימים לפי הדרישות.' };
+                    }
+                    else {
+                        const propertyIds = matchedProperties.map(p => p.id);
+                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_j = freshLead.data()) === null || _j === void 0 ? void 0 : _j.name) || 'לקוח', propertyIds);
+                        catalogCreated = true;
+                        sentCatalogUrl = catalogUrl;
+                        console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyIds.length}`);
+                        functionResult = { success: true, url: catalogUrl, count: matchedProperties.length };
+                    }
                 }
             }
         }
@@ -512,19 +555,37 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             console.warn(`[WeBot] Unknown function call: ${call.name}`);
             functionResult = { success: false, reason: 'unknown_function' };
         }
-        chatResponse = await chat.sendMessage([{
+        chatResponse = await withRetry('chat.sendMessage(fn)', () => chat.sendMessage([{
                 functionResponse: { name: call.name, response: functionResult },
-            }]);
+            }]));
+    }
+    // Ask for extra criteria ONCE — only when first entering this stage
+    if (requirementsJustSaved && !catalogCreated && currentState !== 'ASKING_EXTRA_CRITERIA') {
+        finalReply = 'קיבלתי את הדרישות.\nלפני שמכין את הקטלוג — האם יש דרישות נוספות?\n(חנייה, מעלית, מרפסת, ממ״ד, קומה, גינה, מצב הנכס)';
+        await updateChatState(leadId, 'ASKING_EXTRA_CRITERIA');
+        await sendBotMessage(integration, customerPhone, leadId, finalReply);
+        return;
     }
     // Guarantee the catalog URL appears in the reply even if Gemini forgot to include it
-    if (sentCatalogUrl && !finalReply.includes(sentCatalogUrl)) {
-        finalReply = finalReply.trimEnd()
-            ? `${finalReply.trimEnd()}\n\n${sentCatalogUrl}`
-            : `הנה קטלוג הנכסים המותאם לך 🏠:\n${sentCatalogUrl}`;
+    if (sentCatalogUrl) {
+        if (!finalReply.includes(sentCatalogUrl)) {
+            finalReply = finalReply.trimEnd()
+                ? `${finalReply.trimEnd()}\n\n📋 קטלוג הנכסים שלך:\n${sentCatalogUrl}`
+                : `הנה קטלוג הנכסים המותאם לך 🏠\n${sentCatalogUrl}`;
+        }
+        // Invite to schedule a consultation call
+        if (!finalReply.includes('שיחה') && !finalReply.includes('פגישה') && !finalReply.includes('ייעוץ')) {
+            finalReply += '\n\nהיועץ שלנו זמין לדון איתך על הנכסים ולסייע בקבלת ההחלטה.\nמתי נוח לך לשיחת ייעוץ?';
+        }
+    }
+    // After meeting scheduled: closing message
+    if (meetingScheduled) {
+        const base = finalReply.trim() || 'מצוין.';
+        finalReply = `${base}\n\nתודה. נדבר בקרוב.\nלשאלות נוספות, אנחנו כאן.`;
     }
     if (!finalReply.trim()) {
         console.warn(`[WeBot] Empty reply from Gemini for lead ${leadId}, using fallback.`);
-        finalReply = 'תודה על פנייתך! אחזור אליך בהקדם. 😊';
+        finalReply = 'תודה על פנייתך. נחזור אליך בהקדם.';
     }
     await sendBotMessage(integration, customerPhone, leadId, finalReply);
     // After catalog is sent → move to SCHEDULING_CALL + notify agent
@@ -553,7 +614,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
     if (currentState === 'IDLE') {
         await db.collection('leads').doc(leadId).update({ type: 'seller', status: 'potential_seller' });
         await updateChatState(leadId, 'COLLECTING_SELLER_INFO');
-        await sendBotMessage(integration, customerPhone, leadId, `תודה שפנית! 🏠\nכדי שנוכל לשווק את הנכס שלך בצורה הטובה ביותר, אנא ספר לנו:\n\n1️⃣ מה *כתובת הנכס*?\n2️⃣ מה *סוג הנכס*? (דירה, בית פרטי, דופלקס, פנטהאוס וכו׳)`);
+        await sendBotMessage(integration, customerPhone, leadId, `תודה שפנית.\nכדי שנוכל לשווק את הנכס שלך, אנא ספר לנו:\n\n1. מה *כתובת הנכס*?\n2. מה *סוג הנכס*? (דירה, בית פרטי, דופלקס, פנטהאוס וכו׳)`);
         return;
     }
     // ── Collecting address + property type ───────────────────────────────────
@@ -562,7 +623,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
         const address = extracted.address || chatStateData.pendingSellerAddress;
         const propertyType = extracted.propertyType || chatStateData.pendingSellerType;
         if (!address && !propertyType) {
-            await sendBotMessage(integration, customerPhone, leadId, `לא הצלחתי לזהות את הפרטים. 😊\nאנא ציין את *כתובת הנכס* וה*סוג* שלו — לדוגמה: "דירה ברחוב הרצל 5, תל אביב"`);
+            await sendBotMessage(integration, customerPhone, leadId, `לא הצלחתי לזהות את הפרטים.\nאנא ציין את *כתובת הנכס* וה*סוג* שלו — לדוגמה: "דירה ברחוב הרצל 5, תל אביב"`);
             return;
         }
         if (!address || !propertyType) {
@@ -571,7 +632,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
                 pendingSellerType: propertyType,
             });
             const missing = !address ? 'כתובת הנכס' : 'סוג הנכס (דירה, בית, פנטהאוס וכו׳)';
-            await sendBotMessage(integration, customerPhone, leadId, `תודה! חסר לנו רק ${missing}. 🙏`);
+            await sendBotMessage(integration, customerPhone, leadId, `תודה. כדי להמשיך, חסר לנו ${missing}.`);
             return;
         }
         // All info collected → move to scheduling
@@ -583,7 +644,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
             pendingSellerAddress: address,
             pendingSellerType: propertyType,
         });
-        await sendBotMessage(integration, customerPhone, leadId, `מצוין! קיבלנו את הפרטים:\n📍 *כתובת:* ${address}\n🏠 *סוג:* ${propertyType}\n\nמתי נוח לך לדבר עם מנהל המשרד? (ציין יום ושעה מועדפים)`);
+        await sendBotMessage(integration, customerPhone, leadId, `קיבלנו את הפרטים:\n📍 *כתובת:* ${address}\n🏠 *סוג:* ${propertyType}\n\nמתי נוח לך לשיחה עם מנהל המשרד? (ציין יום ושעה מועדפים)`);
         return;
     }
     // ── Scheduling the seller call ────────────────────────────────────────────
@@ -604,7 +665,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        await sendBotMessage(integration, customerPhone, leadId, 'תודה, מנהל המשרד יחזור אליך בשעה שציינת');
+        await sendBotMessage(integration, customerPhone, leadId, 'תודה. מנהל המשרד יחזור אליך בזמן שציינת.');
         await updateChatState(leadId, 'IDLE');
         // Notify admin (not agent — seller goes straight to admin)
         const adminPhone = await findAdminPhone(agencyId);
@@ -654,7 +715,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         let currentState = storedChatState.state;
         if (isResetKeyword) {
             await updateChatState(leadId, 'IDLE');
-            await sendBotMessage(integration, customerPhone, leadId, 'בסדר! מתחילים מחדש. 😊\nאיך אוכל לעזור לך היום?\n• מחפש דירה לקנות/לשכור?\n• רוצה לפרסם ולמכור נכס?');
+            await sendBotMessage(integration, customerPhone, leadId, 'בסדר, מתחילים מחדש.\nאיך אוכל לעזור לך היום?\n• מחפש דירה לקנות/לשכור?\n• רוצה לפרסם ולמכור נכס?');
             return;
         }
         if (isStale && currentState !== 'IDLE') {
@@ -662,7 +723,21 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             currentState = 'IDLE';
             await updateChatState(leadId, 'IDLE');
         }
-        // 5. Route by state
+        // 5. Name collection: ask name on first bot interaction (regardless of WhatsApp display name)
+        if (currentState === 'COLLECTING_NAME') {
+            const name = incomingMessage.trim().substring(0, 50) || 'לקוח';
+            await db.collection('leads').doc(leadId).update({ name, botNameCollected: true });
+            await updateChatState(leadId, 'IDLE');
+            await sendBotMessage(integration, customerPhone, leadId, `נעים להכיר, ${name}.\nאיך אוכל לעזור לך?\n• מחפש/ת דירה לקנות או לשכור?\n• רוצה לפרסם ולמכור נכס?`);
+            return;
+        }
+        if (currentState === 'IDLE' && !leadData.botNameCollected) {
+            const agencyDisplayName = agencyData.agencyName || agencyData.name || 'הסוכנות שלנו';
+            await updateChatState(leadId, 'COLLECTING_NAME');
+            await sendBotMessage(integration, customerPhone, leadId, `שלום, אני הנציג הדיגיטלי של ${agencyDisplayName}.\nאשמח לעזור לך בחיפוש או שיווק נכס.\nמה שמך?`);
+            return;
+        }
+        // 6. Route by state
         if (currentState === 'IDLE') {
             const intent = await classifyIntent(incomingMessage, leadData.type || 'buyer', geminiApiKey);
             console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
@@ -681,7 +756,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             await runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState);
             return;
         }
-        if (currentState === 'COLLECTING_REQS' || currentState === 'SCHEDULING_CALL') {
+        if (currentState === 'COLLECTING_REQS' || currentState === 'ASKING_EXTRA_CRITERIA' || currentState === 'SCHEDULING_CALL') {
             await runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState);
             return;
         }

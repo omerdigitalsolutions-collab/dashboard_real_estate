@@ -155,8 +155,11 @@ export const connectAgencyWhatsApp = onCall({
     instanceId = creds.idInstance;
     instanceToken = creds.apiTokenInstance;
   } else {
-    // Allocate a new instance from the pool
-    const availableSnap = await db.collection('available_instances').limit(1).get();
+    // Allocate a new instance from the pool (isActive: false = free)
+    const availableSnap = await db.collection('available_instances')
+      .where('isActive', '==', false)
+      .limit(1)
+      .get();
     if (availableSnap.empty) {
       throw new HttpsError('resource-exhausted', 'No available WhatsApp instances at the moment. Please contact support.');
     }
@@ -169,8 +172,6 @@ export const connectAgencyWhatsApp = onCall({
     // Encrypt the token
     const { encryptedToken, iv } = encryptToken(instanceToken, masterKey.value());
 
-    // ✅ FIX 1: FieldValue.delete() is NOT allowed inside set({}, {merge:true}).
-    //           We use set() for new fields, then update() separately for deletions.
     await db.runTransaction(async (t) => {
       t.set(credsRef, {
         idInstance: instanceId,
@@ -179,7 +180,6 @@ export const connectAgencyWhatsApp = onCall({
         assignedAt: admin.firestore.FieldValue.serverTimestamp()
       });
 
-      // Set only new/updated fields — no FieldValue.delete() here
       t.set(agencyRef, {
         whatsappIntegration: {
           status: 'PENDING_SCAN',
@@ -187,12 +187,17 @@ export const connectAgencyWhatsApp = onCall({
         }
       }, { merge: true });
 
-      // Separate update() call to safely delete legacy greenApiKeys field
       t.update(agencyRef, {
         greenApiKeys: admin.firestore.FieldValue.delete()
       });
 
-      t.delete(instanceDoc.ref);
+      // Mark instance as active in the registry (don't delete — keep for future lookups)
+      t.update(instanceDoc.ref, {
+        isActive: true,
+        agencyId,
+        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        apiTokenInstance: null,
+      });
     });
 
     console.log(`[WhatsApp] Allocated new instance ${instanceId} to agency ${agencyId}`);
@@ -292,12 +297,13 @@ export const disconnectAgencyWhatsApp = onCall({
   //       We must use update() for fields we want to delete, and set() only for new data.
   try {
     await db.runTransaction(async (t) => {
-      // Return plain-text keys to the pool (idInstance as doc ID ensures uniqueness)
+      // Return instance to pool by flipping isActive back to false
       const poolRef = db.collection('available_instances').doc(keys!.idInstance);
-      t.set(poolRef, {
-        idInstance: keys!.idInstance,
+      t.update(poolRef, {
+        isActive: false,
+        agencyId: null,
         apiTokenInstance: keys!.apiTokenInstance,
-        returnedAt: admin.firestore.FieldValue.serverTimestamp()
+        returnedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       // Delete the private credentials sub-document
@@ -653,8 +659,6 @@ export const syncLeadChat = onCall({
     throw new HttpsError('failed-precondition', 'WhatsApp is not connected.');
   }
 
-  // Import locally to avoid circular dependencies if any
-  const { syncChatHistory } = require('./whatsappService');
   await syncChatHistory(db, agencyId, leadId, phone, keys, 15);
   return { success: true };
 });
@@ -782,131 +786,4 @@ export const disconnectWhatsApp = onCall({
 
   return { success: true };
 });
-
-// ─── 5. whatsappWebhook ───────────────────────────────────────────────────────
-
-/**
- * Central inbound webhook — receives messages from Green API / WAHA.
- * Set this URL in your WAHA dashboard or in each Green API instance settings.
- *
- * Security: validates X-Webhook-Secret header against WAHA_WEBHOOK_SECRET env var.
- */
-export const whatsappWebhook = onRequest({
-  region: REGION,
-  secrets: ['WAHA_WEBHOOK_SECRET', geminiApiKey]
-}, async (req, res) => {
-  // Always ACK first to prevent retries
-    const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
-    const expected = process.env.WAHA_WEBHOOK_SECRET || '';
-
-    if (!expected || secret !== expected) {
-      console.error(`Webhook: Unauthorized access attempt. Incoming secret: '${secret}'.`);
-      res.status(401).send('Unauthorized');
-      return;
-    }
-
-    // ACK only after authorization check
-    res.status(200).send('OK');
-    console.log(`Webhook: Authorized request.`);
-
-    try {
-
-    const body = req.body;
-    const typeWebhook: string = body?.typeWebhook || body?.event || '';
-    const idMessage: string | undefined = body?.idMessage;
-
-    // Support both Green API and WAHA event formats
-    // We now ALSO handle outgoing messages so human replies from phone/web show up in CRM.
-    const isRelevantEvent =
-      typeWebhook === 'incomingMessageReceived' ||   // Green API Inbound
-      typeWebhook === 'outgoingMessageReceived' ||   // Green API Human Outbound
-      typeWebhook === 'outgoingAPIMessageReceived' ||// Green API Bot Outbound (for idempotency)
-      typeWebhook === 'message';                     // WAHA
-
-    console.log(`Webhook: Received event type '${typeWebhook}'. isRelevantEvent: ${isRelevantEvent}`);
-
-    if (!isRelevantEvent) return;
-
-    // ── Extract idInstance (Green API) or sessionName (WAHA) ─────────────
-    const idInstance: string | undefined = body?.idInstance;
-    const sessionName: string | undefined = body?.session;
-
-    // ── Find the agency ───────────────────────────────────────────────────
-    let agencyId: string | undefined;
-
-    if (idInstance) {
-      const snap = await db.collectionGroup('private_credentials')
-        .where('idInstance', '==', idInstance)
-        .limit(1).get();
-      if (!snap.empty) {
-        agencyId = snap.docs[0].ref.parent.parent?.id;
-      }
-    } else if (sessionName) {
-      const snap = await db.collection('agencies')
-        .where('whatsappIntegration.sessionName', '==', sessionName)
-        .limit(1).get();
-      if (!snap.empty) agencyId = snap.docs[0].id;
-    }
-
-    if (!agencyId) {
-      console.log(`Webhook: No agency found for instance ${idInstance} or session ${sessionName}. Ignored.`);
-      return;
-    }
-
-    const agencyDoc = await db.collection('agencies').doc(agencyId).get();
-    const agencyData = agencyDoc.data() || {};
-    // Support both old string[] and new {id, name}[] structure
-    const monitoredGroupsRaw: any[] = agencyData.whatsappIntegration?.monitoredGroups || [];
-    const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
-
-    // ── Extract sender and message text ────────────────────────────────────
-    const senderData = body?.senderData || {};
-    const messageData = body?.messageData || {};
-
-    // Determine chat type and actual sender
-    const chatId: string = senderData.chatId || '';
-    const isGroup = chatId.endsWith('@g.us');
-    const isDirect = chatId.endsWith('@c.us');
-
-    // For outgoing messages, the recipient is the chatId
-    const isOutbound = typeWebhook === 'outgoingMessageReceived' || typeWebhook === 'outgoingAPIMessageReceived';
-    const rawSender: string = isOutbound ? (body?.chatData?.chatId || body?.senderData?.chatId) : (senderData.sender || chatId);
-    
-    // Support various content types for Green API
-    let textMessage: string = messageData.textMessageData?.textMessage || '';
-    const caption: string = messageData.extendedTextMessageData?.text || 
-                         messageData.imageMessageData?.caption || 
-                         messageData.videoMessageData?.caption || 
-                         messageData.fileMessageData?.caption || '';
-
-    // If it's a media message without text, use a generic label
-    if (!textMessage && !caption) {
-      if (messageData.typeMessage === 'imageMessage') textMessage = '[תמונה]';
-      else if (messageData.typeMessage === 'videoMessage') textMessage = '[סרטון]';
-      else if (messageData.typeMessage === 'audioMessage') textMessage = '[הודעה קולית]';
-      else if (messageData.typeMessage === 'fileMessage') textMessage = '[קובץ]';
-      else if (messageData.typeMessage === 'locationMessage') textMessage = '[מיקום]';
-      else if (messageData.typeMessage === 'contactMessage') textMessage = '[איש קשר]';
-    } else {
-      textMessage = textMessage || caption;
-    }
-
-    console.log(`Webhook: Agency ${agencyId} | ChatId: ${chatId} | isGroup: ${isGroup} | Sender: ${rawSender}`);
-    if (textMessage) console.log(`Webhook: Message text preview: ${textMessage.substring(0, 50)}...`);
-
-    if (!rawSender || !textMessage) {
-      console.log('Webhook: No text content or sender, skipping.');
-      return;
-    }
-
-    // ── Normalise phone ─────────────────────────────────────────────────────
-    let cleanPhone = rawSender.replace('@c.us', '');
-    if (cleanPhone.startsWith('972')) cleanPhone = '0' + cleanPhone.substring(3);
-
-    // ── Message handling handled by webhookWhatsAppAI ────────────────────────
-  } catch (err) {
-    console.error('Webhook fatal error:', err);
-  }
-});
-
 

@@ -19,11 +19,11 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Clock, CheckCircle, Trash2 } from 'lucide-react';
+import { GripVertical, Clock, CheckCircle, Trash2, FileText, FilePlus } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { updateDealStage, deleteDeal } from '../../services/dealService';
 import { Deal, DealStage, CustomDealStage, Property, Lead } from '../../types';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { triggerWonConfetti } from '../../utils/effects';
 import { useAuth } from '../../context/AuthContext';
 
@@ -51,6 +51,7 @@ function DealCard({
     onDelete: (id: string) => void;
     onClick?: (deal: Deal) => void;
 }) {
+    const navigate = useNavigate();
     const {
         attributes,
         listeners,
@@ -105,6 +106,21 @@ function DealCard({
                 </div>
 
                 <div className="flex items-center gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
+                    {/* Contract button — shown for all; green when contract exists */}
+                    <button
+                        onClick={() => navigate(`/dashboard/contracts/${deal.id}/edit`)}
+                        title={deal.contract?.contractId ? 'ערוך חוזה' : 'צור חוזה'}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                            deal.contract?.status === 'completed'
+                                ? 'text-green-500 hover:bg-green-50'
+                                : deal.contract?.contractId
+                                    ? 'text-blue-500 hover:bg-blue-50'
+                                    : 'text-slate-300 hover:text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        {deal.contract?.contractId ? <FileText size={16} /> : <FilePlus size={16} />}
+                    </button>
+
                     {canEdit && (
                         <>
                             <button onClick={() => onDelete(deal.id)} className="p-1.5 text-slate-300 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors" title="מחק עסקה">
