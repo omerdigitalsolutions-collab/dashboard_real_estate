@@ -40,22 +40,24 @@ service firebase.storage {
     //            the leading slash on every child segment).
     // ══════════════════════════════════════════════════════════════════════════
 
+    function isSuperAdmin() {
+      return request.auth != null && (
+        firestore.exists(/databases/(default)/documents/superAdmins/$(request.auth.uid))
+      );
+    }
+
     // Helper: checks if caller is an admin/owner of the given agency.
     // Falls back to Firestore if token claims are stale or not yet set.
     function isAgencyAdmin(agencyId) {
-      return request.auth != null
+      return isSuperAdmin() || (
+        request.auth != null
         && request.auth.token.agencyId == agencyId
         && (
           request.auth.token.role == 'admin'
           || request.auth.token.role == 'owner'
           || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
           || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'owner'
-        );
-    }
-
-    function isSuperAdmin() {
-      return request.auth != null && (
-        firestore.exists(/databases/(default)/documents/superAdmins/$(request.auth.uid))
+        )
       );
     }
 
@@ -201,7 +203,7 @@ service firebase.storage {
 
       // Any agent in the agency can upload template PDFs (20 MB max)
       allow create: if request.auth != null
-                    && request.auth.token.agencyId == agencyId
+                    && (isSuperAdmin() || request.auth.token.agencyId == agencyId)
                     && request.resource.size < 20 * 1024 * 1024
                     && request.resource.contentType == 'application/pdf';
 

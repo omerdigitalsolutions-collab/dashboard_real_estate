@@ -381,6 +381,20 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                                             transactionType: data.transactionType || (data.type === 'rent' ? 'rent' : 'forsale'),
                                             propertyType: data.propertyType || data.kind || '',
                                             squareMeters: data.squareMeters || data.sqm || null,
+                                            rooms: data.rooms || data.roomCount || null,
+                                            floor: data.floor || null,
+                                            features: data.features || {
+                                                hasElevator: data.hasElevator ?? null,
+                                                hasParking: data.hasParking ?? null,
+                                                parkingSpots: data.parkingSpots ?? null,
+                                                hasBalcony: data.hasBalcony ?? null,
+                                                hasMamad: data.hasMamad ?? data.hasSafeRoom ?? null,
+                                                hasStorage: data.hasStorage ?? null,
+                                                isRenovated: data.isRenovated ?? null,
+                                                isFurnished: data.isFurnished ?? null,
+                                                hasAirConditioning: data.hasAirConditioning ?? null,
+                                            },
+                                            rawDescription: data.rawDescription || data.description || data.details || '',
                                             isGlobalCityProperty: true,
                                             readonly: true
                                         } as Property;

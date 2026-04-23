@@ -24,6 +24,9 @@ export default function SignaturePage() {
     const [isDone, setIsDone] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+    const fieldRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+    const [showModalFallback, setShowModalFallback] = useState(false);
 
     // Signature canvas ref
     const sigCanvasRef = useRef<SignatureCanvas>(null);
@@ -53,6 +56,11 @@ export default function SignaturePage() {
 
                 setContract(data);
                 setFields(data.fields || []);
+
+                // Track view
+                if (data.status !== 'completed') {
+                    signingService.trackContractView(agencyId, contractId).catch(console.error);
+                }
             } catch (err: any) {
                 console.error('Failed to load contract:', err);
                 setError(`Failed to load contract: ${err.message}`);
@@ -71,7 +79,35 @@ export default function SignaturePage() {
         );
     };
 
-    // ── Confirm signature from modal ───────────────────────────────────────
+    // ── Activate field & calculate size ─────────────────────────────────────
+    const handleActivateField = (fieldId: string) => {
+        const el = fieldRefs.current[fieldId];
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            // Fallback for very small fields
+            if (rect.width < 100 || rect.height < 50) {
+                setShowModalFallback(true);
+            } else {
+                setShowModalFallback(false);
+            }
+            setCanvasSize({ width: rect.width, height: Math.max(rect.height, 80) });
+        }
+        setActiveSigField(fieldId);
+    };
+
+    // Resize listener to close active field if window resizes, as rect changes
+    useEffect(() => {
+        const handleResize = () => {
+            if (activeSigField) {
+                setActiveSigField(null);
+                setShowModalFallback(false);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [activeSigField]);
+
+    // ── Confirm signature from modal or inline ─────────────────────────────
     const confirmSignature = () => {
         if (sigCanvasRef.current && activeSigField) {
             try {
@@ -253,7 +289,8 @@ export default function SignaturePage() {
                                     {fields.map(field => (
                                         <div
                                             key={field.id}
-                                            className="absolute"
+                                            ref={el => { fieldRefs.current[field.id] = el; }}
+                                            className={`absolute ${activeSigField === field.id && !showModalFallback ? 'z-50' : 'z-10'}`}
                                             style={{
                                                 left: `${field.position.x * 100}%`,
                                                 top: `${field.position.y * 100}%`,
@@ -262,8 +299,42 @@ export default function SignaturePage() {
                                             }}
                                         >
                                             {field.type === 'signature' ? (
+                                                activeSigField === field.id && !showModalFallback ? (
+                                                    <div className="absolute top-0 left-0 w-full h-full bg-white border-2 border-blue-500 rounded shadow-xl overflow-visible">
+                                                        <SignatureCanvas
+                                                            ref={sigCanvasRef}
+                                                            penColor="black"
+                                                            canvasProps={{
+                                                                width: canvasSize.width,
+                                                                height: canvasSize.height,
+                                                                className: 'cursor-crosshair w-full h-full touch-none'
+                                                            }}
+                                                        />
+                                                        <div className="absolute top-full left-0 mt-2 flex gap-2 w-max bg-white p-2 rounded shadow-lg border border-gray-200" dir="rtl">
+                                                            <button onClick={(e) => { e.stopPropagation(); confirmSignature(); }} className="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white rounded flex items-center gap-1 hover:bg-blue-700">
+                                                                <CheckCircle size={14} /> אישור
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); setActiveSigField(null); }} className="px-3 py-1.5 text-xs font-bold bg-red-100 text-red-600 rounded hover:bg-red-200">
+                                                                ביטול
+                                                            </button>
+                                                            <button onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                const data = sigCanvasRef.current?.toData();
+                                                                if (data && data.length > 0) {
+                                                                    data.pop();
+                                                                    sigCanvasRef.current?.fromData(data);
+                                                                }
+                                                            }} className="px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 rounded">
+                                                                אחורה
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); sigCanvasRef.current?.clear(); }} className="px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 rounded">
+                                                                נקה
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
                                                 <button
-                                                    onClick={() => setActiveSigField(field.id)}
+                                                    onClick={() => handleActivateField(field.id)}
                                                     className={`w-full h-full rounded border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors
                                                         ${field.value
                                                         ? 'border-green-500 bg-green-50 hover:bg-green-100'
@@ -279,6 +350,7 @@ export default function SignaturePage() {
                                                         </div>
                                                     )}
                                                 </button>
+                                                )
                                             ) : (
                                                 <input
                                                     type={field.type === 'date' ? 'date' : 'text'}
@@ -318,8 +390,8 @@ export default function SignaturePage() {
                 </div>
             </div>
 
-            {/* Signature Modal */}
-            {activeSigField && (
+            {/* Signature Modal Fallback */}
+            {activeSigField && showModalFallback && (
                 <div className="fixed inset-0 z-[100] bg-black/60 flex items-end md:items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-md rounded-2xl md:rounded-2xl shadow-2xl overflow-hidden">
                         {/* Modal header */}

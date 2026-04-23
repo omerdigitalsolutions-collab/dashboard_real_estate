@@ -11,6 +11,7 @@ import {
     Loader2,
     AlertCircle,
     Search,
+    History,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -234,6 +235,15 @@ export default function Contracts() {
                                                 className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                                             >
                                                 <PenTool size={16} />
+                                            </button>
+                                        )}
+                                        {contract.dealId && (
+                                            <button
+                                                onClick={() => navigate(`/dashboard/contracts/${contract.id}/logs`)}
+                                                title="היסטוריית פעולות"
+                                                className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                            >
+                                                <History size={16} />
                                             </button>
                                         )}
                                         {isComplete && (

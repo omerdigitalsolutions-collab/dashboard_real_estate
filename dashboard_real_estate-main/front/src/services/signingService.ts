@@ -1,5 +1,5 @@
 import { signInAnonymously, Auth } from 'firebase/auth';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, increment, getDoc } from 'firebase/firestore';
 import { httpsCallable, Functions } from 'firebase/functions';
 import { db, functions, auth } from '../config/firebase';
 import { Field } from '../types';
@@ -50,4 +50,24 @@ export const signingService = {
         const signDeal = httpsCallable(functions, 'contracts-signDeal');
         return signDeal({ dealId, agencyId });
     },
+
+    /**
+     * Tracks a contract view by incrementing viewCount and setting viewedAt on first view.
+     */
+    async trackContractView(agencyId: string, contractId: string): Promise<void> {
+        await this.ensureAnonymousAuth();
+        const contractRef = doc(db, `agencies/${agencyId}/contracts`, contractId);
+        
+        const snap = await getDoc(contractRef);
+        if (snap.exists()) {
+            const data = snap.data();
+            const updates: any = {
+                viewCount: increment(1)
+            };
+            if (!data.viewedAt) {
+                updates.viewedAt = serverTimestamp();
+            }
+            await updateDoc(contractRef, updates);
+        }
+    }
 };

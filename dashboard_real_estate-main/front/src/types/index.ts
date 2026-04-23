@@ -394,6 +394,8 @@ export interface Contract {
     originalFileUrl: string;  // original template PDF
     signedPdfUrl?: string;
     status: 'draft' | 'active' | 'completed';
+    viewedAt?: Timestamp;
+    viewCount?: number;
     fields: Field[];
     createdBy: string;
     createdAt: Timestamp;
@@ -413,4 +415,19 @@ export interface Expense {
     createdBy: string;
     createdAt: Timestamp;
     isRecurring?: boolean;
+}
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+export interface AuditLog {
+    id: string;
+    type: 'contract_opened' | 'contract_signed' | string;
+    contractId: string;
+    dealId: string;
+    agencyId: string;
+    signedBy?: string;
+    signedByEmail?: string;
+    ipAddress?: string;
+    signedPdfUrl?: string;
+    fieldCount?: number;
+    createdAt: Timestamp;
 }

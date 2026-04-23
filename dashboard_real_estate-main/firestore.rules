@@ -11,19 +11,19 @@ service cloud.firestore {
     }
 
     function inAgency(agencyId) {
-      return isAuthed() && request.auth.token.agencyId == agencyId;
+      return isAuthed() && request.auth.token.get('agencyId', null) == agencyId;
     }
 
     function isAdmin() {
-      return isAuthed() && request.auth.token.role == 'admin';
-    }
-
-    function isAgencyAdmin(agencyId) {
-      return inAgency(agencyId) && isAdmin();
+      return isAuthed() && request.auth.token.get('role', null) == 'admin';
     }
 
     function isSuperAdmin() {
       return isAuthed() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
+    function isAgencyAdmin(agencyId) {
+      return isSuperAdmin() || (inAgency(agencyId) && isAdmin());
     }
 
     function isNonEmptyString(val) {
@@ -59,8 +59,11 @@ service cloud.firestore {
      * where we can't pass the agency data inline.
      */
     function isBillingActiveForCaller() {
-      let agencyData = get(/databases/$(database)/documents/agencies/$(request.auth.token.agencyId)).data;
-      return isBillingActive(agencyData);
+      return isSuperAdmin() || (
+        isAuthed() && 
+        request.auth.token.get('agencyId', null) != null &&
+        isBillingActive(get(/databases/$(database)/documents/agencies/$(request.auth.token.agencyId)).data)
+      );
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -93,6 +96,11 @@ service cloud.firestore {
             ])
           );
       allow delete: if isSuperAdmin();
+    }
+
+    match /agencies/{agencyId}/auditLogs/{logId} {
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      allow create, update, delete: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -166,7 +174,7 @@ service cloud.firestore {
       // Authenticated agency members and anonymous users (via signing link) can read
       allow read: if request.auth != null;
       // Any authenticated agent in the agency can create templates
-      allow create: if inAgency(agencyId) && isBillingActiveForCaller();
+      allow create: if (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
 
       // Authenticated users (including anonymous) can update field values
       // Prevents updates after contract is completed (immutable once signed)
@@ -185,7 +193,7 @@ service cloud.firestore {
         request.auth.uid == userId
         || isSuperAdmin()
         || (resource != null && inAgency(resource.data.agencyId))
-        || (resource != null && resource.data.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+        || (resource != null && resource.data.email != null && request.auth.token.get('email', '') != '' && resource.data.email.lower() == request.auth.token.email.lower())
       );
 
       // List: agents can only see their own agency
@@ -225,14 +233,14 @@ service cloud.firestore {
 
       // Direct client creates allowed for agency members (e.g. batch import).
       allow create: if isAuthed()
-          && inAgency(agencyId)
+          && (inAgency(agencyId) || isSuperAdmin())
           && isBillingActiveForCaller();
 
       // Admins can update any property. Agents can only update their own.
       allow update: if isAuthed()
-          && inAgency(agencyId)
+          && (inAgency(agencyId) || isSuperAdmin())
           && isBillingActiveForCaller()
-          && (isAdmin() || resource.data.management.get('assignedAgentId', null) == request.auth.uid);
+          && (isAdmin() || isSuperAdmin() || resource.data.management.get('assignedAgentId', null) == request.auth.uid);
 
       // Admins can delete any property. Agents can only delete their own.
       allow delete: if isAuthed()
@@ -250,15 +258,15 @@ service cloud.firestore {
       // Direct client creates allowed for authenticated agency members (e.g. batch import)
       // if they set the correct agencyId and billing is active.
       allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
+          && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isBillingActiveForCaller();
 
       // Updates: admins can update any lead. Agents can only update leads assigned to them.
       allow update: if isAuthed()
-          && inAgency(resource.data.agencyId)
-          && agencyIdUnchanged()
+          && (inAgency(resource.data.agencyId) || isSuperAdmin())
+          && (agencyIdUnchanged() || isSuperAdmin())
           && isBillingActiveForCaller()
-          && (isAdmin() || resource.data.assignedAgentId == request.auth.uid);
+          && (isAdmin() || isSuperAdmin() || resource.data.assignedAgentId == request.auth.uid);
 
       // Deletes: admins can delete any lead. Agents can only delete leads assigned to them.
       allow delete: if isAuthed()
@@ -284,7 +292,7 @@ service cloud.firestore {
     match /deals/{dealId} {
       allow read: if isAuthed() && inAgency(resource.data.agencyId);
       allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
+          && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isNonEmptyString(request.resource.data.stage)
           && isPositiveNumber(request.resource.data.projectedCommission)
           && isBillingActiveForCaller();
@@ -293,11 +301,11 @@ service cloud.firestore {
       // Only admins can change commission amounts.
       // Marking 'won' (actualCommission) is also admin-only.
       allow update: if isAuthed()
-          && inAgency(resource.data.agencyId)
-          && agencyIdUnchanged()
+          && (inAgency(resource.data.agencyId) || isSuperAdmin())
+          && (agencyIdUnchanged() || isSuperAdmin())
           && isBillingActiveForCaller()
-          && (request.resource.data.projectedCommission == resource.data.projectedCommission || isAgencyAdmin(resource.data.agencyId))
-          && (request.resource.data.actualCommission == resource.data.actualCommission || isAgencyAdmin(resource.data.agencyId));
+          && (request.resource.data.projectedCommission == resource.data.projectedCommission || isAgencyAdmin(resource.data.agencyId) || isSuperAdmin())
+          && (request.resource.data.actualCommission == resource.data.actualCommission || isAgencyAdmin(resource.data.agencyId) || isSuperAdmin());
 
       // Admins can delete any deal. Agents can only delete deals they created.
       allow delete: if isAuthed()
@@ -315,14 +323,14 @@ service cloud.firestore {
           && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
 
       allow create: if isAuthed()
-          && inAgency(request.resource.data.agencyId)
+          && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isNonEmptyString(request.resource.data.title);
 
       // Agents can update tasks they created OR tasks assigned to them (e.g. task completion).
       allow update: if isAuthed()
-          && inAgency(resource.data.agencyId)
-          && agencyIdUnchanged()
-          && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
+          && (inAgency(resource.data.agencyId) || isSuperAdmin())
+          && (agencyIdUnchanged() || isSuperAdmin())
+          && (isAdmin() || isSuperAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
 
       // Agents can delete tasks they created. Admins can delete any task.
       allow delete: if isAuthed()
@@ -350,7 +358,7 @@ service cloud.firestore {
 
       // Alerts can be created by authenticated agency members (for task assignment notifications from the client).
       // Agency admins can also create alerts.
-      allow create: if isAuthed() && inAgency(request.resource.data.agencyId);
+      allow create: if isAuthed() && (inAgency(request.resource.data.agencyId) || isSuperAdmin());
 
       // Delete: admin only
       allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);

@@ -32,6 +32,7 @@ import AgencyDrillDown from './pages/superadmin/AgencyDrillDown';
 import ProfitAndLossDashboard from './pages/ProfitAndLossDashboard';
 import ContractEditor from './pages/ContractEditor';
 import Contracts from './pages/Contracts';
+import ContractAuditLog from './pages/ContractAuditLog';
 import SignaturePage from './pages/SignaturePage';
 import BillingLockScreen from './pages/BillingLockScreen';
 import PendingApproval from './pages/PendingApproval';
@@ -142,6 +143,7 @@ function App() {
           <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
           <Route path="contracts" element={<ErrorBoundary><Contracts /></ErrorBoundary>} />
           <Route path="contracts/:dealId/edit" element={<ErrorBoundary><ContractEditor /></ErrorBoundary>} />
+          <Route path="contracts/:contractId/logs" element={<ErrorBoundary><ContractAuditLog /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>
               <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>
