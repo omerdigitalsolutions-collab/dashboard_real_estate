@@ -163,6 +163,7 @@ export async function sendWhatsAppMessage(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chatId, message: messageText }),
+      signal: AbortSignal.timeout(15_000),
     });
     const data: any = await res.json();
     return res.ok && !!data.idMessage;

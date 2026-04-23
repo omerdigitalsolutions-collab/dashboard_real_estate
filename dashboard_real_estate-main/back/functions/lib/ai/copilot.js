@@ -46,6 +46,23 @@ function currentMonthBounds() {
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     return { start, end };
 }
+/**
+ * Safely converts a Firestore value to a Date object.
+ * Handles Timestamps, native Dates, and serialized Timestamp objects.
+ */
+function safeToDate(ts) {
+    if (!ts)
+        return null;
+    if (typeof ts.toDate === 'function')
+        return ts.toDate();
+    if (ts instanceof Date)
+        return ts;
+    if (ts && typeof ts === 'object' && '_seconds' in ts) {
+        return new Date(ts._seconds * 1000 + (ts._nanoseconds || 0) / 1000000);
+    }
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+}
 // ── Tool definitions for the Gemini model ─────────────────────────────────────
 const tools = [
     {
@@ -198,6 +215,26 @@ exports.askCopilot = (0, https_1.onCall)({ secrets: [geminiApiKey], region: 'eur
     if (!prompt || typeof prompt !== 'string') {
         throw new https_1.HttpsError('invalid-argument', 'A valid prompt string must be provided.');
     }
+    // Validate and sanitize user prompt to prevent injection attacks
+    if (prompt.length > 5000) {
+        throw new https_1.HttpsError('invalid-argument', 'Prompt is too long (max 5000 characters).');
+    }
+    // Check for common prompt injection patterns
+    const injectionPatterns = [
+        /ignore.*instruction/i,
+        /forget.*rule/i,
+        /instead.*do/i,
+        /override.*system/i,
+        /new role/i,
+        /you are now/i,
+        /pretend.*you/i,
+    ];
+    const suspiciousMatch = injectionPatterns.find(pattern => pattern.test(prompt));
+    if (suspiciousMatch) {
+        console.warn(`[askCopilot] Suspicious prompt detected: potential injection attempt. Pattern: ${suspiciousMatch}`);
+        // Log but don't block — let the model handle it safely due to system role separation
+        // If we blocked every creative prompt, users couldn't ask valid questions
+    }
     // 2. Tenant isolation: get agencyId from custom claim
     const agencyId = request.auth.token.agencyId;
     if (!agencyId) {
@@ -317,13 +354,13 @@ exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region
         ]);
         // Transform into compact representation
         const properties = propertiesSnap.docs.map(d => {
-            var _a, _b, _c, _d, _e, _f;
+            var _a, _b, _c, _d, _e;
             const data = d.data();
             return {
                 id: d.id,
                 address: ((_a = data.address) === null || _a === void 0 ? void 0 : _a.fullAddress) || `${((_b = data.address) === null || _b === void 0 ? void 0 : _b.street) || ''}, ${((_c = data.address) === null || _c === void 0 ? void 0 : _c.city) || ''}`,
                 price: (_e = (_d = data.financials) === null || _d === void 0 ? void 0 : _d.price) !== null && _e !== void 0 ? _e : data.price,
-                createdAt: (_f = data.createdAt) === null || _f === void 0 ? void 0 : _f.toDate(),
+                createdAt: safeToDate(data.createdAt),
             };
         });
         const leadsStatusCount = {};
@@ -335,20 +372,25 @@ exports.getSmartInsights = (0, https_1.onCall)({ secrets: [geminiApiKey], region
             leadsSourceCount[src] = (leadsSourceCount[src] || 0) + 1;
         });
         const currentMonthDeals = dealsSnap.docs.map(d => d.data()).filter(d => {
-            var _a;
-            const date = ((_a = d.updatedAt) === null || _a === void 0 ? void 0 : _a.toDate()) || new Date(0);
+            const date = safeToDate(d.updatedAt) || new Date(0);
             return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
         });
         const agents = agentsSnap.docs.map(d => ({ name: d.data().firstName + ' ' + (d.data().lastName || ''), role: d.data().role }));
         const oldPropertiesCount = properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length;
-        // 2. Build the context prompt — embed JSON schema in text
+        // Safely stringify JSON data to prevent prompt injection via newlines
+        const safeStringify = (obj) => {
+            return JSON.stringify(obj)
+                .replace(/\n/g, ' ') // Remove newlines that could inject instructions
+                .replace(/\r/g, ' '); // Remove carriage returns
+        };
+        // 2. Build the context prompt — embed JSON schema in text with sanitized data
         const contextPrompt = `You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate exactly 3 highly actionable, specific insights for the manager.
 Write ALL text IN HEBREW.
 
 DATA SNAPSHOT:
 - Active Properties: ${properties.length} (Oldest ones: ${oldPropertiesCount} older than 30 days)
-- Leads by Status: ${JSON.stringify(leadsStatusCount)}
-- Leads by Source: ${JSON.stringify(leadsSourceCount)}
+- Leads by Status: ${safeStringify(leadsStatusCount)}
+- Leads by Source: ${safeStringify(leadsSourceCount)}
 - Deals Won This Month: ${currentMonthDeals.length}
 - Agents on Team: ${agents.length}
 

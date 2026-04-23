@@ -8,8 +8,8 @@
  *   - formatPhoneForGreenAPI → phone normalisation
  *   - sendWhatsAppMessage   → Green API send wrapper
  *
- * NOTE: This project uses FLAT Firestore collections (leads, properties) with
- * an `agencyId` field — NOT the multi-tenant sub-collection pattern.
+ * NOTE: properties are stored in the agencies/{agencyId}/properties subcollection.
+ * leads remain in a flat top-level collection filtered by agencyId.
  * Keep all Firestore paths in webhookWhatsAppAI.ts, NOT here.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -157,6 +157,7 @@ async function sendWhatsAppMessage(integration, customerPhone, messageText) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chatId, message: messageText }),
+            signal: AbortSignal.timeout(15000),
         });
         const data = await res.json();
         return res.ok && !!data.idMessage;

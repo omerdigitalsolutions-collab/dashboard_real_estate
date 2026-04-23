@@ -163,7 +163,7 @@ async function upsertLead(agencyId, phone, rawName) {
         agencyId,
         phone,
         name: leadName,
-        type: 'buyer',
+        type: 'new',
         status: 'new',
         source: 'WhatsApp Bot',
         isBotActive: true,
@@ -177,7 +177,8 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
     region: REGION,
     secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
     timeoutSeconds: 300,
-    memory: '1GiB'
+    memory: '1GiB',
+    cpu: 1, // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
 }, async (req, res) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // 1. ACK immediately
@@ -255,9 +256,17 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
                 try {
                     const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey.value());
                     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+                    // Sanitize textMessage to prevent prompt injection
+                    // Escape special characters that could break the prompt string
+                    const escapedMessage = textMessage
+                        .replace(/\\/g, '\\\\') // Escape backslashes first
+                        .replace(/"/g, '\\"') // Escape double quotes
+                        .replace(/`/g, '\\`') // Escape backticks
+                        .replace(/\n/g, ' ') // Replace newlines with spaces (prevent new instructions)
+                        .substring(0, 2000); // Truncate to prevent excessive prompt size
                     const prompt = `You are a real estate listing parser for Israeli B2B WhatsApp agent groups. Extract structured data from the following Hebrew/English message.
 
-Message: "${textMessage}"
+Message: "${escapedMessage}"
 
 Return ONLY a JSON object with these fields (no markdown, no explanation):
 {

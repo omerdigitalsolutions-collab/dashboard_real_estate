@@ -268,6 +268,7 @@ async function classifyIntent(
   message: string,
   leadType: string,
   geminiApiKey: string,
+  leadStatus?: string,
 ): Promise<'buyer' | 'seller' | 'irrelevant'> {
   // Fast keyword check for sellers (high confidence)
   const sellerKeywords = ['למכור', 'מכירה', 'לפרסם', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את'];
@@ -276,12 +277,12 @@ async function classifyIntent(
   // If existing seller lead writing again — stay in seller flow
   if (leadType === 'seller') return 'seller';
 
-  // Returning buyers skip the Gemini classification call entirely
-  if (leadType === 'buyer') return 'buyer';
+  // Only skip Gemini for confirmed buyers (those who have already provided requirements)
+  if (leadType === 'buyer' && leadStatus === 'searching') return 'buyer';
 
   try {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
     const result = await model.generateContent(
       `סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
       `קטגוריות:\n- buyer: מחפש לקנות/לשכור נכס\n- seller: רוצה למכור/להשכיר/לפרסם נכס\n` +
@@ -370,7 +371,7 @@ async function extractSellerInfo(
 ): Promise<{ address?: string; propertyType?: string }> {
   try {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
     const result = await model.generateContent(
       `חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
       `{"address":"כתובת מלאה או null","propertyType":"דירה/בית/דופלקס/פנטהאוס/מסחרי או null"}`
@@ -392,7 +393,7 @@ async function extractSellerInfo(
 async function extractTimePreference(message: string, geminiApiKey: string): Promise<string> {
   try {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
     const today = new Date().toLocaleDateString('he-IL');
     const result = await model.generateContent(
       `חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${message}"\n` +
@@ -926,7 +927,7 @@ export async function handleWeBotReply(
 
     // 6. Route by state
     if (currentState === 'IDLE') {
-      const intent = await classifyIntent(incomingMessage, leadData.type || 'buyer', geminiApiKey);
+      const intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status);
       console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
 
       if (intent === 'irrelevant') {

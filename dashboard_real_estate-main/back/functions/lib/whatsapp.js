@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.whatsappWebhook = exports.disconnectWhatsApp = exports.getGroups = exports.syncLeadChat = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
+exports.disconnectWhatsApp = exports.getGroups = exports.syncLeadChat = exports.sendWhatsappMessage = exports.checkWhatsAppStatus = exports.generateWhatsAppQR = exports.disconnectAgencyWhatsApp = exports.connectAgencyWhatsApp = void 0;
 exports.sendSystemWhatsappMessage = sendSystemWhatsappMessage;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
@@ -494,6 +494,8 @@ exports.checkWhatsAppStatus = (0, https_1.onCall)({
         return { status: ((_g = (_f = agencyDoc.data()) === null || _f === void 0 ? void 0 : _f.whatsappIntegration) === null || _g === void 0 ? void 0 : _g.status) || 'PENDING_SCAN' };
     }
 });
+// ─── 3. sendWhatsappMessage ──────────────────────────────────────────────────
+const whatsappService_1 = require("./whatsappService");
 /**
  * Secure message dispatch. Frontend sends only { phone, message } — never any tokens.
  * The function resolves the agency's WAHA credentials server-side.
@@ -635,9 +637,7 @@ exports.syncLeadChat = (0, https_1.onCall)({
     if (!(keys === null || keys === void 0 ? void 0 : keys.idInstance) || !(keys === null || keys === void 0 ? void 0 : keys.apiTokenInstance)) {
         throw new https_1.HttpsError('failed-precondition', 'WhatsApp is not connected.');
     }
-    // Import locally to avoid circular dependencies if any
-    const { syncChatHistory } = require('./whatsappService');
-    await syncChatHistory(db, agencyId, leadId, phone, keys, 15);
+    await (0, whatsappService_1.syncChatHistory)(db, agencyId, leadId, phone, keys, 15);
     return { success: true };
 });
 /**
@@ -754,119 +754,5 @@ exports.disconnectWhatsApp = (0, https_1.onCall)({
     // This just wipes front-end statuses
     await db.collection('agencies').doc(agencyId).set({ whatsappIntegration: { status: 'DISCONNECTED', updatedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
     return { success: true };
-});
-// ─── 5. whatsappWebhook ───────────────────────────────────────────────────────
-/**
- * Central inbound webhook — receives messages from Green API / WAHA.
- * Set this URL in your WAHA dashboard or in each Green API instance settings.
- *
- * Security: validates X-Webhook-Secret header against WAHA_WEBHOOK_SECRET env var.
- */
-exports.whatsappWebhook = (0, https_1.onRequest)({
-    region: REGION,
-    secrets: ['WAHA_WEBHOOK_SECRET', geminiApiKey]
-}, async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
-    // Always ACK first to prevent retries
-    const secret = req.headers['x-webhook-secret'] || req.headers['x-greenapi-webhook-secret'] || '';
-    const expected = process.env.WAHA_WEBHOOK_SECRET || '';
-    if (!expected || secret !== expected) {
-        console.error(`Webhook: Unauthorized access attempt. Incoming secret: '${secret}'.`);
-        res.status(401).send('Unauthorized');
-        return;
-    }
-    // ACK only after authorization check
-    res.status(200).send('OK');
-    console.log(`Webhook: Authorized request.`);
-    try {
-        const body = req.body;
-        const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
-        const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
-        // Support both Green API and WAHA event formats
-        // We now ALSO handle outgoing messages so human replies from phone/web show up in CRM.
-        const isRelevantEvent = typeWebhook === 'incomingMessageReceived' || // Green API Inbound
-            typeWebhook === 'outgoingMessageReceived' || // Green API Human Outbound
-            typeWebhook === 'outgoingAPIMessageReceived' || // Green API Bot Outbound (for idempotency)
-            typeWebhook === 'message'; // WAHA
-        console.log(`Webhook: Received event type '${typeWebhook}'. isRelevantEvent: ${isRelevantEvent}`);
-        if (!isRelevantEvent)
-            return;
-        // ── Extract idInstance (Green API) or sessionName (WAHA) ─────────────
-        const idInstance = body === null || body === void 0 ? void 0 : body.idInstance;
-        const sessionName = body === null || body === void 0 ? void 0 : body.session;
-        // ── Find the agency ───────────────────────────────────────────────────
-        let agencyId;
-        if (idInstance) {
-            const registryDoc = await db.collection('available_instances').doc(idInstance).get();
-            if (registryDoc.exists && ((_a = registryDoc.data()) === null || _a === void 0 ? void 0 : _a.isActive)) {
-                agencyId = registryDoc.data().agencyId;
-            }
-        }
-        else if (sessionName) {
-            const snap = await db.collection('agencies')
-                .where('whatsappIntegration.sessionName', '==', sessionName)
-                .limit(1).get();
-            if (!snap.empty)
-                agencyId = snap.docs[0].id;
-        }
-        if (!agencyId) {
-            console.log(`Webhook: No agency found for instance ${idInstance} or session ${sessionName}. Ignored.`);
-            return;
-        }
-        const agencyDoc = await db.collection('agencies').doc(agencyId).get();
-        const agencyData = agencyDoc.data() || {};
-        // Support both old string[] and new {id, name}[] structure
-        const monitoredGroupsRaw = ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.monitoredGroups) || [];
-        const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
-        // ── Extract sender and message text ────────────────────────────────────
-        const senderData = (body === null || body === void 0 ? void 0 : body.senderData) || {};
-        const messageData = (body === null || body === void 0 ? void 0 : body.messageData) || {};
-        // Determine chat type and actual sender
-        const chatId = senderData.chatId || '';
-        const isGroup = chatId.endsWith('@g.us');
-        const isDirect = chatId.endsWith('@c.us');
-        // For outgoing messages, the recipient is the chatId
-        const isOutbound = typeWebhook === 'outgoingMessageReceived' || typeWebhook === 'outgoingAPIMessageReceived';
-        const rawSender = isOutbound ? (((_c = body === null || body === void 0 ? void 0 : body.chatData) === null || _c === void 0 ? void 0 : _c.chatId) || ((_d = body === null || body === void 0 ? void 0 : body.senderData) === null || _d === void 0 ? void 0 : _d.chatId)) : (senderData.sender || chatId);
-        // Support various content types for Green API
-        let textMessage = ((_e = messageData.textMessageData) === null || _e === void 0 ? void 0 : _e.textMessage) || '';
-        const caption = ((_f = messageData.extendedTextMessageData) === null || _f === void 0 ? void 0 : _f.text) ||
-            ((_g = messageData.imageMessageData) === null || _g === void 0 ? void 0 : _g.caption) ||
-            ((_h = messageData.videoMessageData) === null || _h === void 0 ? void 0 : _h.caption) ||
-            ((_j = messageData.fileMessageData) === null || _j === void 0 ? void 0 : _j.caption) || '';
-        // If it's a media message without text, use a generic label
-        if (!textMessage && !caption) {
-            if (messageData.typeMessage === 'imageMessage')
-                textMessage = '[תמונה]';
-            else if (messageData.typeMessage === 'videoMessage')
-                textMessage = '[סרטון]';
-            else if (messageData.typeMessage === 'audioMessage')
-                textMessage = '[הודעה קולית]';
-            else if (messageData.typeMessage === 'fileMessage')
-                textMessage = '[קובץ]';
-            else if (messageData.typeMessage === 'locationMessage')
-                textMessage = '[מיקום]';
-            else if (messageData.typeMessage === 'contactMessage')
-                textMessage = '[איש קשר]';
-        }
-        else {
-            textMessage = textMessage || caption;
-        }
-        console.log(`Webhook: Agency ${agencyId} | ChatId: ${chatId} | isGroup: ${isGroup} | Sender: ${rawSender}`);
-        if (textMessage)
-            console.log(`Webhook: Message text preview: ${textMessage.substring(0, 50)}...`);
-        if (!rawSender || !textMessage) {
-            console.log('Webhook: No text content or sender, skipping.');
-            return;
-        }
-        // ── Normalise phone ─────────────────────────────────────────────────────
-        let cleanPhone = rawSender.replace('@c.us', '');
-        if (cleanPhone.startsWith('972'))
-            cleanPhone = '0' + cleanPhone.substring(3);
-        // ── Message handling handled by webhookWhatsAppAI ────────────────────────
-    }
-    catch (err) {
-        console.error('Webhook fatal error:', err);
-    }
 });
 //# sourceMappingURL=whatsapp.js.map

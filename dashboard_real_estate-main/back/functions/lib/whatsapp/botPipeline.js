@@ -77,17 +77,18 @@ async function writeAuditLog(phone, agencyId, direction, text, extra) {
         .catch((e) => console.warn('[Pipeline] audit log write failed:', e.message));
 }
 async function getOrCreateSession(phone, agencyId) {
-    const ref = db.collection('whatsapp_sessions').doc(phone);
+    const sessionId = `${agencyId}_${phone}`;
+    const ref = db.collection('whatsapp_sessions').doc(sessionId);
     const now = admin.firestore.Timestamp.now();
     const snap = await ref.get();
     if (snap.exists) {
         await ref.update({ lastMessageAt: now });
-        return Object.assign({ id: snap.id }, snap.data());
+        return Object.assign(Object.assign({ id: snap.id }, snap.data()), { lastMessageAt: now });
     }
     const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + SESSION_TTL_MS);
     const session = { phone, agencyId, createdAt: now, lastMessageAt: now, expiresAt, status: 'active' };
     await ref.set(session);
-    return Object.assign({ id: phone }, session);
+    return Object.assign({ id: sessionId }, session);
 }
 // ─── Property-specific routing ─────────────────────────────────────────────────
 // Returns true if the message was handled (conversation should not continue to AI bot).
@@ -97,7 +98,7 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
     if (!propertyKeywords.some((kw) => text.includes(kw)))
         return false;
     const words = text.split(/\s+/).filter((w) => w.length > 2);
-    if (words.length === 0)
+    if (words.length < 2)
         return false;
     const propSnap = await db
         .collection('agencies').doc(agencyId).collection('properties')
@@ -151,13 +152,16 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
 async function processInboundMessage(params) {
     var _a, _b, _c;
     const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
-    // 1. Blocklist
-    if (await (0, blocklist_1.checkBlocklist)(phone)) {
+    // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
+    const [isBlocked, passedRateLimit] = await Promise.all([
+        (0, blocklist_1.checkBlocklist)(phone).catch(() => false), // fail-safe: assume not blocked
+        (0, rateLimiter_1.checkRateLimit)(phone).catch(() => true), // fail-safe: assume passed
+    ]);
+    if (isBlocked) {
         await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
         return;
     }
-    // 2. Rate limit
-    if (!(await (0, rateLimiter_1.checkRateLimit)(phone))) {
+    if (!passedRateLimit) {
         await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
         await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
         return;
@@ -177,11 +181,11 @@ async function processInboundMessage(params) {
             await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
             return;
         }
-        await writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
+        writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
         // Continue — system prompt handles the injection attempt gracefully
     }
     else {
-        await writeAuditLog(phone, agencyId, 'inbound', sanitized);
+        writeAuditLog(phone, agencyId, 'inbound', sanitized);
     }
     // 5. Security session TTL (rolling 24h — expires 24h after last message, not after creation)
     const session = await getOrCreateSession(phone, agencyId);
@@ -194,7 +198,7 @@ async function processInboundMessage(params) {
         const agencyDoc = await db.collection('agencies').doc(agencyId).get();
         const agencyPhone = ((_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.phone) || ((_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.phoneNumber) || '';
         await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);
-        await db.collection('whatsapp_sessions').doc(phone).delete();
+        await db.collection('whatsapp_sessions').doc(`${agencyId}_${phone}`).delete();
         return;
     }
     // 6. Property-specific routing

@@ -177,14 +177,18 @@ async function handlePropertyRouting(
 export async function processInboundMessage(params: PipelineParams): Promise<void> {
   const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
 
-  // 1. Blocklist
-  if (await checkBlocklist(phone)) {
+  // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
+  const [isBlocked, passedRateLimit] = await Promise.all([
+    checkBlocklist(phone).catch(() => false),     // fail-safe: assume not blocked
+    checkRateLimit(phone).catch(() => true),      // fail-safe: assume passed
+  ]);
+
+  if (isBlocked) {
     await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
     return;
   }
 
-  // 2. Rate limit
-  if (!(await checkRateLimit(phone))) {
+  if (!passedRateLimit) {
     await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
     await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
     return;
@@ -211,10 +215,10 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
       await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
       return;
     }
-    await writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
+    writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
     // Continue — system prompt handles the injection attempt gracefully
   } else {
-    await writeAuditLog(phone, agencyId, 'inbound', sanitized);
+    writeAuditLog(phone, agencyId, 'inbound', sanitized);
   }
 
   // 5. Security session TTL (rolling 24h — expires 24h after last message, not after creation)

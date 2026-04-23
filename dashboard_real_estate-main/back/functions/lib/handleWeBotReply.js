@@ -168,11 +168,12 @@ async function loadChatHistory(leadId, limit = 20, excludeDocId) {
 // ─── findMatchingPropertiesForBot ─────────────────────────────────────────────
 async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+    const agencyPath = `agencies/${agencyId}/properties`;
     const agencySnap = await db
         .collection('agencies').doc(agencyId).collection('properties')
         .where('status', '==', 'active')
         .get();
-    const agencyProps = agencySnap.docs.map(doc => (Object.assign({ id: doc.id }, doc.data())));
+    const agencyProps = agencySnap.docs.map(doc => (Object.assign({ id: doc.id, _collectionPath: agencyPath }, doc.data())));
     let globalProps = [];
     const cities = (_a = requirements.desiredCity) !== null && _a !== void 0 ? _a : [];
     if (cities.length > 0) {
@@ -181,7 +182,7 @@ async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
                 const snap = await db
                     .collection('cities').doc(city).collection('properties')
                     .limit(200).get();
-                return snap.docs.map(doc => (Object.assign({ id: doc.id, isExclusivity: false }, doc.data())));
+                return snap.docs.map(doc => (Object.assign({ id: doc.id, _collectionPath: `cities/${city}/properties`, isExclusivity: false }, doc.data())));
             }
             catch (_a) {
                 return [];
@@ -242,7 +243,7 @@ async function sendBotMessage(integration, customerPhone, leadId, text) {
     }
 }
 // ─── classifyIntent ───────────────────────────────────────────────────────────
-async function classifyIntent(message, leadType, geminiApiKey) {
+async function classifyIntent(message, leadType, geminiApiKey, leadStatus) {
     // Fast keyword check for sellers (high confidence)
     const sellerKeywords = ['למכור', 'מכירה', 'לפרסם', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את'];
     if (sellerKeywords.some(kw => message.includes(kw)))
@@ -250,12 +251,12 @@ async function classifyIntent(message, leadType, geminiApiKey) {
     // If existing seller lead writing again — stay in seller flow
     if (leadType === 'seller')
         return 'seller';
-    // Returning buyers skip the Gemini classification call entirely
-    if (leadType === 'buyer')
+    // Only skip Gemini for confirmed buyers (those who have already provided requirements)
+    if (leadType === 'buyer' && leadStatus === 'searching')
         return 'buyer';
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
         const result = await model.generateContent(`סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
             `קטגוריות:\n- buyer: מחפש לקנות/לשכור נכס\n- seller: רוצה למכור/להשכיר/לפרסם נכס\n` +
             `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה\n\n{"intent":"buyer"|"seller"|"irrelevant"}`);
@@ -322,7 +323,7 @@ async function findAdminPhone(agencyId) {
 async function extractSellerInfo(message, geminiApiKey) {
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
         const result = await model.generateContent(`חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
             `{"address":"כתובת מלאה או null","propertyType":"דירה/בית/דופלקס/פנטהאוס/מסחרי או null"}`);
         const text = result.response.text().replace(/```json|```/g, '').trim();
@@ -341,7 +342,7 @@ async function extractSellerInfo(message, geminiApiKey) {
 async function extractTimePreference(message, geminiApiKey) {
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
         const today = new Date().toLocaleDateString('he-IL');
         const result = await model.generateContent(`חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${message}"\n` +
             `{"timeText":"תיאור הזמן הקריא בעברית, או null"}`);
@@ -355,16 +356,22 @@ async function extractTimePreference(message, geminiApiKey) {
 }
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
 async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState = 'IDLE') {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     // RAG: active properties + chat history in parallel
-    const [propSnap, chatHistory] = await Promise.all([
+    const reqsCity = (_b = (_a = leadData.requirements) === null || _a === void 0 ? void 0 : _a.desiredCity) === null || _b === void 0 ? void 0 : _b[0];
+    const globalPropPromise = reqsCity ?
+        db.collection('cities').doc(reqsCity).collection('properties').limit(5).get() :
+        Promise.resolve({ docs: [] });
+    const [propSnap, globalSnap, chatHistory] = await Promise.all([
         db.collection('agencies').doc(agencyId).collection('properties')
             .where('status', '==', 'active')
             .limit(15)
             .get(),
+        globalPropPromise,
         loadChatHistory(leadId, 20, currentMsgDocId),
     ]);
-    const ragProperties = propSnap.docs.map(doc => {
+    const allDocs = [...propSnap.docs, ...globalSnap.docs];
+    const ragProperties = allDocs.map(doc => {
         var _a, _b, _c, _d, _e, _f, _g, _h;
         const d = doc.data();
         return {
@@ -402,7 +409,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
     let meetingScheduled = false;
     while (iterCount < 5) {
         iterCount++;
-        const fnCalls = (_c = (_b = (_a = chatResponse.response).functionCalls) === null || _b === void 0 ? void 0 : _b.call(_a)) !== null && _c !== void 0 ? _c : [];
+        const fnCalls = (_e = (_d = (_c = chatResponse.response).functionCalls) === null || _d === void 0 ? void 0 : _d.call(_c)) !== null && _e !== void 0 ? _e : [];
         if (fnCalls.length === 0) {
             finalReply = chatResponse.response.text();
             break;
@@ -445,13 +452,13 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                 let calendarUserId = null;
                 if (leadData.assignedAgentId) {
                     const agentDoc = await db.collection('users').doc(leadData.assignedAgentId).get();
-                    if ((_e = (_d = agentDoc.data()) === null || _d === void 0 ? void 0 : _d.googleCalendar) === null || _e === void 0 ? void 0 : _e.enabled)
+                    if ((_g = (_f = agentDoc.data()) === null || _f === void 0 ? void 0 : _f.googleCalendar) === null || _g === void 0 ? void 0 : _g.enabled)
                         calendarUserId = leadData.assignedAgentId;
                 }
                 if (!calendarUserId) {
                     const adminSnap = await db.collection('users')
                         .where('agencyId', '==', agencyId).where('role', '==', 'admin').limit(1).get();
-                    if (!adminSnap.empty && ((_f = adminSnap.docs[0].data().googleCalendar) === null || _f === void 0 ? void 0 : _f.enabled))
+                    if (!adminSnap.empty && ((_h = adminSnap.docs[0].data().googleCalendar) === null || _h === void 0 ? void 0 : _h.enabled))
                         calendarUserId = adminSnap.docs[0].id;
                 }
                 if (calendarUserId) {
@@ -528,8 +535,8 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             }
             else {
                 const freshLead = await db.collection('leads').doc(leadId).get();
-                const reqs = ((_g = freshLead.data()) === null || _g === void 0 ? void 0 : _g.requirements) || {};
-                if (!((_h = reqs.desiredCity) === null || _h === void 0 ? void 0 : _h.length) && !reqs.maxBudget && !reqs.minRooms) {
+                const reqs = ((_j = freshLead.data()) === null || _j === void 0 ? void 0 : _j.requirements) || {};
+                if (!((_k = reqs.desiredCity) === null || _k === void 0 ? void 0 : _k.length) && !reqs.maxBudget && !reqs.minRooms) {
                     functionResult = {
                         success: false, reason: 'missing_requirements',
                         message: 'לא נמצאו דרישות שמורות. יש לאסוף מהלקוח לפחות עיר + תקציב או חדרים.',
@@ -541,11 +548,14 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                         functionResult = { success: false, reason: 'no_matches', message: 'לא נמצאו נכסים מתאימים לפי הדרישות.' };
                     }
                     else {
-                        const propertyIds = matchedProperties.map(p => p.id);
-                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_j = freshLead.data()) === null || _j === void 0 ? void 0 : _j.name) || 'לקוח', propertyIds);
+                        const propertyRefs = matchedProperties.map(p => ({
+                            id: p.id,
+                            collectionPath: p._collectionPath || `agencies/${agencyId}/properties`,
+                        }));
+                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_l = freshLead.data()) === null || _l === void 0 ? void 0 : _l.name) || 'לקוח', propertyRefs);
                         catalogCreated = true;
                         sentCatalogUrl = catalogUrl;
-                        console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyIds.length}`);
+                        console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyRefs.length}`);
                         functionResult = { success: true, url: catalogUrl, count: matchedProperties.length };
                     }
                 }
@@ -558,6 +568,10 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         chatResponse = await withRetry('chat.sendMessage(fn)', () => chat.sendMessage([{
                 functionResponse: { name: call.name, response: functionResult },
             }]));
+    }
+    if (iterCount >= 5 && !finalReply.trim()) {
+        console.warn(`[WeBot] Hit max iterations (5) for lead ${leadId}`);
+        finalReply = 'הבנתי. אני מעבד את הנתונים, מיד אשוב חזרה עם תשובה מסודרת.';
     }
     // Ask for extra criteria ONCE — only when first entering this stage
     if (requirementsJustSaved && !catalogCreated && currentState !== 'ASKING_EXTRA_CRITERIA') {
@@ -592,7 +606,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
     if (catalogCreated) {
         await updateChatState(leadId, 'SCHEDULING_CALL');
         const freshLead = await db.collection('leads').doc(leadId).get();
-        const reqs = ((_k = freshLead.data()) === null || _k === void 0 ? void 0 : _k.requirements) || {};
+        const reqs = ((_m = freshLead.data()) === null || _m === void 0 ? void 0 : _m.requirements) || {};
         const leadName = leadData.name || customerPhone;
         const reqSummary = [
             Array.isArray(reqs.desiredCity) ? reqs.desiredCity.join(', ') : null,
@@ -739,7 +753,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         }
         // 6. Route by state
         if (currentState === 'IDLE') {
-            const intent = await classifyIntent(incomingMessage, leadData.type || 'buyer', geminiApiKey);
+            const intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status);
             console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
             if (intent === 'irrelevant') {
                 // Known leads: log silent CRM note. New contacts: discard.
