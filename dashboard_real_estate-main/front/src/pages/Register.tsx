@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { Loader2, Mail, Lock, User } from 'lucide-react';
@@ -7,6 +7,8 @@ import { signInWithGooglePopup, checkUserExists } from '../services/authService'
 import { isValidEmail } from '../utils/validation';
 
 export default function Register() {
+    const [params] = useSearchParams();
+    const navigate = useNavigate();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -15,7 +17,12 @@ export default function Register() {
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-    const navigate = useNavigate();
+    useEffect(() => {
+        const token = params.get('token');
+        if (token) {
+            navigate(`/join?token=${token}`);
+        }
+    }, [params, navigate]);
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();

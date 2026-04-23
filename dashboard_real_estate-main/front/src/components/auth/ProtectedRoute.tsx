@@ -19,8 +19,8 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
 
     if (requireOnboarding) {
-        // If they are on onboarding, verify-phone, or agent-setup, let them stay
-        if (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup') {
+        // If they are on onboarding, verify-phone, agent-setup, or join (invite claim), let them stay
+        if (location.pathname === '/onboarding' || location.pathname === '/verify-phone' || location.pathname === '/agent-setup' || location.pathname === '/join') {
             return <>{children}</>;
         }
         // Otherwise, send to onboarding first (new flow)

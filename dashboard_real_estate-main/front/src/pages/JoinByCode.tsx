@@ -27,9 +27,9 @@ export default function JoinByCode() {
             setStatus('success');
             toast.success('הקוד אומת בהצלחה! מעביר אותך להמשך הרישום...');
             
-            // Redirect to the established join flow
+            // Redirect to the established join flow with email pre-filled
             setTimeout(() => {
-                navigate(`/join?token=${inviteToken}`);
+                navigate(`/join?token=${inviteToken}&email=${encodeURIComponent(email.trim())}`);
             }, 2000);
         } catch (err: any) {
             console.error(err);
