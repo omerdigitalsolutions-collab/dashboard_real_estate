@@ -2,6 +2,13 @@ import * as XLSX from 'xlsx';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
+// Safely escape HTML special characters to prevent XSS attacks
+const escapeHtml = (text: string): string => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
 export interface PnLReportData {
     agencyName: string;
     agencyLogo: string;
@@ -99,9 +106,9 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
 
         return items.map(item => `
             <tr style="border-bottom: 1px solid #e5e7eb;">
-                <td style="padding: 10px; font-weight: 600; color: #111827;">${type === 'income' ? item.propertyName : item.description}</td>
-                <td style="padding: 10px; color: #4b5563;">${type === 'income' ? item.agentName : item.category}</td>
-                <td style="padding: 10px; color: #6b7280;">${item.date}</td>
+                <td style="padding: 10px; font-weight: 600; color: #111827;">${escapeHtml(type === 'income' ? item.propertyName : item.description)}</td>
+                <td style="padding: 10px; color: #4b5563;">${escapeHtml(type === 'income' ? item.agentName : item.category)}</td>
+                <td style="padding: 10px; color: #6b7280;">${escapeHtml(item.date)}</td>
                 <td style="padding: 10px; font-weight: bold; text-align: left; direction: ltr;">₪${item.amount.toLocaleString()}</td>
             </tr>
         `).join('');
@@ -115,7 +122,7 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
                     <h1 style="margin: 0; font-size: 32px; font-weight: 800; color: #020617; letter-spacing: -0.5px;">דוח רווח והפסד</h1>
                     <p style="margin: 8px 0 0 0; color: #64748b; font-size: 15px; display: flex; align-items: center; gap: 6px;">
                         <span>תקופה:</span>
-                        <span style="font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 2px 10px; border-radius: 6px;">${data.dateRangeLabel}</span>
+                        <span style="font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 2px 10px; border-radius: 6px;">${escapeHtml(data.dateRangeLabel)}</span>
                     </p>
                 </div>
                 <div style="text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
@@ -125,7 +132,7 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
                     </div>
                     ${data.agencyName ? `
                     <div style="margin-top: 4px;">
-                        <p style="margin: 0; font-size: 16px; font-weight: 800; color: #1e293b;">${data.agencyName}</p>
+                        <p style="margin: 0; font-size: 16px; font-weight: 800; color: #1e293b;">${escapeHtml(data.agencyName)}</p>
                     </div>` : ''}
                 </div>
             </div>
