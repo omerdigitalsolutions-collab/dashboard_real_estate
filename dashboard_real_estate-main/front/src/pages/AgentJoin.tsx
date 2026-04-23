@@ -7,6 +7,13 @@ import { auth } from '../config/firebase';
 import { Building2, Mail, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+// Safely escape HTML special characters to prevent XSS
+const escapeHtml = (text: string): string => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
 interface InviteInfo {
     agencyName: string;
     agentName: string;
@@ -115,10 +122,24 @@ export default function AgentJoin() {
             return;
         }
 
+        // Basic password strength validation
+        if (passwordInput.trim().length < 6) {
+            setErrorMsg('הסיסמה חייבת להכיל לפחות 6 תווים');
+            return;
+        }
+
         try {
             setAuthMode('loading');
             const trimmedEmail = emailInput.trim().toLowerCase();
             const trimmedPassword = passwordInput.trim();
+
+            // Basic email format validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(trimmedEmail)) {
+                setErrorMsg('כתובת המייל אינה תקינה');
+                setAuthMode('email');
+                return;
+            }
 
             // Try to sign in; if user doesn't exist, create new account
             try {
@@ -188,10 +209,10 @@ export default function AgentJoin() {
                         <div className="space-y-6">
                             <div className="text-center">
                                 <p className="text-slate-500 text-sm">שלום,</p>
-                                <p className="text-2xl font-bold text-slate-900 mt-1">{info.agentName}</p>
+                                <p className="text-2xl font-bold text-slate-900 mt-1">{escapeHtml(info.agentName)}</p>
                                 <p className="text-slate-500 text-sm mt-2">
                                     הוזמנת להצטרף לסוכנות{' '}
-                                    <span className="font-semibold text-slate-700">{info.agencyName}</span>
+                                    <span className="font-semibold text-slate-700">{escapeHtml(info.agencyName)}</span>
                                 </p>
                             </div>
 
