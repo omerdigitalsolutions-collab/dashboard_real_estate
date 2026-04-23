@@ -163,10 +163,10 @@ async function upsertLead(
         agencyId,
         phone,
         name: leadName,
-        type: 'buyer',
+        type: 'new',
         status: 'new',
         source: 'WhatsApp Bot',
-        isBotActive: true, 
+        isBotActive: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -267,9 +267,19 @@ export const webhookWhatsAppAI = onRequest(
                     try {
                         const genAI = new GoogleGenerativeAI(geminiApiKey.value());
                         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+                        // Sanitize textMessage to prevent prompt injection
+                        // Escape special characters that could break the prompt string
+                        const escapedMessage = textMessage
+                            .replace(/\\/g, '\\\\')      // Escape backslashes first
+                            .replace(/"/g, '\\"')         // Escape double quotes
+                            .replace(/`/g, '\\`')         // Escape backticks
+                            .replace(/\n/g, ' ')          // Replace newlines with spaces (prevent new instructions)
+                            .substring(0, 2000);          // Truncate to prevent excessive prompt size
+
                         const prompt = `You are a real estate listing parser for Israeli B2B WhatsApp agent groups. Extract structured data from the following Hebrew/English message.
 
-Message: "${textMessage}"
+Message: "${escapedMessage}"
 
 Return ONLY a JSON object with these fields (no markdown, no explanation):
 {

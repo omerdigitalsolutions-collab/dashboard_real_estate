@@ -204,6 +204,29 @@ export const askCopilot = onCall(
             throw new HttpsError('invalid-argument', 'A valid prompt string must be provided.');
         }
 
+        // Validate and sanitize user prompt to prevent injection attacks
+        if (prompt.length > 5000) {
+            throw new HttpsError('invalid-argument', 'Prompt is too long (max 5000 characters).');
+        }
+
+        // Check for common prompt injection patterns
+        const injectionPatterns = [
+            /ignore.*instruction/i,
+            /forget.*rule/i,
+            /instead.*do/i,
+            /override.*system/i,
+            /new role/i,
+            /you are now/i,
+            /pretend.*you/i,
+        ];
+
+        const suspiciousMatch = injectionPatterns.find(pattern => pattern.test(prompt));
+        if (suspiciousMatch) {
+            console.warn(`[askCopilot] Suspicious prompt detected: potential injection attempt. Pattern: ${suspiciousMatch}`);
+            // Log but don't block — let the model handle it safely due to system role separation
+            // If we blocked every creative prompt, users couldn't ask valid questions
+        }
+
         // 2. Tenant isolation: get agencyId from custom claim
         const agencyId = request.auth.token.agencyId as string | undefined;
         if (!agencyId) {
@@ -367,14 +390,21 @@ export const getSmartInsights = onCall(
             const agents = agentsSnap.docs.map(d => ({ name: d.data().firstName + ' ' + (d.data().lastName || ''), role: d.data().role }));
             const oldPropertiesCount = properties.filter(p => p.createdAt && p.createdAt < thirtyDaysAgo).length;
 
-            // 2. Build the context prompt — embed JSON schema in text
+            // Safely stringify JSON data to prevent prompt injection via newlines
+            const safeStringify = (obj: any): string => {
+                return JSON.stringify(obj)
+                    .replace(/\n/g, ' ')      // Remove newlines that could inject instructions
+                    .replace(/\r/g, ' ');    // Remove carriage returns
+            };
+
+            // 2. Build the context prompt — embed JSON schema in text with sanitized data
             const contextPrompt = `You are the hOMER Smart Insights Engine. Analyze the following real estate agency data and generate exactly 3 highly actionable, specific insights for the manager.
 Write ALL text IN HEBREW.
 
 DATA SNAPSHOT:
 - Active Properties: ${properties.length} (Oldest ones: ${oldPropertiesCount} older than 30 days)
-- Leads by Status: ${JSON.stringify(leadsStatusCount)}
-- Leads by Source: ${JSON.stringify(leadsSourceCount)}
+- Leads by Status: ${safeStringify(leadsStatusCount)}
+- Leads by Source: ${safeStringify(leadsSourceCount)}
 - Deals Won This Month: ${currentMonthDeals.length}
 - Agents on Team: ${agents.length}
 
