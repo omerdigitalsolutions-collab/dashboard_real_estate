@@ -10,13 +10,15 @@ const COLLECTION = 'shared_catalogs';
  */
 export async function createCatalog(
     agencyId: string,
-    leadId: string,
-    leadName: string | undefined,
-    propertyIds: Array<string | { id: string; collectionPath: string }>
+    leadId?: string | null,
+    leadName?: string | undefined,
+    propertyIds: Array<string | { id: string; collectionPath: string }>,
+    title?: string,
+    leadRequirements?: any
 ): Promise<string> {
     const fns = getFunctions(undefined, 'europe-west1');
     const generateCatalogCF = httpsCallable<
-        { agencyId: string, leadId: string, leadName: string | undefined, propertyIds: Array<string | { id: string; collectionPath: string }> },
+        { agencyId: string, leadId?: string | null, leadName?: string | undefined, propertyIds: Array<string | { id: string; collectionPath: string }>, title?: string, leadRequirements?: any },
         { success: boolean, catalogId: string, url: string }
     >(fns, 'catalogs-generateCatalog');
 
@@ -25,7 +27,9 @@ export async function createCatalog(
         agencyId,
         leadId,
         leadName,
-        propertyIds
+        propertyIds,
+        title,
+        leadRequirements
     });
 
     const data = result.data;

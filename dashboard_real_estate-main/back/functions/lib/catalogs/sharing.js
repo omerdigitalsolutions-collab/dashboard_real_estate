@@ -9,11 +9,9 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
     }
-    const { agencyId, leadId, leadName, propertyIds } = request.data;
+    const { agencyId, leadId, leadName, propertyIds, title, leadRequirements: providedRequirements } = request.data;
     if (!(agencyId === null || agencyId === void 0 ? void 0 : agencyId.trim()))
         throw new https_1.HttpsError('invalid-argument', 'agencyId is required.');
-    if (!(leadId === null || leadId === void 0 ? void 0 : leadId.trim()))
-        throw new https_1.HttpsError('invalid-argument', 'leadId is required.');
     if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
         throw new https_1.HttpsError('invalid-argument', 'propertyIds must be a non-empty array.');
     }
@@ -34,8 +32,8 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
         agencyData.phone ||
         callerPhone || '';
     // ── Fetch Lead requirements ──────────────────────────────────────────────────
-    let leadRequirements = null;
-    if (leadId) {
+    let leadRequirements = providedRequirements || null;
+    if (!leadRequirements && leadId) {
         try {
             const leadDoc = await db.doc(`leads/${leadId}`).get();
             if (leadDoc.exists) {
@@ -54,8 +52,9 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
         agencyLogoUrl,
         agencyPhone,
         agentId: request.auth.uid,
-        leadId,
+        leadId: leadId || null,
         leadName: leadName || '',
+        title: title || '',
         propertyIds: propertyIds, // Storing only the references for live fetching
         leadRequirements: leadRequirements || null,
         viewCount: 0,

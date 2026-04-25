@@ -449,7 +449,7 @@ export default function SharedCatalogPage() {
                     )}
 
                     <h1 className="text-3xl font-black mb-2 leading-tight">
-                        {leadName ? `הנכסים שנבחרו עבור ${leadName}` : 'קטלוג נכסים אישי'}
+                        {catalog?.title || (leadName ? `הנכסים שנבחרו עבור ${leadName}` : 'קטלוג נכסים אישי')}
                     </h1>
                     <p className="text-blue-200/80 text-sm mb-5">
                         מצאנו <span className="font-bold text-white">{sortedProperties.length}</span> נכסים שיכולים להתאים לך

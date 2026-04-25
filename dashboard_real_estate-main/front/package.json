@@ -20,7 +20,7 @@
     "axios": "^1.13.5",
     "canvas-confetti": "^1.9.4",
     "date-fns": "^4.1.0",
-    "firebase": "^12.9.0",
+    "firebase": "^11.1.0",
     "framer-motion": "^12.35.1",
     "html2pdf.js": "^0.14.0",
     "lodash.debounce": "^4.0.8",

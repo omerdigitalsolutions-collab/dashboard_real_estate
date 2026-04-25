@@ -6,26 +6,17 @@ import {
     ReactNode,
 } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, limit, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { AppUser } from '../types';
 
 // ─── Context Shape ───────────────────────────────────────────────────────────── 
 interface AuthContextType {
-    /** The raw Firebase Auth user object. Null when logged out. */
     currentUser: User | null;
-    /**
-     * The Firestore user document — contains agencyId and role.
-     * Null until the document is fetched after login.
-     */
     userData: AppUser | null;
-    /** True while auth state or Firestore fetch is in flight. */
     loading: boolean;
-    /** True if the user has authenticated but hasn't completed onboarding */
     requireOnboarding: boolean;
-    /** Triggers a manual refetch of the Firestore user doc */
     refreshUserData: () => Promise<void>;
-    /** Allows manually overriding the user data (used for impersonation feature) */
     setUserData: React.Dispatch<React.SetStateAction<AppUser | null>>;
 }
 
@@ -45,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!targetUid) return;
 
         try {
-            // Fast path: check if doc exists at users/{uid} (agency admin flow)
             const userDocRef = doc(db, 'users', targetUid);
             const userDocSnap = await getDoc(userDocRef);
 
@@ -55,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            // Fallback: invited agent whose doc has a random stub ID — query by uid field
             const stubSnap = await getDocs(
                 query(collection(db, 'users'), where('uid', '==', targetUid))
             );
@@ -74,11 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        /**
-         * onAuthStateChanged fires once on mount (with the persisted session
-         * if the user is already logged in) and again on every subsequent
-         * login / logout.  We return its unsubscribe function for cleanup.
-         */
         let unsubUserDoc: (() => void) | null = null;
 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -86,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Clean up any previous real-time user doc listener
             if (unsubUserDoc) {
-                unsubUserDoc();
+                try { unsubUserDoc(); } catch (e) { console.warn('unsubUserDoc fail', e); }
                 unsubUserDoc = null;
             }
 
@@ -96,22 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setCurrentUser(firebaseUser);
 
                 if (firebaseUser) {
-                    console.log('[AuthContext] Refreshing token...');
+                    // 1. Refresh token to ensure custom claims are present
                     try {
                         await firebaseUser.getIdToken(true);
                     } catch (e) {
                         console.warn('[AuthContext] Token refresh warning:', e);
                     }
 
+                    // 2. Fetch user doc with defensive check
                     const uidDocRef = doc(db, 'users', firebaseUser.uid);
-                    console.log('[AuthContext] Checking user doc at /users/' + firebaseUser.uid);
-                    let uidDocSnap = await getDoc(uidDocRef);
-                    // ── INVITE TOKEN FLOW (Flag Only) ──────────────────────────────
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const urlToken = urlParams.get('token');
-
-                    if (!uidDocSnap.exists()) {
-                        console.log('[AuthContext] User doc does not exist.');
+                    const uidDocSnap = await getDoc(uidDocRef);
+                    
+                    // Defensive: if auth state changed while we were fetching, abort
+                    if (auth.currentUser?.uid !== firebaseUser.uid) {
+                        console.log('[AuthContext] User changed during fetch, aborting.');
+                        return;
                     }
 
                     if (uidDocSnap.exists()) {
@@ -119,39 +102,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...uidDocSnap.data() } as AppUser);
                         setRequireOnboarding(false);
 
-                        // ── REAL-TIME LISTENER ──────────────────────────────────
+                        // 3. Start real-time listener
                         unsubUserDoc = onSnapshot(uidDocRef, (snap) => {
                             if (snap.exists()) {
-                                console.log('[AuthContext] onSnapshot: user doc updated.');
                                 setUserData({ id: firebaseUser.uid, uid: firebaseUser.uid, ...snap.data() } as AppUser);
                             }
                         }, (err) => {
                             console.warn('[AuthContext] onSnapshot error (non-fatal):', err);
                         });
                     } else {
-                        // No user doc and no token — this is a brand new user, require onboarding.
-                        // We intentionally do NOT search Firestore users/ by email here
-                        // to avoid redirect loops. Agents must join via an explicit invite link.
                         console.log('[AuthContext] No user doc found. Require onboarding.');
                         setUserData(null);
                         setRequireOnboarding(true);
                     }
                 } else {
+                    // User is logged out
                     setUserData(null);
                     setRequireOnboarding(false);
                 }
             } catch (globalErr) {
                 console.error('[AuthContext] UNEXPECTED GLOBAL ERROR:', globalErr);
             } finally {
-                console.log('[AuthContext] Setting loading to FALSE');
-                setLoading(false);
-                setIsInitial(false);
+                // Only finalize loading if the current auth state still matches this execution
+                if (auth.currentUser?.uid === firebaseUser?.uid || !firebaseUser) {
+                    setLoading(false);
+                    setIsInitial(false);
+                }
             }
         });
 
         return () => {
             unsubscribe();
-            if (unsubUserDoc) unsubUserDoc();
+            if (unsubUserDoc) {
+                try { unsubUserDoc(); } catch (e) { }
+            }
         };
     }, []);
 
@@ -159,21 +143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return (
         <AuthContext.Provider value={value}>
-            {/* Block rendering until initial auth state is resolved.
-          This prevents a flash of the login screen for persisted sessions. */}
             {!isInitial && children}
         </AuthContext.Provider>
     );
 }
 
-// ─── Custom Hook ──────────────────────────────────────────────────────────────
-/**
- * useAuth() — consume the AuthContext anywhere in the component tree.
- *
- * Usage:
- *   const { currentUser, userData, loading } = useAuth();
- *   const agencyId = userData?.agencyId;
- */
 export function useAuth(): AuthContextType {
     const context = useContext(AuthContext);
     if (context === undefined) {

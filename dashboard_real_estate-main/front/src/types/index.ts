@@ -275,6 +275,9 @@ export interface Deal {
     projectedCommission: number;
     actualCommission?: number;
     isVatIncluded?: boolean;
+    // UI Virtual Fields
+    clientName?: string;
+    propertyAddress?: string;
     createdAt: Timestamp;
     updatedAt?: Timestamp;
     contract?: {
@@ -317,6 +320,7 @@ export interface SharedCatalog {
     agentId: string;
     leadId: string | null;
     leadName?: string;
+    title?: string;
     propertyIds: Array<string | { id: string; collectionPath: string }>;
     viewCount: number;
     likedPropertyIds?: string[];
@@ -430,4 +434,39 @@ export interface AuditLog {
     signedPdfUrl?: string;
     fieldCount?: number;
     createdAt: Timestamp;
+}
+
+// ─── AI Text Contracts ────────────────────────────────────────────────────────
+export interface TemplateField {
+    id: string;
+    label: string;
+    type: 'text' | 'date' | 'signature';
+    role: 'agent' | 'client';
+    mappingTarget?: string;
+    required?: boolean;
+}
+
+export interface ContractTemplate {
+    id?: string;
+    agencyId: string;
+    title: string;
+    rawText: string;
+    taggedText: string;
+    fieldsMetadata: TemplateField[];
+    createdBy: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+}
+
+export interface ContractInstance {
+    id?: string;
+    agencyId: string;
+    templateId: string;
+    dealId: string;
+    leadId?: string;
+    status: 'draft' | 'sent' | 'signed';
+    values: Record<string, string>;
+    createdBy: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 }

@@ -152,16 +152,19 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
 async function processInboundMessage(params) {
     var _a, _b, _c;
     const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
+    // Bypass phone — always gets a response regardless of locks/checks
+    const BYPASS_PHONE = '0507706024';
+    const isBypassPhone = phone === BYPASS_PHONE;
     // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
     const [isBlocked, passedRateLimit] = await Promise.all([
         (0, blocklist_1.checkBlocklist)(phone).catch(() => false), // fail-safe: assume not blocked
         (0, rateLimiter_1.checkRateLimit)(phone).catch(() => true), // fail-safe: assume passed
     ]);
-    if (isBlocked) {
+    if (!isBypassPhone && isBlocked) {
         await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
         return;
     }
-    if (!passedRateLimit) {
+    if (!isBypassPhone && !passedRateLimit) {
         await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
         await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
         return;
@@ -176,7 +179,7 @@ async function processInboundMessage(params) {
         const prev = suspSnap.exists ? ((_a = suspSnap.data().score) !== null && _a !== void 0 ? _a : 0) : 0;
         const newScore = prev + score;
         await suspRef.set({ phone, agencyId, score: newScore, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-        if (newScore >= 3) {
+        if (!isBypassPhone && newScore >= 3) {
             await (0, blocklist_1.blockPhone)(phone, `injection_attempts_score_${newScore}`);
             await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
             return;
@@ -194,7 +197,7 @@ async function processInboundMessage(params) {
         : 0;
     const isExpired = session.status === 'expired' ||
         (Date.now() - lastActive > SESSION_TTL_MS);
-    if (isExpired) {
+    if (!isBypassPhone && isExpired) {
         const agencyDoc = await db.collection('agencies').doc(agencyId).get();
         const agencyPhone = ((_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.phone) || ((_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.phoneNumber) || '';
         await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);

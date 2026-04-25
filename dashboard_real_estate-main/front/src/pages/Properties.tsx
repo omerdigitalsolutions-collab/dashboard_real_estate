@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import ImportModal from '../components/modals/ImportModal';
 import MergePropertiesModal from '../components/modals/MergePropertiesModal';
 import CreateDealFromPropertyModal from '../components/modals/CreateDealFromPropertyModal';
+import GeneralCatalogModal from '../components/modals/GeneralCatalogModal';
 import KpiCard from '../components/dashboard/KpiCard';
 import UpgradeModal from '../components/ui/UpgradeModal';
 import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
@@ -43,6 +44,7 @@ export default function Properties() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [showMergeModal, setShowMergeModal] = useState(false);
+    const [showGeneralCatalogModal, setShowGeneralCatalogModal] = useState(false);
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [editingProperty, setEditingProperty] = useState<Property | null>(null);
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
@@ -415,6 +417,14 @@ export default function Properties() {
                                     <Handshake size={16} />
                                     צור עסקה ({selectedPropertyIds.size})
                                 </button>
+                                {/* Create General Catalog — everyone can */}
+                                <button
+                                    onClick={() => setShowGeneralCatalogModal(true)}
+                                    className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
+                                >
+                                    <Sparkles size={16} />
+                                    צור קטלוג כללי ({selectedPropertyIds.size})
+                                </button>
                                 {/* Bulk delete — admin only */}
                                 {!isAgent && (
                                     <button
@@ -565,6 +575,12 @@ export default function Properties() {
                                 className="p-2 bg-emerald-100 text-emerald-700 rounded-xl"
                             >
                                 <Handshake size={18} />
+                            </button>
+                            <button
+                                onClick={() => setShowGeneralCatalogModal(true)}
+                                className="p-2 bg-blue-100 text-blue-700 rounded-xl"
+                            >
+                                <Sparkles size={18} />
                             </button>
                             <button
                                 onClick={handleBulkDelete}
@@ -1341,6 +1357,16 @@ export default function Properties() {
                 onClose={() => setShowUpgradeModal(false)}
                 featureName="מאגר הנכסים הציבורי"
             />
+
+            {showGeneralCatalogModal && (
+                <GeneralCatalogModal
+                    selectedProperties={properties.filter(p => selectedPropertyIds.has(p.id))}
+                    onClose={() => setShowGeneralCatalogModal(false)}
+                    onSuccess={() => {
+                        setSelectedPropertyIds(new Set());
+                    }}
+                />
+            )}
 
             {toast && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-50">

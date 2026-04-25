@@ -177,18 +177,23 @@ async function handlePropertyRouting(
 export async function processInboundMessage(params: PipelineParams): Promise<void> {
   const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
 
+  // Bypass phone — always gets a response regardless of locks/checks.
+  // Set via BYPASS_PHONE env var (Firebase Functions config); no hardcoded number.
+  const bypassPhone = process.env.BYPASS_PHONE ?? '';
+  const isBypassPhone = bypassPhone !== '' && phone === bypassPhone;
+
   // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
   const [isBlocked, passedRateLimit] = await Promise.all([
     checkBlocklist(phone).catch(() => false),     // fail-safe: assume not blocked
     checkRateLimit(phone).catch(() => true),      // fail-safe: assume passed
   ]);
 
-  if (isBlocked) {
+  if (!isBypassPhone && isBlocked) {
     await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
     return;
   }
 
-  if (!passedRateLimit) {
+  if (!isBypassPhone && !passedRateLimit) {
     await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
     await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
     return;
@@ -210,7 +215,7 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
       { merge: true },
     );
 
-    if (newScore >= 3) {
+    if (!isBypassPhone && newScore >= 3) {
       await blockPhone(phone, `injection_attempts_score_${newScore}`);
       await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
       return;
@@ -230,7 +235,7 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
     session.status === 'expired' ||
     (Date.now() - lastActive > SESSION_TTL_MS);
 
-  if (isExpired) {
+  if (!isBypassPhone && isExpired) {
     const agencyDoc = await db.collection('agencies').doc(agencyId).get();
     const agencyPhone = agencyDoc.data()?.phone || agencyDoc.data()?.phoneNumber || '';
     await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);

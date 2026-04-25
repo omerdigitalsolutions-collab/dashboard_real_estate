@@ -213,6 +213,96 @@ async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
     matches.sort((a, b) => b.matchScore - a.matchScore);
     return matches.slice(0, topN);
 }
+// ─── handleAddressQuery ───────────────────────────────────────────────────────
+async function handleAddressQuery(agencyId, leadId, customerPhone, message, leadData, integration) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+    const addressQueryTriggers = ['פרטים על', 'מה המחיר של', 'מה יש ב', 'תספר לי על', 'כמה עולה', 'כמה חדרים ב'];
+    const hasStreetNumber = /\d/.test(message);
+    const hasTrigger = addressQueryTriggers.some(kw => message.includes(kw));
+    if (!hasTrigger || !hasStreetNumber)
+        return false;
+    const addressQueryCount = (_a = leadData.addressQueryCount) !== null && _a !== void 0 ? _a : 0;
+    if (addressQueryCount >= 2)
+        return false; // Max 2 queries, then fall through to AI
+    const words = message.split(/\s+/).filter((w) => w.length > 2);
+    if (words.length < 2)
+        return false;
+    const propSnap = await db
+        .collection('agencies').doc(agencyId).collection('properties')
+        .where('status', '==', 'active')
+        .limit(50)
+        .get();
+    const matched = [];
+    propSnap.docs.forEach((doc) => {
+        const d = doc.data();
+        const addrObj = d.address;
+        const haystack = [
+            typeof addrObj === 'object' ? addrObj === null || addrObj === void 0 ? void 0 : addrObj.fullAddress : addrObj,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.street,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.city,
+            addrObj === null || addrObj === void 0 ? void 0 : addrObj.neighborhood,
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (words.some((w) => haystack.includes(w.toLowerCase()))) {
+            matched.push(doc);
+        }
+    });
+    if (matched.length === 0)
+        return false;
+    // Increment counter
+    await db.collection('leads').doc(leadId).update({
+        addressQueryCount: admin.firestore.FieldValue.increment(1),
+    });
+    if (matched.length === 1) {
+        const prop = matched[0].data();
+        const address = ((_b = prop.address) === null || _b === void 0 ? void 0 : _b.fullAddress) || `${(_c = prop.address) === null || _c === void 0 ? void 0 : _c.street}, ${(_d = prop.address) === null || _d === void 0 ? void 0 : _d.city}` || prop.city || 'נכס';
+        const price = (_f = (_e = prop.financials) === null || _e === void 0 ? void 0 : _e.price) !== null && _f !== void 0 ? _f : prop.price;
+        const rooms = prop.rooms;
+        const neighborhood = ((_g = prop.address) === null || _g === void 0 ? void 0 : _g.neighborhood) || prop.neighborhood;
+        const priceStr = price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר לא צוין';
+        const roomsStr = rooms ? `${rooms}` : 'לא צוין';
+        const areaStr = neighborhood || 'לא צוין';
+        await sendBotMessage(integration, customerPhone, leadId, `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}`);
+        return true;
+    }
+    // Multiple matches
+    if (addressQueryCount < 1) {
+        await sendBotMessage(integration, customerPhone, leadId, `מצאתי כמה נכסים בכתובת זו. מה טווח המחיר המשוער שמעניין אותך?`);
+        return true;
+    }
+    // Second query with clarification — send top match
+    const topProp = matched[0].data();
+    const address = ((_h = topProp.address) === null || _h === void 0 ? void 0 : _h.fullAddress) || `${(_j = topProp.address) === null || _j === void 0 ? void 0 : _j.street}, ${(_k = topProp.address) === null || _k === void 0 ? void 0 : _k.city}` || topProp.city || 'נכס';
+    const price = (_m = (_l = topProp.financials) === null || _l === void 0 ? void 0 : _l.price) !== null && _m !== void 0 ? _m : topProp.price;
+    const rooms = topProp.rooms;
+    const neighborhood = ((_o = topProp.address) === null || _o === void 0 ? void 0 : _o.neighborhood) || topProp.neighborhood;
+    const priceStr = price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר לא צוין';
+    const roomsStr = rooms ? `${rooms}` : 'לא צוין';
+    const areaStr = neighborhood || 'לא צוין';
+    await sendBotMessage(integration, customerPhone, leadId, `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}`);
+    return true;
+}
+// ─── generateConversationSummary ──────────────────────────────────────────────
+async function generateConversationSummary(leadType, recentMessages, sellerInfo, geminiApiKey) {
+    if (leadType === 'seller' && sellerInfo) {
+        const parts = [];
+        if (sellerInfo.propertyType)
+            parts.push(sellerInfo.propertyType);
+        if (sellerInfo.address)
+            parts.push(`ב${sellerInfo.address}`);
+        return parts.length ? `${parts.join(' ')} — הגיש/ה בקשה לשיווק` : 'מוכר פנה לשיווק נכס';
+    }
+    try {
+        const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+        const conversation = recentMessages.join('\n');
+        const result = await model.generateContent(`סכם את השיחה הבאה בין בוט נדל"ן לבין לקוח קונה בשתי שורות קצרות בעברית.\n\n${conversation}`);
+        return result.response.text().trim().substring(0, 200);
+    }
+    catch (err) {
+        console.warn('[WeBot] Failed to generate summary:', err);
+        return 'לקוח חדש מחפש נכס';
+    }
+}
 // ─── updateChatState ──────────────────────────────────────────────────────────
 async function updateChatState(leadId, state, extra = {}) {
     await db.collection('leads').doc(leadId).update({
@@ -244,8 +334,12 @@ async function sendBotMessage(integration, customerPhone, leadId, text) {
 }
 // ─── classifyIntent ───────────────────────────────────────────────────────────
 async function classifyIntent(message, leadType, geminiApiKey, leadStatus) {
-    // Fast keyword check for sellers (high confidence)
-    const sellerKeywords = ['למכור', 'מכירה', 'לפרסם', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את'];
+    // Step 1 — Buyer fast-path (runs first, takes precedence)
+    const buyerFastPhrases = ['מחפש', 'מחפשת', 'מעוניין', 'מעוניינת', 'רוצה לקנות', 'רוצה לשכור'];
+    if (buyerFastPhrases.some(kw => message.includes(kw)))
+        return 'buyer';
+    // Step 2 — Seller fast-path (unambiguous selling intent only)
+    const sellerKeywords = ['רוצה למכור', 'אני מוכר', 'לפרסם נכס', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את', 'בעל נכס'];
     if (sellerKeywords.some(kw => message.includes(kw)))
         return 'seller';
     // If existing seller lead writing again — stay in seller flow
@@ -266,7 +360,7 @@ async function classifyIntent(message, leadType, geminiApiKey, leadStatus) {
     }
     catch (err) {
         console.warn('[WeBot] Intent classification failed, fallback to keyword check:', err);
-        const buyerKeywords = ['מחפש', 'קנות', 'שכירות', 'דירה', 'נכס', 'חדרים', 'תקציב', 'רוצה לקנות'];
+        const buyerKeywords = ['מחפש', 'מחפשת', 'קנות', 'שכירות', 'דירה', 'נכס', 'חדרים', 'תקציב', 'רוצה לקנות'];
         if (buyerKeywords.some(kw => message.includes(kw)))
             return 'buyer';
         return 'irrelevant';
@@ -602,9 +696,10 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         finalReply = 'תודה על פנייתך. נחזור אליך בהקדם.';
     }
     await sendBotMessage(integration, customerPhone, leadId, finalReply);
-    // After catalog is sent → move to SCHEDULING_CALL + notify agent
+    // After catalog is sent → move to CLOSED + notify agent + ask closing question
     if (catalogCreated) {
-        await updateChatState(leadId, 'SCHEDULING_CALL');
+        await sendBotMessage(integration, customerPhone, leadId, 'מתי אתה פנוי לשיחה קצרה עם יועץ נדל"ן שלנו?');
+        await updateChatState(leadId, 'CLOSED', { closedAt: Date.now() });
         const freshLead = await db.collection('leads').doc(leadId).get();
         const reqs = ((_m = freshLead.data()) === null || _m === void 0 ? void 0 : _m.requirements) || {};
         const leadName = leadData.name || customerPhone;
@@ -616,6 +711,16 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         const agentPhone = await findAgentPhone(agencyId, leadData.assignedAgentId);
         if (agentPhone) {
             await notifyAgentOrAdmin(agentPhone, `🏠 *פנייה חדשה מהבוט*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\nהלקוח קיבל קטלוג ומחכה לשיחת ייעוץ.`, greenApiCreds);
+        }
+        // Admin notification with AI summary
+        const [adminPhone, recentMsgs] = await Promise.all([
+            findAdminPhone(agencyId),
+            loadChatHistory(leadId, 6),
+        ]);
+        if (adminPhone && adminPhone !== agentPhone) {
+            const msgTexts = recentMsgs.map(m => `${m.role === 'user' ? 'לקוח' : 'בוט'}: ${m.parts[0].text}`);
+            const summary = await generateConversationSummary('buyer', msgTexts, null, geminiApiKey);
+            await notifyAgentOrAdmin(adminPhone, `🏠 *ליד חדש — קונה*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\n📝 סיכום: ${summary}`, greenApiCreds);
         }
         await createCRMNotification(agencyId, leadId, leadName, 'new_buyer_inquiry', 'assign_agent', { phone: customerPhone, requirements: reqs, catalogSent: true });
     }
@@ -684,14 +789,15 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
         // Notify admin (not agent — seller goes straight to admin)
         const adminPhone = await findAdminPhone(agencyId);
         if (adminPhone) {
-            await notifyAgentOrAdmin(adminPhone, `🏠 *מוכר חדש — מהבוט*\nשם: ${leadName}\nטלפון: ${customerPhone}\nנכס: ${propertyType} ב${address}\nזמן מועדף לשיחה: *${timePreference}*`, greenApiCreds);
+            const summary = await generateConversationSummary('seller', [], { address, propertyType }, geminiApiKey);
+            await notifyAgentOrAdmin(adminPhone, `🏠 *מוכר חדש — מהבוט*\nשם: ${leadName}\nטלפון: ${customerPhone}\nנכס: ${propertyType} ב${address}\nזמן מועדף לשיחה: *${timePreference}*\n📝 סיכום: ${summary}`, greenApiCreds);
         }
         await createCRMNotification(agencyId, leadId, leadName, 'new_seller_inquiry', 'contact_seller', { phone: customerPhone, address, propertyType, scheduledTime: timePreference, canAssignToAgent: true });
     }
 }
 // ─── Main Export ──────────────────────────────────────────────────────────────
 async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, greenApiCreds, _idMessage, currentMsgDocId) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     try {
         // 1. Fetch agency + lead
         const [agencySnap, leadSnap] = await Promise.all([
@@ -732,17 +838,60 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             await sendBotMessage(integration, customerPhone, leadId, 'בסדר, מתחילים מחדש.\nאיך אוכל לעזור לך היום?\n• מחפש דירה לקנות/לשכור?\n• רוצה לפרסם ולמכור נכס?');
             return;
         }
+        // CLOSED state — 24h lock after catalog was sent
+        const BYPASS_PHONE = '0507706024';
+        if (currentState === 'CLOSED') {
+            if (customerPhone === BYPASS_PHONE) {
+                // Silent pass — no AI invoked, no tokens spent, just log
+                console.log(`[WeBot] ✅ Bypass phone ${customerPhone} in CLOSED state — skipping AI`);
+                return;
+            }
+            const closedAt = (_e = storedChatState.closedAt) !== null && _e !== void 0 ? _e : storedChatState.lastStateAt;
+            if ((Date.now() - closedAt) < 24 * 60 * 60 * 1000) {
+                console.log(`[WeBot] 🔒 CLOSED lock active for lead ${leadId} — ignoring message`);
+                return; // Silent ignore
+            }
+            // 24h passed — reopen
+            currentState = 'IDLE';
+            await updateChatState(leadId, 'IDLE');
+        }
+        // Daily AI usage limit — prevent token abuse
+        const today = new Date().toISOString().split('T')[0];
+        const dailyCount = leadData.lastMessageDate === today ? ((_f = leadData.dailyMessageCount) !== null && _f !== void 0 ? _f : 0) : 0;
+        if (dailyCount >= 10) {
+            console.log(`[WeBot] 🛑 Lead ${leadId} reached daily AI limit (${dailyCount}/10) — skipping`);
+            return;
+        }
+        // Suspected bot alert at 50 messages
+        if (dailyCount === 49) {
+            const adminPhone = await findAdminPhone(agencyId);
+            const alertMsg = `⚠️ *התראת אבטחה*\nהמספר ${customerPhone} שלח מעל 50 הודעות היום. חשד לבוט.`;
+            if (adminPhone)
+                await notifyAgentOrAdmin(adminPhone, alertMsg, greenApiCreds);
+            await notifyAgentOrAdmin(BYPASS_PHONE, alertMsg, greenApiCreds);
+        }
+        // Increment daily counter (reset if new day)
+        await db.collection('leads').doc(leadId).update({
+            dailyMessageCount: leadData.lastMessageDate === today
+                ? admin.firestore.FieldValue.increment(1)
+                : 1,
+            lastMessageDate: today,
+        });
         if (isStale && currentState !== 'IDLE') {
             console.log(`[WeBot] State stale (>24h) for lead ${leadId} — resetting to IDLE`);
             currentState = 'IDLE';
             await updateChatState(leadId, 'IDLE');
         }
+        // Address-specific property query (fires regardless of state, except CLOSED)
+        const handledAsAddress = await handleAddressQuery(agencyId, leadId, customerPhone, incomingMessage, leadData, integration);
+        if (handledAsAddress)
+            return;
         // 5. Name collection: ask name on first bot interaction (regardless of WhatsApp display name)
         if (currentState === 'COLLECTING_NAME') {
             const name = incomingMessage.trim().substring(0, 50) || 'לקוח';
             await db.collection('leads').doc(leadId).update({ name, botNameCollected: true });
             await updateChatState(leadId, 'IDLE');
-            await sendBotMessage(integration, customerPhone, leadId, `נעים להכיר, ${name}.\nאיך אוכל לעזור לך?\n• מחפש/ת דירה לקנות או לשכור?\n• רוצה לפרסם ולמכור נכס?`);
+            await sendBotMessage(integration, customerPhone, leadId, `נעים להכיר, ${name}.\nאיך אוכל לעזור לך?\n\nמחפש/ת דירה לקנות או לשכור? או\n\nלמכור נכס?`);
             return;
         }
         if (currentState === 'IDLE' && !leadData.botNameCollected) {

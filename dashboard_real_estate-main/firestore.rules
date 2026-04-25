@@ -184,6 +184,29 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /agencies/{agencyId}/contractTemplates/{templateId} {
+      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      // Any authenticated agent in the agency can create and manage templates
+      allow create, update: if isAuthed() && (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
+      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
+    }
+
+    match /agencies/{agencyId}/contractInstances/{instanceId} {
+      // Authenticated agency members and anonymous users (via signing link) can read
+      allow read: if request.auth != null;
+      // Any authenticated agent in the agency can create instances
+      allow create: if isAuthed() && (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
+
+      // Authenticated users (including anonymous signers) can update field values
+      // Prevents updates after contract is completed (immutable once signed)
+      allow update: if request.auth != null 
+          && resource.data.status != 'completed' 
+          && resource.data.status != 'signed';
+
+      // Only agency admins or the creator can delete drafts
+      allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin() || resource.data.createdBy == request.auth.uid);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // USERS
     // ══════════════════════════════════════════════════════════════════════════

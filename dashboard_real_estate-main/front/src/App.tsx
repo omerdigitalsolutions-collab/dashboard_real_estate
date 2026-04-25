@@ -21,6 +21,7 @@ import Agents from './pages/Agents';
 import Settings from './pages/Settings';
 import Calendar from './pages/Calendar';
 import SharedCatalogPage from './pages/SharedCatalog';
+import Catalogs from './pages/Catalogs';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import SuperAdminRoute from './components/routing/SuperAdminRoute';
 import LandingPage from './pages/LandingPage';
@@ -34,6 +35,9 @@ import ContractEditor from './pages/ContractEditor';
 import Contracts from './pages/Contracts';
 import ContractAuditLog from './pages/ContractAuditLog';
 import SignaturePage from './pages/SignaturePage';
+import ContractTemplates from './pages/ContractTemplates';
+import ContractInstanceEditor from './pages/ContractInstanceEditor';
+import SignInstancePage from './pages/SignInstancePage';
 import BillingLockScreen from './pages/BillingLockScreen';
 import PendingApproval from './pages/PendingApproval';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
@@ -136,6 +140,7 @@ function App() {
           <Route index element={<ErrorBoundary><DashboardIndex /></ErrorBoundary>} />
           <Route path="leads" element={<ErrorBoundary><Leads /></ErrorBoundary>} />
           <Route path="properties" element={<ErrorBoundary><Properties /></ErrorBoundary>} />
+          <Route path="catalogs" element={<ErrorBoundary><Catalogs /></ErrorBoundary>} />
           <Route path="transactions" element={<ErrorBoundary><Transactions /></ErrorBoundary>} />
           <Route path="agents" element={<ErrorBoundary><Agents /></ErrorBoundary>} />
           <Route path="pnl" element={<ErrorBoundary><ProfitAndLossDashboard /></ErrorBoundary>} />
@@ -144,6 +149,8 @@ function App() {
           <Route path="contracts" element={<ErrorBoundary><Contracts /></ErrorBoundary>} />
           <Route path="contracts/:dealId/edit" element={<ErrorBoundary><ContractEditor /></ErrorBoundary>} />
           <Route path="contracts/:contractId/logs" element={<ErrorBoundary><ContractAuditLog /></ErrorBoundary>} />
+          <Route path="contracts/templates" element={<ErrorBoundary><ContractTemplates /></ErrorBoundary>} />
+          <Route path="contracts/instances/:instanceId/edit" element={<ErrorBoundary><ContractInstanceEditor /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>
               <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>
@@ -158,6 +165,7 @@ function App() {
 
         {/* Public contract signing — no auth required, uses anonymous Firebase Auth */}
         <Route path="/sign/:agencyId/:contractId" element={<SignaturePage />} />
+        <Route path="/sign-instance/:agencyId/:instanceId" element={<SignInstancePage />} />
 
         {/* Catch-all route to redirect unknown paths to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

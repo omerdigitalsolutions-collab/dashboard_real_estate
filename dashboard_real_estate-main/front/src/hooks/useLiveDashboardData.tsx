@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode, useRef } fro
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Property, Deal, AppTask, Alert, Lead, Agency } from '../types';
+import { Property, Deal, AppTask, Alert, Lead, Agency, SharedCatalog } from '../types';
 import { getPlanFeatures } from '../config/plans';
 import { isCityMatch } from '../utils/stringUtils';
 
@@ -16,6 +16,7 @@ interface LiveDashboardData {
     rawAgency: Agency | null;
     agencyName: string | null;
     agencyLogo: string | null;
+    sharedCatalogs: SharedCatalog[];
     loading: boolean;
     error: Error | null;
 }
@@ -35,6 +36,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const [agencyName, setAgencyName] = useState<string | null>(null);
     const [agencyLogo, setAgencyLogo] = useState<string | null>(null);
     const [citiesCatalog, setCitiesCatalog] = useState<string[]>([]);
+    const [sharedCatalogs, setSharedCatalogs] = useState<SharedCatalog[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -63,11 +65,12 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             properties: false,
             deals: false,
             leads: false,
-            agency: false
+            agency: false,
+            sharedCatalogs: false
         };
 
         const checkLoaded = () => {
-            if (isMounted && loadedFlags.properties && loadedFlags.deals && loadedFlags.leads && loadedFlags.agency) {
+            if (isMounted && loadedFlags.properties && loadedFlags.deals && loadedFlags.leads && loadedFlags.agency && loadedFlags.sharedCatalogs) {
                 setLoading(false);
             }
         };
@@ -163,6 +166,32 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             if (isMounted) {
                 setError(e);
                 loadedFlags.deals = true; checkLoaded();
+            }
+        }
+
+        // 4.5 Shared Catalogs Query
+        const qCatalogs = query(
+            collection(db, 'shared_catalogs'),
+            where('agencyId', '==', agencyId)
+        );
+
+        let unsubCatalogs = () => { };
+        try {
+            unsubCatalogs = onSnapshot(qCatalogs, (snap) => {
+                if (isMounted) {
+                    setSharedCatalogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as SharedCatalog)));
+                    loadedFlags.sharedCatalogs = true; checkLoaded();
+                }
+            }, (err) => {
+                console.error('[useLiveDashboardData] Catalogs Error:', err);
+                if (isMounted) {
+                    loadedFlags.sharedCatalogs = true; checkLoaded();
+                }
+            });
+        } catch (e: any) {
+            console.error('[useLiveDashboardData] Catalogs Sync Error:', e);
+            if (isMounted) {
+                loadedFlags.sharedCatalogs = true; checkLoaded();
             }
         }
 
@@ -438,6 +467,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubAlertsPersonal();
             unsubAlertsBroadcast();
             unsubAgency();
+            unsubCatalogs();
             globalCityUnsubs.forEach(unsub => unsub());
         };
     }, [userData?.agencyId, userData?.uid, citiesCatalog]);
@@ -490,7 +520,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     }, [tasks]);
 
     return (
-        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, agencySettings, rawAgency, agencyName, agencyLogo, loading, error }}>
+        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, sharedCatalogs, agencySettings, rawAgency, agencyName, agencyLogo, loading, error }}>
             {children}
         </DashboardDataContext.Provider>
     );
