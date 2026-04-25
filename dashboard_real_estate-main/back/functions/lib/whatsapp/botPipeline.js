@@ -150,11 +150,12 @@ async function handlePropertyRouting(phone, waChatId, text, agencyId, creds) {
 }
 // ─── Main export ──────────────────────────────────────────────────────────────
 async function processInboundMessage(params) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
-    // Bypass phone — always gets a response regardless of locks/checks
-    const BYPASS_PHONE = '0507706024';
-    const isBypassPhone = phone === BYPASS_PHONE;
+    // Bypass phone — always gets a response regardless of locks/checks.
+    // Set via BYPASS_PHONE env var (Firebase Functions config); no hardcoded number.
+    const bypassPhone = (_a = process.env.BYPASS_PHONE) !== null && _a !== void 0 ? _a : '';
+    const isBypassPhone = bypassPhone !== '' && phone === bypassPhone;
     // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
     const [isBlocked, passedRateLimit] = await Promise.all([
         (0, blocklist_1.checkBlocklist)(phone).catch(() => false), // fail-safe: assume not blocked
@@ -176,7 +177,7 @@ async function processInboundMessage(params) {
     if (isInjection) {
         const suspRef = db.collection('whatsapp_suspicious').doc(phone);
         const suspSnap = await suspRef.get();
-        const prev = suspSnap.exists ? ((_a = suspSnap.data().score) !== null && _a !== void 0 ? _a : 0) : 0;
+        const prev = suspSnap.exists ? ((_b = suspSnap.data().score) !== null && _b !== void 0 ? _b : 0) : 0;
         const newScore = prev + score;
         await suspRef.set({ phone, agencyId, score: newScore, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
         if (!isBypassPhone && newScore >= 3) {
@@ -199,7 +200,7 @@ async function processInboundMessage(params) {
         (Date.now() - lastActive > SESSION_TTL_MS);
     if (!isBypassPhone && isExpired) {
         const agencyDoc = await db.collection('agencies').doc(agencyId).get();
-        const agencyPhone = ((_b = agencyDoc.data()) === null || _b === void 0 ? void 0 : _b.phone) || ((_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.phoneNumber) || '';
+        const agencyPhone = ((_c = agencyDoc.data()) === null || _c === void 0 ? void 0 : _c.phone) || ((_d = agencyDoc.data()) === null || _d === void 0 ? void 0 : _d.phoneNumber) || '';
         await sendDirect(creds, waChatId, `השיחה פגה. לחידוש פנה ל: ${agencyPhone}`);
         await db.collection('whatsapp_sessions').doc(`${agencyId}_${phone}`).delete();
         return;

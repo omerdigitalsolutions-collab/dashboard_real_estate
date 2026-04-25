@@ -37,6 +37,7 @@ import ContractAuditLog from './pages/ContractAuditLog';
 import SignaturePage from './pages/SignaturePage';
 import ContractTemplates from './pages/ContractTemplates';
 import ContractInstanceEditor from './pages/ContractInstanceEditor';
+import ContractInstanceViewer from './pages/ContractInstanceViewer';
 import SignInstancePage from './pages/SignInstancePage';
 import BillingLockScreen from './pages/BillingLockScreen';
 import PendingApproval from './pages/PendingApproval';
@@ -151,6 +152,7 @@ function App() {
           <Route path="contracts/:contractId/logs" element={<ErrorBoundary><ContractAuditLog /></ErrorBoundary>} />
           <Route path="contracts/templates" element={<ErrorBoundary><ContractTemplates /></ErrorBoundary>} />
           <Route path="contracts/instances/:instanceId/edit" element={<ErrorBoundary><ContractInstanceEditor /></ErrorBoundary>} />
+          <Route path="contracts/instances/:instanceId/view" element={<ErrorBoundary><ContractInstanceViewer /></ErrorBoundary>} />
           <Route path="super-admin" element={
             <SuperAdminRoute>
               <ErrorBoundary><SuperAdminDashboard /></ErrorBoundary>

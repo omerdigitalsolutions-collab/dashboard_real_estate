@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, Briefcase, Loader2, X, Check, ChevronDown } from 'lucide-react';
+import { Search, User, Briefcase, Loader2, X, Check, ChevronDown, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getLiveLeads } from '../../services/leadService';
 import { getLiveDeals } from '../../services/dealService';
@@ -14,6 +14,9 @@ interface AssignToDealModalProps {
     template: (ContractTemplate & { id: string }) | null;
     // When opened from the "active" tab, pass all templates so the user can pick one
     allTemplates?: (ContractTemplate & { id: string })[];
+    // 'template' = create instance and open ContractInstanceEditor (default)
+    // 'pdf' = just pick a deal and open ContractEditor for PDF upload
+    mode?: 'template' | 'pdf';
 }
 
 type TargetType = 'deal' | 'lead';
@@ -23,6 +26,7 @@ export default function AssignToDealModal({
     onClose,
     template,
     allTemplates,
+    mode = 'template',
 }: AssignToDealModalProps) {
     const { userData } = useAuth();
     const navigate = useNavigate();
@@ -47,6 +51,11 @@ export default function AssignToDealModal({
             setTargetType('deal');
         }
     }, [isOpen]);
+
+    // Reset search when switching tabs
+    useEffect(() => {
+        setSearch('');
+    }, [targetType]);
 
     useEffect(() => {
         if (!isOpen || !userData?.agencyId) return;
@@ -80,22 +89,29 @@ export default function AssignToDealModal({
         (d as any).propertyAddress?.toLowerCase().includes(search.toLowerCase())
     );
 
-    const handleAssign = async (dealId: string) => {
-        if (!selectedTemplate || !userData?.agencyId) return;
-
-        if (targetType === 'lead') {
-            toast.error('שיוך ישיר לליד טרם נתמך — נא לבחור עסקה');
+    const handleAssign = async (targetId?: string) => {
+        // PDF mode: just navigate to the ContractEditor for this deal
+        if (mode === 'pdf') {
+            if (targetType === 'lead') {
+                toast.error('העלאת PDF לליד טרם נתמכת');
+                return;
+            }
+            onClose();
+            navigate(`/dashboard/contracts/${targetId}/edit`);
             return;
         }
+
+        if (!selectedTemplate || !userData?.agencyId) return;
 
         try {
             setSubmitting(true);
             const instanceId = await createInstance(
                 userData.agencyId,
                 selectedTemplate.id,
-                dealId,
+                targetType === 'deal' ? targetId : undefined,
                 {},
-                userData.uid!
+                userData.uid!,
+                targetType === 'lead' ? targetId : undefined
             );
             toast.success('החוזה שויך בהצלחה');
             onClose();
@@ -103,6 +119,30 @@ export default function AssignToDealModal({
         } catch (err) {
             console.error('[AssignToDealModal] Error assigning:', err);
             toast.error('שגיאה בשיוך החוזה');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleManualEntry = async () => {
+        if (!selectedTemplate || !userData?.agencyId) return;
+
+        try {
+            setSubmitting(true);
+            const instanceId = await createInstance(
+                userData.agencyId,
+                selectedTemplate.id,
+                undefined,
+                {},
+                userData.uid!,
+                undefined
+            );
+            toast.success('נוצר חוזה חדש להזנה ידנית');
+            onClose();
+            navigate(`/dashboard/contracts/instances/${instanceId}/edit`);
+        } catch (err) {
+            console.error('[AssignToDealModal] Error creating manual entry:', err);
+            toast.error('שגיאה ביצירת חוזה');
         } finally {
             setSubmitting(false);
         }
@@ -119,8 +159,10 @@ export default function AssignToDealModal({
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
                     <div>
-                        <h2 className="text-lg font-bold text-slate-900">שיוך תבנית לעסקה</h2>
-                        {selectedTemplate && (
+                        <h2 className="text-lg font-bold text-slate-900">
+                            {mode === 'pdf' ? 'בחר עסקה להעלאת חוזה PDF' : 'שיוך תבנית לעסקה'}
+                        </h2>
+                        {mode === 'template' && selectedTemplate && (
                             <p className="text-sm text-slate-500 mt-0.5">תבנית: {selectedTemplate.title}</p>
                         )}
                     </div>
@@ -221,10 +263,10 @@ export default function AssignToDealModal({
                                         </div>
                                         <div className="text-right">
                                             <p className="font-semibold text-slate-900 text-sm">
-                                                עסקה #{deal.id.slice(-6).toUpperCase()}
+                                                {deal.clientName || `עסקה #${deal.id.slice(-6).toUpperCase()}`}
                                             </p>
                                             <p className="text-xs text-slate-500">
-                                                {(deal as any).propertyAddress || 'ללא כתובת'}
+                                                {deal.propertyAddress || 'ללא כתובת'}
                                             </p>
                                         </div>
                                     </div>
@@ -236,11 +278,12 @@ export default function AssignToDealModal({
                                 </button>
                             ))}
 
-                            {targetType === 'lead' && filteredLeads.map(lead => (
-                                <div
+                             {targetType === 'lead' && filteredLeads.map(lead => (
+                                <button
                                     key={lead.id}
-                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50/60 text-right cursor-not-allowed opacity-60"
-                                    title="שיוך ישיר לליד יתמך בקרוב"
+                                    onClick={() => handleAssign(lead.id)}
+                                    disabled={submitting || !selectedTemplate}
+                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/30 transition-all text-right group disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
@@ -251,13 +294,27 @@ export default function AssignToDealModal({
                                             <p className="text-xs text-slate-500">{lead.phone}</p>
                                         </div>
                                     </div>
-                                    <span className="text-xs text-slate-400 border border-slate-200 px-2 py-1 rounded-lg">
-                                        בקרוב
-                                    </span>
-                                </div>
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                                            <Check size={16} />
+                                        </div>
+                                    </div>
+                                </button>
                             ))}
                         </>
                     )}
+                </div>
+
+                {/* Manual entry option */}
+                <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                    <button
+                        onClick={handleManualEntry}
+                        disabled={submitting || !selectedTemplate}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all font-medium disabled:opacity-50"
+                    >
+                        <Plus size={18} />
+                        <span>הזנה ידנית ללא שיוך</span>
+                    </button>
                 </div>
 
                 {/* Submitting overlay */}

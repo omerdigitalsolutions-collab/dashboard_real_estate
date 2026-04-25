@@ -462,7 +462,7 @@ export interface ContractInstance {
     id?: string;
     agencyId: string;
     templateId: string;
-    dealId: string;
+    dealId?: string;
     leadId?: string;
     status: 'draft' | 'sent' | 'signed';
     values: Record<string, string>;

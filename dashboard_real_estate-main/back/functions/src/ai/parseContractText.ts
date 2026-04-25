@@ -47,7 +47,7 @@ RULES:
   - "id": the token string, e.g. "field_001"
   - "label": a short Hebrew human-readable name based on surrounding context, e.g. "שם המוכר"
   - "type": one of "text", "date", "signature"
-  - "role": "client" if the field is for a buyer/tenant/client, "agent" if it is for the agent/broker
+  - "role": MUST be exactly "client" or "agent" — never null, never "N/A". Use "client" for buyer/tenant/client fields, "agent" for agent/broker fields. When uncertain, default to "client".
   - "mappingTarget": OPTIONAL — if the field clearly maps to a known CRM data point, set this to one of: "deal.projectedCommission", "deal.actualCommission", "property.address.fullAddress", "property.address.city", "property.financials.price", "lead.name", "lead.phone". Otherwise omit.
   - "required": true for signature fields, true for name/date/price fields, false for optional notes fields.
 
@@ -101,7 +101,7 @@ Return ONLY a raw JSON object (no markdown, no code blocks) with exactly these t
                 );
             }
 
-            // Basic validation of fieldsMetadata structure
+            // Sanitize and validate fieldsMetadata
             for (const field of parsed.fieldsMetadata) {
                 if (!field.id || !field.label || !field.type || !field.role) {
                     throw new HttpsError(
@@ -109,17 +109,13 @@ Return ONLY a raw JSON object (no markdown, no code blocks) with exactly these t
                         `AI response contains incomplete field metadata. Each field must have id, label, type, and role.`
                     );
                 }
+                // Sanitize type — fall back to 'text' if model hallucinated an invalid value
                 if (!['text', 'date', 'signature'].includes(field.type)) {
-                    throw new HttpsError(
-                        'internal',
-                        `AI returned invalid field type: ${field.type}. Must be text, date, or signature.`
-                    );
+                    field.type = 'text';
                 }
+                // Sanitize role — fall back to 'client' rather than crashing
                 if (!['agent', 'client'].includes(field.role)) {
-                    throw new HttpsError(
-                        'internal',
-                        `AI returned invalid field role: ${field.role}. Must be agent or client.`
-                    );
+                    field.role = 'client';
                 }
             }
 

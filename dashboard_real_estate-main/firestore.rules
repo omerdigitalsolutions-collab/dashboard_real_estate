@@ -184,9 +184,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // System-wide contract templates — readable by any authenticated user, writable by super admins only
+    match /systemTemplates/{templateId} {
+      allow read: if isAuthed();
+      allow write: if isSuperAdmin();
+    }
+
     match /agencies/{agencyId}/contractTemplates/{templateId} {
-      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
-      // Any authenticated agent in the agency can create and manage templates
+      // Read: agency members (dashboard) + anonymous auth users (public signing links)
+      allow read: if request.auth != null;
+      // Write: agency members only (with active billing)
       allow create, update: if isAuthed() && (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
       allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
     }

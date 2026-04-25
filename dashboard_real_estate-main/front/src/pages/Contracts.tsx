@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
 import {
     FileText,
     PenTool,
     CheckCircle,
     Clock,
     Link2,
-    ExternalLink,
     Loader2,
     AlertCircle,
     Search,
@@ -17,12 +17,17 @@ import {
     Upload,
     GitMerge,
     Download,
+    Eye,
+    Copy,
+    Library,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { getLiveContracts } from '../services/contractService';
 import { getLiveTemplates, createTemplate, deleteTemplate } from '../services/contractTemplateService';
 import { getLiveInstances } from '../services/contractInstanceService';
+import { getSystemTemplates, cloneSystemTemplate } from '../services/systemTemplateService';
+import type { SystemTemplate } from '../services/systemTemplateService';
 import { Contract, ContractTemplate, ContractInstance, TemplateField } from '../types';
 import TemplateParserModal from '../components/contracts/TemplateParserModal';
 import AssignToDealModal from '../components/contracts/AssignToDealModal';
@@ -31,7 +36,7 @@ import AssignToDealModal from '../components/contracts/AssignToDealModal';
 type ContractWithId = Contract & { id: string };
 type ContractTemplateWithId = ContractTemplate & { id: string };
 type ContractInstanceWithId = ContractInstance & { id: string };
-type ActiveTab = 'templates' | 'active';
+type ActiveTab = 'templates' | 'active' | 'system';
 
 // ─── Status configs ────────────────────────────────────────────────────────────
 const INSTANCE_STATUS: Record<string, { label: string; icon: React.ReactNode; chip: string }> = {
@@ -66,54 +71,77 @@ export default function Contracts() {
     const [activeTab, setActiveTab] = useState<ActiveTab>('templates');
     const [search, setSearch] = useState('');
 
-    // Tab 1 — Templates
+    // Tab 1 — My templates
     const [templates, setTemplates] = useState<ContractTemplateWithId[]>([]);
     const [templatesLoading, setTemplatesLoading] = useState(true);
     const [showParserModal, setShowParserModal] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [assignTemplate, setAssignTemplate] = useState<ContractTemplateWithId | null>(null);
+    const [showAssignModal, setShowAssignModal] = useState(false);
+    const [showPdfDealPicker, setShowPdfDealPicker] = useState(false);
 
     // Tab 2 — Active contracts (instances + PDF contracts)
     const [instances, setInstances] = useState<ContractInstanceWithId[]>([]);
     const [pdfContracts, setPdfContracts] = useState<ContractWithId[]>([]);
     const [activeLoading, setActiveLoading] = useState(true);
 
+    // Tab 3 — System templates
+    const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>([]);
+    const [systemLoading, setSystemLoading] = useState(false);
+    const [systemLoaded, setSystemLoaded] = useState(false);
+    const [cloning, setCloning] = useState<string | null>(null);
+
     // ── Live listeners ──────────────────────────────────────────────────────────
     useEffect(() => {
         if (!userData?.agencyId) return;
 
         let mounted = true;
-        // Track per-listener readiness via refs so closures always read current values
+        const unsubs: (() => void)[] = [];
         const done = { instances: false, pdf: false };
         const checkDone = () => {
             if (mounted && done.instances && done.pdf) setActiveLoading(false);
         };
 
-        const unsubTemplates = getLiveTemplates(
-            userData.agencyId,
-            (data) => { if (mounted) { setTemplates(data); setTemplatesLoading(false); } },
-            () => { if (mounted) setTemplatesLoading(false); }
-        );
+        const timerId = setTimeout(async () => {
+            if (!mounted) return;
+            try { await getAuth().currentUser?.getIdToken(/* forceRefresh */ true); } catch { /* non-fatal */ }
+            if (!mounted) return;
 
-        const unsubInstances = getLiveInstances(
-            userData.agencyId,
-            (data) => { if (mounted) { setInstances(data); done.instances = true; checkDone(); } },
-            () => { if (mounted) { done.instances = true; checkDone(); } }
-        );
+            unsubs.push(getLiveTemplates(
+                userData.agencyId,
+                (data) => { if (mounted) { setTemplates(data); setTemplatesLoading(false); } },
+                () => { if (mounted) setTemplatesLoading(false); }
+            ));
 
-        const unsubPdf = getLiveContracts(
-            userData.agencyId,
-            (data) => { if (mounted) { setPdfContracts(data); done.pdf = true; checkDone(); } },
-            () => { if (mounted) { done.pdf = true; checkDone(); } }
-        );
+            unsubs.push(getLiveInstances(
+                userData.agencyId,
+                (data) => { if (mounted) { setInstances(data); done.instances = true; checkDone(); } },
+                () => { if (mounted) { done.instances = true; checkDone(); } }
+            ));
+
+            unsubs.push(getLiveContracts(
+                userData.agencyId,
+                (data) => { if (mounted) { setPdfContracts(data); done.pdf = true; checkDone(); } },
+                () => { if (mounted) { done.pdf = true; checkDone(); } }
+            ));
+        }, 0);
 
         return () => {
             mounted = false;
-            unsubTemplates();
-            unsubInstances();
-            unsubPdf();
+            clearTimeout(timerId);
+            unsubs.forEach(fn => fn());
         };
     }, [userData?.agencyId]);
+
+    // Load system templates lazily when tab is first opened
+    useEffect(() => {
+        if (activeTab !== 'system' || systemLoaded) return;
+        setSystemLoading(true);
+        getSystemTemplates()
+            .then(data => { setSystemTemplates(data); setSystemLoaded(true); })
+            .catch(() => toast.error('שגיאה בטעינת תבניות המערכת'))
+            .finally(() => setSystemLoading(false));
+    }, [activeTab, systemLoaded]);
 
     // ── Template handlers ───────────────────────────────────────────────────────
     const handleSaveTemplate = async (data: {
@@ -144,6 +172,20 @@ export default function Contracts() {
             toast.error('שגיאה במחיקת התבנית');
         } finally {
             setDeleting(null);
+        }
+    };
+
+    const handleCloneSystemTemplate = async (template: SystemTemplate) => {
+        if (!userData?.agencyId) return;
+        try {
+            setCloning(template.id);
+            await cloneSystemTemplate(userData.agencyId, template, userData.uid!);
+            toast.success(`"${template.title}" שוכפלה לתבניות שלך`);
+            setActiveTab('templates');
+        } catch {
+            toast.error('שגיאה בשכפול התבנית');
+        } finally {
+            setCloning(null);
         }
     };
 
@@ -183,6 +225,10 @@ export default function Contracts() {
             c.status?.toLowerCase().includes(q))
         : pdfContracts;
 
+    const filteredSystem = q
+        ? systemTemplates.filter(t => t.title.toLowerCase().includes(q))
+        : systemTemplates;
+
     const activeCount = filteredInstances.length + filteredPdf.length;
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -206,7 +252,7 @@ export default function Contracts() {
                     }`}
                 >
                     <Sparkles size={15} />
-                    תבניות כלליות
+                    תבניות שלי
                     {templates.length > 0 && (
                         <span className="bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-full">
                             {templates.length}
@@ -229,22 +275,35 @@ export default function Contracts() {
                         </span>
                     )}
                 </button>
+                <button
+                    onClick={() => setActiveTab('system')}
+                    className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+                        activeTab === 'system'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                >
+                    <Library size={15} />
+                    תבניות מוכנות
+                </button>
             </div>
 
-            {/* Shared search bar */}
-            <div className="relative max-w-xs">
-                <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                    type="text"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="חיפוש..."
-                    className="w-full pr-9 pl-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 ring-blue-500 bg-white"
-                />
-            </div>
+            {/* Shared search bar — hidden on system tab when not loaded yet */}
+            {(activeTab !== 'system' || systemLoaded) && (
+                <div className="relative max-w-xs">
+                    <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="חיפוש..."
+                        className="w-full pr-9 pl-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 ring-blue-500 bg-white"
+                    />
+                </div>
+            )}
 
             {/* ══════════════════════════════════════════════════
-                TAB 1 — תבניות כלליות
+                TAB 1 — תבניות שלי
             ══════════════════════════════════════════════════ */}
             {activeTab === 'templates' && (
                 <div className="space-y-4">
@@ -254,7 +313,7 @@ export default function Contracts() {
                             className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
                         >
                             <Plus size={16} />
-                            צור תבנית כללית חדשה
+                            צור תבנית חדשה
                         </button>
                     </div>
 
@@ -275,16 +334,25 @@ export default function Contracts() {
                             <p className="text-sm text-slate-400 mb-6">
                                 {search
                                     ? 'נסה לחפש עם מילים אחרות'
-                                    : 'הדבק טקסט חוזה והבינה המלאכותית תזהה את השדות'}
+                                    : 'צור תבנית חדשה או שכפל תבנית מוכנה מהספרייה'}
                             </p>
                             {!search && (
-                                <button
-                                    onClick={() => setShowParserModal(true)}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                                >
-                                    <Plus size={16} />
-                                    צור תבנית ראשונה
-                                </button>
+                                <div className="flex items-center justify-center gap-3">
+                                    <button
+                                        onClick={() => setShowParserModal(true)}
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                        צור תבנית חדשה
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('system')}
+                                        className="inline-flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+                                    >
+                                        <Library size={16} />
+                                        תבניות מוכנות
+                                    </button>
+                                </div>
                             )}
                         </div>
                     )}
@@ -360,10 +428,10 @@ export default function Contracts() {
                         <button
                             onClick={() => {
                                 if (templates.length === 0) {
-                                    toast.error('צור תחילה תבנית כללית');
+                                    toast.error('צור תחילה תבנית');
                                     setActiveTab('templates');
                                 } else {
-                                    setAssignTemplate(templates[0]);
+                                    setShowAssignModal(true);
                                 }
                             }}
                             className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 bg-white text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
@@ -372,7 +440,7 @@ export default function Contracts() {
                             שיוך תבנית לעסקה
                         </button>
                         <button
-                            onClick={() => navigate('/dashboard/transactions')}
+                            onClick={() => setShowPdfDealPicker(true)}
                             className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
                         >
                             <Upload size={15} />
@@ -459,9 +527,14 @@ export default function Contracts() {
                                                     </button>
                                                 )}
                                                 {isSigned && (
-                                                    <span className="p-2 text-green-500">
-                                                        <CheckCircle size={15} />
-                                                    </span>
+                                                    <button
+                                                        onClick={() => navigate(`/dashboard/contracts/instances/${inst.id}/view`)}
+                                                        title="צפה בחוזה החתום"
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-semibold hover:bg-green-100 transition-colors"
+                                                    >
+                                                        <Eye size={13} />
+                                                        צפה
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -564,6 +637,104 @@ export default function Contracts() {
                 </div>
             )}
 
+            {/* ══════════════════════════════════════════════════
+                TAB 3 — תבניות מוכנות (ספריית מערכת)
+            ══════════════════════════════════════════════════ */}
+            {activeTab === 'system' && (
+                <div className="space-y-4">
+                    {/* Header banner */}
+                    <div className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 flex items-start gap-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Library size={20} className="text-blue-600" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900">ספריית תבניות מוכנות</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                                תבניות חוזה מקצועיות מוכנות לשימוש. שכפל לתבניות שלך וערוך לפי הצורך.
+                            </p>
+                        </div>
+                    </div>
+
+                    {systemLoading && (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 size={32} className="animate-spin text-slate-400" />
+                        </div>
+                    )}
+
+                    {!systemLoading && filteredSystem.length === 0 && (
+                        <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+                            <Library size={32} className="text-slate-300 mx-auto mb-3" />
+                            <p className="text-sm text-slate-400">
+                                {search ? 'לא נמצאו תבניות' : 'אין תבניות מערכת זמינות כרגע'}
+                            </p>
+                        </div>
+                    )}
+
+                    {!systemLoading && filteredSystem.length > 0 && (
+                        <div className="grid gap-3">
+                            {filteredSystem.map(template => {
+                                const alreadyCloned = templates.some(t => t.title === template.title);
+                                return (
+                                    <div
+                                        key={template.id}
+                                        className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow"
+                                    >
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Library size={14} className="text-blue-500 flex-shrink-0" />
+                                                    <h3 className="text-base font-semibold text-slate-900 truncate">
+                                                        {template.title}
+                                                    </h3>
+                                                    {alreadyCloned && (
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex-shrink-0">
+                                                            ✓ שוכפל
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {template.description && (
+                                                    <p className="text-xs text-slate-500 mb-2">{template.description}</p>
+                                                )}
+                                                <p className="text-xs text-slate-400 mb-3">
+                                                    {template.fieldsMetadata.length} שדות
+                                                    {template.category && <> • {template.category}</>}
+                                                </p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {template.fieldsMetadata.slice(0, 5).map(f => (
+                                                        <span
+                                                            key={f.id}
+                                                            className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full font-medium"
+                                                        >
+                                                            {f.label}
+                                                        </span>
+                                                    ))}
+                                                    {template.fieldsMetadata.length > 5 && (
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded-full">
+                                                            +{template.fieldsMetadata.length - 5} עוד
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={() => handleCloneSystemTemplate(template)}
+                                                disabled={cloning === template.id}
+                                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                            >
+                                                {cloning === template.id
+                                                    ? <Loader2 size={13} className="animate-spin" />
+                                                    : <Copy size={13} />}
+                                                {alreadyCloned ? 'שכפל שוב' : 'שכפל לתבניות שלי'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Modals */}
             <TemplateParserModal
                 isOpen={showParserModal}
@@ -571,11 +742,30 @@ export default function Contracts() {
                 onSave={handleSaveTemplate}
             />
 
+            {/* Template assign — opened from "שייך לעסקה" on a specific template card */}
             <AssignToDealModal
                 isOpen={assignTemplate !== null}
                 onClose={() => setAssignTemplate(null)}
                 template={assignTemplate}
                 allTemplates={templates}
+                mode="template"
+            />
+
+            {/* Template assign — opened from "שיוך תבנית לעסקה" in active tab */}
+            <AssignToDealModal
+                isOpen={showAssignModal}
+                onClose={() => setShowAssignModal(false)}
+                template={null}
+                allTemplates={templates}
+                mode="template"
+            />
+
+            {/* PDF deal picker — opened from "העלה חוזה מוכן לחתימה" */}
+            <AssignToDealModal
+                isOpen={showPdfDealPicker}
+                onClose={() => setShowPdfDealPicker(false)}
+                template={null}
+                mode="pdf"
             />
         </div>
     );

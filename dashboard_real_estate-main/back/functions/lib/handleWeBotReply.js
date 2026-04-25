@@ -797,7 +797,7 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
 }
 // ─── Main Export ──────────────────────────────────────────────────────────────
 async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, greenApiCreds, _idMessage, currentMsgDocId) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     try {
         // 1. Fetch agency + lead
         const [agencySnap, leadSnap] = await Promise.all([
@@ -839,14 +839,14 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             return;
         }
         // CLOSED state — 24h lock after catalog was sent
-        const BYPASS_PHONE = '0507706024';
+        const bypassPhone = (_e = process.env.BYPASS_PHONE) !== null && _e !== void 0 ? _e : '';
         if (currentState === 'CLOSED') {
-            if (customerPhone === BYPASS_PHONE) {
+            if (bypassPhone !== '' && customerPhone === bypassPhone) {
                 // Silent pass — no AI invoked, no tokens spent, just log
-                console.log(`[WeBot] ✅ Bypass phone ${customerPhone} in CLOSED state — skipping AI`);
+                console.log(`[WeBot] ✅ Bypass phone in CLOSED state — skipping AI`);
                 return;
             }
-            const closedAt = (_e = storedChatState.closedAt) !== null && _e !== void 0 ? _e : storedChatState.lastStateAt;
+            const closedAt = (_f = storedChatState.closedAt) !== null && _f !== void 0 ? _f : storedChatState.lastStateAt;
             if ((Date.now() - closedAt) < 24 * 60 * 60 * 1000) {
                 console.log(`[WeBot] 🔒 CLOSED lock active for lead ${leadId} — ignoring message`);
                 return; // Silent ignore
@@ -857,7 +857,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         }
         // Daily AI usage limit — prevent token abuse
         const today = new Date().toISOString().split('T')[0];
-        const dailyCount = leadData.lastMessageDate === today ? ((_f = leadData.dailyMessageCount) !== null && _f !== void 0 ? _f : 0) : 0;
+        const dailyCount = leadData.lastMessageDate === today ? ((_g = leadData.dailyMessageCount) !== null && _g !== void 0 ? _g : 0) : 0;
         if (dailyCount >= 10) {
             console.log(`[WeBot] 🛑 Lead ${leadId} reached daily AI limit (${dailyCount}/10) — skipping`);
             return;
@@ -868,7 +868,8 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             const alertMsg = `⚠️ *התראת אבטחה*\nהמספר ${customerPhone} שלח מעל 50 הודעות היום. חשד לבוט.`;
             if (adminPhone)
                 await notifyAgentOrAdmin(adminPhone, alertMsg, greenApiCreds);
-            await notifyAgentOrAdmin(BYPASS_PHONE, alertMsg, greenApiCreds);
+            if (bypassPhone)
+                await notifyAgentOrAdmin(bypassPhone, alertMsg, greenApiCreds);
         }
         // Increment daily counter (reset if new day)
         await db.collection('leads').doc(leadId).update({
