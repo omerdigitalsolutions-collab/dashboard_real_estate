@@ -8,9 +8,11 @@
  *   3. Sanitize input
  *   4. Injection detection + auto-block at score ≥ 3
  *   5. 24-hour security session TTL
- *   6. Property-specific routing (exclusive → agent, other → admin)
- *   7. Delegate to handleWeBotReply
- *   8. Audit log every interaction
+ *   6. Delegate to handleWeBotReply (property-specific answering + handoff
+ *      live inside handleAddressQuery there — they were removed from this
+ *      pipeline to avoid hijacking buyer/seller flows on messages that
+ *      merely mention "רחוב" or "דירה ב…")
+ *   7. Audit log every interaction
  */
 
 import * as admin from 'firebase-admin';
@@ -92,86 +94,6 @@ async function getOrCreateSession(
   return { id: sessionId, ...session };
 }
 
-// ─── Property-specific routing ─────────────────────────────────────────────────
-// Returns true if the message was handled (conversation should not continue to AI bot).
-
-async function handlePropertyRouting(
-  phone: string,
-  waChatId: string,
-  text: string,
-  agencyId: string,
-  creds: GreenApiCreds,
-): Promise<boolean> {
-  const propertyKeywords = ['רחוב', 'כתובת', 'נכס ב', 'דירה ב', 'הנכס ב', 'פרויקט', 'מגדל', 'גוש', 'חלקה', 'קומה'];
-  if (!propertyKeywords.some((kw) => text.includes(kw))) return false;
-
-  const words = text.split(/\s+/).filter((w) => w.length > 2);
-  if (words.length < 2) return false;
-
-  const propSnap = await db
-    .collection('agencies').doc(agencyId).collection('properties')
-    .where('status', '==', 'active')
-    .limit(50)
-    .get();
-
-  const matched = propSnap.docs.find((doc) => {
-    const d = doc.data();
-    const addrObj = d.address;
-    const haystack = [
-      typeof addrObj === 'object' ? addrObj?.fullAddress : addrObj,
-      addrObj?.street,
-      addrObj?.city,
-      addrObj?.neighborhood,
-    ].filter(Boolean).join(' ').toLowerCase();
-    return words.some((w) => haystack.includes(w.toLowerCase()));
-  });
-
-  if (!matched) return false;
-
-  const prop = matched.data();
-  const assignedAgentId: string | null = prop.management?.assignedAgentId || prop.agentId || null;
-  const toIntl = (p: string) => `${p.replace(/^0/, '972')}@c.us`;
-
-  if (prop.isExclusive && assignedAgentId) {
-    const agentDoc = await db.collection('users').doc(assignedAgentId).get();
-    const agentPhone: string | null = agentDoc.data()?.phone || agentDoc.data()?.phoneNumber || null;
-    if (agentPhone) {
-      const desc = prop.address?.fullAddress || prop.address?.city || prop.city || 'נכס';
-      await sendDirect(
-        creds,
-        toIntl(agentPhone),
-        `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${phone}\nשאל על: ${desc}\n\nהודעה:\n"${text}"`,
-      );
-      await sendDirect(creds, waChatId, 'מעביר אותך לסוכן שאחראי על הנכס — הוא יחזור אליך בהקדם. 🏡');
-      return true;
-    }
-  }
-
-  // Non-exclusive or no agent phone → admin + create lead notification
-  const adminSnap = await db
-    .collection('users')
-    .where('agencyId', '==', agencyId)
-    .where('role', '==', 'admin')
-    .where('isActive', '==', true)
-    .limit(1)
-    .get();
-
-  if (!adminSnap.empty) {
-    const adminPhone: string | null =
-      adminSnap.docs[0].data()?.phone || adminSnap.docs[0].data()?.phoneNumber || null;
-    if (adminPhone) {
-      await sendDirect(
-        creds,
-        toIntl(adminPhone),
-        `🏠 *ליד חדש מהבוט*\nטלפון: ${phone}\nשאל על: ${prop.address?.fullAddress || prop.address?.city || prop.city || 'נכס'}\n\nהודעה:\n"${text}"`,
-      );
-    }
-  }
-
-  await sendDirect(creds, waChatId, 'פנינו לנציג שיחזור אליך בהקדם. 🏡');
-  return true;
-}
-
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function processInboundMessage(params: PipelineParams): Promise<void> {
@@ -243,13 +165,8 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
     return;
   }
 
-  // 6. Property-specific routing
-  const wasRouted = await handlePropertyRouting(phone, waChatId, sanitized, agencyId, creds);
-  if (wasRouted) {
-    await writeAuditLog(phone, agencyId, 'outbound', '[property routing]', { routed: true });
-    return;
-  }
-
-  // 7. Delegate to existing AI bot
+  // 6. Delegate to existing AI bot. Property-specific answering + agent
+  //    notification (for exclusive listings) live in handleAddressQuery
+  //    inside handleWeBotReply — see the rationale at the top of this file.
   await handleWeBotReply(agencyId, leadId, phone, sanitized, geminiApiKey, creds, idMessage, inboundMsgDocId);
 }

@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, User, Briefcase, Loader2, X, Check, ChevronDown, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getLiveLeads } from '../../services/leadService';
-import { getLiveDeals } from '../../services/dealService';
+import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { createInstance } from '../../services/contractInstanceService';
-import { Lead, Deal, ContractTemplate } from '../../types';
+import { ContractTemplate } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -30,21 +29,17 @@ export default function AssignToDealModal({
 }: AssignToDealModalProps) {
     const { userData } = useAuth();
     const navigate = useNavigate();
+    const { deals, leads, properties, loading } = useLiveDashboardData();
 
     const [selectedTemplate, setSelectedTemplate] = useState<(ContractTemplate & { id: string }) | null>(template);
     const [targetType, setTargetType] = useState<TargetType>('deal');
     const [search, setSearch] = useState('');
-    const [leads, setLeads] = useState<Lead[]>([]);
-    const [deals, setDeals] = useState<Deal[]>([]);
-    const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
-    // Sync selected template when the prop changes (opening modal pre-selected)
     useEffect(() => {
         if (template) setSelectedTemplate(template);
     }, [template]);
 
-    // Reset state on open
     useEffect(() => {
         if (isOpen) {
             setSearch('');
@@ -52,42 +47,31 @@ export default function AssignToDealModal({
         }
     }, [isOpen]);
 
-    // Reset search when switching tabs
     useEffect(() => {
         setSearch('');
     }, [targetType]);
 
-    useEffect(() => {
-        if (!isOpen || !userData?.agencyId) return;
-
-        setLoading(true);
-        let leadsDone = false;
-        let dealsDone = false;
-        const checkDone = () => { if (leadsDone && dealsDone) setLoading(false); };
-
-        const unsubLeads = getLiveLeads(userData.agencyId, (data) => {
-            setLeads(data);
-            leadsDone = true;
-            checkDone();
+    // propertyId → fullAddress for deal display
+    const propertyMap = useMemo(() => {
+        const map = new Map<string, string>();
+        properties.forEach(p => {
+            map.set(p.id, p.address?.fullAddress || p.address?.city || '');
         });
-        const unsubDeals = getLiveDeals(userData.agencyId, (data) => {
-            setDeals(data);
-            dealsDone = true;
-            checkDone();
-        });
+        return map;
+    }, [properties]);
 
-        return () => { unsubLeads(); unsubDeals(); };
-    }, [isOpen, userData?.agencyId]);
+    const filteredLeads = useMemo(() =>
+        leads.filter(l =>
+            l.name.toLowerCase().includes(search.toLowerCase()) ||
+            l.phone.includes(search)
+        ), [leads, search]);
 
-    const filteredLeads = leads.filter(l =>
-        l.name.toLowerCase().includes(search.toLowerCase()) ||
-        l.phone.includes(search)
-    );
-
-    const filteredDeals = deals.filter(d =>
-        d.id.toLowerCase().includes(search.toLowerCase()) ||
-        (d as any).propertyAddress?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredDeals = useMemo(() =>
+        deals.filter(d => {
+            const addr = propertyMap.get(d.propertyId) || '';
+            const q = search.toLowerCase();
+            return d.id.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
+        }), [deals, propertyMap, search]);
 
     const handleAssign = async (targetId?: string) => {
         // PDF mode: just navigate to the ContractEditor for this deal
@@ -250,33 +234,36 @@ export default function AssignToDealModal({
                                 <p className="text-center py-12 text-slate-400 text-sm">לא נמצאו לידים</p>
                             )}
 
-                            {targetType === 'deal' && filteredDeals.map(deal => (
-                                <button
-                                    key={deal.id}
-                                    onClick={() => handleAssign(deal.id)}
-                                    disabled={submitting || !selectedTemplate}
-                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/30 transition-all text-right group disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-                                            <Briefcase size={18} />
+                            {targetType === 'deal' && filteredDeals.map(deal => {
+                                const address = propertyMap.get(deal.propertyId) || '';
+                                return (
+                                    <button
+                                        key={deal.id}
+                                        onClick={() => handleAssign(deal.id)}
+                                        disabled={submitting || !selectedTemplate}
+                                        className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/30 transition-all text-right group disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+                                                <Briefcase size={18} />
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-semibold text-slate-900 text-sm">
+                                                    {address || `עסקה #${deal.id.slice(-6).toUpperCase()}`}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    #{deal.id.slice(-6).toUpperCase()} · {deal.stage}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-semibold text-slate-900 text-sm">
-                                                {deal.clientName || `עסקה #${deal.id.slice(-6).toUpperCase()}`}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {deal.propertyAddress || 'ללא כתובת'}
-                                            </p>
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                                                <Check size={16} />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                                            <Check size={16} />
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
+                                    </button>
+                                );
+                            })}
 
                              {targetType === 'lead' && filteredLeads.map(lead => (
                                 <button
