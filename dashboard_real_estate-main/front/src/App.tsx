@@ -41,6 +41,7 @@ import ContractInstanceViewer from './pages/ContractInstanceViewer';
 import SignInstancePage from './pages/SignInstancePage';
 import BillingLockScreen from './pages/BillingLockScreen';
 import PendingApproval from './pages/PendingApproval';
+import ExploreGallery from './pages/ExploreGallery';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
 import OnboardingTour from './components/common/OnboardingTour';
 
@@ -85,6 +86,9 @@ function App() {
           <Route path="/join" element={<AgentJoin />} />
           <Route path="/join-agency" element={<JoinByCode />} />
         </Route>
+
+        {/* B2C Property Gallery — fully public, no auth */}
+        <Route path="/explore" element={<ExploreGallery />} />
 
         {/* Onboarding (new agency admins) - Now public for Step 0 lead capture */}
         <Route path="/onboarding" element={<Onboarding />} />

@@ -63,6 +63,41 @@ export async function createContractFromPDF(
     return { contractId: docRef.id, pdfUrl };
 }
 
+/**
+ * Uploads an image (scan) to Storage and creates a draft Contract document.
+ */
+export async function createContractFromImage(
+    agencyId: string,
+    file: File,
+    createdBy: string,
+    dealId?: string
+): Promise<{ contractId: string; imageUrl: string }> {
+    const storagePath = `agencies/${agencyId}/contracts/scans/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, storagePath);
+
+    await new Promise<void>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
+        task.on('state_changed', null, reject, () => resolve());
+    });
+
+    const imageUrl = await getDownloadURL(storageRef);
+
+    const data: Omit<Contract, 'id'> = {
+        agencyId,
+        dealId: dealId ?? undefined,
+        source: 'scan',
+        originalFileUrl: imageUrl, // Reusing this field for the image URL
+        status: 'draft',
+        fields: [],
+        createdBy,
+        createdAt: serverTimestamp() as any,
+        updatedAt: serverTimestamp() as any,
+    };
+
+    const docRef = await addDoc(contractsCol(agencyId), data);
+    return { contractId: docRef.id, imageUrl };
+}
+
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
 /**

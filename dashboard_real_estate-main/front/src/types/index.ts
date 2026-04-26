@@ -180,6 +180,9 @@ export interface Property {
     ingestedAt?: any;
     source?: string;
     listingType?: 'exclusive' | 'external' | 'private';
+    visibility?: 'public' | 'private' | 'draft';
+    slug?: string;
+    seoDescription?: string;
     isGlobalCityProperty?: boolean;
     importedFromGlobal?: boolean;
     originalGlobalId?: string;
@@ -243,6 +246,24 @@ export interface Property {
 
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+}
+
+// ─── B2C Search Alerts ────────────────────────────────────────────────────────
+export interface SearchAlert {
+    id?: string;
+    phone: string;
+    filters: {
+        city?: string;
+        minPrice?: number;
+        maxPrice?: number;
+        rooms?: number;
+        propertyType?: string;
+        transactionType?: 'forsale' | 'rent';
+        rawQuery?: string;
+    };
+    active: boolean;
+    lastNotified?: Timestamp;
+    createdAt: Timestamp;
 }
 
 export interface PendingLead {

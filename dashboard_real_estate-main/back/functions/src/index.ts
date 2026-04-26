@@ -30,6 +30,7 @@ import { updateProperty } from './properties/updateProperty';
 import { deleteProperty } from './properties/deleteProperty';
 import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty } from './properties/geocode';
 import { onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking } from './properties/matchmaking';
+import { processNaturalLanguageSearch } from './properties/processNaturalLanguageSearch';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -108,7 +109,7 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
 export const users = { inviteAgent, sendAgentInvite, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
 export const alerts = { triggerSystemAlert };

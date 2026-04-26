@@ -32,7 +32,7 @@ export async function createInstance(
     const docRef = await addDoc(instancesCol(agencyId), {
         agencyId,
         templateId,
-        dealId,
+        ...(dealId ? { dealId } : {}),
         ...(leadId ? { leadId } : {}),
         status: 'draft',
         values: initialValues,
@@ -96,4 +96,8 @@ export async function markInstanceSigned(agencyId: string, instanceId: string): 
         status: 'signed',
         updatedAt: Timestamp.now()
     });
+}
+
+export async function deleteInstance(agencyId: string, instanceId: string): Promise<void> {
+    await deleteDoc(instanceDoc(agencyId, instanceId));
 }

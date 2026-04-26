@@ -214,8 +214,8 @@ async function findMatchingPropertiesForBot(agencyId, requirements, topN = 10) {
     return matches.slice(0, topN);
 }
 // ─── handleAddressQuery ───────────────────────────────────────────────────────
-async function handleAddressQuery(agencyId, leadId, customerPhone, message, leadData, integration) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+async function handleAddressQuery(agencyId, leadId, customerPhone, message, leadData, integration, greenApiCreds) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     const addressQueryTriggers = ['פרטים על', 'מה המחיר של', 'מה יש ב', 'תספר לי על', 'כמה עולה', 'כמה חדרים ב'];
     const hasStreetNumber = /\d/.test(message);
     const hasTrigger = addressQueryTriggers.some(kw => message.includes(kw));
@@ -242,43 +242,51 @@ async function handleAddressQuery(agencyId, leadId, customerPhone, message, lead
             addrObj === null || addrObj === void 0 ? void 0 : addrObj.city,
             addrObj === null || addrObj === void 0 ? void 0 : addrObj.neighborhood,
         ].filter(Boolean).join(' ').toLowerCase();
-        if (words.some((w) => haystack.includes(w.toLowerCase()))) {
-            matched.push(doc);
-        }
+        const score = words.reduce((n, w) => n + (haystack.includes(w.toLowerCase()) ? 1 : 0), 0);
+        if (score >= 2)
+            matched.push({ doc, score });
     });
+    matched.sort((a, b) => b.score - a.score);
     if (matched.length === 0)
         return false;
     // Increment counter
     await db.collection('leads').doc(leadId).update({
         addressQueryCount: admin.firestore.FieldValue.increment(1),
     });
-    if (matched.length === 1) {
-        const prop = matched[0].data();
-        const address = ((_b = prop.address) === null || _b === void 0 ? void 0 : _b.fullAddress) || `${(_c = prop.address) === null || _c === void 0 ? void 0 : _c.street}, ${(_d = prop.address) === null || _d === void 0 ? void 0 : _d.city}` || prop.city || 'נכס';
-        const price = (_f = (_e = prop.financials) === null || _e === void 0 ? void 0 : _e.price) !== null && _f !== void 0 ? _f : prop.price;
-        const rooms = prop.rooms;
-        const neighborhood = ((_g = prop.address) === null || _g === void 0 ? void 0 : _g.neighborhood) || prop.neighborhood;
-        const priceStr = price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר לא צוין';
-        const roomsStr = rooms ? `${rooms}` : 'לא צוין';
-        const areaStr = neighborhood || 'לא צוין';
-        await sendBotMessage(integration, customerPhone, leadId, `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}`);
-        return true;
-    }
-    // Multiple matches
-    if (addressQueryCount < 1) {
+    // Multiple matches → ask for clarification on the first try
+    if (matched.length > 1 && addressQueryCount < 1) {
         await sendBotMessage(integration, customerPhone, leadId, `מצאתי כמה נכסים בכתובת זו. מה טווח המחיר המשוער שמעניין אותך?`);
         return true;
     }
-    // Second query with clarification — send top match
-    const topProp = matched[0].data();
-    const address = ((_h = topProp.address) === null || _h === void 0 ? void 0 : _h.fullAddress) || `${(_j = topProp.address) === null || _j === void 0 ? void 0 : _j.street}, ${(_k = topProp.address) === null || _k === void 0 ? void 0 : _k.city}` || topProp.city || 'נכס';
-    const price = (_m = (_l = topProp.financials) === null || _l === void 0 ? void 0 : _l.price) !== null && _m !== void 0 ? _m : topProp.price;
-    const rooms = topProp.rooms;
-    const neighborhood = ((_o = topProp.address) === null || _o === void 0 ? void 0 : _o.neighborhood) || topProp.neighborhood;
+    // Single match (or top match after clarification) → answer with public details
+    const topDoc = matched[0].doc;
+    const prop = topDoc.data();
+    const address = ((_b = prop.address) === null || _b === void 0 ? void 0 : _b.fullAddress) || `${(_c = prop.address) === null || _c === void 0 ? void 0 : _c.street}, ${(_d = prop.address) === null || _d === void 0 ? void 0 : _d.city}` || prop.city || 'נכס';
+    const price = (_f = (_e = prop.financials) === null || _e === void 0 ? void 0 : _e.price) !== null && _f !== void 0 ? _f : prop.price;
+    const rooms = prop.rooms;
+    const neighborhood = ((_g = prop.address) === null || _g === void 0 ? void 0 : _g.neighborhood) || prop.neighborhood;
     const priceStr = price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר לא צוין';
     const roomsStr = rooms ? `${rooms}` : 'לא צוין';
     const areaStr = neighborhood || 'לא צוין';
-    await sendBotMessage(integration, customerPhone, leadId, `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}`);
+    // For exclusive listings with an assigned agent, append a handoff line and
+    // ping the agent — the customer still gets the public details first.
+    const isExclusive = prop.isExclusive === true;
+    const assignedAgentId = ((_h = prop.management) === null || _h === void 0 ? void 0 : _h.assignedAgentId) || prop.agentId || null;
+    let handoffNote = '';
+    if (isExclusive && assignedAgentId) {
+        try {
+            const agentDoc = await db.collection('users').doc(assignedAgentId).get();
+            const agentPhone = ((_j = agentDoc.data()) === null || _j === void 0 ? void 0 : _j.phone) || ((_k = agentDoc.data()) === null || _k === void 0 ? void 0 : _k.phoneNumber) || null;
+            if (agentPhone) {
+                await notifyAgentOrAdmin(agentPhone, `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${customerPhone}\nשאל על: ${address}\n\nהודעה:\n"${message}"`, greenApiCreds);
+                handoffNote = '\n\nהסוכן האחראי על הנכס יחזור אליך בהקדם. 🏡';
+            }
+        }
+        catch (err) {
+            console.warn('[WeBot] handleAddressQuery: failed to notify exclusive agent', err);
+        }
+    }
+    await sendBotMessage(integration, customerPhone, leadId, `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}${handoffNote}`);
     return true;
 }
 // ─── generateConversationSummary ──────────────────────────────────────────────
@@ -334,14 +342,15 @@ async function sendBotMessage(integration, customerPhone, leadId, text) {
 }
 // ─── classifyIntent ───────────────────────────────────────────────────────────
 async function classifyIntent(message, leadType, geminiApiKey, leadStatus) {
-    // Step 1 — Buyer fast-path (runs first, takes precedence)
+    // Step 1 — Seller fast-path (runs first; "דירה שלי / נכס שלי / רוצה למכור" beats
+    // generic verbs like "מחפש" so that "אני מחפש קונה לדירה שלי" is a seller, not a buyer)
+    const sellerKeywords = ['רוצה למכור', 'אני מוכר', 'לפרסם נכס', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את', 'בעל נכס', 'מחפש קונה', 'מחפשת קונה'];
+    if (sellerKeywords.some(kw => message.includes(kw)))
+        return 'seller';
+    // Step 2 — Buyer fast-path
     const buyerFastPhrases = ['מחפש', 'מחפשת', 'מעוניין', 'מעוניינת', 'רוצה לקנות', 'רוצה לשכור'];
     if (buyerFastPhrases.some(kw => message.includes(kw)))
         return 'buyer';
-    // Step 2 — Seller fast-path (unambiguous selling intent only)
-    const sellerKeywords = ['רוצה למכור', 'אני מוכר', 'לפרסם נכס', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את', 'בעל נכס'];
-    if (sellerKeywords.some(kw => message.includes(kw)))
-        return 'seller';
     // If existing seller lead writing again — stay in seller flow
     if (leadType === 'seller')
         return 'seller';
@@ -433,19 +442,35 @@ async function extractSellerInfo(message, geminiApiKey) {
     }
 }
 // ─── extractTimePreference ────────────────────────────────────────────────────
+/**
+ * Extracts a usable time hint from the customer's message.
+ * Returns null when no time signal is detectable so the caller can re-ask
+ * instead of saving garbage like "תודה רבה" as scheduledTime.
+ */
 async function extractTimePreference(message, geminiApiKey) {
+    const trimmed = message.trim();
+    // Cheap local heuristic — digit / day-name / common time keyword.
+    const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    const timeKeywords = ['בוקר', 'ערב', 'צהריים', 'לילה', 'מחר', 'מחרתיים', 'היום', 'עכשיו', 'אחה"צ', 'אחר הצהריים', 'בשעה'];
+    const hasLocalSignal = /\d/.test(trimmed)
+        || dayNames.some(d => trimmed.includes(d))
+        || timeKeywords.some(k => trimmed.includes(k));
     try {
         const genAI = new generative_ai_1.GoogleGenerativeAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
         const today = new Date().toLocaleDateString('he-IL');
-        const result = await model.generateContent(`חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${message}"\n` +
+        const result = await model.generateContent(`חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${trimmed}"\n` +
             `{"timeText":"תיאור הזמן הקריא בעברית, או null"}`);
         const parsed = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
-        return parsed.timeText || message.trim();
+        if (typeof parsed.timeText === 'string' && parsed.timeText.trim()) {
+            return parsed.timeText.trim();
+        }
+        // Gemini said null — fall back to local signal if present.
+        return hasLocalSignal ? trimmed : null;
     }
     catch (err) {
         console.warn('[WeBot] extractTimePreference failed (Gemini/parse error):', err);
-        return message.trim();
+        return hasLocalSignal ? trimmed : null;
     }
 }
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
@@ -518,8 +543,27 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             const propertyId = args.propertyId;
             const durationMins = typeof args.duration === 'number' ? args.duration : 60;
             const typeLabel = meetingType === 'call' ? 'שיחת טלפון' : 'סיור בנכס';
+            // Reject Gemini outputs that aren't well-formed dates/times — feed the
+            // error back so it asks the user again instead of crashing on
+            // Invalid Date.toISOString().
+            const dateOk = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date);
+            const timeOk = typeof time === 'string' && /^\d{2}:\d{2}$/.test(time);
+            const startDateObj = dateOk && timeOk ? new Date(`${date}T${time}:00`) : null;
+            if (!startDateObj || Number.isNaN(startDateObj.getTime())) {
+                chatResponse = await withRetry('chat.sendMessage(fn)', () => chat.sendMessage([{
+                        functionResponse: {
+                            name: call.name,
+                            response: {
+                                success: false,
+                                reason: 'invalid_datetime',
+                                message: 'התאריך או השעה לא תקינים. בקש מהלקוח תאריך בפורמט YYYY-MM-DD ושעה בפורמט HH:MM.',
+                            },
+                        },
+                    }]));
+                continue;
+            }
             const startDateTime = `${date}T${time}:00`;
-            const endDate = new Date(`${date}T${time}:00`);
+            const endDate = new Date(startDateObj);
             endDate.setMinutes(endDate.getMinutes() + durationMins);
             const endDateTime = endDate.toISOString().slice(0, 16) + ':00';
             await db.collection('meetings').add({
@@ -727,7 +771,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
 }
 // ─── Seller Flow (deterministic) ─────────────────────────────────────────────
 async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, leadData, integration, currentState, chatStateData, greenApiCreds) {
-    var _a, _b;
+    var _a, _b, _c;
     const leadName = leadData.name || customerPhone;
     // ── First contact: start seller flow ─────────────────────────────────────
     if (currentState === 'IDLE') {
@@ -741,14 +785,41 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
         const extracted = await extractSellerInfo(incomingMessage, geminiApiKey);
         const address = extracted.address || chatStateData.pendingSellerAddress;
         const propertyType = extracted.propertyType || chatStateData.pendingSellerType;
-        if (!address && !propertyType) {
-            await sendBotMessage(integration, customerPhone, leadId, `לא הצלחתי לזהות את הפרטים.\nאנא ציין את *כתובת הנכס* וה*סוג* שלו — לדוגמה: "דירה ברחוב הרצל 5, תל אביב"`);
+        const attempts = ((_a = chatStateData.sellerInfoAttempts) !== null && _a !== void 0 ? _a : 0) + 1;
+        const incomplete = !address || !propertyType;
+        // After 3 unsuccessful attempts, escalate to admin instead of looping forever.
+        if (incomplete && attempts >= 3) {
+            await updateChatState(leadId, 'IDLE', {
+                pendingSellerAddress: address,
+                pendingSellerType: propertyType,
+                sellerInfoAttempts: attempts,
+            });
+            await sendBotMessage(integration, customerPhone, leadId, 'תודה רבה. מנהל המשרד יחזור אליך בהקדם להמשך הטיפול.');
+            const adminPhone = await findAdminPhone(agencyId);
+            if (adminPhone) {
+                const partial = [
+                    address ? `כתובת חלקית: ${address}` : null,
+                    propertyType ? `סוג: ${propertyType}` : null,
+                ].filter(Boolean).join(' | ') || 'אין פרטים';
+                await notifyAgentOrAdmin(adminPhone, `🏠 *מוכר חדש — דורש טיפול ידני*\nשם: ${leadName}\nטלפון: ${customerPhone}\nהבוט לא הצליח לאסוף פרטים אחרי 3 ניסיונות.\n${partial}\nהודעה אחרונה: "${incomingMessage.substring(0, 200)}"`, greenApiCreds);
+            }
+            await createCRMNotification(agencyId, leadId, leadName, 'new_seller_inquiry', 'contact_seller', { phone: customerPhone, partialAddress: address, partialType: propertyType, reason: 'bot_collection_failed', canAssignToAgent: true });
             return;
         }
-        if (!address || !propertyType) {
+        if (!address && !propertyType) {
             await updateChatState(leadId, 'COLLECTING_SELLER_INFO', {
                 pendingSellerAddress: address,
                 pendingSellerType: propertyType,
+                sellerInfoAttempts: attempts,
+            });
+            await sendBotMessage(integration, customerPhone, leadId, `לא הצלחתי לזהות את הפרטים.\nאנא ציין את *כתובת הנכס* וה*סוג* שלו — לדוגמה: "דירה ברחוב הרצל 5, תל אביב"`);
+            return;
+        }
+        if (incomplete) {
+            await updateChatState(leadId, 'COLLECTING_SELLER_INFO', {
+                pendingSellerAddress: address,
+                pendingSellerType: propertyType,
+                sellerInfoAttempts: attempts,
             });
             const missing = !address ? 'כתובת הנכס' : 'סוג הנכס (דירה, בית, פנטהאוס וכו׳)';
             await sendBotMessage(integration, customerPhone, leadId, `תודה. כדי להמשיך, חסר לנו ${missing}.`);
@@ -769,8 +840,12 @@ async function runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, g
     // ── Scheduling the seller call ────────────────────────────────────────────
     if (currentState === 'SCHEDULING_SELLER_CALL') {
         const timePreference = await extractTimePreference(incomingMessage, geminiApiKey);
-        const address = chatStateData.pendingSellerAddress || ((_a = leadData.sellerInfo) === null || _a === void 0 ? void 0 : _a.address) || 'לא צוין';
-        const propertyType = chatStateData.pendingSellerType || ((_b = leadData.sellerInfo) === null || _b === void 0 ? void 0 : _b.propertyType) || 'לא צוין';
+        if (!timePreference) {
+            await sendBotMessage(integration, customerPhone, leadId, 'לא הצלחתי להבין את הזמן המבוקש.\nציין בבקשה יום ושעה — לדוגמה: "מחר ב-10:00" או "יום שני אחה"צ".');
+            return;
+        }
+        const address = chatStateData.pendingSellerAddress || ((_b = leadData.sellerInfo) === null || _b === void 0 ? void 0 : _b.address) || 'לא צוין';
+        const propertyType = chatStateData.pendingSellerType || ((_c = leadData.sellerInfo) === null || _c === void 0 ? void 0 : _c.propertyType) || 'לא צוין';
         await db.collection('tasks').add({
             agencyId, leadId,
             createdBy: 'bot',
@@ -883,13 +958,21 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
             currentState = 'IDLE';
             await updateChatState(leadId, 'IDLE');
         }
-        // Address-specific property query (fires regardless of state, except CLOSED)
-        const handledAsAddress = await handleAddressQuery(agencyId, leadId, customerPhone, incomingMessage, leadData, integration);
-        if (handledAsAddress)
-            return;
+        // Address-specific property query — only when the conversation isn't
+        // mid-flow (state machine integrity: don't hijack a seller giving their
+        // address with a stray "כמה עולה דירה דומה?" answer).
+        if (currentState === 'IDLE' || currentState === 'COLLECTING_NAME') {
+            const handledAsAddress = await handleAddressQuery(agencyId, leadId, customerPhone, incomingMessage, leadData, integration, greenApiCreds);
+            if (handledAsAddress)
+                return;
+        }
         // 5. Name collection: ask name on first bot interaction (regardless of WhatsApp display name)
         if (currentState === 'COLLECTING_NAME') {
-            const name = incomingMessage.trim().substring(0, 50) || 'לקוח';
+            const candidate = incomingMessage.trim().substring(0, 50);
+            // Accept Hebrew letters, Latin letters, spaces, hyphens, and apostrophes —
+            // require ≥ 2 letters total. Anything else → fall back to "לקוח".
+            const looksLikeName = /^[֐-׿a-zA-Z\s'\-]{2,}$/.test(candidate);
+            const name = looksLikeName ? candidate : 'לקוח';
             await db.collection('leads').doc(leadId).update({ name, botNameCollected: true });
             await updateChatState(leadId, 'IDLE');
             await sendBotMessage(integration, customerPhone, leadId, `נעים להכיר, ${name}.\nאיך אוכל לעזור לך?\n\nמחפש/ת דירה לקנות או לשכור? או\n\nלמכור נכס?`);
@@ -912,11 +995,28 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
                 }
                 return; // No WhatsApp reply
             }
+            // Persist the classified type immediately so the lead is registered
+            // as buyer/seller even if the conversation stalls before requirements
+            // are collected or the seller flow completes.
             if (intent === 'seller') {
+                if (leadData.type !== 'seller') {
+                    await db.collection('leads').doc(leadId).update({
+                        type: 'seller',
+                        status: leadData.status && leadData.status !== 'new' ? leadData.status : 'potential_seller',
+                    });
+                    leadData.type = 'seller';
+                }
                 await runSellerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, leadData, integration, 'IDLE', storedChatState, greenApiCreds);
                 return;
             }
             // buyer (default)
+            if (leadData.type !== 'buyer') {
+                await db.collection('leads').doc(leadId).update({
+                    type: 'buyer',
+                    status: leadData.status && leadData.status !== 'new' ? leadData.status : 'searching',
+                });
+                leadData.type = 'buyer';
+            }
             await runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState);
             return;
         }

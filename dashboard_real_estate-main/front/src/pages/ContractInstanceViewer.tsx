@@ -76,15 +76,73 @@ export default function ContractInstanceViewer() {
         try {
             setExporting(true);
             const html2pdf = (await import('html2pdf.js')).default;
+
+            const clone = previewRef.current.cloneNode(true) as HTMLElement;
+            clone.style.cssText = [
+                'width:740px',
+                'padding:30px 40px',
+                'font-family:Arial,"Helvetica Neue",Helvetica,sans-serif',
+                'font-size:14px',
+                'line-height:2',
+                'direction:rtl',
+                'background:white',
+                'color:#000',
+                'box-sizing:border-box',
+                'overflow:visible',
+            ].join(';');
+
+            // Remove any overflow:hidden / text-overflow clipping from every child
+            clone.querySelectorAll<HTMLElement>('*').forEach((el) => {
+                el.style.overflow = 'visible';
+                el.style.textOverflow = 'clip';
+                el.style.maxWidth = 'none';
+            });
+
+            // Replace inputs/textareas with visible inline-block spans
+            clone.querySelectorAll('input, textarea').forEach((el) => {
+                const input = el as HTMLInputElement | HTMLTextAreaElement;
+                const span = document.createElement('span');
+                const isDate = (input as HTMLInputElement).type === 'date';
+
+                let display = input.value;
+                if (isDate && display) {
+                    const [y, m, d] = display.split('-');
+                    display = `${d}/${m}/${y}`;
+                }
+
+                span.style.cssText = [
+                    'display:inline-block',
+                    'border-bottom:1.5px solid #444',
+                    'padding:0 6px',
+                    'margin:0 2px',
+                    'color:#000',
+                    'font-size:13px',
+                    'min-width:80px',
+                    'text-align:center',
+                    'white-space:nowrap',
+                ].join(';');
+                span.textContent = display || '___________';
+                input.replaceWith(span);
+            });
+
             const opt = {
-                margin: [15, 15, 15, 15],
+                margin: [12, 12, 12, 12] as [number, number, number, number],
                 filename: `${template.title} — חתום.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: false },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+                image: { type: 'jpeg' as const, quality: 0.97 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true,
+                    windowWidth: 740,
+                    scrollX: 0,
+                    scrollY: 0,
+                },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                pagebreak: { mode: ['css', 'legacy'], avoid: 'img' },
             };
-            await html2pdf().set(opt).from(previewRef.current).save();
+
+            await html2pdf().set(opt).from(clone).save();
             toast.success('הקובץ הורד בהצלחה');
         } catch (err) {
             console.error('[ContractInstanceViewer] PDF export error:', err);

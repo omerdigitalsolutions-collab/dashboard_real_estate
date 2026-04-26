@@ -20,12 +20,13 @@ import {
     Eye,
     Copy,
     Library,
+    Camera,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { getLiveContracts } from '../services/contractService';
-import { getLiveTemplates, createTemplate, deleteTemplate } from '../services/contractTemplateService';
-import { getLiveInstances } from '../services/contractInstanceService';
+import { getLiveTemplates, createTemplate, deleteTemplate, updateTemplate } from '../services/contractTemplateService';
+import { getLiveInstances, deleteInstance } from '../services/contractInstanceService';
 import { getSystemTemplates, cloneSystemTemplate } from '../services/systemTemplateService';
 import type { SystemTemplate } from '../services/systemTemplateService';
 import { Contract, ContractTemplate, ContractInstance, TemplateField } from '../types';
@@ -76,6 +77,9 @@ export default function Contracts() {
     const [templatesLoading, setTemplatesLoading] = useState(true);
     const [showParserModal, setShowParserModal] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [editingTemplate, setEditingTemplate] = useState<ContractTemplateWithId | null>(null);
+    const [editingTitle, setEditingTitle] = useState('');
+    const [savingTitle, setSavingTitle] = useState(false);
     const [assignTemplate, setAssignTemplate] = useState<ContractTemplateWithId | null>(null);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showPdfDealPicker, setShowPdfDealPicker] = useState(false);
@@ -84,6 +88,7 @@ export default function Contracts() {
     const [instances, setInstances] = useState<ContractInstanceWithId[]>([]);
     const [pdfContracts, setPdfContracts] = useState<ContractWithId[]>([]);
     const [activeLoading, setActiveLoading] = useState(true);
+    const [deletingInstance, setDeletingInstance] = useState<string | null>(null);
 
     // Tab 3 — System templates
     const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>([]);
@@ -175,6 +180,34 @@ export default function Contracts() {
         }
     };
 
+    const handleEditTemplateName = (template: ContractTemplateWithId) => {
+        setEditingTemplate(template);
+        setEditingTitle(template.title);
+    };
+
+    const handleSaveTemplateName = async () => {
+        if (!userData?.agencyId || !editingTemplate) return;
+        const newTitle = editingTitle.trim();
+        if (!newTitle) {
+            toast.error('שם התבנית לא יכול להיות ריק');
+            return;
+        }
+        if (newTitle === editingTemplate.title) {
+            setEditingTemplate(null);
+            return;
+        }
+        try {
+            setSavingTitle(true);
+            await updateTemplate(userData.agencyId, editingTemplate.id, { title: newTitle });
+            toast.success('שם התבנית עודכן');
+            setEditingTemplate(null);
+        } catch {
+            toast.error('שגיאה בעדכון שם התבנית');
+        } finally {
+            setSavingTitle(false);
+        }
+    };
+
     const handleCloneSystemTemplate = async (template: SystemTemplate) => {
         if (!userData?.agencyId) return;
         try {
@@ -186,6 +219,26 @@ export default function Contracts() {
             toast.error('שגיאה בשכפול התבנית');
         } finally {
             setCloning(null);
+        }
+    };
+
+    const handleDeleteInstance = async (inst: ContractInstanceWithId) => {
+        if (!userData?.agencyId) return;
+        const isSigned = inst.status === 'signed';
+        const msg = isSigned
+            ? 'חוזה זה כבר נחתם. האם אתה בטוח שברצונך למחוק אותו לצמיתות?'
+            : 'האם אתה בטוח שברצונך למחוק חוזה זה?';
+        if (!window.confirm(msg)) return;
+        try {
+            setDeletingInstance(inst.id);
+            await deleteInstance(userData.agencyId, inst.id);
+            toast.success('החוזה נמחק');
+        } catch (err: any) {
+            console.error('[Contracts] deleteInstance error:', err);
+            const isPermission = err?.code === 'permission-denied';
+            toast.error(isPermission ? 'אין הרשאה למחוק חוזה זה' : 'שגיאה במחיקת החוזה');
+        } finally {
+            setDeletingInstance(null);
         }
     };
 
@@ -307,6 +360,37 @@ export default function Contracts() {
             ══════════════════════════════════════════════════ */}
             {activeTab === 'templates' && (
                 <div className="space-y-4">
+                    {/* How-to banner */}
+                    <div className="bg-gradient-to-l from-purple-50 to-blue-50 border border-purple-100 rounded-2xl p-5">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <Sparkles size={18} className="text-purple-600" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm font-bold text-slate-900 mb-1">תבניות חוזה — איך עובד?</h3>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                    צור תבנית חוזה עם שדות מילוי (שם, תאריך, חתימה וכו'). לאחר מכן שייך אותה לעסקה או ליד — המערכת תפתח עורך שבו תוכל למלא את הפרטים ולשלוח ללקוח לחתימה דיגיטלית.
+                                </p>
+                                <div className="flex items-center gap-3 mt-3">
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">1</span>
+                                        צור תבנית
+                                    </div>
+                                    <span className="text-slate-300">›</span>
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">2</span>
+                                        שייך לעסקה
+                                    </div>
+                                    <span className="text-slate-300">›</span>
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                        <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">3</span>
+                                        שלח לחתימה
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex justify-end">
                         <button
                             onClick={() => setShowParserModal(true)}
@@ -395,6 +479,13 @@ export default function Contracts() {
 
                                         <div className="flex items-center gap-2 flex-shrink-0">
                                             <button
+                                                onClick={() => handleEditTemplateName(template)}
+                                                title="ערוך שם"
+                                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                            >
+                                                <PenTool size={16} />
+                                            </button>
+                                            <button
                                                 onClick={() => setAssignTemplate(template)}
                                                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-700 transition-colors"
                                             >
@@ -424,6 +515,41 @@ export default function Contracts() {
             ══════════════════════════════════════════════════ */}
             {activeTab === 'active' && (
                 <div className="space-y-4">
+                    {/* How-to banner */}
+                    <div className="bg-gradient-to-l from-slate-50 to-blue-50 border border-slate-200 rounded-2xl p-5">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <FileText size={18} className="text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm font-bold text-slate-900 mb-1">חוזים בתהליך — שלושה מסלולים</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                                    <div className="flex gap-2">
+                                        <GitMerge size={14} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-700">שיוך תבנית</p>
+                                            <p className="text-xs text-slate-400 leading-relaxed">בחר תבנית קיימת, שייך אותה לעסקה ומלא את השדות — שלח ללקוח לחתימה דיגיטלית</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Upload size={14} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-700">העלאת PDF</p>
+                                            <p className="text-xs text-slate-400 leading-relaxed">העלה חוזה PDF קיים, הגדר מיקומי חתימה ושלח ללקוח</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Camera size={14} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-700">סריקה מהמצלמה</p>
+                                            <p className="text-xs text-slate-400 leading-relaxed">צלם מסמך פיזי ישירות מהנייד, הגדר שדות חתימה ושלח</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex flex-wrap gap-2 justify-end">
                         <button
                             onClick={() => {
@@ -445,6 +571,13 @@ export default function Contracts() {
                         >
                             <Upload size={15} />
                             העלה חוזה מוכן לחתימה
+                        </button>
+                        <button
+                            onClick={() => setShowPdfDealPicker(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            <Camera size={15} />
+                            סרוק חוזה מהמצלמה
                         </button>
                     </div>
 
@@ -736,6 +869,53 @@ export default function Contracts() {
             )}
 
             {/* Modals */}
+            {/* Edit Template Name Modal */}
+            {editingTemplate && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" dir="rtl">
+                        <div className="px-6 py-4 border-b border-slate-200">
+                            <h2 className="text-lg font-bold text-slate-900">ערוך שם תבנית</h2>
+                        </div>
+                        <div className="px-6 py-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    שם התבנית
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editingTitle}
+                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveTemplateName();
+                                        if (e.key === 'Escape') setEditingTemplate(null);
+                                    }}
+                                    placeholder="הכנס שם חדש..."
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
+                            <button
+                                onClick={() => setEditingTemplate(null)}
+                                disabled={savingTitle}
+                                className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                            >
+                                ביטול
+                            </button>
+                            <button
+                                onClick={handleSaveTemplateName}
+                                disabled={savingTitle}
+                                className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {savingTitle && <Loader2 size={16} className="animate-spin" />}
+                                שמור
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <TemplateParserModal
                 isOpen={showParserModal}
                 onClose={() => setShowParserModal(false)}

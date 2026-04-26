@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
-import { PenTool, Type, Calendar, Trash2, Save, Upload, ArrowLeft, Users, Sparkles, AlertTriangle, Check, RefreshCw } from 'lucide-react';
+import { PenTool, Type, Calendar, Trash2, Save, Upload, ArrowLeft, Users, Sparkles, AlertTriangle, Check, RefreshCw, Loader2, Camera } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import {
     createContractFromPDF,
+    createContractFromImage,
     getContract,
     updateContractFields,
     linkContractToDeal,
@@ -58,6 +59,7 @@ export default function ContractEditor() {
     const [detecting, setDetecting] = useState(false);
     const [deal, setDeal] = useState<Deal | null>(null);
     const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+    const [isImage, setIsImage] = useState(false);
 
     const [containerPx, setContainerPx] = useState({ w: 595, h: 842 });
     const containerRef = useRef<HTMLDivElement>(null);
@@ -82,30 +84,36 @@ export default function ContractEditor() {
     }, [pdfUrl]);
 
     useEffect(() => {
-        if (!dealId || !userData?.agencyId) return;
+        if (!userData?.agencyId) return;
 
         (async () => {
             try {
                 setLoading(true);
-                const dealSnap = await getDoc(doc(db, 'deals', dealId));
 
-                if (!dealSnap.exists()) {
-                    toast.error('העסקה לא נמצאה');
-                    navigate('/dashboard/contracts');
-                    return;
-                }
+                // If dealId exists and is valid, load its data
+                if (dealId && dealId !== 'new') {
+                    const dealSnap = await getDoc(doc(db, 'deals', dealId));
 
-                const dealData = dealSnap.data() as Deal & { contract?: { contractId: string; pdfUrl: string } };
-                setDeal(dealData);
+                    if (!dealSnap.exists()) {
+                        toast.error('העסקה לא נמצאה');
+                        navigate('/dashboard/contracts');
+                        return;
+                    }
 
-                if (dealData.contract?.contractId) {
-                    const contract = await getContract(userData.agencyId, dealData.contract.contractId);
-                    if (contract) {
-                        setContractId(contract.id!);
-                        setPdfUrl(contract.originalFileUrl);
-                        setFields(contract.fields || []);
+                    const dealData = dealSnap.data() as Deal & { contract?: { contractId: string; pdfUrl: string } };
+                    setDeal(dealData);
+
+                    if (dealData.contract?.contractId) {
+                        const contract = await getContract(userData.agencyId, dealData.contract.contractId);
+                        if (contract) {
+                            setContractId(contract.id!);
+                            setPdfUrl(contract.originalFileUrl);
+                            setFields(contract.fields || []);
+                            setIsImage(contract.source === 'scan' || /\.(jpg|jpeg|png|webp)$/i.test(contract.originalFileUrl));
+                        }
                     }
                 }
+                // If dealId is 'new' or missing, allow empty form for PDF upload
             } catch (err) {
                 toast.error('שגיאה בטעינת הנתונים');
             } finally {
@@ -116,24 +124,48 @@ export default function ContractEditor() {
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !userData?.agencyId || !dealId || !currentUser) return;
-        if (file.type !== 'application/pdf') {
-            toast.error('נא להעלות קובץ PDF בלבד');
+        if (!file || !userData?.agencyId || !currentUser) return;
+        
+        const isPdf = file.type === 'application/pdf';
+        const isImg = file.type.startsWith('image/');
+
+        if (!isPdf && !isImg) {
+            toast.error('נא להעלות קובץ PDF או תמונה בלבד');
             return;
         }
 
         try {
             setUploading(true);
-            const { contractId: newId, pdfUrl: newUrl } = await createContractFromPDF(
-                userData.agencyId,
-                file,
-                currentUser.uid,
-                dealId
-            );
-            await linkContractToDeal(dealId, newId, newUrl);
+            let result;
+            
+            if (isPdf) {
+                result = await createContractFromPDF(
+                    userData.agencyId,
+                    file,
+                    currentUser.uid,
+                    dealId || undefined
+                );
+                setIsImage(false);
+            } else {
+                result = await createContractFromImage(
+                    userData.agencyId,
+                    file,
+                    currentUser.uid,
+                    dealId || undefined
+                );
+                setIsImage(true);
+            }
+
+            const { contractId: newId, imageUrl, pdfUrl: newPdfUrl } = result as any;
+            const finalUrl = imageUrl || newPdfUrl;
+
+            // Only link if dealId exists and is valid
+            if (dealId && dealId !== 'new') {
+                await linkContractToDeal(dealId, newId, finalUrl);
+            }
 
             setContractId(newId);
-            setPdfUrl(newUrl);
+            setPdfUrl(finalUrl);
             setFields([]);
             toast.success('הקובץ הועלה בהצלחה');
             
@@ -313,10 +345,25 @@ export default function ContractEditor() {
                         ניתוח AI
                     </button>
                     
-                    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
+                    <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFileChange} />
                     <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-all">
                         <Upload size={16} />
-                        {uploading ? 'מעלה...' : 'החלף PDF'}
+                        {uploading ? 'מעלה...' : 'החלף מסמך'}
+                    </button>
+                    <button
+                        onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.capture = 'environment';
+                            input.onchange = (e) => handleFileChange(e as any);
+                            input.click();
+                        }}
+                        disabled={uploading}
+                        className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-all"
+                    >
+                        <Camera size={16} />
+                        {uploading ? 'מעלה...' : 'סרוק'}
                     </button>
 
                     <button onClick={handleSave} disabled={saving || !contractId} className="flex items-center gap-2 px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 disabled:opacity-50 transition-all shadow-lg shadow-slate-900/10">
@@ -391,17 +438,54 @@ export default function ContractEditor() {
                 {/* Canvas Area */}
                 <div className="flex-1 overflow-auto flex items-start justify-center p-12 bg-slate-100/50">
                     {!pdfUrl ? (
-                        <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center w-full max-w-md aspect-[1/1.4] bg-white border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/20 transition-all text-slate-400 group">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                <Upload size={32} />
+                        <div className="flex flex-col gap-6 w-full max-w-2xl">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div 
+                                    onClick={() => fileInputRef.current?.click()} 
+                                    className="flex flex-col items-center justify-center aspect-[1/1.4] bg-white border-2 border-dashed border-slate-300 rounded-3xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/20 transition-all text-slate-400 group shadow-sm"
+                                >
+                                    <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                        <Upload size={36} className="text-blue-600" />
+                                    </div>
+                                    <p className="font-bold text-slate-700 text-lg">העלה חוזה PDF</p>
+                                    <p className="text-sm mt-2 px-6 text-center">בחר קובץ קיים מהמחשב או מהנייד</p>
+                                </div>
+
+                                <div 
+                                    onClick={() => {
+                                        const input = document.createElement('input');
+                                        input.type = 'file';
+                                        input.accept = 'image/*';
+                                        input.capture = 'environment';
+                                        input.onchange = (e) => handleFileChange(e as any);
+                                        input.click();
+                                    }} 
+                                    className="flex flex-col items-center justify-center aspect-[1/1.4] bg-white border-2 border-dashed border-slate-300 rounded-3xl cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/20 transition-all text-slate-400 group shadow-sm"
+                                >
+                                    <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                        <Camera size={36} className="text-indigo-600" />
+                                    </div>
+                                    <p className="font-bold text-slate-700 text-lg">סרוק מהמצלמה</p>
+                                    <p className="text-sm mt-2 px-6 text-center">צלם מסמך פיזי והפוך אותו לדיגיטלי</p>
+                                </div>
                             </div>
-                            <p className="font-bold text-slate-600">העלה חוזה PDF</p>
-                            <p className="text-xs mt-2">לחץ כאן לבחירת קובץ</p>
                         </div>
                     ) : (
                         <div className="relative bg-white shadow-2xl rounded-sm" style={{ width: '100%', maxWidth: 700, paddingBottom: `${A4_RATIO * 100}%` }}>
                             <div ref={containerRef} className="absolute inset-0">
-                                <iframe src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`} className="absolute inset-0 w-full h-full border-0 pointer-events-none" title="Contract PDF" />
+                                {isImage ? (
+                                    <img 
+                                        src={pdfUrl} 
+                                        className="absolute inset-0 w-full h-full object-contain pointer-events-none" 
+                                        alt="Contract Scan" 
+                                    />
+                                ) : (
+                                    <iframe 
+                                        src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
+                                        className="absolute inset-0 w-full h-full border-0 pointer-events-none" 
+                                        title="Contract PDF" 
+                                    />
+                                )}
                                 <div className="absolute inset-0 cursor-crosshair z-10" onClick={handleCanvasClick} />
 
                                 {fields.map(field => {

@@ -182,7 +182,9 @@ export const webhookWhatsAppAI = onRequest(
         secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
         timeoutSeconds: 300,
         memory: '1GiB',
-        cpu: 1,  // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
+        cpu: 1,             // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
+        minInstances: 1,    // מונע cold-start — שמרן אחד חם תמיד, חוסך 5–30s לכל הודעה ראשונה אחרי השקטה
+        concurrency: 40,    // אינסטנס יחיד מטפל במספר הודעות במקביל
     },
     async (req, res) => {
         // 1. ACK immediately

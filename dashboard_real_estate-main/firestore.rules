@@ -259,7 +259,9 @@ service cloud.firestore {
     // agencyId is enforced by path — no need to check the field inside the doc.
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/properties/{propId} {
-      allow read: if isAuthed() && (inAgency(agencyId) || isSuperAdmin());
+      // Public properties are readable without authentication (B2C gallery)
+      allow read: if resource.data.visibility == 'public'
+          || (isAuthed() && (inAgency(agencyId) || isSuperAdmin()));
 
       // Direct client creates allowed for agency members (e.g. batch import).
       allow create: if isAuthed()
@@ -476,6 +478,16 @@ service cloud.firestore {
     // Server-managed active trials collection
     match /activeTrials/{document=**} {
       allow read, write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // B2C SEARCH ALERTS — write-only for anonymous visitors
+    // ══════════════════════════════════════════════════════════════════════════
+    match /searchAlerts/{alertId} {
+      allow create: if request.resource.data.phone is string
+          && request.resource.data.phone.size() > 5
+          && request.resource.data.active == true;
+      allow read, update, delete: if isSuperAdmin();
     }
 
     // ══════════════════════════════════════════════════════════════════════════

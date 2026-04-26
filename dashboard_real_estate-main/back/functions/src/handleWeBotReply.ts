@@ -29,14 +29,14 @@ import { createCalendarEvent } from './calendar/eventManager';
 
 const db = admin.firestore();
 
-async function withRetry<T>(label: string, fn: () => Promise<T>, retries = 2): Promise<T> {
+async function withRetry<T>(label: string, fn: () => Promise<T>, retries = 1): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err: any) {
-      const isTransient = err?.message?.includes('fetch failed') || err?.code === 'ECONNRESET' || err?.code === 'ETIMEDOUT';
+      const isTransient = err?.message?.includes('fetch failed') || err?.code === 'ECONNRESET' || err?.code === 'ETIMEDOUT' || err?.message?.includes('timeout');
       if (isTransient && attempt < retries) {
-        const delay = 1500 * (attempt + 1);
+        const delay = 400 * (attempt + 1);
         console.warn(`[WeBot] ${label} — transient error (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms:`, err.message);
         await new Promise(r => setTimeout(r, delay));
         continue;
@@ -45,6 +45,30 @@ async function withRetry<T>(label: string, fn: () => Promise<T>, retries = 2): P
     }
   }
   throw new Error('unreachable');
+}
+
+// Reuse one client per process — `new GoogleGenerativeAI()` is cheap, but
+// caching prevents repeated allocation under load.
+let cachedGenAI: GoogleGenerativeAI | null = null;
+let cachedGenAIKey = '';
+function getGenAI(apiKey: string): GoogleGenerativeAI {
+  if (!cachedGenAI || cachedGenAIKey !== apiKey) {
+    cachedGenAI = new GoogleGenerativeAI(apiKey);
+    cachedGenAIKey = apiKey;
+  }
+  return cachedGenAI;
+}
+
+// Hard deadline on any Gemini call so a hung request doesn't block the bot
+// for minutes. flash-lite normally responds in 0.5–2s — 8s is generous.
+function withTimeout<T>(label: string, ms: number, fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    fn().then(
+      v => { clearTimeout(t); resolve(v); },
+      e => { clearTimeout(t); reject(e); },
+    );
+  });
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -116,6 +140,19 @@ const createCatalogDeclaration: FunctionDeclaration = {
   name: 'create_catalog',
   description: 'צור קטלוג נכסים מותאם ללקוח לפי הדרישות השמורות. קרא לאחר update_lead_requirements.',
   parameters: { type: SchemaType.OBJECT, properties: {} },
+};
+
+const notifyAssignedAgentDeclaration: FunctionDeclaration = {
+  name: 'notify_assigned_agent',
+  description:
+    'שלח התראת WhatsApp לסוכן האחראי על נכס בלעדי כשהלקוח שואל עליו ספציפית. קרא רק כאשר ענית על שאלה לגבי נכס שמופיע ב-RAG context עם המזהה שלו, ואחרי שכבר נתת ללקוח את הפרטים.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      propertyId: { type: SchemaType.STRING, description: 'המזהה של הנכס מהקונטקסט (השדה [מזהה: ...])' },
+    },
+    required: ['propertyId'],
+  },
 };
 
 // ─── mapWeBotConfig ───────────────────────────────────────────────────────────
@@ -224,109 +261,50 @@ async function findMatchingPropertiesForBot(
   return matches.slice(0, topN);
 }
 
-// ─── handleAddressQuery ───────────────────────────────────────────────────────
+// ─── handleNotifyAssignedAgent ────────────────────────────────────────────────
 
-async function handleAddressQuery(
+/**
+ * Looks up a property by ID across the agency and city subcollections, and —
+ * if the property is exclusive and has an assigned agent — pings the agent
+ * via WhatsApp. Called by Gemini's `notify_assigned_agent` function.
+ */
+async function handleNotifyAssignedAgent(
   agencyId: string,
-  leadId: string,
   customerPhone: string,
-  message: string,
-  leadData: admin.firestore.DocumentData,
-  integration: WhatsappIntegration,
+  customerMessage: string,
+  propertyId: string,
   greenApiCreds: { idInstance: string; apiTokenInstance: string },
-): Promise<boolean> {
-  const addressQueryTriggers = ['פרטים על', 'מה המחיר של', 'מה יש ב', 'תספר לי על', 'כמה עולה', 'כמה חדרים ב'];
-  const hasStreetNumber = /\d/.test(message);
-  const hasTrigger = addressQueryTriggers.some(kw => message.includes(kw));
+): Promise<{ notified: boolean; reason?: string }> {
+  try {
+    const agencyPropDoc = await db.collection('agencies').doc(agencyId).collection('properties').doc(propertyId).get();
+    let prop = agencyPropDoc.exists ? agencyPropDoc.data() : null;
 
-  if (!hasTrigger || !hasStreetNumber) return false;
-
-  const addressQueryCount = leadData.addressQueryCount ?? 0;
-  if (addressQueryCount >= 2) return false; // Max 2 queries, then fall through to AI
-
-  const words = message.split(/\s+/).filter((w: string) => w.length > 2);
-  if (words.length < 2) return false;
-
-  const propSnap = await db
-    .collection('agencies').doc(agencyId).collection('properties')
-    .where('status', '==', 'active')
-    .limit(50)
-    .get();
-
-  // Score each property by number of matching tokens — single-token substring
-  // hits caused false positives ("אביב" inside "תל אביב"), so we require
-  // ≥ 2 distinct word matches before considering a property a real hit.
-  type ScoredMatch = { doc: admin.firestore.QueryDocumentSnapshot; score: number };
-  const matched: ScoredMatch[] = [];
-  propSnap.docs.forEach((doc) => {
-    const d = doc.data();
-    const addrObj = d.address;
-    const haystack = [
-      typeof addrObj === 'object' ? addrObj?.fullAddress : addrObj,
-      addrObj?.street,
-      addrObj?.city,
-      addrObj?.neighborhood,
-    ].filter(Boolean).join(' ').toLowerCase();
-    const score = words.reduce((n: number, w: string) => n + (haystack.includes(w.toLowerCase()) ? 1 : 0), 0);
-    if (score >= 2) matched.push({ doc, score });
-  });
-  matched.sort((a, b) => b.score - a.score);
-
-  if (matched.length === 0) return false;
-
-  // Increment counter
-  await db.collection('leads').doc(leadId).update({
-    addressQueryCount: admin.firestore.FieldValue.increment(1),
-  });
-
-  // Multiple matches → ask for clarification on the first try
-  if (matched.length > 1 && addressQueryCount < 1) {
-    await sendBotMessage(
-      integration, customerPhone, leadId,
-      `מצאתי כמה נכסים בכתובת זו. מה טווח המחיר המשוער שמעניין אותך?`,
-    );
-    return true;
-  }
-
-  // Single match (or top match after clarification) → answer with public details
-  const topDoc = matched[0].doc;
-  const prop = topDoc.data();
-  const address = prop.address?.fullAddress || `${prop.address?.street}, ${prop.address?.city}` || prop.city || 'נכס';
-  const price = prop.financials?.price ?? prop.price;
-  const rooms = prop.rooms;
-  const neighborhood = prop.address?.neighborhood || prop.neighborhood;
-
-  const priceStr = price ? `₪${Number(price).toLocaleString('he-IL')}` : 'מחיר לא צוין';
-  const roomsStr = rooms ? `${rooms}` : 'לא צוין';
-  const areaStr = neighborhood || 'לא צוין';
-
-  // For exclusive listings with an assigned agent, append a handoff line and
-  // ping the agent — the customer still gets the public details first.
-  const isExclusive = prop.isExclusive === true;
-  const assignedAgentId: string | null = prop.management?.assignedAgentId || prop.agentId || null;
-  let handoffNote = '';
-  if (isExclusive && assignedAgentId) {
-    try {
-      const agentDoc = await db.collection('users').doc(assignedAgentId).get();
-      const agentPhone: string | null = agentDoc.data()?.phone || agentDoc.data()?.phoneNumber || null;
-      if (agentPhone) {
-        await notifyAgentOrAdmin(
-          agentPhone,
-          `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${customerPhone}\nשאל על: ${address}\n\nהודעה:\n"${message}"`,
-          greenApiCreds,
-        );
-        handoffNote = '\n\nהסוכן האחראי על הנכס יחזור אליך בהקדם. 🏡';
-      }
-    } catch (err) {
-      console.warn('[WeBot] handleAddressQuery: failed to notify exclusive agent', err);
+    // Fallback: search city-level properties
+    if (!prop) {
+      const cityHit = await db.collectionGroup('properties').where('id', '==', propertyId).limit(1).get();
+      if (!cityHit.empty) prop = cityHit.docs[0].data();
     }
-  }
+    if (!prop) return { notified: false, reason: 'property_not_found' };
 
-  await sendBotMessage(
-    integration, customerPhone, leadId,
-    `📍 *${address}*\n💰 מחיר: ${priceStr}\n🛏 חדרים: ${roomsStr}\n🏘 שכונה: ${areaStr}${handoffNote}`,
-  );
-  return true;
+    if (prop.isExclusive !== true) return { notified: false, reason: 'not_exclusive' };
+    const assignedAgentId: string | null = prop.management?.assignedAgentId || prop.agentId || null;
+    if (!assignedAgentId) return { notified: false, reason: 'no_assigned_agent' };
+
+    const agentDoc = await db.collection('users').doc(assignedAgentId).get();
+    const agentPhone: string | null = agentDoc.data()?.phone || agentDoc.data()?.phoneNumber || null;
+    if (!agentPhone) return { notified: false, reason: 'no_agent_phone' };
+
+    const address = prop.address?.fullAddress || `${prop.address?.street}, ${prop.address?.city}` || prop.city || 'נכס';
+    await notifyAgentOrAdmin(
+      agentPhone,
+      `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${customerPhone}\nשאל על: ${address}\n\nהודעה:\n"${customerMessage}"`,
+      greenApiCreds,
+    );
+    return { notified: true };
+  } catch (err) {
+    console.warn('[WeBot] handleNotifyAssignedAgent failed:', err);
+    return { notified: false, reason: 'error' };
+  }
 }
 
 // ─── generateConversationSummary ──────────────────────────────────────────────
@@ -345,12 +323,12 @@ async function generateConversationSummary(
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    const genAI = getGenAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const conversation = recentMessages.join('\n');
-    const result = await model.generateContent(
+    const result = await withTimeout('summary', 6000, () => model.generateContent(
       `סכם את השיחה הבאה בין בוט נדל"ן לבין לקוח קונה בשתי שורות קצרות בעברית.\n\n${conversation}`,
-    );
+    ));
     return result.response.text().trim().substring(0, 200);
   } catch (err) {
     console.warn('[WeBot] Failed to generate summary:', err);
@@ -365,8 +343,14 @@ async function updateChatState(
   state: ChatState,
   extra: Partial<StoredChatState> = {},
 ): Promise<void> {
+  // Firestore rejects `undefined` values — strip them so partial extractor
+  // results (e.g. address known, propertyType unknown) don't crash the write.
+  const cleanExtra: Record<string, any> = {};
+  for (const [k, v] of Object.entries(extra)) {
+    if (v !== undefined) cleanExtra[k] = v;
+  }
   await db.collection('leads').doc(leadId).update({
-    chatState: { state, lastStateAt: Date.now(), ...extra },
+    chatState: { state, lastStateAt: Date.now(), ...cleanExtra },
     lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
   });
   console.log(`[WeBot] 🔄 State → ${state} for lead ${leadId}`);
@@ -407,36 +391,29 @@ async function classifyIntent(
   geminiApiKey: string,
   leadStatus?: string,
 ): Promise<'buyer' | 'seller' | 'irrelevant'> {
-  // Step 1 — Seller fast-path (runs first; "דירה שלי / נכס שלי / רוצה למכור" beats
-  // generic verbs like "מחפש" so that "אני מחפש קונה לדירה שלי" is a seller, not a buyer)
-  const sellerKeywords = ['רוצה למכור', 'אני מוכר', 'לפרסם נכס', 'פרסום נכס', 'נכס שלי', 'דירה שלי', 'להשכיר את', 'בעל נכס', 'מחפש קונה', 'מחפשת קונה'];
-  if (sellerKeywords.some(kw => message.includes(kw))) return 'seller';
-
-  // Step 2 — Buyer fast-path
-  const buyerFastPhrases = ['מחפש', 'מחפשת', 'מעוניין', 'מעוניינת', 'רוצה לקנות', 'רוצה לשכור'];
-  if (buyerFastPhrases.some(kw => message.includes(kw))) return 'buyer';
-
-  // If existing seller lead writing again — stay in seller flow
+  // State continuity short-circuits — once a lead has committed to a flow,
+  // don't re-classify each new message.
   if (leadType === 'seller') return 'seller';
-
-  // Only skip Gemini for confirmed buyers (those who have already provided requirements)
   if (leadType === 'buyer' && leadStatus === 'searching') return 'buyer';
 
+  // Otherwise, let Gemini decide. No keyword fast-paths — those caused
+  // false positives ("אני מחפש קונה לדירה שלי" → buyer) and made the
+  // classifier disagree with itself.
   try {
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
-    const result = await model.generateContent(
+    const genAI = getGenAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const result = await withTimeout('classifyIntent', 5000, () => model.generateContent(
       `סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
-      `קטגוריות:\n- buyer: מחפש לקנות/לשכור נכס\n- seller: רוצה למכור/להשכיר/לפרסם נכס\n` +
-      `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה\n\n{"intent":"buyer"|"seller"|"irrelevant"}`
-    );
+      `קטגוריות:\n- buyer: מחפש לקנות/לשכור דירה\n- seller: רוצה למכור/להשכיר/לפרסם את הדירה שלו\n` +
+      `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה\n\n` +
+      `שים לב: "אני מחפש קונה לדירה שלי" = seller. "מחפש דירה לקנות" = buyer.\n\n` +
+      `{"intent":"buyer"|"seller"|"irrelevant"}`
+    ));
     const text = result.response.text().replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(text);
-    return (['buyer', 'seller', 'irrelevant'].includes(parsed.intent) ? parsed.intent : 'buyer') as 'buyer' | 'seller' | 'irrelevant';
+    return (['buyer', 'seller', 'irrelevant'].includes(parsed.intent) ? parsed.intent : 'irrelevant') as 'buyer' | 'seller' | 'irrelevant';
   } catch (err) {
-    console.warn('[WeBot] Intent classification failed, fallback to keyword check:', err);
-    const buyerKeywords = ['מחפש', 'מחפשת', 'קנות', 'שכירות', 'דירה', 'נכס', 'חדרים', 'תקציב', 'רוצה לקנות'];
-    if (buyerKeywords.some(kw => message.includes(kw))) return 'buyer';
+    console.warn('[WeBot] Intent classification failed:', err);
     return 'irrelevant';
   }
 }
@@ -512,12 +489,12 @@ async function extractSellerInfo(
   geminiApiKey: string,
 ): Promise<{ address?: string; propertyType?: string }> {
   try {
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
-    const result = await model.generateContent(
+    const genAI = getGenAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const result = await withTimeout('extractSellerInfo', 6000, () => model.generateContent(
       `חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
       `{"address":"כתובת מלאה או null","propertyType":"דירה/בית/דופלקס/פנטהאוס/מסחרי או null"}`
-    );
+    ));
     const text = result.response.text().replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(text);
     return {
@@ -533,36 +510,29 @@ async function extractSellerInfo(
 // ─── extractTimePreference ────────────────────────────────────────────────────
 
 /**
- * Extracts a usable time hint from the customer's message.
- * Returns null when no time signal is detectable so the caller can re-ask
- * instead of saving garbage like "תודה רבה" as scheduledTime.
+ * Extracts a usable time hint from the customer's message via Gemini.
+ * Returns null when Gemini can't find a time signal (or fails) so the caller
+ * can re-ask instead of saving garbage like "תודה רבה" as scheduledTime.
  */
 async function extractTimePreference(message: string, geminiApiKey: string): Promise<string | null> {
   const trimmed = message.trim();
-  // Cheap local heuristic — digit / day-name / common time keyword.
-  const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-  const timeKeywords = ['בוקר', 'ערב', 'צהריים', 'לילה', 'מחר', 'מחרתיים', 'היום', 'עכשיו', 'אחה"צ', 'אחר הצהריים', 'בשעה'];
-  const hasLocalSignal = /\d/.test(trimmed)
-    || dayNames.some(d => trimmed.includes(d))
-    || timeKeywords.some(k => trimmed.includes(k));
-
   try {
-    const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    const genAI = getGenAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const today = new Date().toLocaleDateString('he-IL');
-    const result = await model.generateContent(
+    const result = await withTimeout('extractTimePreference', 6000, () => model.generateContent(
       `חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${trimmed}"\n` +
+      `החזר JSON בלבד. אם אין במסר אזכור של יום/שעה/תאריך, החזר null.\n` +
       `{"timeText":"תיאור הזמן הקריא בעברית, או null"}`
-    );
+    ));
     const parsed = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
     if (typeof parsed.timeText === 'string' && parsed.timeText.trim()) {
       return parsed.timeText.trim();
     }
-    // Gemini said null — fall back to local signal if present.
-    return hasLocalSignal ? trimmed : null;
+    return null;
   } catch (err) {
     console.warn('[WeBot] extractTimePreference failed (Gemini/parse error):', err);
-    return hasLocalSignal ? trimmed : null;
+    return null;
   }
 }
 
@@ -583,17 +553,17 @@ async function runBuyerFlow(
 ): Promise<void> {
   // RAG: active properties + chat history in parallel
   const reqsCity = leadData.requirements?.desiredCity?.[0];
-  const globalPropPromise = reqsCity ? 
-    db.collection('cities').doc(reqsCity).collection('properties').limit(5).get() : 
+  const globalPropPromise = reqsCity ?
+    db.collection('cities').doc(reqsCity).collection('properties').limit(3).get() :
     Promise.resolve({ docs: [] });
 
   const [propSnap, globalSnap, chatHistory] = await Promise.all([
     db.collection('agencies').doc(agencyId).collection('properties')
       .where('status', '==', 'active')
-      .limit(15)
+      .limit(10)
       .get(),
     globalPropPromise,
-    loadChatHistory(leadId, 20, currentMsgDocId),
+    loadChatHistory(leadId, 12, currentMsgDocId),
   ]);
 
   const allDocs = [...propSnap.docs, ...globalSnap.docs];
@@ -608,6 +578,7 @@ async function runBuyerFlow(
       rooms:       d.rooms ?? 0,
       price:       d.financials?.price ?? d.price ?? 0,
       description: d.management?.descriptions || '',
+      isExclusive: d.isExclusive === true,
     };
   });
 
@@ -622,16 +593,16 @@ async function runBuyerFlow(
       ? '⚠️ שלב: הלקוח ענה על שאלת "האם יש קריטריונים נוספים?". אם ציין קריטריונים — קרא ל-update_lead_requirements עם הדרישות המעודכנות ואז מיד ל-create_catalog. אם אין דרישות נוספות — קרא ישירות ל-create_catalog.\n\n'
       : '';
 
-  const genAI = new GoogleGenerativeAI(geminiApiKey);
+  const genAI = getGenAI(geminiApiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    tools: [{ functionDeclarations: [scheduleMeetingDeclaration, updateLeadRequirementsDeclaration, createCatalogDeclaration] }],
+    model: 'gemini-2.5-flash-lite',
+    tools: [{ functionDeclarations: [scheduleMeetingDeclaration, updateLeadRequirementsDeclaration, createCatalogDeclaration, notifyAssignedAgentDeclaration] }],
     toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
     systemInstruction: schedulingPrefix + systemPrompt,
   });
 
   const chat = model.startChat({ history: chatHistory });
-  let chatResponse  = await withRetry('chat.sendMessage', () => chat.sendMessage(incomingMessage));
+  let chatResponse  = await withRetry('chat.sendMessage', () => withTimeout('chat.sendMessage', 12_000, () => chat.sendMessage(incomingMessage)));
   let finalReply             = '';
   let catalogCreated         = false;
   let sentCatalogUrl: string | null = null;
@@ -667,7 +638,7 @@ async function runBuyerFlow(
       const timeOk = typeof time === 'string' && /^\d{2}:\d{2}$/.test(time);
       const startDateObj = dateOk && timeOk ? new Date(`${date}T${time}:00`) : null;
       if (!startDateObj || Number.isNaN(startDateObj.getTime())) {
-        chatResponse = await withRetry('chat.sendMessage(fn)', () => chat.sendMessage([{
+        chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 12_000, () => chat.sendMessage([{
           functionResponse: {
             name: call.name,
             response: {
@@ -676,7 +647,7 @@ async function runBuyerFlow(
               message: 'התאריך או השעה לא תקינים. בקש מהלקוח תאריך בפורמט YYYY-MM-DD ושעה בפורמט HH:MM.',
             },
           },
-        }]));
+        }])));
         continue;
       }
       const startDateTime = `${date}T${time}:00`;
@@ -817,14 +788,27 @@ async function runBuyerFlow(
         }
       }
 
+    // ── notify_assigned_agent ─────────────────────────────────────────────────
+    } else if (call.name === 'notify_assigned_agent') {
+      const args = call.args as Record<string, any>;
+      const propertyId = typeof args.propertyId === 'string' ? args.propertyId : '';
+      if (!propertyId) {
+        functionResult = { success: false, reason: 'missing_property_id' };
+      } else {
+        const result = await handleNotifyAssignedAgent(
+          agencyId, customerPhone, incomingMessage, propertyId, greenApiCreds,
+        );
+        functionResult = { success: result.notified, reason: result.reason };
+      }
+
     } else {
       console.warn(`[WeBot] Unknown function call: ${call.name}`);
       functionResult = { success: false, reason: 'unknown_function' };
     }
 
-    chatResponse = await withRetry('chat.sendMessage(fn)', () => chat.sendMessage([{
+    chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 12_000, () => chat.sendMessage([{
       functionResponse: { name: call.name, response: functionResult },
-    }]));
+    }])));
   }
 
   if (iterCount >= 5 && !finalReply.trim()) {
@@ -936,7 +920,7 @@ async function runSellerFlow(
     await updateChatState(leadId, 'COLLECTING_SELLER_INFO');
     await sendBotMessage(
       integration, customerPhone, leadId,
-      `תודה שפנית.\nכדי שנוכל לשווק את הנכס שלך, אנא ספר לנו:\n\n1. מה *כתובת הנכס*?\n2. מה *סוג הנכס*? (דירה, בית פרטי, דופלקס, פנטהאוס וכו׳)`,
+      `תודה שפנית.\nכדי שנוכל למכור את הדירה שלך, אנא ספר לנו:\n\n1. מה *כתובת הנכס*?\n2. מה *סוג הנכס*? (דירה, בית פרטי, דופלקס, פנטהאוס וכו׳)`,
     );
     return;
   }
@@ -1191,16 +1175,6 @@ export async function handleWeBotReply(
       await updateChatState(leadId, 'IDLE');
     }
 
-    // Address-specific property query — only when the conversation isn't
-    // mid-flow (state machine integrity: don't hijack a seller giving their
-    // address with a stray "כמה עולה דירה דומה?" answer).
-    if (currentState === 'IDLE' || currentState === 'COLLECTING_NAME') {
-      const handledAsAddress = await handleAddressQuery(
-        agencyId, leadId, customerPhone, incomingMessage, leadData, integration, greenApiCreds,
-      );
-      if (handledAsAddress) return;
-    }
-
     // 5. Name collection: ask name on first bot interaction (regardless of WhatsApp display name)
     if (currentState === 'COLLECTING_NAME') {
       const candidate = incomingMessage.trim().substring(0, 50);
@@ -1222,7 +1196,7 @@ export async function handleWeBotReply(
       await updateChatState(leadId, 'COLLECTING_NAME');
       await sendBotMessage(
         integration, customerPhone, leadId,
-        `שלום, אני הנציג הדיגיטלי של ${agencyDisplayName}.\nאשמח לעזור לך בחיפוש או שיווק נכס.\nמה שמך?`,
+        `שלום, אני הנציג הדיגיטלי של ${agencyDisplayName}.\nאשמח לעזור לך לקנות, לשכור או למכור דירה.\nמה שמך?`,
       );
       return;
     }
@@ -1233,7 +1207,27 @@ export async function handleWeBotReply(
       console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
 
       if (intent === 'irrelevant') {
-        // Known leads: log silent CRM note. New contacts: discard.
+        // Greetings & ambiguous one-liners ("היי", "שלום", "מה קורה") get a
+        // friendly menu instead of dead silence. True spam (long, repeated,
+        // off-topic) gets ignored after the first nudge.
+        const trimmed = incomingMessage.trim();
+        const looksLikeGreeting = trimmed.length <= 30;
+        const lastNudgeAt: number = leadData.lastIrrelevantNudgeAt || 0;
+        const recentlyNudged = Date.now() - lastNudgeAt < 6 * 60 * 60 * 1000; // 6h
+
+        if (looksLikeGreeting && !recentlyNudged) {
+          const name = leadData.name && leadData.name !== 'לקוח' && leadData.name !== 'ליד מוואטסאפ (לא ידוע)'
+            ? leadData.name : '';
+          const greeting = name ? `שלום ${name},` : 'שלום,';
+          await sendBotMessage(
+            integration, customerPhone, leadId,
+            `${greeting} כיף שחזרת. איך אוכל לעזור?\n\n• מחפש/ת דירה לקנות או לשכור?\n• רוצה למכור את הדירה שלך?`,
+          );
+          await db.collection('leads').doc(leadId).update({ lastIrrelevantNudgeAt: Date.now() });
+          return;
+        }
+
+        // Real spam / repeated noise → silent CRM log only.
         if (leadData.source) {
           await createCRMNotification(
             agencyId, leadId, leadData.name || customerPhone,
@@ -1241,7 +1235,7 @@ export async function handleWeBotReply(
             { phone: customerPhone, note: 'הודעה לא רלוונטית מליד קיים', message: incomingMessage },
           );
         }
-        return; // No WhatsApp reply
+        return;
       }
 
       // Persist the classified type immediately so the lead is registered
