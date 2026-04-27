@@ -56,6 +56,11 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
     };
 
     const displayAddress = [property.address, property.city].filter(Boolean).join(', ') || 'מיקום לא צוין';
+
+    const contactPhone = property.listingType === 'exclusive' && property.agentPhone
+        ? property.agentPhone
+        : (property.assignedAgentPhone || agencyPhone || '');
+    const contactPhoneWa = contactPhone.replace(/\D/g, '').replace(/^0/, '972');
     const activeAmenities = AMENITY_ICONS.filter(a => {
         const mamadKey = a.key === 'hasSafeRoom' ? 'hasMamad' : a.key;
         return property[a.key] || property.features?.[a.key] || property.features?.[mamadKey];
@@ -266,17 +271,17 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                     )}
 
                     {/* Contact buttons */}
-                    {agencyPhone && (
+                    {contactPhone && (
                         <div className="border-t border-slate-100 pt-4 flex gap-3">
                             <a
-                                href={`tel:${agencyPhone}`}
+                                href={`tel:${contactPhone}`}
                                 className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm py-3 rounded-2xl transition-colors"
                             >
                                 <Phone size={16} />
                                 התקשר
                             </a>
                             <a
-                                href={`https://wa.me/${agencyPhone.replace(/\D/g, '').replace(/^0/, '972')}?text=${encodeURIComponent(`היי, אני מתעניין/ת בנכס ב${property.address || ''}`)}`}
+                                href={`https://wa.me/${contactPhoneWa}?text=${encodeURIComponent(`היי, אני מתעניין/ת בנכס ב${property.address || ''}`)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex-1 flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1fbc5a] text-white font-bold text-sm py-3 rounded-2xl transition-colors"

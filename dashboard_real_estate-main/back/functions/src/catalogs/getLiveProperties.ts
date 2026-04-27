@@ -121,6 +121,48 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
         }
     }
 
+    // Enrich properties with agent photos (exclusive) and assigned-agent phones (external)
+    if (agencyId && liveProperties.length > 0) {
+        const agentIds = new Set<string>();
+        for (const prop of liveProperties) {
+            const assignedId = prop.management?.assignedAgentId;
+            if (assignedId) agentIds.add(assignedId);
+        }
+
+        if (agentIds.size > 0) {
+            const agentDocs = await Promise.all(
+                Array.from(agentIds).map(id =>
+                    db.collection(`agencies/${agencyId}/users`).doc(id).get()
+                )
+            );
+            const agentMap = new Map<string, { photoURL?: string; phone?: string; name?: string }>();
+            for (const agentDoc of agentDocs) {
+                if (agentDoc.exists) {
+                    const d = agentDoc.data()!;
+                    agentMap.set(agentDoc.id, {
+                        photoURL: d.photoURL || '',
+                        phone: d.phone || '',
+                        name: d.name || '',
+                    });
+                }
+            }
+
+            for (const prop of liveProperties) {
+                const assignedId = prop.management?.assignedAgentId;
+                if (!assignedId || !agentMap.has(assignedId)) continue;
+                const agent = agentMap.get(assignedId)!;
+                if (prop.listingType === 'exclusive') {
+                    prop.agentPhotoUrl = agent.photoURL || '';
+                    if (!prop.agentPhone && agent.phone) prop.agentPhone = agent.phone;
+                } else {
+                    // Non-office property: surface assigned office-agent phone for call/WA
+                    prop.assignedAgentPhone = agent.phone || '';
+                    prop.assignedAgentName = agent.name || '';
+                }
+            }
+        }
+    }
+
     return {
         success: true,
         properties: liveProperties

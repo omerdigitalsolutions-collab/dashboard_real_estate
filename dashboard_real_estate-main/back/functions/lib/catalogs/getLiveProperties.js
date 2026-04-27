@@ -12,7 +12,7 @@ const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1560518883-ce09059e
  * Validates the requested property IDs against the actual catalog document.
  */
 exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const { catalogId, propertyIds } = request.data;
     if (!catalogId)
         throw new https_1.HttpsError('invalid-argument', 'catalogId is required.');
@@ -88,6 +88,45 @@ exports.getLiveProperties = (0, https_1.onCall)({ cors: true }, async (request) 
                     price, rooms: data.rooms || null, squareMeters: data.squareMeters || data.sqm || null, floor: data.floor || null, images: finalImages, transactionType, propertyType: data.propertyType || data.kind || null, listingType: data.listingType || null, description, createdAt: data.createdAt || null, agentName, agentPhone: data.listingType === 'exclusive' ? (data.agentPhone || '') : '', 
                     // Pass through nested objects for richer display
                     features: data.features || null, financials: data.financials || { price }, media: Object.assign(Object.assign({}, data.media), { images: finalImages }), management: data.management || null }));
+            }
+        }
+    }
+    // Enrich properties with agent photos (exclusive) and assigned-agent phones (external)
+    if (agencyId && liveProperties.length > 0) {
+        const agentIds = new Set();
+        for (const prop of liveProperties) {
+            const assignedId = (_h = prop.management) === null || _h === void 0 ? void 0 : _h.assignedAgentId;
+            if (assignedId)
+                agentIds.add(assignedId);
+        }
+        if (agentIds.size > 0) {
+            const agentDocs = await Promise.all(Array.from(agentIds).map(id => db.collection(`agencies/${agencyId}/users`).doc(id).get()));
+            const agentMap = new Map();
+            for (const agentDoc of agentDocs) {
+                if (agentDoc.exists) {
+                    const d = agentDoc.data();
+                    agentMap.set(agentDoc.id, {
+                        photoURL: d.photoURL || '',
+                        phone: d.phone || '',
+                        name: d.name || '',
+                    });
+                }
+            }
+            for (const prop of liveProperties) {
+                const assignedId = (_j = prop.management) === null || _j === void 0 ? void 0 : _j.assignedAgentId;
+                if (!assignedId || !agentMap.has(assignedId))
+                    continue;
+                const agent = agentMap.get(assignedId);
+                if (prop.listingType === 'exclusive') {
+                    prop.agentPhotoUrl = agent.photoURL || '';
+                    if (!prop.agentPhone && agent.phone)
+                        prop.agentPhone = agent.phone;
+                }
+                else {
+                    // Non-office property: surface assigned office-agent phone for call/WA
+                    prop.assignedAgentPhone = agent.phone || '';
+                    prop.assignedAgentName = agent.name || '';
+                }
             }
         }
     }

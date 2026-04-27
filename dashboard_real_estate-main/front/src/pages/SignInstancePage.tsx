@@ -136,7 +136,7 @@ export default function SignInstancePage() {
                 <div className="bg-white rounded-2xl border border-green-200 p-8 max-w-md w-full text-center">
                     <CheckCircle className="inline-block text-green-600 mb-4" size={48} />
                     <h1 className="text-xl font-bold text-slate-900 mb-2">החוזה נחתם בהצלחה!</h1>
-                    <p className="text-slate-600">תודה על חתימת החוזה. הוא שונמר בבטחה.</p>
+                    <p className="text-slate-600">תודה על חתימת החוזה. הוא נשמר בבטחה.</p>
                 </div>
             </div>
         );
@@ -163,14 +163,14 @@ export default function SignInstancePage() {
                         <div className="flex items-center justify-between mb-2">
                             <p className="text-sm font-medium text-slate-700">התקדמות</p>
                             <p className="text-sm text-slate-600">
-                                {Object.values(values).filter(Boolean).length} / {clientFields.length}
+                                {clientFields.filter(f => values[f.id]).length} / {clientFields.length}
                             </p>
                         </div>
                         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-blue-600 transition-all duration-300"
                                 style={{
-                                    width: `${(Object.values(values).filter(Boolean).length / clientFields.length) * 100}%`
+                                    width: `${(clientFields.filter(f => values[f.id]).length / clientFields.length) * 100}%`
                                 }}
                             />
                         </div>
@@ -212,7 +212,7 @@ export default function SignInstancePage() {
                         {isProcessing ? (
                             <span className="flex items-center justify-center gap-2">
                                 <Loader2 size={18} className="animate-spin" />
-                                חוקע חוזה...
+                                חותם על החוזה...
                             </span>
                         ) : (
                             'חתום על החוזה'

@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import {
     Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle,
     Trash2, Sparkles, ChevronLeft, ChevronRight, Table as TableIcon,
+    CalendarClock, ShieldAlert,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../config/firebase';
@@ -116,6 +117,15 @@ const MappingTable: React.FC<{
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+type PurgeReport = {
+    success: boolean;
+    dryRun: boolean;
+    cutoffISO: string;
+    keepMissingDate: boolean;
+    totals: { kept: number; deleted: number; missingDate: number; citiesEmptied: number };
+    perCity: Record<string, { kept: number; deleted: number; missingDate: number }>;
+};
+
 const GlobalPropertyImport: React.FC = () => {
     const [step, setStep]             = useState<1 | 2 | 3>(1);
     const [file, setFile]             = useState<File | null>(null);
@@ -126,6 +136,29 @@ const GlobalPropertyImport: React.FC = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [results, setResults]       = useState<{ success: boolean; count?: number; message?: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // ── Purge panel state ────────────────────────────────────────────────────
+    const [purgeCutoff, setPurgeCutoff]       = useState('2026-04-21');
+    const [keepMissingDate, setKeepMissingDate] = useState(false);
+    const [isPurging, setIsPurging]           = useState(false);
+    const [purgeReport, setPurgeReport]       = useState<PurgeReport | null>(null);
+    const [purgeError, setPurgeError]         = useState<string | null>(null);
+    const [confirmText, setConfirmText]       = useState('');
+
+    const runPurge = async (dryRun: boolean) => {
+        setPurgeError(null);
+        setIsPurging(true);
+        try {
+            const purgeFn = httpsCallable(functions, 'superadmin-superAdminPurgeOldGlobalPropertiesV2');
+            const res = await purgeFn({ cutoffISO: purgeCutoff, dryRun, keepMissingDate });
+            setPurgeReport(res.data as PurgeReport);
+            if (!dryRun) setConfirmText('');
+        } catch (err: any) {
+            setPurgeError(err?.message || 'שגיאה בהפעלת המחיקה');
+        } finally {
+            setIsPurging(false);
+        }
+    };
 
     // ── File upload & parse ──────────────────────────────────────────────────
 
@@ -446,6 +479,126 @@ const GlobalPropertyImport: React.FC = () => {
                     <p className="text-sm font-medium">{results.message}</p>
                 </div>
             )}
+
+            {/* ── Purge old global properties ─────────────────────────────── */}
+            <div className="mt-8 border-t border-red-500/20 pt-6">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 bg-red-500/20 rounded-lg">
+                        <ShieldAlert className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-base font-bold text-white">מחיקת נכסים גלובליים ישנים</h3>
+                        <p className="text-xs text-slate-400">
+                            שומר נכסים שנוצרו בתאריך הקיצוץ ואחריו, מוחק את כל השאר מ-<code className="text-slate-300">cities/*/properties</code>.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="bg-slate-800/40 border border-red-500/20 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                            <CalendarClock size={14} className="text-red-400" />
+                            תאריך קיצוץ (שמור מתאריך זה ואילך):
+                        </label>
+                        <input
+                            type="date"
+                            value={purgeCutoff}
+                            onChange={e => setPurgeCutoff(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        />
+                        <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={keepMissingDate}
+                                onChange={e => setKeepMissingDate(e.target.checked)}
+                                className="accent-red-500"
+                            />
+                            השאר נכסים ללא תאריך יצירה
+                        </label>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                            onClick={() => runPurge(true)}
+                            disabled={isPurging || !purgeCutoff}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-40"
+                        >
+                            {isPurging ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                            סימולציה (ספירה בלבד)
+                        </button>
+
+                        <input
+                            type="text"
+                            placeholder='לאישור: כתוב DELETE'
+                            value={confirmText}
+                            onChange={e => setConfirmText(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-red-500/40 w-40"
+                        />
+
+                        <button
+                            onClick={() => runPurge(false)}
+                            disabled={isPurging || confirmText !== 'DELETE' || !purgeCutoff}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {isPurging ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                            מחק עכשיו
+                        </button>
+                    </div>
+
+                    {purgeError && (
+                        <div className="p-3 rounded-lg bg-red-900/20 border border-red-500/30 text-red-400 text-xs flex items-start gap-2">
+                            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                            <span>{purgeError}</span>
+                        </div>
+                    )}
+
+                    {purgeReport && (
+                        <div className={`p-3 rounded-lg border text-xs space-y-2 ${
+                            purgeReport.dryRun
+                                ? 'bg-slate-900/40 border-slate-700 text-slate-300'
+                                : 'bg-emerald-900/20 border-emerald-500/30 text-emerald-300'
+                        }`}>
+                            <p className="font-bold">
+                                {purgeReport.dryRun ? 'תוצאות סימולציה' : 'מחיקה הושלמה'} — קיצוץ: {purgeReport.cutoffISO}
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div className="bg-slate-900/60 rounded p-2 text-center">
+                                    <p className="text-lg font-black text-emerald-400">{purgeReport.totals.kept}</p>
+                                    <p className="text-[10px] text-slate-400">נשמרו</p>
+                                </div>
+                                <div className="bg-slate-900/60 rounded p-2 text-center">
+                                    <p className="text-lg font-black text-red-400">{purgeReport.totals.deleted}</p>
+                                    <p className="text-[10px] text-slate-400">{purgeReport.dryRun ? 'יימחקו' : 'נמחקו'}</p>
+                                </div>
+                                <div className="bg-slate-900/60 rounded p-2 text-center">
+                                    <p className="text-lg font-black text-amber-400">{purgeReport.totals.missingDate}</p>
+                                    <p className="text-[10px] text-slate-400">ללא תאריך</p>
+                                </div>
+                                <div className="bg-slate-900/60 rounded p-2 text-center">
+                                    <p className="text-lg font-black text-slate-300">{purgeReport.totals.citiesEmptied}</p>
+                                    <p className="text-[10px] text-slate-400">ערים ריקות שנוקו</p>
+                                </div>
+                            </div>
+                            <details className="text-[11px] text-slate-400">
+                                <summary className="cursor-pointer hover:text-slate-200">פירוט לפי עיר ({Object.keys(purgeReport.perCity).length})</summary>
+                                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                                    {Object.entries(purgeReport.perCity)
+                                        .sort((a, b) => b[1].deleted - a[1].deleted)
+                                        .map(([city, s]) => (
+                                            <div key={city} className="flex justify-between px-2 py-0.5 hover:bg-slate-800/50 rounded">
+                                                <span>{city}</span>
+                                                <span className="text-slate-500">
+                                                    שמור: <span className="text-emerald-400">{s.kept}</span> · {purgeReport.dryRun ? 'יימחק' : 'נמחק'}: <span className="text-red-400">{s.deleted}</span>
+                                                    {s.missingDate > 0 && <> · ללא תאריך: <span className="text-amber-400">{s.missingDate}</span></>}
+                                                </span>
+                                            </div>
+                                        ))}
+                                </div>
+                            </details>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 };

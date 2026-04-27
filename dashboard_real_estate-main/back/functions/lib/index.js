@@ -28,6 +28,7 @@ const updateProperty_1 = require("./properties/updateProperty");
 const deleteProperty_1 = require("./properties/deleteProperty");
 const geocode_1 = require("./properties/geocode");
 const matchmaking_1 = require("./properties/matchmaking");
+const processNaturalLanguageSearch_1 = require("./properties/processNaturalLanguageSearch");
 // ── Leads Module ──────────────────────────────────────────────────────────────
 const webhookReceiveLead_1 = require("./leads/webhookReceiveLead");
 const addLead_1 = require("./leads/addLead");
@@ -82,7 +83,7 @@ const manual_requests_1 = require("./billing/manual_requests");
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, checkPhoneAvailable: onboarding_1.checkPhoneAvailable, captureLead: onboarding_1.captureLead };
 exports.users = { inviteAgent: team_1.inviteAgent, sendAgentInvite: team_1.sendAgentInvite, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually, generateAgencyJoinCode: team_1.generateAgencyJoinCode, saveAgencyJoinCode: team_1.saveAgencyJoinCode, joinWithCode: team_1.joinWithCode, claimInviteToken: team_1.claimInviteToken };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
-exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking };
+exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
@@ -105,7 +106,8 @@ exports.superadmin = {
     superAdminSetUserStatus: superadmin_1.superAdminSetUserStatus,
     superAdminApproveAgency: superadmin_1.superAdminApproveAgency,
     superAdminHealSelf: healAdmin_1.superAdminHealSelf,
-    superAdminConsolidateCityV2: globalImport_1.superAdminConsolidateCityV2
+    superAdminConsolidateCityV2: globalImport_1.superAdminConsolidateCityV2,
+    superAdminPurgeOldGlobalPropertiesV2: globalImport_1.superAdminPurgeOldGlobalPropertiesV2
 };
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.contracts = { signDeal: signDeal_1.signDeal };

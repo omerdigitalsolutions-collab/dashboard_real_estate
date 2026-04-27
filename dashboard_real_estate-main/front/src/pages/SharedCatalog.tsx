@@ -371,17 +371,17 @@ export default function SharedCatalogPage() {
     const agencyPhone = rawAgencyPhone.replace(/\D/g, '').replace(/^0/, '972');
 
     const getCallPhone = (property: any): string => {
-        if (property.listingType === 'exclusive' && property.agentPhone) {
-            return property.agentPhone;
-        }
+        if (property.listingType === 'exclusive' && property.agentPhone) return property.agentPhone;
+        if (property.assignedAgentPhone) return property.assignedAgentPhone;
         return rawAgencyPhone;
     };
 
     const getWaPhone = (property: any): string => {
-        if (property.listingType === 'exclusive' && property.agentPhone) {
+        if (property.listingType === 'exclusive' && property.agentPhone)
             return property.agentPhone.replace(/\D/g, '').replace(/^0/, '972');
-        }
-        return agencyPhone; // catalog stores WA integration phone or office phone
+        if (property.assignedAgentPhone)
+            return property.assignedAgentPhone.replace(/\D/g, '').replace(/^0/, '972');
+        return agencyPhone;
     };
 
     const getWaLink = (property: any): string => {
@@ -389,8 +389,10 @@ export default function SharedCatalogPage() {
         if (!phone) return '#';
         const addr = toStreetOnly(property.address || '');
         const location = [addr, property.city].filter(Boolean).join(', ');
-        const agentDisplayName = property.agentName || '';
-        const greeting = agentDisplayName ? `היי ${agentDisplayName},` : 'היי,';
+        const contactName = property.listingType === 'exclusive'
+            ? (property.agentName || '')
+            : (property.assignedAgentName || '');
+        const greeting = contactName ? `היי ${contactName},` : 'היי,';
         const msg = `${greeting} אני מתעניין/ת בנכס ב${location}`;
         return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
     };
@@ -576,22 +578,26 @@ export default function SharedCatalogPage() {
                                         </p>
                                     )}
 
-                                    {/* Agent / Agency branding */}
-                                    {((property.listingType === 'exclusive' && property.agentName) || agencyLogoUrl || agencyName) && (
+                                    {/* Agent / Agency branding — only for office properties */}
+                                    {property.listingType === 'exclusive' && (
                                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
-                                            {property.listingType === 'exclusive' && property.agentName ? (
-                                                <>
-                                                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                                        <span className="text-[9px] font-black text-blue-600">
-                                                            {property.agentName.charAt(0)}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-xs text-slate-500 font-semibold truncate">{property.agentName}</span>
-                                                </>
+                                            {property.agentPhotoUrl ? (
+                                                <img
+                                                    src={property.agentPhotoUrl}
+                                                    alt={property.agentName || ''}
+                                                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100"
+                                                />
                                             ) : agencyLogoUrl ? (
                                                 <img src={agencyLogoUrl} alt={agencyName || ''} className="h-5 w-auto max-w-[70px] object-contain shrink-0" />
-                                            ) : (
-                                                <span className="text-xs text-slate-400 font-medium truncate">{agencyName}</span>
+                                            ) : property.agentName ? (
+                                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                    <span className="text-[9px] font-black text-blue-600">
+                                                        {property.agentName.charAt(0)}
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                            {property.agentName && (
+                                                <span className="text-xs text-slate-500 font-semibold truncate">{property.agentName}</span>
                                             )}
                                         </div>
                                     )}

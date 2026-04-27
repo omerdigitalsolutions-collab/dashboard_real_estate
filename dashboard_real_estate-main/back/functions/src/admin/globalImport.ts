@@ -234,6 +234,125 @@ export const superAdminGetImportMappingV2 = functions.https.onCall({
     return { success: true, mapping };
 });
 
+/**
+ * Purges global properties (cities/{city}/properties) created BEFORE a given cutoff date.
+ * Use `dryRun: true` to count what would be deleted without actually deleting.
+ *
+ * Selection logic per doc:
+ *  - keep when createdAt >= cutoff
+ *  - delete when createdAt < cutoff
+ *  - missing-createdAt: deleted by default (treated as "old"); set keepMissingDate=true to keep them.
+ *
+ * Empty city documents (no remaining properties) are also removed.
+ */
+export const superAdminPurgeOldGlobalPropertiesV2 = functions.https.onCall({
+    region: 'europe-west1',
+    memory: '512MiB',
+    timeoutSeconds: 540,
+    cors: true,
+    invoker: 'public',
+}, async (request) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    if (request.auth.token.superAdmin !== true) {
+        throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
+    }
+
+    const { cutoffISO, dryRun = true, keepMissingDate = false } = request.data as {
+        cutoffISO: string;
+        dryRun?: boolean;
+        keepMissingDate?: boolean;
+    };
+
+    if (!cutoffISO || typeof cutoffISO !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing cutoffISO (e.g. "2026-04-21").');
+    }
+    const cutoff = new Date(cutoffISO);
+    if (isNaN(cutoff.getTime())) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid cutoffISO date.');
+    }
+    const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
+
+    const db = admin.firestore();
+    let kept = 0;
+    let toDelete = 0;
+    let missingDate = 0;
+    let citiesEmptied = 0;
+    const perCity: Record<string, { kept: number; deleted: number; missingDate: number }> = {};
+
+    const citiesSnap = await db.collection('cities').get();
+
+    for (const cityDoc of citiesSnap.docs) {
+        const cityName = cityDoc.id;
+        const propsSnap = await cityDoc.ref.collection('properties').get();
+        if (propsSnap.empty) continue;
+
+        const stats = { kept: 0, deleted: 0, missingDate: 0 };
+        const toDeleteRefs: FirebaseFirestore.DocumentReference[] = [];
+
+        propsSnap.forEach(d => {
+            const data = d.data() as any;
+            const createdAt = data?.createdAt;
+            const createdDate: Date | null =
+                createdAt?.toDate ? createdAt.toDate() :
+                createdAt instanceof Date ? createdAt :
+                typeof createdAt === 'string' ? new Date(createdAt) :
+                null;
+
+            if (!createdDate || isNaN(createdDate.getTime())) {
+                stats.missingDate++;
+                missingDate++;
+                if (!keepMissingDate) {
+                    toDeleteRefs.push(d.ref);
+                    stats.deleted++;
+                    toDelete++;
+                } else {
+                    stats.kept++;
+                    kept++;
+                }
+                return;
+            }
+
+            if (createdDate.getTime() >= cutoffTs.toMillis()) {
+                stats.kept++;
+                kept++;
+            } else {
+                toDeleteRefs.push(d.ref);
+                stats.deleted++;
+                toDelete++;
+            }
+        });
+
+        perCity[cityName] = stats;
+
+        if (!dryRun && toDeleteRefs.length > 0) {
+            const batchSize = 400;
+            for (let i = 0; i < toDeleteRefs.length; i += batchSize) {
+                const chunk = toDeleteRefs.slice(i, i + batchSize);
+                const batch = db.batch();
+                chunk.forEach(r => batch.delete(r));
+                await batch.commit();
+            }
+
+            if (stats.kept === 0) {
+                await cityDoc.ref.delete().catch(() => {});
+                citiesEmptied++;
+            }
+        }
+    }
+
+    return {
+        success: true,
+        dryRun,
+        cutoffISO,
+        cutoffApplied: cutoff.toISOString(),
+        keepMissingDate,
+        totals: { kept, deleted: toDelete, missingDate, citiesEmptied },
+        perCity,
+    };
+});
+
 export const superAdminConsolidateCityV2 = functions.https.onCall({
     region: 'europe-west1',
     cors: true,

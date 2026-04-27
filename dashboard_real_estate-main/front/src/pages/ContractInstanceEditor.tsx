@@ -102,23 +102,28 @@ export default function ContractInstanceEditor() {
                 }
                 setTemplate(tmpl);
 
-                const dealSnap = await getDoc(doc(db, 'deals', inst.dealId));
-                const dealData = dealSnap.data() as Deal | undefined;
-                setDeal(dealData || null);
+                let dealData: Deal | undefined;
+                let propData: Property | undefined;
 
-                if (dealData?.propertyId) {
-                    const propSnap = await getDoc(
-                        doc(db, `agencies/${userData.agencyId}/properties`, dealData.propertyId)
-                    );
-                    const propData = propSnap.data() as Property | undefined;
-                    setProperty(propData || null);
+                if (inst.dealId) {
+                    const dealSnap = await getDoc(doc(db, 'deals', inst.dealId));
+                    dealData = dealSnap.data() as Deal | undefined;
+                    setDeal(dealData || null);
+
+                    if (dealData?.propertyId) {
+                        const propSnap = await getDoc(
+                            doc(db, `agencies/${userData.agencyId}/properties`, dealData.propertyId)
+                        );
+                        propData = propSnap.data() as Property | undefined;
+                        setProperty(propData || null);
+                    }
                 }
 
                 const filledValues = magicFill(
                     tmpl.fieldsMetadata,
                     inst.values || {},
                     dealData || null,
-                    null
+                    propData || null
                 );
                 setValues(filledValues);
             } catch (err) {

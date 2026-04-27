@@ -74,6 +74,7 @@ const webhookSecret = (0, params_1.defineSecret)('WAHA_WEBHOOK_SECRET');
 const googleClientId = (0, params_1.defineSecret)('GOOGLE_CLIENT_ID');
 const googleClientSecret = (0, params_1.defineSecret)('GOOGLE_CLIENT_SECRET');
 const googleRedirectUri = (0, params_1.defineSecret)('GOOGLE_REDIRECT_URI');
+const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = admin.firestore();
 const REGION = 'europe-west1';
 // ─── Crypto Helpers (mirrors whatsapp.ts — AES-256-CBC) ───────────────────────
@@ -175,10 +176,12 @@ async function upsertLead(agencyId, phone, rawName) {
 // ─── Main Cloud Function ──────────────────────────────────────────────────────
 exports.webhookWhatsAppAI = (0, https_1.onRequest)({
     region: REGION,
-    secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
+    secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri, resendApiKey],
     timeoutSeconds: 300,
     memory: '1GiB',
     cpu: 1, // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
+    minInstances: 1, // מונע cold-start — שמרן אחד חם תמיד, חוסך 5–30s לכל הודעה ראשונה אחרי השקטה
+    concurrency: 40, // אינסטנס יחיד מטפל במספר הודעות במקביל
 }, async (req, res) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // 1. ACK immediately
@@ -197,17 +200,18 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
             console.log(`[Webhook] ⏭️ Skipping irrelevant type: ${typeWebhook}`);
             return;
         }
-        // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery)
+        // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery).
+        // Read is awaited (correctness gate); the marker write is fire-and-forget.
         const idMessageEarly = body === null || body === void 0 ? void 0 : body.idMessage;
         if (idMessageEarly) {
             const processedRef = db.collection('processed_messages').doc(idMessageEarly);
             const alreadyDone = await processedRef.get();
             if (alreadyDone.exists)
                 return;
-            await processedRef.set({
+            processedRef.set({
                 processedAt: admin.firestore.FieldValue.serverTimestamp(),
                 instance: idInstance,
-            });
+            }).catch((e) => console.warn('[Webhook] processed_messages set failed:', e === null || e === void 0 ? void 0 : e.message));
         }
         // Resolve Agency
         const agencyId = await resolveAgencyByInstance(idInstance);
@@ -384,6 +388,7 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                     agencyId,
                     leadId,
                     geminiApiKey: geminiApiKey.value(),
+                    resendApiKey: resendApiKey.value(),
                     creds,
                     idMessage,
                     inboundMsgDocId: inboundMsgRef.id,

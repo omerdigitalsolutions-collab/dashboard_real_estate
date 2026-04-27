@@ -40,6 +40,7 @@ export interface PipelineParams {
   agencyId: string;
   leadId: string;
   geminiApiKey: string;
+  resendApiKey?: string;
   creds: GreenApiCreds;
   idMessage?: string;
   inboundMsgDocId: string;
@@ -84,7 +85,8 @@ async function getOrCreateSession(
   const snap = await ref.get();
 
   if (snap.exists) {
-    await ref.update({ lastMessageAt: now });
+    // Fire-and-forget — don't block the bot reply on a "lastMessageAt" stamp.
+    ref.update({ lastMessageAt: now }).catch((e) => console.warn('[Pipeline] session update failed:', e.message));
     return { id: snap.id, ...snap.data()!, lastMessageAt: now };
   }
 
@@ -97,7 +99,7 @@ async function getOrCreateSession(
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function processInboundMessage(params: PipelineParams): Promise<void> {
-  const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
+  const { phone, waChatId, text, agencyId, leadId, geminiApiKey, resendApiKey, creds, idMessage, inboundMsgDocId } = params;
 
   // Bypass phone — always gets a response regardless of locks/checks.
   // Set via BYPASS_PHONE env var (Firebase Functions config); no hardcoded number.
@@ -111,13 +113,13 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
   ]);
 
   if (!isBypassPhone && isBlocked) {
-    await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
+    writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
     return;
   }
 
   if (!isBypassPhone && !passedRateLimit) {
     await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
-    await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
+    writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
     return;
   }
 
@@ -132,14 +134,14 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
     const prev = suspSnap.exists ? (suspSnap.data()!.score ?? 0) : 0;
     const newScore = prev + score;
 
-    await suspRef.set(
+    suspRef.set(
       { phone, agencyId, score: newScore, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true },
-    );
+    ).catch((e) => console.warn('[Pipeline] suspicious-set failed:', e.message));
 
     if (!isBypassPhone && newScore >= 3) {
       await blockPhone(phone, `injection_attempts_score_${newScore}`);
-      await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
+      writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
       return;
     }
     writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
@@ -168,5 +170,5 @@ export async function processInboundMessage(params: PipelineParams): Promise<voi
   // 6. Delegate to existing AI bot. Property-specific answering + agent
   //    notification (for exclusive listings) live in handleAddressQuery
   //    inside handleWeBotReply — see the rationale at the top of this file.
-  await handleWeBotReply(agencyId, leadId, phone, sanitized, geminiApiKey, creds, idMessage, inboundMsgDocId);
+  await handleWeBotReply(agencyId, leadId, phone, sanitized, geminiApiKey, creds, idMessage, inboundMsgDocId, resendApiKey);
 }

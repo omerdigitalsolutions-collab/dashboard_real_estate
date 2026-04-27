@@ -137,13 +137,14 @@ export default function ContractEditor() {
         try {
             setUploading(true);
             let result;
-            
+            const validDealId = dealId && dealId !== 'new' ? dealId : undefined;
+
             if (isPdf) {
                 result = await createContractFromPDF(
                     userData.agencyId,
                     file,
                     currentUser.uid,
-                    dealId || undefined
+                    validDealId
                 );
                 setIsImage(false);
             } else {
@@ -151,7 +152,7 @@ export default function ContractEditor() {
                     userData.agencyId,
                     file,
                     currentUser.uid,
-                    dealId || undefined
+                    validDealId
                 );
                 setIsImage(true);
             }

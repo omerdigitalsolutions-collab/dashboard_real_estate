@@ -47,16 +47,16 @@ export async function createContractFromPDF(
     const pdfUrl = await getDownloadURL(storageRef);
 
     // 2. Create Firestore document
-    const data: Omit<Contract, 'id'> = {
+    const data: any = {
         agencyId,
-        dealId: dealId ?? undefined,
+        ...(dealId ? { dealId } : {}),
         source: 'pdf_upload',
         originalFileUrl: pdfUrl,
         status: 'draft',
         fields: [],
         createdBy,
-        createdAt: serverTimestamp() as any,
-        updatedAt: serverTimestamp() as any,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
     };
 
     const docRef = await addDoc(contractsCol(agencyId), data);
@@ -82,16 +82,16 @@ export async function createContractFromImage(
 
     const imageUrl = await getDownloadURL(storageRef);
 
-    const data: Omit<Contract, 'id'> = {
+    const data: any = {
         agencyId,
-        dealId: dealId ?? undefined,
+        ...(dealId ? { dealId } : {}),
         source: 'scan',
-        originalFileUrl: imageUrl, // Reusing this field for the image URL
+        originalFileUrl: imageUrl,
         status: 'draft',
         fields: [],
         createdBy,
-        createdAt: serverTimestamp() as any,
-        updatedAt: serverTimestamp() as any,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
     };
 
     const docRef = await addDoc(contractsCol(agencyId), data);

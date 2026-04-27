@@ -415,8 +415,8 @@ export interface Contract {
     id?: string;
     agencyId: string;
     dealId?: string;
-    source: 'pdf_upload';
-    originalFileUrl: string;  // original template PDF
+    source: 'pdf_upload' | 'scan';
+    originalFileUrl: string;  // original template PDF or scanned image
     signedPdfUrl?: string;
     status: 'draft' | 'active' | 'completed';
     viewedAt?: Timestamp;

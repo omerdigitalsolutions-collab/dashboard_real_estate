@@ -84,7 +84,8 @@ async function getOrCreateSession(phone, agencyId) {
     const now = admin.firestore.Timestamp.now();
     const snap = await ref.get();
     if (snap.exists) {
-        await ref.update({ lastMessageAt: now });
+        // Fire-and-forget — don't block the bot reply on a "lastMessageAt" stamp.
+        ref.update({ lastMessageAt: now }).catch((e) => console.warn('[Pipeline] session update failed:', e.message));
         return Object.assign(Object.assign({ id: snap.id }, snap.data()), { lastMessageAt: now });
     }
     const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + SESSION_TTL_MS);
@@ -95,7 +96,7 @@ async function getOrCreateSession(phone, agencyId) {
 // ─── Main export ──────────────────────────────────────────────────────────────
 async function processInboundMessage(params) {
     var _a, _b, _c, _d;
-    const { phone, waChatId, text, agencyId, leadId, geminiApiKey, creds, idMessage, inboundMsgDocId } = params;
+    const { phone, waChatId, text, agencyId, leadId, geminiApiKey, resendApiKey, creds, idMessage, inboundMsgDocId } = params;
     // Bypass phone — always gets a response regardless of locks/checks.
     // Set via BYPASS_PHONE env var (Firebase Functions config); no hardcoded number.
     const bypassPhone = (_a = process.env.BYPASS_PHONE) !== null && _a !== void 0 ? _a : '';
@@ -106,12 +107,12 @@ async function processInboundMessage(params) {
         (0, rateLimiter_1.checkRateLimit)(phone).catch(() => true), // fail-safe: assume passed
     ]);
     if (!isBypassPhone && isBlocked) {
-        await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
+        writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
         return;
     }
     if (!isBypassPhone && !passedRateLimit) {
         await sendDirect(creds, waChatId, RATE_LIMITED_MSG);
-        await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
+        writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'rate_limit' });
         return;
     }
     // 3. Sanitize
@@ -123,10 +124,10 @@ async function processInboundMessage(params) {
         const suspSnap = await suspRef.get();
         const prev = suspSnap.exists ? ((_b = suspSnap.data().score) !== null && _b !== void 0 ? _b : 0) : 0;
         const newScore = prev + score;
-        await suspRef.set({ phone, agencyId, score: newScore, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        suspRef.set({ phone, agencyId, score: newScore, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch((e) => console.warn('[Pipeline] suspicious-set failed:', e.message));
         if (!isBypassPhone && newScore >= 3) {
             await (0, blocklist_1.blockPhone)(phone, `injection_attempts_score_${newScore}`);
-            await writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
+            writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
             return;
         }
         writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
@@ -152,6 +153,6 @@ async function processInboundMessage(params) {
     // 6. Delegate to existing AI bot. Property-specific answering + agent
     //    notification (for exclusive listings) live in handleAddressQuery
     //    inside handleWeBotReply — see the rationale at the top of this file.
-    await (0, handleWeBotReply_1.handleWeBotReply)(agencyId, leadId, phone, sanitized, geminiApiKey, creds, idMessage, inboundMsgDocId);
+    await (0, handleWeBotReply_1.handleWeBotReply)(agencyId, leadId, phone, sanitized, geminiApiKey, creds, idMessage, inboundMsgDocId, resendApiKey);
 }
 //# sourceMappingURL=botPipeline.js.map

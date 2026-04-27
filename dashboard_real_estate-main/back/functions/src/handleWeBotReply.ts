@@ -17,6 +17,7 @@ import {
   Content,
   FunctionCallingMode,
 } from '@google/generative-ai';
+import { Resend } from 'resend';
 import {
   buildWeBotPrompt,
   sendWhatsAppMessage,
@@ -118,11 +119,11 @@ const scheduleMeetingDeclaration: FunctionDeclaration = {
 
 const updateLeadRequirementsDeclaration: FunctionDeclaration = {
   name: 'update_lead_requirements',
-  description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות עיר + תקציב או חדרים.',
+  description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג / עיר). עיר אינה חובה — ניתן לחפש בכל נכסי הסוכנות.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      desiredCity:      { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'ערים מועדפות (עברית)' },
+      desiredCity:      { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'ערים מועדפות (עברית) — אופציונלי' },
       maxBudget:        { type: SchemaType.NUMBER,  description: 'תקציב מקסימלי בשקלים' },
       minRooms:         { type: SchemaType.NUMBER,  description: 'מינימום חדרים' },
       maxRooms:         { type: SchemaType.NUMBER,  description: 'מקסימום חדרים' },
@@ -132,7 +133,7 @@ const updateLeadRequirementsDeclaration: FunctionDeclaration = {
       mustHaveBalcony:  { type: SchemaType.BOOLEAN },
       mustHaveSafeRoom: { type: SchemaType.BOOLEAN },
     },
-    required: ['desiredCity'],
+    required: [],
   },
 };
 
@@ -274,6 +275,7 @@ async function handleNotifyAssignedAgent(
   customerMessage: string,
   propertyId: string,
   greenApiCreds: { idInstance: string; apiTokenInstance: string },
+  resendApiKey?: string,
 ): Promise<{ notified: boolean; reason?: string }> {
   try {
     const agencyPropDoc = await db.collection('agencies').doc(agencyId).collection('properties').doc(propertyId).get();
@@ -291,15 +293,31 @@ async function handleNotifyAssignedAgent(
     if (!assignedAgentId) return { notified: false, reason: 'no_assigned_agent' };
 
     const agentDoc = await db.collection('users').doc(assignedAgentId).get();
-    const agentPhone: string | null = agentDoc.data()?.phone || agentDoc.data()?.phoneNumber || null;
-    if (!agentPhone) return { notified: false, reason: 'no_agent_phone' };
+    const agentData = agentDoc.data() || {};
+    const agentPhone: string | null = agentData.phone || agentData.phoneNumber || null;
+    const agentEmail: string | null = agentData.email || null;
 
     const address = prop.address?.fullAddress || `${prop.address?.street}, ${prop.address?.city}` || prop.city || 'נכס';
-    await notifyAgentOrAdmin(
-      agentPhone,
-      `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${customerPhone}\nשאל על: ${address}\n\nהודעה:\n"${customerMessage}"`,
-      greenApiCreds,
-    );
+    const waMsg = `🏠 *פנייה ישירה לנכס — מהבוט*\nטלפון לקוח: ${customerPhone}\nשאל על: ${address}\n\nהודעה:\n"${customerMessage}"`;
+
+    if (agentPhone) {
+      await notifyAgentOrAdmin(agentPhone, waMsg, greenApiCreds);
+    }
+    if (agentEmail && resendApiKey) {
+      await sendEmailNotification(
+        resendApiKey, agentEmail,
+        `פנייה ישירה לנכס — ${address}`,
+        `<div dir="rtl" style="font-family:sans-serif;color:#333">
+          <h2>🏠 לקוח התעניין בנכס ספציפי</h2>
+          <p><strong>נכס:</strong> ${address}</p>
+          <p><strong>טלפון לקוח:</strong> ${customerPhone}</p>
+          <p><strong>הודעת הלקוח:</strong> ${customerMessage}</p>
+        </div>`,
+      );
+    }
+
+    // Also notify admin if no assigned agent phone/email was found
+    if (!agentPhone && !agentEmail) return { notified: false, reason: 'no_agent_contact' };
     return { notified: true };
   } catch (err) {
     console.warn('[WeBot] handleNotifyAssignedAgent failed:', err);
@@ -371,7 +389,9 @@ async function sendBotMessage(
     console.log(`[WeBot] ✅ Sent to ${customerPhone}`);
   }
   if (isSent) {
-    await db.collection(`leads/${leadId}/messages`).add({
+    // Fire-and-forget — message already left WhatsApp; the Firestore log
+    // isn't on the critical path of the customer reply.
+    db.collection(`leads/${leadId}/messages`).add({
       text,
       direction:   'outbound',
       senderPhone: 'bot',
@@ -379,7 +399,7 @@ async function sendBotMessage(
       botSentAt:   Date.now(),
       timestamp:   admin.firestore.FieldValue.serverTimestamp(),
       isRead:      true,
-    });
+    }).catch((e) => console.warn('[WeBot] outbound msg log failed:', e?.message));
   }
 }
 
@@ -404,9 +424,18 @@ async function classifyIntent(
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const result = await withTimeout('classifyIntent', 5000, () => model.generateContent(
       `סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
-      `קטגוריות:\n- buyer: מחפש לקנות/לשכור דירה\n- seller: רוצה למכור/להשכיר/לפרסם את הדירה שלו\n` +
-      `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה\n\n` +
-      `שים לב: "אני מחפש קונה לדירה שלי" = seller. "מחפש דירה לקנות" = buyer.\n\n` +
+      `קטגוריות:\n- buyer: הלקוח מחפש דירה/נכס לקנייה או לשכירות (גם אם השתמש במילים "למכירה"/"להשכרה" — אלו מתייחסות לסטטוס הנכס, לא לכוונת הלקוח).\n` +
+      `- seller: הלקוח רוצה למכור/להשכיר/לפרסם את הדירה שלו, או מחפש קונה/שוכר לנכס שלו.\n` +
+      `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה.\n\n` +
+      `כלל מנחה: אם הלקוח הוא זה שמחפש/מתעניין/רוצה דירה — זה buyer, גם אם נכתב "דירה למכירה" או "דירה להשכרה".\n\n` +
+      `דוגמאות:\n` +
+      `- "מחפש דירה למכירה בתל אביב 5 חדרים" → buyer\n` +
+      `- "מתעניין בדירת 5 חדרים במודיעין" → buyer\n` +
+      `- "דירה להשכרה ברמת גן 4 חדרים" → buyer\n` +
+      `- "מחפש דירה לקנות" → buyer\n` +
+      `- "אני רוצה למכור את הדירה שלי" → seller\n` +
+      `- "מחפש קונה לדירה שלי" → seller\n` +
+      `- "רוצה לפרסם נכס למכירה" → seller\n\n` +
       `{"intent":"buyer"|"seller"|"irrelevant"}`
     ));
     const text = result.response.text().replace(/```json|```/g, '').trim();
@@ -482,6 +511,48 @@ async function findAdminPhone(agencyId: string): Promise<string | null> {
   return snap.empty ? null : snap.docs[0].data()?.phone || snap.docs[0].data()?.phoneNumber || null;
 }
 
+async function findAdminEmail(agencyId: string): Promise<string | null> {
+  const snap = await db.collection('users')
+    .where('agencyId', '==', agencyId)
+    .where('role', '==', 'admin')
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0].data()?.email || null;
+}
+
+async function findAgentEmail(agencyId: string, assignedAgentId?: string): Promise<string | null> {
+  if (assignedAgentId) {
+    const doc = await db.collection('users').doc(assignedAgentId).get();
+    const email = doc.data()?.email;
+    if (email) return email;
+  }
+  const snap = await db.collection('users')
+    .where('agencyId', '==', agencyId)
+    .where('role', 'in', ['agent', 'admin'])
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0].data()?.email || null;
+}
+
+async function sendEmailNotification(
+  resendApiKey: string,
+  to: string,
+  subject: string,
+  htmlBody: string,
+): Promise<void> {
+  try {
+    const resend = new Resend(resendApiKey);
+    await resend.emails.send({
+      from: 'hOMER CRM <noreply@omer-crm.co.il>',
+      to: [to],
+      subject,
+      html: htmlBody,
+    });
+  } catch (err) {
+    console.warn('[WeBot] sendEmailNotification failed (non-fatal):', err);
+  }
+}
+
 // ─── extractSellerInfo ────────────────────────────────────────────────────────
 
 async function extractSellerInfo(
@@ -550,6 +621,7 @@ async function runBuyerFlow(
   currentMsgDocId: string | undefined,
   greenApiCreds:  { idInstance: string; apiTokenInstance: string },
   currentState:   ChatState = 'IDLE',
+  resendApiKey?:  string,
 ): Promise<void> {
   // RAG: active properties + chat history in parallel
   const reqsCity = leadData.requirements?.desiredCity?.[0];
@@ -589,9 +661,7 @@ async function runBuyerFlow(
   const schedulingPrefix =
     currentState === 'SCHEDULING_CALL'
       ? '⚠️ מצב נוכחי: קטלוג הנכסים כבר נשלח ללקוח. אם הלקוח רוצה לקבוע שיחה/פגישה — שאל תאריך ושעה מועדפים ואז קרא ל-schedule_meeting בלבד. לאחר שהפגישה נקבעה שלח הודעת סיום חמה וחזור ל-IDLE. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
-      : currentState === 'ASKING_EXTRA_CRITERIA'
-      ? '⚠️ שלב: הלקוח ענה על שאלת "האם יש קריטריונים נוספים?". אם ציין קריטריונים — קרא ל-update_lead_requirements עם הדרישות המעודכנות ואז מיד ל-create_catalog. אם אין דרישות נוספות — קרא ישירות ל-create_catalog.\n\n'
-      : '';
+      : '⚡ מהירות מעל הכל: ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג נכס / שכונה), קרא ל-update_lead_requirements ומיד אחר כך ל-create_catalog — אין צורך לדעת עיר. הבוט מחפש בכל נכסי הסוכנות. שאל שאלה אחת בלבד: "יש פרטים נוספים שחשוב לי לדעת לפני שאמצא לך נכסים?" ואז צור קטלוג ללא תלות בתשובה.\n\n';
 
   const genAI = getGenAI(geminiApiKey);
   const model = genAI.getGenerativeModel({
@@ -607,7 +677,6 @@ async function runBuyerFlow(
   let catalogCreated         = false;
   let sentCatalogUrl: string | null = null;
   let iterCount              = 0;
-  let requirementsJustSaved  = false;
   let meetingScheduled       = false;
 
   while (iterCount < 5) {
@@ -746,26 +815,19 @@ async function runBuyerFlow(
       });
       await updateChatState(leadId, 'COLLECTING_REQS');
       console.log(`[WeBot] 📋 Requirements saved: lead=${leadId}`, requirements);
-      requirementsJustSaved = true;
-      functionResult = { success: true };
+      functionResult = { success: true, message: 'הדרישות נשמרו. קרא עכשיו ל-create_catalog באותו תור.' };
 
     // ── create_catalog ────────────────────────────────────────────────────────
     } else if (call.name === 'create_catalog') {
-      if (requirementsJustSaved && currentState !== 'ASKING_EXTRA_CRITERIA') {
-        // Requirements were just saved in a non-extra-criteria turn — ask extra criteria first
-        functionResult = {
-          success: false,
-          reason: 'ask_extra_criteria_first',
-          message: 'יש לשאול את הלקוח על קריטריונים נוספים לפני יצירת הקטלוג.',
-        };
-      } else {
+      {
         const freshLead = await db.collection('leads').doc(leadId).get();
         const reqs: MatchingRequirements = freshLead.data()?.requirements || {};
 
-        if (!reqs.desiredCity?.length && !reqs.maxBudget && !reqs.minRooms) {
+        const hasAnyReq = reqs.desiredCity?.length || reqs.maxBudget || reqs.minRooms || reqs.maxRooms || reqs.propertyType?.length;
+        if (!hasAnyReq) {
           functionResult = {
             success: false, reason: 'missing_requirements',
-            message: 'לא נמצאו דרישות שמורות. יש לאסוף מהלקוח לפחות עיר + תקציב או חדרים.',
+            message: 'לא נמצאו דרישות שמורות. יש לאסוף מהלקוח לפחות פרמטר אחד (חדרים / תקציב / סוג נכס).',
           };
         } else {
           const matchedProperties = await findMatchingPropertiesForBot(agencyId, reqs, 10);
@@ -796,7 +858,7 @@ async function runBuyerFlow(
         functionResult = { success: false, reason: 'missing_property_id' };
       } else {
         const result = await handleNotifyAssignedAgent(
-          agencyId, customerPhone, incomingMessage, propertyId, greenApiCreds,
+          agencyId, customerPhone, incomingMessage, propertyId, greenApiCreds, resendApiKey,
         );
         functionResult = { success: result.notified, reason: result.reason };
       }
@@ -814,14 +876,6 @@ async function runBuyerFlow(
   if (iterCount >= 5 && !finalReply.trim()) {
     console.warn(`[WeBot] Hit max iterations (5) for lead ${leadId}`);
     finalReply = 'הבנתי. אני מעבד את הנתונים, מיד אשוב חזרה עם תשובה מסודרת.';
-  }
-
-  // Ask for extra criteria ONCE — only when first entering this stage
-  if (requirementsJustSaved && !catalogCreated && currentState !== 'ASKING_EXTRA_CRITERIA') {
-    finalReply = 'קיבלתי את הדרישות.\nלפני שמכין את הקטלוג — האם יש דרישות נוספות?\n(חנייה, מעלית, מרפסת, ממ״ד, קומה, גינה, מצב הנכס)';
-    await updateChatState(leadId, 'ASKING_EXTRA_CRITERIA');
-    await sendBotMessage(integration, customerPhone, leadId, finalReply);
-    return;
   }
 
   // Guarantee the catalog URL appears in the reply even if Gemini forgot to include it
@@ -867,26 +921,55 @@ async function runBuyerFlow(
       reqs.maxBudget                    ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
     ].filter(Boolean).join(' | ');
 
-    const agentPhone = await findAgentPhone(agencyId, leadData.assignedAgentId);
+    const [agentPhone, agentEmail, adminPhone, adminEmail, recentMsgs] = await Promise.all([
+      findAgentPhone(agencyId, leadData.assignedAgentId),
+      findAgentEmail(agencyId, leadData.assignedAgentId),
+      findAdminPhone(agencyId),
+      findAdminEmail(agencyId),
+      loadChatHistory(leadId, 6),
+    ]);
+
+    const waBody = `🏠 *פנייה חדשה מהבוט*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\nהלקוח קיבל קטלוג ומחכה לשיחת ייעוץ.${sentCatalogUrl ? `\n🔗 קטלוג: ${sentCatalogUrl}` : ''}`;
+
     if (agentPhone) {
-      await notifyAgentOrAdmin(
-        agentPhone,
-        `🏠 *פנייה חדשה מהבוט*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\nהלקוח קיבל קטלוג ומחכה לשיחת ייעוץ.`,
-        greenApiCreds,
+      await notifyAgentOrAdmin(agentPhone, waBody, greenApiCreds);
+    }
+    if (agentEmail && resendApiKey) {
+      await sendEmailNotification(
+        resendApiKey, agentEmail,
+        `ליד חדש מהבוט — ${leadName}`,
+        `<div dir="rtl" style="font-family:sans-serif;color:#333">
+          <h2>🏠 פנייה חדשה — קונה</h2>
+          <p><strong>שם:</strong> ${leadName}</p>
+          <p><strong>טלפון:</strong> ${customerPhone}</p>
+          <p><strong>דרישות:</strong> ${reqSummary || 'לא צוין'}</p>
+          ${sentCatalogUrl ? `<p><strong>קטלוג שנשלח:</strong> <a href="${sentCatalogUrl}">${sentCatalogUrl}</a></p>` : ''}
+          <p>הלקוח ממתין לשיחת ייעוץ.</p>
+        </div>`,
       );
     }
 
-    // Admin notification with AI summary
-    const [adminPhone, recentMsgs] = await Promise.all([
-      findAdminPhone(agencyId),
-      loadChatHistory(leadId, 6),
-    ]);
+    const msgTexts = recentMsgs.map(m => `${m.role === 'user' ? 'לקוח' : 'בוט'}: ${(m.parts[0] as any).text}`);
+    const summary = await generateConversationSummary('buyer', msgTexts, null, geminiApiKey);
+
     if (adminPhone && adminPhone !== agentPhone) {
-      const msgTexts = recentMsgs.map(m => `${m.role === 'user' ? 'לקוח' : 'בוט'}: ${(m.parts[0] as any).text}`);
-      const summary = await generateConversationSummary('buyer', msgTexts, null, geminiApiKey);
       await notifyAgentOrAdmin(adminPhone,
-        `🏠 *ליד חדש — קונה*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\n📝 סיכום: ${summary}`,
+        `🏠 *ליד חדש — קונה*\nשם: ${leadName}\nטלפון: ${customerPhone}\nדרישות: ${reqSummary || 'לא צוין'}\n📝 סיכום: ${summary}${sentCatalogUrl ? `\n🔗 קטלוג: ${sentCatalogUrl}` : ''}`,
         greenApiCreds,
+      );
+    }
+    if (adminEmail && adminEmail !== agentEmail && resendApiKey) {
+      await sendEmailNotification(
+        resendApiKey, adminEmail,
+        `ליד חדש מהבוט — ${leadName}`,
+        `<div dir="rtl" style="font-family:sans-serif;color:#333">
+          <h2>🏠 ליד חדש — קונה</h2>
+          <p><strong>שם:</strong> ${leadName}</p>
+          <p><strong>טלפון:</strong> ${customerPhone}</p>
+          <p><strong>דרישות:</strong> ${reqSummary || 'לא צוין'}</p>
+          ${sentCatalogUrl ? `<p><strong>קטלוג שנשלח:</strong> <a href="${sentCatalogUrl}">${sentCatalogUrl}</a></p>` : ''}
+          <p><strong>סיכום שיחה:</strong> ${summary}</p>
+        </div>`,
       );
     }
 
@@ -1072,6 +1155,7 @@ export async function handleWeBotReply(
   greenApiCreds:   { idInstance: string; apiTokenInstance: string },
   _idMessage?:     string,
   currentMsgDocId?: string,
+  resendApiKey?:   string,
 ): Promise<void> {
   try {
     // 1. Fetch agency + lead
@@ -1161,13 +1245,14 @@ export async function handleWeBotReply(
       if (bypassPhone) await notifyAgentOrAdmin(bypassPhone, alertMsg, greenApiCreds);
     }
 
-    // Increment daily counter (reset if new day)
-    await db.collection('leads').doc(leadId).update({
+    // Increment daily counter (reset if new day) — fire-and-forget; the
+    // value isn't read again in this handler, so blocking on it is wasted.
+    db.collection('leads').doc(leadId).update({
       dailyMessageCount: leadData.lastMessageDate === today
         ? admin.firestore.FieldValue.increment(1)
         : 1,
       lastMessageDate: today,
-    });
+    }).catch((e) => console.warn('[WeBot] dailyMessageCount update failed:', e?.message));
 
     if (isStale && currentState !== 'IDLE') {
       console.log(`[WeBot] State stale (>24h) for lead ${leadId} — resetting to IDLE`);
@@ -1178,9 +1263,15 @@ export async function handleWeBotReply(
     // 5. Name collection: ask name on first bot interaction (regardless of WhatsApp display name)
     if (currentState === 'COLLECTING_NAME') {
       const candidate = incomingMessage.trim().substring(0, 50);
-      // Accept Hebrew letters, Latin letters, spaces, hyphens, and apostrophes —
-      // require ≥ 2 letters total. Anything else → fall back to "לקוח".
-      const looksLikeName = /^[֐-׿a-zA-Z\s'\-]{2,}$/.test(candidate);
+      // Accept ≤ 3 words of Hebrew/Latin letters (with hyphen/apostrophe) —
+      // and reject any candidate containing real-estate intent keywords, which
+      // would otherwise let "אני מחפש דירה לקנות" slip through as a name.
+      const wordCount = candidate.split(/\s+/).filter(Boolean).length;
+      const intentKeywords = /(מחפש|מעוניין|מתעניין|לקנות|לשכור|למכור|דירה|נכס|לפרסם|להשכיר|קונה|שוכר)/;
+      const looksLikeName =
+        /^[֐-׿a-zA-Z]{2,}(?:[\s'\-][֐-׿a-zA-Z]+){0,2}$/.test(candidate)
+        && wordCount <= 3
+        && !intentKeywords.test(candidate);
       const name = looksLikeName ? candidate : 'לקוח';
       await db.collection('leads').doc(leadId).update({ name, botNameCollected: true });
       await updateChatState(leadId, 'IDLE');
@@ -1219,9 +1310,35 @@ export async function handleWeBotReply(
           const name = leadData.name && leadData.name !== 'לקוח' && leadData.name !== 'ליד מוואטסאפ (לא ידוע)'
             ? leadData.name : '';
           const greeting = name ? `שלום ${name},` : 'שלום,';
+
+          // Reference prior interest when we have it — so a returning buyer
+          // who already told us city/rooms/budget doesn't get re-asked from
+          // scratch. Falls back to the generic menu otherwise.
+          const reqs = leadData.requirements || {};
+          const reqSummaryParts = [
+            Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,
+            reqs.minRooms ? `${reqs.minRooms} חדרים` : null,
+            reqs.maxBudget ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
+          ].filter(Boolean);
+          const reqSummary = reqSummaryParts.join(' | ');
+
+          let body: string;
+          if (leadData.type === 'seller') {
+            const sellerAddress = leadData.sellerInfo?.address;
+            const sellerType    = leadData.sellerInfo?.propertyType;
+            const sellerSummary = [sellerType, sellerAddress].filter(Boolean).join(' ב');
+            body = sellerSummary
+              ? `כיף שחזרת. ראיתי שבעבר התעניינת במכירת ${sellerSummary}. רוצה שנתקדם עם זה, או שמשהו אחר?`
+              : `כיף שחזרת. רוצה להתקדם עם מכירת הנכס שלך, או שמשהו אחר?`;
+          } else if (reqSummary) {
+            body = `כיף שחזרת. ראיתי שבעבר התעניינת ב-${reqSummary}.\nרוצה שאעדכן אותך בנכסים חדשים שמתאימים, או שמחפש משהו אחר?`;
+          } else {
+            body = `כיף שחזרת. איך אוכל לעזור?\n\n• מחפש/ת דירה לקנות או לשכור?\n• רוצה למכור את הדירה שלך?`;
+          }
+
           await sendBotMessage(
             integration, customerPhone, leadId,
-            `${greeting} כיף שחזרת. איך אוכל לעזור?\n\n• מחפש/ת דירה לקנות או לשכור?\n• רוצה למכור את הדירה שלך?`,
+            `${greeting} ${body}`,
           );
           await db.collection('leads').doc(leadId).update({ lastIrrelevantNudgeAt: Date.now() });
           return;
@@ -1268,21 +1385,71 @@ export async function handleWeBotReply(
       await runBuyerFlow(
         agencyId, leadId, customerPhone, incomingMessage,
         geminiApiKey, agencyData, leadData, integration,
-        currentMsgDocId, greenApiCreds, currentState,
+        currentMsgDocId, greenApiCreds, currentState, resendApiKey,
       );
       return;
     }
 
-    if (currentState === 'COLLECTING_REQS' || currentState === 'ASKING_EXTRA_CRITERIA' || currentState === 'SCHEDULING_CALL') {
+    // Mid-flow override: if the customer pivots to a different topic
+    // ("אני מחפש דירה לקנות" while we're in COLLECTING_SELLER_INFO, or
+    // "רוצה למכור את הדירה שלי" while in COLLECTING_REQS), don't keep
+    // re-asking the previous question. Re-classify the new message — if
+    // Gemini sees a clear *opposite* intent, reset to IDLE and route fresh.
+    const inBuyerFlow  = currentState === 'COLLECTING_REQS' || currentState === 'SCHEDULING_CALL';
+    const inSellerFlow = currentState === 'COLLECTING_SELLER_INFO' || currentState === 'SCHEDULING_SELLER_CALL';
+
+    if (inBuyerFlow || inSellerFlow) {
+      // Pass leadType='new' to force a fresh Gemini classification (skip the
+      // state-continuity short-circuits in classifyIntent).
+      const freshIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey);
+      const wantsBuyer  = freshIntent === 'buyer'  && inSellerFlow;
+      const wantsSeller = freshIntent === 'seller' && inBuyerFlow;
+
+      if (wantsBuyer || wantsSeller) {
+        console.log(`[WeBot] 🔀 Topic pivot detected: state=${currentState} → intent=${freshIntent} for lead ${leadId}`);
+        // Reset state and re-route through the IDLE path with the new intent.
+        await updateChatState(leadId, 'IDLE');
+        if (wantsSeller) {
+          if (leadData.type !== 'seller') {
+            await db.collection('leads').doc(leadId).update({
+              type: 'seller',
+              status: leadData.status && leadData.status !== 'new' ? leadData.status : 'potential_seller',
+            });
+            leadData.type = 'seller';
+          }
+          await runSellerFlow(
+            agencyId, leadId, customerPhone, incomingMessage,
+            geminiApiKey, leadData, integration, 'IDLE',
+            { state: 'IDLE', lastStateAt: Date.now() }, greenApiCreds,
+          );
+        } else {
+          if (leadData.type !== 'buyer') {
+            await db.collection('leads').doc(leadId).update({
+              type: 'buyer',
+              status: leadData.status && leadData.status !== 'new' ? leadData.status : 'searching',
+            });
+            leadData.type = 'buyer';
+          }
+          await runBuyerFlow(
+            agencyId, leadId, customerPhone, incomingMessage,
+            geminiApiKey, agencyData, leadData, integration,
+            currentMsgDocId, greenApiCreds, 'IDLE', resendApiKey,
+          );
+        }
+        return;
+      }
+    }
+
+    if (inBuyerFlow) {
       await runBuyerFlow(
         agencyId, leadId, customerPhone, incomingMessage,
         geminiApiKey, agencyData, leadData, integration,
-        currentMsgDocId, greenApiCreds, currentState,
+        currentMsgDocId, greenApiCreds, currentState, resendApiKey,
       );
       return;
     }
 
-    if (currentState === 'COLLECTING_SELLER_INFO' || currentState === 'SCHEDULING_SELLER_CALL') {
+    if (inSellerFlow) {
       await runSellerFlow(
         agencyId, leadId, customerPhone, incomingMessage,
         geminiApiKey, leadData, integration, currentState,

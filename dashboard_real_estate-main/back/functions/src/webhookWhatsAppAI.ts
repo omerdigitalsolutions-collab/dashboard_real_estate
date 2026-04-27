@@ -37,6 +37,7 @@ const webhookSecret = defineSecret('WAHA_WEBHOOK_SECRET');
 const googleClientId = defineSecret('GOOGLE_CLIENT_ID');
 const googleClientSecret = defineSecret('GOOGLE_CLIENT_SECRET');
 const googleRedirectUri = defineSecret('GOOGLE_REDIRECT_URI');
+const resendApiKey = defineSecret('RESEND_API_KEY');
 
 const db = admin.firestore();
 const REGION = 'europe-west1';
@@ -179,7 +180,7 @@ async function upsertLead(
 export const webhookWhatsAppAI = onRequest(
     {
         region: REGION,
-        secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri],
+        secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri, resendApiKey],
         timeoutSeconds: 300,
         memory: '1GiB',
         cpu: 1,             // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
@@ -208,16 +209,17 @@ export const webhookWhatsAppAI = onRequest(
                 return;
             }
 
-            // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery)
+            // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery).
+            // Read is awaited (correctness gate); the marker write is fire-and-forget.
             const idMessageEarly: string | undefined = body?.idMessage;
             if (idMessageEarly) {
                 const processedRef = db.collection('processed_messages').doc(idMessageEarly);
                 const alreadyDone = await processedRef.get();
                 if (alreadyDone.exists) return;
-                await processedRef.set({
+                processedRef.set({
                     processedAt: admin.firestore.FieldValue.serverTimestamp(),
                     instance: idInstance,
-                });
+                }).catch((e) => console.warn('[Webhook] processed_messages set failed:', e?.message));
             }
 
             // Resolve Agency
@@ -403,6 +405,7 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                         agencyId,
                         leadId,
                         geminiApiKey: geminiApiKey.value(),
+                        resendApiKey: resendApiKey.value(),
                         creds,
                         idMessage,
                         inboundMsgDocId: inboundMsgRef.id,

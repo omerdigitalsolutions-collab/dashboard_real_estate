@@ -21,6 +21,8 @@ import {
     Copy,
     Library,
     Camera,
+    HelpCircle,
+    X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -70,6 +72,7 @@ export default function Contracts() {
     const { userData } = useAuth();
 
     const [activeTab, setActiveTab] = useState<ActiveTab>('templates');
+    const [showHelp, setShowHelp] = useState(false);
     const [search, setSearch] = useState('');
 
     // Tab 1 — My templates
@@ -289,9 +292,18 @@ export default function Contracts() {
         <div className="p-4 sm:p-6 lg:p-8 space-y-6" dir="rtl">
 
             {/* Page header */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">חוזים</h1>
-                <p className="text-sm text-slate-500 mt-0.5">ניהול תבניות, שיוך לעסקאות וחתימות דיגיטליות</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">חוזים</h1>
+                    <p className="text-sm text-slate-500 mt-0.5">ניהול תבניות, שיוך לעסקאות וחתימות דיגיטליות</p>
+                </div>
+                <button
+                    onClick={() => setShowHelp(true)}
+                    className="inline-flex items-center gap-2 px-3 py-2 border border-slate-200 bg-white text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+                >
+                    <HelpCircle size={16} />
+                    מדריך שימוש
+                </button>
             </div>
 
             {/* Tab navigation */}
@@ -947,6 +959,176 @@ export default function Contracts() {
                 template={null}
                 mode="pdf"
             />
+
+            {/* ─── Help Modal ──────────────────────────────────────────────── */}
+            {showHelp && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                        dir="rtl"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+                            <div className="flex items-center gap-2">
+                                <HelpCircle size={20} className="text-blue-600" />
+                                <h2 className="text-lg font-bold text-slate-900">מדריך מודול החוזים</h2>
+                            </div>
+                            <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-700 transition-colors">
+                                <X size={22} />
+                            </button>
+                        </div>
+
+                        <div className="px-6 py-5 space-y-8">
+
+                            {/* Tab 1 */}
+                            <section>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                        <Sparkles size={14} className="text-purple-600" />
+                                    </span>
+                                    <h3 className="text-sm font-bold text-slate-900">טאב 1 — תבניות שלי</h3>
+                                </div>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    כאן מנהלים את תבניות החוזה שיצרת. תבנית היא מסמך חוזה עם שדות מסומנים (שם, תאריך, חתימה וכו') שניתן למלא ולשלוח ללקוח.
+                                </p>
+                                <div className="space-y-2">
+                                    {[
+                                        { icon: <Plus size={13} />, color: 'bg-blue-600 text-white', label: 'צור תבנית חדשה', desc: 'פותח עורך שבו מדביקים טקסט חוזה ומסמנים את השדות הניתנים למילוי ({{שם}}, {{תאריך}} וכו\')' },
+                                        { icon: <PenTool size={13} />, color: 'bg-slate-100 text-slate-600', label: 'עריכת שם (עט)', desc: 'לחיצה על כפתור העט שליד כל תבנית מאפשרת לשנות את שם התבנית' },
+                                        { icon: <GitMerge size={13} />, color: 'bg-slate-900 text-white', label: 'שייך לעסקה', desc: 'בוחרים עסקה, ליד, או הזנה ידנית — המערכת יוצרת עותק של התבנית ופותחת את עורך החוזה למילוי' },
+                                        { icon: <Trash2 size={13} />, color: 'bg-red-50 text-red-500', label: 'מחק תבנית', desc: 'מוחק את התבנית לצמיתות. לא ניתן לבטל.' },
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.color}`}>{item.icon}</span>
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            <div className="border-t border-slate-100" />
+
+                            {/* Tab 2 */}
+                            <section>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                        <FileText size={14} className="text-blue-600" />
+                                    </span>
+                                    <h3 className="text-sm font-bold text-slate-900">טאב 2 — חוזים בתהליך</h3>
+                                </div>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    כל החוזים הפעילים — הן חוזי תבנית והן חוזי PDF — מוצגים כאן. ניתן לשלוח קישור חתימה, לערוך שדות, לצפות בחוזה לאחר חתימה ולהוריד PDF.
+                                </p>
+                                <p className="text-xs font-semibold text-slate-700 mb-2">כפתורי פעולה:</p>
+                                <div className="space-y-2 mb-4">
+                                    {[
+                                        { icon: <GitMerge size={13} />, color: 'bg-white text-slate-700 border border-slate-200', label: 'שיוך תבנית לעסקה', desc: 'יוצר חוזה חדש מתבנית קיימת ומשייך אותו לעסקה או ליד' },
+                                        { icon: <Upload size={13} />, color: 'bg-blue-600 text-white', label: 'העלה חוזה מוכן לחתימה', desc: 'מעלה קובץ PDF קיים, מאפשר להניח שדות חתימה ולשלוח ללקוח לחתימה דיגיטלית' },
+                                        { icon: <Camera size={13} />, color: 'bg-indigo-600 text-white', label: 'סרוק חוזה מהמצלמה', desc: 'פותח את מצלמת הנייד, מצלם מסמך פיזי ומעלה אותו כחוזה לחתימה דיגיטלית' },
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 text-xs ${item.color}`}>{item.icon}</span>
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs font-semibold text-slate-700 mb-2">אייקונים בשורת כל חוזה:</p>
+                                <div className="space-y-2">
+                                    {[
+                                        { icon: <Link2 size={13} />, color: 'bg-slate-100 text-slate-600', label: 'קישור חתימה', desc: 'מעתיק ללוח את הקישור לשליחה ללקוח לחתימה דיגיטלית. מושבת לאחר חתימה.' },
+                                        { icon: <PenTool size={13} />, color: 'bg-slate-100 text-slate-600', label: 'ערוך', desc: 'פותח את עורך החוזה למילוי שדות או הזזת שדות חתימה על גבי ה-PDF' },
+                                        { icon: <Eye size={13} />, color: 'bg-green-50 text-green-700', label: 'צפה', desc: 'מוצג לאחר חתימה — פותח תצוגה של החוזה החתום עם אפשרות הורדה ל-PDF' },
+                                        { icon: <History size={13} />, color: 'bg-slate-100 text-slate-600', label: 'היסטוריה', desc: 'מציג לוג פעולות על החוזה — מתי נפתח, מתי נחתם' },
+                                        { icon: <Download size={13} />, color: 'bg-slate-100 text-slate-600', label: 'הורד חוזה חתום', desc: 'הורדת ה-PDF הסופי לאחר שהלקוח חתם' },
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${item.color}`}>{item.icon}</span>
+                                            <div>
+                                                <p className="text-xs font-semibold text-slate-800">{item.label}</p>
+                                                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-3 p-3 rounded-xl bg-yellow-50 border border-yellow-100">
+                                    <p className="text-xs font-semibold text-yellow-800 mb-1">סטטוסים אפשריים:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full text-xs font-medium"><Clock size={10} />טיוטה — טרם נשלח</span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 border border-blue-200 rounded-full text-xs font-medium"><PenTool size={10} />נשלח — ממתין לחתימה</span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-xs font-medium"><CheckCircle size={10} />נחתם — הושלם</span>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <div className="border-t border-slate-100" />
+
+                            {/* Tab 3 */}
+                            <section>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                        <Library size={14} className="text-blue-600" />
+                                    </span>
+                                    <h3 className="text-sm font-bold text-slate-900">טאב 3 — תבניות מוכנות</h3>
+                                </div>
+                                <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                                    ספרייה של תבניות חוזה מקצועיות מוכנות לשימוש (הסכם שכירות, הסכם מכירה וכו'). ניתן לשכפל תבנית לתבניות שלך ולערוך אותה לפי הצורך.
+                                </p>
+                                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                                    <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5"><Copy size={13} /></span>
+                                    <div>
+                                        <p className="text-xs font-semibold text-slate-800">שכפל לתבניות שלי</p>
+                                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">יוצר עותק של התבנית תחת "תבניות שלי". לאחר השכפול ניתן לערוך, לשנות שם ולהתאים אישית.</p>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <div className="border-t border-slate-100" />
+
+                            {/* Flow summary */}
+                            <section>
+                                <h3 className="text-sm font-bold text-slate-900 mb-3">זרימת עבודה מומלצת</h3>
+                                <div className="flex flex-col gap-0">
+                                    {[
+                                        { step: '1', title: 'צור תבנית', desc: 'העתק טקסט חוזה → סמן שדות → שמור', color: 'bg-purple-600' },
+                                        { step: '2', title: 'שייך לעסקה', desc: 'בחר עסקה / ליד / הזנה ידנית', color: 'bg-blue-600' },
+                                        { step: '3', title: 'מלא שדות', desc: 'פתח את עורך החוזה ומלא את הפרטים', color: 'bg-blue-600' },
+                                        { step: '4', title: 'שלח לחתימה', desc: 'העתק קישור ושלח ללקוח (WhatsApp / מייל)', color: 'bg-indigo-600' },
+                                        { step: '5', title: 'חוזה נחתם', desc: 'קבל התראה, צפה בחוזה, הורד PDF', color: 'bg-green-600' },
+                                    ].map((item, i, arr) => (
+                                        <div key={i} className="flex items-start gap-3">
+                                            <div className="flex flex-col items-center">
+                                                <span className={`w-7 h-7 rounded-full ${item.color} text-white text-xs font-bold flex items-center justify-center flex-shrink-0`}>{item.step}</span>
+                                                {i < arr.length - 1 && <div className="w-px h-6 bg-slate-200 my-1" />}
+                                            </div>
+                                            <div className="pb-2">
+                                                <p className="text-xs font-semibold text-slate-800">{item.title}</p>
+                                                <p className="text-xs text-slate-500">{item.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                        </div>
+
+                        <div className="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 rounded-b-2xl">
+                            <button
+                                onClick={() => setShowHelp(false)}
+                                className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-700 transition-colors"
+                            >
+                                הבנתי, סגור
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
