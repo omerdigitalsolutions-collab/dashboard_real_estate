@@ -24,9 +24,9 @@ const instanceDoc = (agencyId: string, instanceId: string) =>
 export async function createInstance(
     agencyId: string,
     templateId: string,
-    dealId?: string,
     initialValues: Record<string, string>,
     createdBy: string,
+    dealId?: string,
     leadId?: string
 ): Promise<string> {
     const docRef = await addDoc(instancesCol(agencyId), {

@@ -84,9 +84,9 @@ export default function AssignToDealModal({
             const instanceId = await createInstance(
                 userData.agencyId,
                 selectedTemplate.id,
-                targetType === 'deal' ? targetId : undefined,
                 {},
                 userData.uid!,
+                targetType === 'deal' ? targetId : undefined,
                 targetType === 'lead' ? targetId : undefined
             );
             toast.success('החוזה שויך בהצלחה');

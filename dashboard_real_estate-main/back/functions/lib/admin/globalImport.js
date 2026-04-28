@@ -38,6 +38,7 @@ const functions = __importStar(require("firebase-functions/v2"));
 const admin = __importStar(require("firebase-admin"));
 const crypto = __importStar(require("crypto"));
 const cityUtils_1 = require("../utils/cityUtils");
+const descriptionCleaner_1 = require("../utils/descriptionCleaner");
 /**
  * Callable function for Super Admins to bulk-import properties into global cities collection.
  */
@@ -132,7 +133,7 @@ exports.superAdminImportGlobalPropertiesV2 = functions.https.onCall({
                         price,
                     }, media: {
                         images,
-                    }, management: Object.assign(Object.assign({}, (prop.description ? { descriptions: String(prop.description).trim() } : {})), (agentName ? { agentName } : {})) }, (agentName ? { agentName } : {})), (prop.contactPhone ? { contactPhone: String(prop.contactPhone) } : {})), (prop.contactName ? { contactName: String(prop.contactName) } : {})), (prop.notes ? { notes: String(prop.notes) } : {})), (listingUrl ? { listingUrl: String(listingUrl).trim() } : {})), (prop.listingType ? { listingType: prop.listingType } : {})), { createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
+                    }, management: Object.assign(Object.assign({}, (prop.description ? { descriptions: (0, descriptionCleaner_1.cleanDescription)(String(prop.description).trim()) } : {})), (agentName ? { agentName } : {})) }, (agentName ? { agentName } : {})), (prop.contactPhone ? { contactPhone: String(prop.contactPhone) } : {})), (prop.contactName ? { contactName: String(prop.contactName) } : {})), (prop.notes ? { notes: String(prop.notes) } : {})), (listingUrl ? { listingUrl: String(listingUrl).trim() } : {})), (prop.listingType ? { listingType: prop.listingType } : {})), { createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
             });
             await batch.commit();
             totalInserted += chunk.length;

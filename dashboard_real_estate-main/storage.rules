@@ -195,6 +195,18 @@ service firebase.storage {
     // Both are readable publicly so the iframe preview and download links work.
     // ══════════════════════════════════════════════════════════════════════════
 
+    // Contract scans (camera / image uploads) — same permissions as originals
+    match /agencies/{agencyId}/contracts/scans/{fileName} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+                    && (isSuperAdmin() || request.auth.token.agencyId == agencyId)
+                    && request.resource.size < 20 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+
+      allow update, delete: if false;
+    }
+
     // Original PDF templates uploaded by the agent
     match /agencies/{agencyId}/contracts/originals/{fileName} {
       // Public read: required for iframe preview in editor and signing page,

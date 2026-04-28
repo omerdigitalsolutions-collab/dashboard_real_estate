@@ -29,6 +29,7 @@ const deleteProperty_1 = require("./properties/deleteProperty");
 const geocode_1 = require("./properties/geocode");
 const matchmaking_1 = require("./properties/matchmaking");
 const processNaturalLanguageSearch_1 = require("./properties/processNaturalLanguageSearch");
+const importPropertyFromUrl_1 = require("./properties/importPropertyFromUrl");
 // ── Leads Module ──────────────────────────────────────────────────────────────
 const webhookReceiveLead_1 = require("./leads/webhookReceiveLead");
 const addLead_1 = require("./leads/addLead");
@@ -38,6 +39,7 @@ const matchPropertiesForLead_1 = require("./leads/matchPropertiesForLead");
 // ── Catalogs Module ────────────────────────────────────────────────────────────
 const sharing_1 = require("./catalogs/sharing");
 const getLiveProperties_2 = require("./catalogs/getLiveProperties");
+const onPropertyLiked_1 = require("./catalogs/onPropertyLiked");
 // ── Alerts Module ──────────────────────────────────────────────────────────────
 const triggers_1 = require("./alerts/triggers");
 // ── WhatsApp Module ────────────────────────────────────────────────────────────
@@ -67,6 +69,7 @@ const globalImport_1 = require("./admin/globalImport");
 const checkTrialExpiry_1 = require("./scheduled/checkTrialExpiry");
 const checkTrialExpiryAlerts_1 = require("./scheduled/checkTrialExpiryAlerts");
 const weeklyFollowUp_1 = require("./scheduled/weeklyFollowUp");
+const followUpCampaign_1 = require("./scheduled/followUpCampaign");
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 const manual_requests_1 = require("./billing/manual_requests");
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
@@ -83,9 +86,9 @@ const manual_requests_1 = require("./billing/manual_requests");
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, checkPhoneAvailable: onboarding_1.checkPhoneAvailable, captureLead: onboarding_1.captureLead };
 exports.users = { inviteAgent: team_1.inviteAgent, sendAgentInvite: team_1.sendAgentInvite, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually, generateAgencyJoinCode: team_1.generateAgencyJoinCode, saveAgencyJoinCode: team_1.saveAgencyJoinCode, joinWithCode: team_1.joinWithCode, claimInviteToken: team_1.claimInviteToken };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
-exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch };
+exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch, importPropertyFromUrl: importPropertyFromUrl_1.importPropertyFromUrl };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
-exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties };
+exports.catalogs = { generateCatalog: sharing_1.generateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties, onPropertyLiked: onPropertyLiked_1.onPropertyLiked };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
 exports.whatsapp = { connectAgencyWhatsApp: whatsapp_1.connectAgencyWhatsApp, disconnectAgencyWhatsApp: whatsapp_1.disconnectAgencyWhatsApp, generateWhatsAppQR: whatsapp_1.generateWhatsAppQR, checkWhatsAppStatus: whatsapp_1.checkWhatsAppStatus, sendWhatsappMessage: whatsapp_1.sendWhatsappMessage, syncLeadChat: whatsapp_1.syncLeadChat, getGroups: whatsapp_1.getGroups, disconnectWhatsApp: whatsapp_1.disconnectWhatsApp };
 exports.ai = { askAgencyAgent: agent_1.askAgencyAgent, extractAiData: extractAiData_1.extractAiData, askCopilot: copilot_1.askCopilot, getSmartInsights: copilot_1.getSmartInsights, textToActionAgent: textToAction_1.textToActionAgent, homerChatBot: homerChatBot_1.homerChatBot, parseContractText: parseContractText_1.parseContractText };
@@ -112,7 +115,7 @@ exports.superadmin = {
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.contracts = { signDeal: signDeal_1.signDeal };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
-exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp };
+exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");

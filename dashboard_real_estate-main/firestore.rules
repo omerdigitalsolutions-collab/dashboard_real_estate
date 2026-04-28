@@ -171,14 +171,18 @@ service cloud.firestore {
     // No deletes allowed (immutable archive).
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/contracts/{contractId} {
-      // Authenticated agency members and anonymous users (via signing link) can read
-      allow read: if request.auth != null;
-      // Any authenticated agent in the agency can create templates
+      // Agency members and super admins can read. Anonymous signers (no agencyId claim) also allowed.
+      allow read: if isAuthed() && (
+        inAgency(agencyId) || isSuperAdmin()
+        || request.auth.token.get('agencyId', null) == null
+      );
+      // Any authenticated agent in the agency can create
       allow create: if (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
 
-      // Authenticated users (including anonymous) can update field values
-      // Prevents updates after contract is completed (immutable once signed)
-      allow update: if request.auth != null && resource.data.status != 'completed';
+      // Agency members or anonymous signers can update, but not after contract is completed
+      allow update: if isAuthed()
+        && resource.data.status != 'completed'
+        && (inAgency(agencyId) || isSuperAdmin() || request.auth.token.get('agencyId', null) == null);
 
       // Deletes are prohibited — contracts are archived forever
       allow delete: if false;
@@ -191,24 +195,30 @@ service cloud.firestore {
     }
 
     match /agencies/{agencyId}/contractTemplates/{templateId} {
-      // Read: agency members (dashboard) + anonymous auth users (public signing links)
-      allow read: if request.auth != null;
+      // Agency members + anonymous signers (no agencyId claim) can read (needed to render signing page)
+      allow read: if isAuthed() && (
+        inAgency(agencyId) || isSuperAdmin()
+        || request.auth.token.get('agencyId', null) == null
+      );
       // Write: agency members only (with active billing)
       allow create, update: if isAuthed() && (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
       allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin());
     }
 
     match /agencies/{agencyId}/contractInstances/{instanceId} {
-      // Authenticated agency members and anonymous users (via signing link) can read
-      allow read: if request.auth != null;
+      // Agency members + anonymous signers (no agencyId claim) can read
+      allow read: if isAuthed() && (
+        inAgency(agencyId) || isSuperAdmin()
+        || request.auth.token.get('agencyId', null) == null
+      );
       // Any authenticated agent in the agency can create instances
       allow create: if isAuthed() && (inAgency(agencyId) || isSuperAdmin()) && isBillingActiveForCaller();
 
-      // Authenticated users (including anonymous signers) can update field values
-      // Prevents updates after contract is completed (immutable once signed)
-      allow update: if request.auth != null 
-          && resource.data.status != 'completed' 
-          && resource.data.status != 'signed';
+      // Agency members or anonymous signers can update field values, blocked after signing
+      allow update: if isAuthed()
+          && resource.data.status != 'completed'
+          && resource.data.status != 'signed'
+          && (inAgency(agencyId) || isSuperAdmin() || request.auth.token.get('agencyId', null) == null);
 
       // Only agency admins or the creator can delete drafts
       allow delete: if isAuthed() && (isAgencyAdmin(agencyId) || isSuperAdmin() || resource.data.createdBy == request.auth.uid);
@@ -409,8 +419,9 @@ service cloud.firestore {
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
           && request.resource.data.viewCount == (resource.data.viewCount + 1);
 
-      // Allow updating liked properties list (guests liking properties)
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
+      // Allow updating liked properties list (authenticated users only — anonymous Firebase auth suffices)
+      allow update: if request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedPropertyIds'])
           && request.resource.data.likedPropertyIds is list
           && request.resource.data.likedPropertyIds.size() <= 100;
 

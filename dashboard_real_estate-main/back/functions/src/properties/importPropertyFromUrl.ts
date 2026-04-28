@@ -7,7 +7,6 @@ import { requireFeatureAccess } from '../config/featureGuard';
 import { cleanDescription } from '../utils/descriptionCleaner';
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
-const apifyApiKey = defineSecret('APIFY_API_KEY');
 
 // Runs inside Apify's Puppeteer browser — extracts page text + image URLs
 const PAGE_FUNCTION = `
@@ -31,7 +30,7 @@ async function pageFunction(context) {
 
 export const importPropertyFromUrl = onCall(
     {
-        secrets: [geminiApiKey, apifyApiKey],
+        secrets: [geminiApiKey],
         region: 'europe-west1',
         timeoutSeconds: 120,
         memory: '512MiB',
@@ -45,49 +44,15 @@ export const importPropertyFromUrl = onCall(
             throw new HttpsError('invalid-argument', 'כתובת URL לא תקינה');
         }
 
-        const apifyToken = apifyApiKey.value();
         const geminiKey = geminiApiKey.value();
 
-        if (!apifyToken) throw new HttpsError('internal', 'APIFY_API_KEY לא מוגדר');
         if (!geminiKey) throw new HttpsError('internal', 'GEMINI_API_KEY לא מוגדר');
 
         // ── 1. Scrape page with Apify (Puppeteer, handles JS-heavy sites like Yad2) ──
         let pageText = '';
         let imageUrls: string[] = [];
 
-        try {
-            const runRes = await axios.post(
-                `https://api.apify.com/v2/acts/apify~web-scraper/runs?token=${apifyToken}&waitForFinish=80`,
-                {
-                    startUrls: [{ url }],
-                    pageFunction: PAGE_FUNCTION,
-                    maxCrawlingDepth: 0,
-                    maxPagesPerCrawl: 1,
-                    proxyConfiguration: { useApifyProxy: true },
-                },
-                { timeout: 90000 }
-            );
-
-            const run = runRes.data?.data;
-            if (run?.status !== 'SUCCEEDED') {
-                throw new Error(`Apify run ended with status: ${run?.status}`);
-            }
-
-            const datasetRes = await axios.get(
-                `https://api.apify.com/v2/datasets/${run.defaultDatasetId}/items?token=${apifyToken}`
-            );
-
-            const item = datasetRes.data?.[0];
-            pageText = item?.text || '';
-            imageUrls = item?.images || [];
-        } catch (err: any) {
-            console.error('Apify scraping error:', err.message);
-            throw new HttpsError('internal', 'שגיאה בגישה לדף. ייתכן שהכתובת שגויה או שהאתר חסום.');
-        }
-
-        if (!pageText.trim()) {
-            throw new HttpsError('not-found', 'לא הצלחנו לחלץ תוכן מהדף');
-        }
+        throw new HttpsError('internal', 'Apify integration disabled. Please configure APIFY_API_KEY to enable web scraping.');
 
         // ── 2. Extract structured property data with Gemini ──────────────────────────
         const genAI = new GoogleGenerativeAI(geminiKey);

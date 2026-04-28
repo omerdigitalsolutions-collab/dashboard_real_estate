@@ -63,6 +63,12 @@ const handleWeBotReply_1 = require("../handleWeBotReply");
 const db = admin.firestore();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED_MSG = 'יותר מדי הודעות. נסה שוב בעוד דקה.';
+const OPT_OUT_KEYWORDS = ['הסר', 'הסירו', 'הסר אותי', 'הפסיקו', 'stop', 'unsubscribe'];
+const OPT_OUT_CONFIRM_MSG = 'הוסרת בהצלחה מרשימת ההודעות האוטומטיות שלנו. תמיד נשמח לשמוע ממך! 😊';
+function isOptOutMessage(text) {
+    const n = text.toLowerCase().trim();
+    return OPT_OUT_KEYWORDS.some(kw => n === kw.toLowerCase() || n.startsWith(kw.toLowerCase() + ' '));
+}
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 async function sendDirect(creds, chatId, message) {
     const url = `https://7105.api.greenapi.com/waInstance${creds.idInstance}/sendMessage/${creds.apiTokenInstance}`;
@@ -117,6 +123,22 @@ async function processInboundMessage(params) {
     }
     // 3. Sanitize
     const sanitized = (0, sanitizeInput_1.sanitizeInput)(text);
+    // 3.5. Opt-out detection — after sanitize, before injection check
+    if (!isBypassPhone && isOptOutMessage(sanitized)) {
+        await db.collection('leads').doc(leadId).update({ followUpOptedOut: true });
+        await sendDirect(creds, waChatId, OPT_OUT_CONFIRM_MSG);
+        db.collection(`leads/${leadId}/messages`).add({
+            text: OPT_OUT_CONFIRM_MSG,
+            direction: 'outbound',
+            senderPhone: 'bot',
+            source: 'whatsapp_ai_bot',
+            botSentAt: Date.now(),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            isRead: true,
+        }).catch((e) => console.warn('[Pipeline] opt-out log failed:', e.message));
+        writeAuditLog(phone, agencyId, 'outbound', OPT_OUT_CONFIRM_MSG, { optOut: true });
+        return;
+    }
     // 4. Injection detection
     const { isInjection, score } = (0, detectInjection_1.detectInjection)(sanitized);
     if (isInjection) {
