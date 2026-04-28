@@ -50,7 +50,7 @@ type SortBy = 'newest' | 'oldest' | 'price_asc' | 'price_desc';
 
 async function parseQueryWithGemini(query: string, apiKey: string): Promise<ExplicitFilters> {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite-preview-06-17' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `אתה מנתח שאילתות חיפוש נדל"ן. נתח את השאילתה הבאה והחזר JSON בלבד (ללא markdown, ללא הסברים).
 שדות אפשריים: city (string), minPrice (number, ש"ח), maxPrice (number, ש"ח), minRooms (number), maxRooms (number), propertyType (string: "דירה"|"בית פרטי"|"פנטהאוז"|"מסחרי"), transactionType ("forsale"|"rent").
@@ -237,8 +237,8 @@ export const processNaturalLanguageSearch = onRequest(
 
             res.status(200).json({ properties: sanitized, totalCount, page: safePage, parsedFilters: activeFilters });
         } catch (err) {
-            console.error('processNaturalLanguageSearch error:', err);
-            res.status(500).json({ error: 'Internal server error' });
+            console.error('processNaturalLanguageSearch error:', err instanceof Error ? err.message : String(err));
+            res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : String(err) });
         }
     }
 );

@@ -87,7 +87,7 @@ import {
 } from './superadmin';
 import { superAdminHealSelf } from './superadmin/healAdmin';
 import { superAdminSetPlan } from './superadmin/setAgencyPlan';
-import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2, superAdminConsolidateCityV2, superAdminPurgeOldGlobalPropertiesV2 } from './admin/globalImport';
+import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2, superAdminConsolidateCityV2, superAdminPurgeOldGlobalPropertiesV2, superAdminCleanExistingDescriptionsV2 } from './admin/globalImport';
 
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
@@ -136,7 +136,8 @@ export const superadmin = {
     superAdminApproveAgency,
     superAdminHealSelf,
     superAdminConsolidateCityV2,
-    superAdminPurgeOldGlobalPropertiesV2
+    superAdminPurgeOldGlobalPropertiesV2,
+    superAdminCleanExistingDescriptionsV2
 };
 
 export const deals = { addDeal, updateDeal, deleteDeal };

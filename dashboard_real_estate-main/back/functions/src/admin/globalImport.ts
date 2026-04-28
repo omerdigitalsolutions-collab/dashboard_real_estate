@@ -354,6 +354,93 @@ export const superAdminPurgeOldGlobalPropertiesV2 = functions.https.onCall({
     };
 });
 
+/**
+ * Retroactively cleans descriptions of all existing properties in cities collection.
+ * Removes agent contact info from property descriptions.
+ */
+export const superAdminCleanExistingDescriptionsV2 = functions.https.onCall({
+    region: 'europe-west1',
+    memory: '1GiB',
+    timeoutSeconds: 540,
+    cors: true,
+    invoker: 'public',
+}, async (request) => {
+    if (!request.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    if (request.auth.token.superAdmin !== true) {
+        throw new functions.https.HttpsError('permission-denied', 'Super Admin privileges required.');
+    }
+
+    const db = admin.firestore();
+    let cleanedCount = 0;
+    let skippedCount = 0;
+
+    try {
+        const citiesSnap = await db.collection('cities').get();
+        console.log(`Found ${citiesSnap.docs.length} cities to process`);
+
+        for (const cityDoc of citiesSnap.docs) {
+            const cityName = cityDoc.id;
+            console.log(`Processing city: ${cityName}`);
+
+            const propsSnap = await cityDoc.ref.collection('properties').get();
+            if (propsSnap.empty) {
+                console.log(`  No properties in ${cityName}`);
+                continue;
+            }
+
+            const batchSize = 400;
+            const docs = propsSnap.docs;
+
+            for (let i = 0; i < docs.length; i += batchSize) {
+                const chunk = docs.slice(i, i + batchSize);
+                const batch = db.batch();
+                let updateCount = 0;
+
+                chunk.forEach(doc => {
+                    const data = doc.data() as any;
+                    const currentDesc = data?.management?.descriptions || data?.description;
+
+                    if (!currentDesc || typeof currentDesc !== 'string') {
+                        skippedCount++;
+                        return;
+                    }
+
+                    const cleaned = cleanDescription(currentDesc);
+
+                    // Only update if description changed
+                    if (cleaned !== currentDesc) {
+                        batch.update(doc.ref, {
+                            'management.descriptions': cleaned,
+                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        });
+                        cleanedCount++;
+                        updateCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                });
+
+                if (updateCount > 0) {
+                    await batch.commit();
+                }
+            }
+        }
+
+        return {
+            success: true,
+            message: `Successfully cleaned descriptions across all cities`,
+            cleanedCount,
+            skippedCount,
+            totalProcessed: cleanedCount + skippedCount,
+        };
+    } catch (error: any) {
+        console.error('[superAdminCleanExistingDescriptions] Error:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Error during cleanup.');
+    }
+});
+
 export const superAdminConsolidateCityV2 = functions.https.onCall({
     region: 'europe-west1',
     cors: true,

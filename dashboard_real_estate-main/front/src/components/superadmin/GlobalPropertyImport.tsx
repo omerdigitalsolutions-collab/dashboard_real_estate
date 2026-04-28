@@ -145,6 +145,11 @@ const GlobalPropertyImport: React.FC = () => {
     const [purgeError, setPurgeError]         = useState<string | null>(null);
     const [confirmText, setConfirmText]       = useState('');
 
+    // ── Cleanup descriptions state ───────────────────────────────────────────
+    const [isCleaningDescriptions, setIsCleaningDescriptions] = useState(false);
+    const [cleanupReport, setCleanupReport]   = useState<any>(null);
+    const [cleanupError, setCleanupError]     = useState<string | null>(null);
+
     const runPurge = async (dryRun: boolean) => {
         setPurgeError(null);
         setIsPurging(true);
@@ -157,6 +162,22 @@ const GlobalPropertyImport: React.FC = () => {
             setPurgeError(err?.message || 'שגיאה בהפעלת המחיקה');
         } finally {
             setIsPurging(false);
+        }
+    };
+
+    // ── Run cleanup descriptions ─────────────────────────────────────────────
+    const runCleanupDescriptions = async () => {
+        setCleanupError(null);
+        setCleanupReport(null);
+        setIsCleaningDescriptions(true);
+        try {
+            const cleanupFn = httpsCallable(functions, 'superadmin-superAdminCleanExistingDescriptionsV2');
+            const res = await cleanupFn({});
+            setCleanupReport(res.data as any);
+        } catch (err: any) {
+            setCleanupError(err?.message || 'שגיאה בניקוי התיאורים');
+        } finally {
+            setIsCleaningDescriptions(false);
         }
     };
 
@@ -597,6 +618,81 @@ const GlobalPropertyImport: React.FC = () => {
                             </details>
                         </div>
                     )}
+                </div>
+
+                {/* ── Clean existing descriptions ──────────────────────────────── */}
+                <div className="mt-8 border-t border-blue-500/20 pt-6">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                            <Sparkles className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold text-white">ניקוי תיאורים קיימים</h3>
+                            <p className="text-xs text-slate-400">
+                                הסרת מידע יצירת קשר ושמות מתווכים אחרים מתיאורים בקולקשיין <code className="text-slate-300">cities</code>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800/40 border border-blue-500/20 rounded-xl p-4 space-y-3">
+                        <p className="text-xs text-slate-400">
+                            פונקציה זו תעבור על כל הנכסים בקולקשיין ותנקה את התיאורים שלהם:
+                        </p>
+                        <ul className="text-xs text-slate-400 list-disc list-inside space-y-1 mr-2">
+                            <li>הסרת מספרי טלפון (05X, 03X, 972+)</li>
+                            <li>הסרת שורות קשר (וואטסאפ, לפרטים, וכדומה)</li>
+                            <li>הסרת שמות מתווכים אחרים</li>
+                        </ul>
+
+                        <div className="flex items-center gap-2 flex-wrap pt-2">
+                            <button
+                                onClick={runCleanupDescriptions}
+                                disabled={isCleaningDescriptions}
+                                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_20px_rgba(59,130,246,0.25)]"
+                            >
+                                {isCleaningDescriptions ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin" />
+                                        מנקה תיאורים...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={14} />
+                                        התחל ניקוי
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {cleanupError && (
+                            <div className="p-3 rounded-lg bg-red-900/20 border border-red-500/30 text-red-400 text-xs flex items-start gap-2">
+                                <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                <span>{cleanupError}</span>
+                            </div>
+                        )}
+
+                        {cleanupReport && (
+                            <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-900/20 text-blue-300 text-xs space-y-2">
+                                <p className="font-bold">
+                                    ✅ ניקוי הושלם בהצלחה
+                                </p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="bg-slate-900/60 rounded p-2 text-center">
+                                        <p className="text-lg font-black text-blue-400">{cleanupReport.cleanedCount}</p>
+                                        <p className="text-[10px] text-slate-400">נוקו</p>
+                                    </div>
+                                    <div className="bg-slate-900/60 rounded p-2 text-center">
+                                        <p className="text-lg font-black text-slate-300">{cleanupReport.skippedCount}</p>
+                                        <p className="text-[10px] text-slate-400">לא שונו</p>
+                                    </div>
+                                    <div className="bg-slate-900/60 rounded p-2 text-center">
+                                        <p className="text-lg font-black text-slate-300">{cleanupReport.totalProcessed}</p>
+                                        <p className="text-[10px] text-slate-400">סה״כ בדוקו</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
