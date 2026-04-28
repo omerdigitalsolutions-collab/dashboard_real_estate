@@ -160,15 +160,26 @@ export function useGlobalStats(): GlobalStats {
                 // (Users data already fetched in step 2)
 
                 // ── 3. Properties (active only) ────────────────────────────────
-                const propsSnap = await getDocs(
-                    query(collectionGroup(db, 'properties'))
-                );
-                const activeProps = propsSnap.docs.filter(
-                    (d) => d.data().status === 'active'
-                );
+                let activeProps: any[] = [];
+                try {
+                    const propsSnap = await getDocs(
+                        query(collectionGroup(db, 'properties'))
+                    );
+                    activeProps = propsSnap.docs.filter(
+                        (d) => d.data().status === 'active'
+                    );
+                } catch (propsErr) {
+                    console.warn('[useGlobalStats] Could not fetch properties:', propsErr);
+                }
 
                 // ── 4. Leads ─────────────────────────────────────────────────
-                const leadsSnap = await getDocs(collection(db, 'leads'));
+                let leadsSize = 0;
+                try {
+                    const leadsSnap = await getDocs(collection(db, 'leads'));
+                    leadsSize = leadsSnap.size;
+                } catch (leadsErr) {
+                    console.warn('[useGlobalStats] Could not fetch leads:', leadsErr);
+                }
 
                 // ── 5. Monthly growth (last 6 months) ─────────────────────────
                 const monthlyGrowth = buildLast6Months();
@@ -200,7 +211,7 @@ export function useGlobalStats(): GlobalStats {
                         totalAgencies: allAgencies.length,
                         totalUsers: allUsers.length,
                         totalActiveProperties: activeProps.length,
-                        totalLeads: leadsSnap.size,
+                        totalLeads: leadsSize,
                         allAgencies: allAgenciesWithAdmin,
                         allUsers: allUsers,
                         monthlyGrowth,

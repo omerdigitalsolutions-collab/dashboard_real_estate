@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2 } from 'lucide-react';
+import { X, Building2, Wand2, Loader2, ImagePlus, Star, Trash2, Link2 } from 'lucide-react';
 import { formatNumberWithCommas, parseFormattedNumber } from '../../utils/formatters';
 import UpgradeModal from '../ui/UpgradeModal';
-import { addProperty } from '../../services/propertyService';
+import { addProperty, importPropertyFromUrl } from '../../services/propertyService';
 import { useAuth } from '../../context/AuthContext';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { app } from '../../config/firebase'; // ← תיקון: import של firebase app
@@ -47,6 +47,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     // AI Extraction State
     const [rawText, setRawText] = useState('');
     const [isExtracting, setIsExtracting] = useState(false);
+
+    // URL Import State
+    const [importUrl, setImportUrl] = useState('');
+    const [isImportingUrl, setIsImportingUrl] = useState(false);
 
     const [loading, setLoading] = useState(false);
 
@@ -284,6 +288,50 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         }
     };
 
+    const handleUrlImport = async () => {
+        if (userPlan === 'starter') {
+            setAttemptedFeature('ייבוא נכס מלינק');
+            setIsUpgradeModalOpen(true);
+            return;
+        }
+
+        if (!importUrl.trim()) {
+            showToast('יש להזין כתובת URL', false);
+            return;
+        }
+
+        setIsImportingUrl(true);
+        try {
+            const data = await importPropertyFromUrl(importUrl.trim());
+
+            // Populate form fields with imported data
+            if (data.city) setCity(data.city);
+            if (data.address) setAddressQuery(data.address);
+            if (data.price) setPrice(data.price.toString());
+            if (data.rooms) setRooms(data.rooms.toString());
+            if (data.sqm) setSqm(data.sqm.toString());
+            if (data.floor) setFloor(data.floor.toString());
+            if (data.kind) setKind(data.kind);
+            if (data.type) setType(data.type === 'rent' ? 'rent' : 'sale');
+            if (data.description) setDescription(data.description);
+            if (data.externalLink) setExternalLink(data.externalLink);
+
+            // Set imported images
+            if (data.images && data.images.length > 0) {
+                setImportedImages(data.images);
+            }
+
+            showToast('✅ הנכס חולץ בהצלחה מהלינק');
+            setImportUrl('');
+        } catch (err: any) {
+            console.error('URL import error:', err);
+            const errorMsg = err.message || 'שגיאה בייבוא מהלינק. אנא נסו שוב.';
+            showToast(errorMsg, false);
+        } finally {
+            setIsImportingUrl(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userData?.agencyId) return;
@@ -372,6 +420,42 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 </div>
 
                 <div className="p-6 space-y-5">
+
+                    {/* URL Import Section */}
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
+                            <Link2 size={64} className="text-blue-600" />
+                        </div>
+                        <label className="flex items-center justify-between text-xs font-bold text-blue-800 uppercase tracking-wider mb-2.5">
+                            <span className="flex items-center gap-1.5">
+                                <Link2 size={14} />
+                                ייבוא נכס מלינק (יד2, מדלן, וכו')
+                            </span>
+                        </label>
+                        <div className="flex flex-col gap-2 relative z-10 text-right">
+                            <input
+                                type="url"
+                                value={importUrl}
+                                onChange={e => setImportUrl(e.target.value)}
+                                placeholder="הדבק כאן קישור לנכס (https://...)"
+                                className="w-full border border-blue-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white"
+                                dir="ltr"
+                            />
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-blue-600 font-medium bg-blue-100/50 px-2 py-1 rounded-lg">
+                                    Apify 🔗 מערכת גרדינג חכמה
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleUrlImport}
+                                    disabled={isImportingUrl || !importUrl.trim()}
+                                    className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+                                >
+                                    {isImportingUrl ? <Loader2 size={16} className="animate-spin" /> : 'ייבא נכס'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     {/* AI Text Extraction Section */}
                     <div className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border border-indigo-100 shadow-sm relative overflow-hidden">

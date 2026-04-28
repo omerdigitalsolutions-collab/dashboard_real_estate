@@ -322,3 +322,22 @@ export async function uploadPropertyVideo(
     const snapshot = await uploadBytes(storageRef, videoFile);
     return getDownloadURL(snapshot.ref);
 }
+
+export async function importPropertyFromUrl(url: string): Promise<{
+    city: string;
+    address: string;
+    price: number | null;
+    rooms: number | null;
+    sqm: number | null;
+    floor: number | null;
+    type: 'forsale' | 'rent';
+    kind: string;
+    description: string;
+    images: string[];
+    externalLink: string;
+}> {
+    const fns = getFunctions(app, 'europe-west1');
+    const importFn = httpsCallable(fns, 'properties-importPropertyFromUrl');
+    const result = await importFn({ url });
+    return result.data as any;
+}

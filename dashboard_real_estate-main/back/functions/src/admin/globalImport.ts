@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
 import { normalizeCityName } from '../utils/cityUtils';
+import { cleanDescription } from '../utils/descriptionCleaner';
 
 /**
  * Callable function for Super Admins to bulk-import properties into global cities collection.
@@ -142,7 +143,7 @@ export const superAdminImportGlobalPropertiesV2 = functions.https.onCall({
                     },
 
                     management: {
-                        ...(prop.description ? { descriptions: String(prop.description).trim() } : {}),
+                        ...(prop.description ? { descriptions: cleanDescription(String(prop.description).trim()) } : {}),
                         ...(agentName ? { agentName } : {}),
                     },
 

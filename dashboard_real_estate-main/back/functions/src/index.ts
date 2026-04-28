@@ -31,6 +31,7 @@ import { deleteProperty } from './properties/deleteProperty';
 import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty } from './properties/geocode';
 import { onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking } from './properties/matchmaking';
 import { processNaturalLanguageSearch } from './properties/processNaturalLanguageSearch';
+import { importPropertyFromUrl } from './properties/importPropertyFromUrl';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -42,6 +43,7 @@ import { matchPropertiesForLead } from './leads/matchPropertiesForLead';
 // ── Catalogs Module ────────────────────────────────────────────────────────────
 import { generateCatalog } from './catalogs/sharing';
 import { getLiveProperties as catalogsGetLiveProperties } from './catalogs/getLiveProperties';
+import { onPropertyLiked } from './catalogs/onPropertyLiked';
 
 // ── Alerts Module ──────────────────────────────────────────────────────────────
 import { triggerSystemAlert } from './alerts/triggers';
@@ -91,6 +93,7 @@ import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2, super
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
 import { checkTrialExpiryAlerts } from './scheduled/checkTrialExpiryAlerts';
 import { weeklyFollowUp } from './scheduled/weeklyFollowUp';
+import { followUpCampaign } from './scheduled/followUpCampaign';
 
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/manual_requests';
@@ -109,9 +112,9 @@ import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/m
 export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead };
 export const users = { inviteAgent, sendAgentInvite, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch };
+export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
-export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties };
+export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties, onPropertyLiked };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, syncLeadChat, getGroups, disconnectWhatsApp };
 export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot, parseContractText };
@@ -142,7 +145,7 @@ export const contracts = { signDeal };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 
-export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp };
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

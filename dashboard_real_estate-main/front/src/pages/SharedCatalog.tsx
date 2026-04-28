@@ -331,6 +331,20 @@ export default function SharedCatalogPage() {
         }
     }, [catalog]);
 
+    const notifyLeadOfLike = useCallback(async (catalogToken: string, property: any) => {
+        try {
+            const fns = getFunctions(undefined, 'europe-west1');
+            const cf = httpsCallable(fns, 'catalogs-onPropertyLiked');
+            await cf({
+                catalogId: catalogToken,
+                propertyId: property.id,
+                propertyAddress: property.address ?? '',
+            });
+        } catch (e) {
+            console.warn('[catalog] notifyLeadOfLike failed:', e);
+        }
+    }, []);
+
     const toggleLike = (id: string, property: any, isAdding: boolean) => {
         setLikedIds(prev => {
             const next = new Set(prev);
@@ -342,6 +356,7 @@ export default function SharedCatalogPage() {
         if (isAdding) {
             setShowToast(true);
             notifyAgentOfLike(property);
+            if (token) notifyLeadOfLike(token, property);
         }
     };
 

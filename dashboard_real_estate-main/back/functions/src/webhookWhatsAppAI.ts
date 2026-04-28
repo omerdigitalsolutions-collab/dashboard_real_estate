@@ -383,6 +383,15 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                 isBotActive = res.isBotActive;
             }
 
+            // Reset follow-up campaign step on any real reply (not opt-out)
+            const isOptOutMsg = ['הסר', 'הסירו', 'הסר אותי', 'הפסיקו', 'stop', 'unsubscribe']
+              .some(kw => textMessage.trim().toLowerCase() === kw.toLowerCase()
+                       || textMessage.trim().toLowerCase().startsWith(kw.toLowerCase() + ' '));
+            if (!isOptOutMsg) {
+              db.collection('leads').doc(leadId).update({ followUpCampaignStep: 0 })
+                .catch((e) => console.warn('[Webhook] campaign reset failed:', e?.message));
+            }
+
             const inboundMsgRef = await db.collection(`leads/${leadId}/messages`).add({
                 idMessage: idMessage || null,
                 text: textMessage,
