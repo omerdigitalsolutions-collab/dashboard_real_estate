@@ -110,7 +110,8 @@ exports.superadmin = {
     superAdminApproveAgency: superadmin_1.superAdminApproveAgency,
     superAdminHealSelf: healAdmin_1.superAdminHealSelf,
     superAdminConsolidateCityV2: globalImport_1.superAdminConsolidateCityV2,
-    superAdminPurgeOldGlobalPropertiesV2: globalImport_1.superAdminPurgeOldGlobalPropertiesV2
+    superAdminPurgeOldGlobalPropertiesV2: globalImport_1.superAdminPurgeOldGlobalPropertiesV2,
+    superAdminCleanExistingDescriptionsV2: globalImport_1.superAdminCleanExistingDescriptionsV2
 };
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.contracts = { signDeal: signDeal_1.signDeal };

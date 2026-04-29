@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Timestamp } from 'firebase/firestore';
 import { createEvent } from '../../services/calendarService';
 import { getAgencyTeam } from '../../services/teamService';
 import { getLiveLeads, addLead } from '../../services/leadService';
 import { getLiveProperties } from '../../services/propertyService';
-import { addTask } from '../../services/taskService';
 import { AppUser, Lead, Property } from '../../types';
 import { X, Calendar, MapPin, AlignLeft, Loader2, Link as LinkIcon, UserPlus, Phone, CheckCircle2, MessageCircle, Building2, User } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -183,49 +181,29 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                 attendees.push({ email: agent.email, displayName: agent.name });
             }
 
-            // Google Calendar Event
+            // Determine relatedTo for backend task
+            let relatedTo: any = undefined;
+            if (selectedPropertyId !== 'none') {
+                relatedTo = { type: 'property', id: selectedPropertyId, name: location };
+            } else if (finalLeadId) {
+                relatedTo = { type: 'lead', id: finalLeadId, name: finalClientName };
+            }
+
+            // Create Google Calendar event + CRM task (single backend call)
             const res = await createEvent({
                 summary: summary.trim(),
                 description: description.trim(),
                 location: location.trim(),
                 start: { dateTime: startDateTime.toISOString(), timeZone },
                 end: { dateTime: endDateTime.toISOString(), timeZone },
-                attendees: attendees.length > 0 ? attendees : undefined
+                attendees: attendees.length > 0 ? attendees : undefined,
+                assignedToAgentId: selectedAgentId !== 'none' ? selectedAgentId : userData.uid,
+                relatedTo,
             });
 
             if (res?.htmlLink) {
                 setMeetingLink(res.htmlLink);
             }
-
-            // Record in CRM (Tasks)
-            const taskData: any = {
-                title: `פגישה: ${summary.trim()}`,
-                description: `${description.trim()}\n\nקישור ליומן: ${res?.htmlLink || 'לא זמין'}`,
-                status: 'pending',
-                priority: 'Medium',
-                dueDate: Timestamp.fromDate(startDateTime),
-                updatedAt: Timestamp.now(),
-                category: 'meeting',
-                createdBy: userData.uid,
-                assignedTo: selectedAgentId !== 'none' ? selectedAgentId : userData.uid,
-                isCompleted: false
-            };
-
-            if (selectedPropertyId !== 'none') {
-                taskData.relatedTo = {
-                    type: 'property',
-                    id: selectedPropertyId,
-                    name: location
-                };
-            } else if (finalLeadId) {
-                taskData.relatedTo = {
-                    type: 'lead',
-                    id: finalLeadId,
-                    name: finalClientName
-                };
-            }
-
-            await addTask(userData.agencyId, taskData);
             
             toast.success('הפגישה נוצרה וסונכרנה למערכת');
             setIsSuccess(true);

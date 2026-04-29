@@ -16,7 +16,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { google } from 'googleapis';
 import { validateUserAuth } from '../config/authGuard';
 import { getOAuthClient } from './oauthClient';
-import { CalendarEventPayload, CreateEventResult, AppTask } from './types';
+import { CalendarEventPayload, CreateEventResult } from './types';
 
 // ── Core Utility ──────────────────────────────────────────────────────────────
 
@@ -100,8 +100,9 @@ export async function createCalendarEvent(
  *
  * Output: { success: true, eventId: string, htmlLink: string }
  */
-export const createEvent = onCall({ 
-    cors: true,
+export const createEvent = onCall({
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
+    invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     const authData = await validateUserAuth(request);
@@ -136,21 +137,25 @@ export const createEvent = onCall({
         const db = getFirestore();
         const taskRef = db.collection('tasks').doc();
 
-        const taskData: AppTask = {
+        const taskData: Record<string, any> = {
             id: taskRef.id,
             agencyId: authData.agencyId,
             createdBy: authData.uid,
+            assignedToAgentId: payload.assignedToAgentId || authData.uid,
             title: `פגישה: ${payload.summary}`,
-            description: payload.description || '',
+            description: `${payload.description || ''}\n\nקישור ליומן: ${result.htmlLink}`.trim(),
+            status: 'pending',
             dueDate: Timestamp.fromDate(new Date(payload.start.dateTime)),
-            priority: 'Medium', // Default to Medium, matching frontend case
+            priority: 'Medium',
             isCompleted: false,
             type: 'meeting',
             googleEventId: result.eventId,
-            relatedTo: payload.relatedTo,
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
         };
+        if (payload.relatedTo) {
+            taskData.relatedTo = payload.relatedTo;
+        }
 
         await taskRef.set(taskData);
 
@@ -186,7 +191,7 @@ export const createEvent = onCall({
  * Standardizes deletion flow to ensure no orphaned events remain in the calendar.
  */
 export const deleteEvent = onCall({
-    cors: true,
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

@@ -110,11 +110,13 @@ const scheduleMeetingDeclaration = {
 };
 const updateLeadRequirementsDeclaration = {
     name: 'update_lead_requirements',
-    description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג / עיר). עיר אינה חובה — ניתן לחפש בכל נכסי הסוכנות.',
+    description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג / עיר / שכונה / רחוב). עיר אינה חובה — ניתן לחפש בכל נכסי הסוכנות.',
     parameters: {
         type: generative_ai_1.SchemaType.OBJECT,
         properties: {
             desiredCity: { type: generative_ai_1.SchemaType.ARRAY, items: { type: generative_ai_1.SchemaType.STRING }, description: 'ערים מועדפות (עברית) — אופציונלי' },
+            desiredNeighborhoods: { type: generative_ai_1.SchemaType.ARRAY, items: { type: generative_ai_1.SchemaType.STRING }, description: 'שכונות מועדפות (עברית) — אופציונלי' },
+            desiredStreet: { type: generative_ai_1.SchemaType.ARRAY, items: { type: generative_ai_1.SchemaType.STRING }, description: 'רחובות מועדפים (עברית) — שמור את שם הרחוב בלבד בלי המספר. לדוגמה: "הרצל" ולא "הרצל 5".' },
             maxBudget: { type: generative_ai_1.SchemaType.NUMBER, description: 'תקציב מקסימלי בשקלים' },
             minRooms: { type: generative_ai_1.SchemaType.NUMBER, description: 'מינימום חדרים' },
             maxRooms: { type: generative_ai_1.SchemaType.NUMBER, description: 'מקסימום חדרים' },
@@ -356,13 +358,20 @@ async function sendBotMessage(integration, customerPhone, leadId, text) {
     }
 }
 // ─── classifyIntent ───────────────────────────────────────────────────────────
-async function classifyIntent(message, leadType, geminiApiKey, leadStatus) {
-    // State continuity short-circuits — once a lead has committed to a flow,
-    // don't re-classify each new message.
-    if (leadType === 'seller')
-        return 'seller';
-    if (leadType === 'buyer' && leadStatus === 'searching')
-        return 'buyer';
+async function classifyIntent(message, leadType, geminiApiKey, leadStatus, currentState) {
+    // State continuity short-circuits — only stay-in-flow when actively in a
+    // collection/scheduling state. When state is IDLE (between flows or a
+    // returning customer), always reclassify so a seller who comes back with
+    // a buyer question gets routed correctly. The mid-flow override at the
+    // call site already passes leadType='new' to opt out, so this guard is
+    // effectively "don't override an active collection state".
+    const inActiveFlow = currentState !== undefined && currentState !== 'IDLE';
+    if (inActiveFlow) {
+        if (leadType === 'seller')
+            return 'seller';
+        if (leadType === 'buyer' && leadStatus === 'searching')
+            return 'buyer';
+    }
     // Otherwise, let Gemini decide. No keyword fast-paths — those caused
     // false positives ("אני מחפש קונה לדירה שלי" → buyer) and made the
     // classifier disagree with itself.
@@ -682,6 +691,16 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             const requirements = {};
             if (Array.isArray(args.desiredCity) && args.desiredCity.length)
                 requirements.desiredCity = args.desiredCity;
+            if (Array.isArray(args.desiredNeighborhoods) && args.desiredNeighborhoods.length)
+                requirements.desiredNeighborhoods = args.desiredNeighborhoods;
+            // Street numbers are intentionally stripped — the matching engine compares by
+            // street name only, and Gemini sometimes includes the house number despite
+            // the schema description.
+            if (Array.isArray(args.desiredStreet) && args.desiredStreet.length) {
+                requirements.desiredStreet = args.desiredStreet
+                    .map((s) => typeof s === 'string' ? s.replace(/\s*\d+\s*$/, '').trim() : '')
+                    .filter((s) => s.length > 0);
+            }
             if (typeof args.maxBudget === 'number')
                 requirements.maxBudget = args.maxBudget;
             if (typeof args.minRooms === 'number')
@@ -792,7 +811,9 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         const reqs = ((_o = freshLead.data()) === null || _o === void 0 ? void 0 : _o.requirements) || {};
         const leadName = leadData.name || customerPhone;
         const reqSummary = [
-            Array.isArray(reqs.desiredCity) ? reqs.desiredCity.join(', ') : null,
+            Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,
+            Array.isArray(reqs.desiredNeighborhoods) && reqs.desiredNeighborhoods.length ? `שכונה: ${reqs.desiredNeighborhoods.join(', ')}` : null,
+            Array.isArray(reqs.desiredStreet) && reqs.desiredStreet.length ? `רחוב ${reqs.desiredStreet.join(', ')}` : null,
             reqs.minRooms ? `${reqs.minRooms} חדרים` : null,
             reqs.maxBudget ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
         ].filter(Boolean).join(' | ');
@@ -1050,8 +1071,21 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         }
         // 6. Route by state
         if (currentState === 'IDLE') {
-            const intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status);
+            let intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status, currentState);
             console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
+            // Anti-flip-flop guard: a confirmed buyer/seller is NOT switched to the
+            // opposite type on a short, ambiguous message. Without this, a seller
+            // returning with "היי" or "תודה" could get reclassified to buyer and
+            // start the wrong flow. We only flip on substantive messages: ≥ 4 words
+            // OR a clear directional verb.
+            const wordCount = incomingMessage.trim().split(/\s+/).filter(Boolean).length;
+            const hasDirectionalVerb = /(למכור|לקנות|לשכור|מחפש|מתעניין|לפרסם|להשכיר|בעל\s+נכס|נכס\s+שלי|דירה\s+שלי)/.test(incomingMessage);
+            const isAmbiguous = wordCount < 4 && !hasDirectionalVerb;
+            const isFlip = leadData.type && intent !== 'irrelevant' && intent !== leadData.type;
+            if (isFlip && isAmbiguous) {
+                console.log(`[WeBot] 🛡️ Anti-flip-flop: ignoring ${intent} for type=${leadData.type} on ambiguous "${incomingMessage.substring(0, 30)}"`);
+                intent = 'irrelevant';
+            }
             if (intent === 'irrelevant') {
                 // Greetings & ambiguous one-liners ("היי", "שלום", "מה קורה") get a
                 // friendly menu instead of dead silence. True spam (long, repeated,
@@ -1070,6 +1104,8 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
                     const reqs = leadData.requirements || {};
                     const reqSummaryParts = [
                         Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,
+                        Array.isArray(reqs.desiredNeighborhoods) && reqs.desiredNeighborhoods.length ? `שכונה ${reqs.desiredNeighborhoods.join(', ')}` : null,
+                        Array.isArray(reqs.desiredStreet) && reqs.desiredStreet.length ? `רחוב ${reqs.desiredStreet.join(', ')}` : null,
                         reqs.minRooms ? `${reqs.minRooms} חדרים` : null,
                         reqs.maxBudget ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
                     ].filter(Boolean);
@@ -1134,7 +1170,7 @@ async function handleWeBotReply(agencyId, leadId, customerPhone, incomingMessage
         if (inBuyerFlow || inSellerFlow) {
             // Pass leadType='new' to force a fresh Gemini classification (skip the
             // state-continuity short-circuits in classifyIntent).
-            const freshIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey);
+            const freshIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey, undefined, 'IDLE');
             const wantsBuyer = freshIntent === 'buyer' && inSellerFlow;
             const wantsSeller = freshIntent === 'seller' && inBuyerFlow;
             if (wantsBuyer || wantsSeller) {

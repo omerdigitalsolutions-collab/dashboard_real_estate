@@ -16,12 +16,15 @@ export const getCalendarAuthUrl = async () => {
 };
 
 /**
- * Fetches upcoming events from the user's primary Google Calendar.
+ * Fetches events from the user's primary Google Calendar for the given time range.
  */
-export const listCalendarEvents = async () => {
+export const listCalendarEvents = async (timeMin?: string, timeMax?: string) => {
     try {
-        const listEventsFn = httpsCallable<void, { success: boolean; events: any[] }>(functions, 'calendar-listEvents');
-        const result = await listEventsFn();
+        const listEventsFn = httpsCallable<
+            { timeMin?: string; timeMax?: string },
+            { success: boolean; events: any[] }
+        >(functions, 'calendar-listEvents');
+        const result = await listEventsFn({ timeMin, timeMax });
         return result.data.events;
     } catch (error) {
         console.error('Error listing calendar events:', error);

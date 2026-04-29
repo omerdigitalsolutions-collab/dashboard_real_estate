@@ -10,7 +10,6 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const tokenStore_1 = require("./tokenStore");
-const db = (0, firestore_1.getFirestore)();
 /**
  * Cloud Function: calendar-disconnect
  *
@@ -18,21 +17,20 @@ const db = (0, firestore_1.getFirestore)();
  * 2. Updates the user's profile to disable Google Calendar integration.
  */
 exports.disconnect = (0, https_1.onCall)({
-    cors: true,
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
     invoker: 'public',
 }, async (request) => {
-    // 1. Authenticate user
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     try {
         console.log(`[calendar] Starting disconnect for user: ${authData.uid}`);
-        // 2. Clear tokens from Firestore
         await (0, tokenStore_1.deleteUserTokens)(authData.uid);
-        // 3. Update user profile to mark calendar as disabled
         const db = (0, firestore_1.getFirestore)();
-        await db.collection('users').doc(authData.uid).update({
-            'googleCalendar.enabled': false,
-            'googleCalendar.lastDisconnected': new Date().toISOString(),
-        });
+        await db.collection('users').doc(authData.uid).set({
+            googleCalendar: {
+                enabled: false,
+                lastDisconnected: new Date().toISOString(),
+            },
+        }, { merge: true });
         console.log(`[calendar] Successfully disconnected for user: ${authData.uid}`);
         return { success: true };
     }

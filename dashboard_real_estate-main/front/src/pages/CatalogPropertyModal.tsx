@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 interface CatalogPropertyModalProps {
     property: any | null;
     agencyPhone?: string;
+    agencyLogoUrl?: string;
     onClose: () => void;
 }
 
@@ -14,7 +15,7 @@ const AMENITY_ICONS: { key: string; label: string; icon: React.ReactNode }[] = [
     { key: 'hasSafeRoom', label: 'ממ"ד', icon: <Shield size={13} /> },
 ];
 
-export default function CatalogPropertyModal({ property, agencyPhone, onClose }: CatalogPropertyModalProps) {
+export default function CatalogPropertyModal({ property, agencyPhone, agencyLogoUrl, onClose }: CatalogPropertyModalProps) {
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [activeVideoIndex, setActiveVideoIndex] = useState(0);
     const [isImageFullscreen, setIsImageFullscreen] = useState(false);
@@ -269,6 +270,33 @@ export default function CatalogPropertyModal({ property, agencyPhone, onClose }:
                             </div>
                         </div>
                     )}
+
+                    {/* Agent / Agency branding */}
+                    <div className="border-t border-slate-100 pt-4 flex items-center gap-3">
+                        {property.agentPhotoUrl ? (
+                            <img
+                                src={property.agentPhotoUrl}
+                                alt={property.agentName || ''}
+                                className="w-10 h-10 rounded-full object-cover border border-slate-100 shadow-sm"
+                            />
+                        ) : (property.agencyLogoUrl || property.logoUrl || agencyLogoUrl) ? (
+                            <img
+                                src={property.agencyLogoUrl || property.logoUrl || agencyLogoUrl}
+                                alt="Agency Logo"
+                                className="h-8 w-auto max-w-[100px] object-contain"
+                            />
+                        ) : (property.agentName) ? (
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-xs font-black text-blue-600">
+                                    {property.agentName.charAt(0)}
+                                </span>
+                            </div>
+                        ) : null}
+                        <div>
+                            {property.agentName && <p className="text-sm font-bold text-slate-900">{property.agentName}</p>}
+                            <p className="text-xs text-slate-500">נציג שירות הלקוחות שלנו</p>
+                        </div>
+                    </div>
 
                     {/* Contact buttons */}
                     {contactPhone && (

@@ -59,6 +59,9 @@ export interface CalendarEventPayload {
     /** Optional list of attendees to invite. */
     attendees?: CalendarAttendee[];
 
+    /** The user ID of the agent assigned to this meeting task. */
+    assignedToAgentId?: string;
+
     /** Polymorphic CRM relationship (e.g. Lead or Property). */
     relatedTo?: {
         id: string;
@@ -86,9 +89,11 @@ export interface CreateEventResult {
 export interface AppTask {
     id: string;
     agencyId: string;
-    createdBy: string; // The user ID of the agent who created the task
+    createdBy: string;
+    assignedToAgentId?: string;
     title: string;
     description?: string;
+    status?: string;
     dueDate: any; // Firestore Timestamp
     priority: 'High' | 'Medium' | 'Low';
     isCompleted: boolean;

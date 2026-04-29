@@ -18,8 +18,9 @@ const firestore_1 = require("firebase-admin/firestore");
 const googleapis_1 = require("googleapis");
 const authGuard_1 = require("../config/authGuard");
 const tokenStore_1 = require("./tokenStore");
-/** Google Calendar scope required to create / read events. */
+/** Google Calendar scopes — full read/write across all of the user's calendars. */
 const CALENDAR_SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/calendar.events',
 ];
 // ── Internal: build a bare client from env vars only (no user tokens needed) ─
@@ -44,7 +45,7 @@ function buildBaseOAuth2Client() {
  * with a `code` query parameter, which is then passed to handleOAuthCallback.
  */
 exports.getAuthUrl = (0, https_1.onCall)({
-    cors: true,
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

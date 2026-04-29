@@ -55,6 +55,20 @@
       ]
     },
     {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "available_instances",
       "queryScope": "COLLECTION",
       "fields": [

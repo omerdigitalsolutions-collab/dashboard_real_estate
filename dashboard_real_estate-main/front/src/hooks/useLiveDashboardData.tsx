@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef, useMemo } from 'react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -519,8 +519,13 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         }
     }, [tasks]);
 
+    const value = useMemo<LiveDashboardData>(
+        () => ({ properties, deals, tasks, alerts, leads, sharedCatalogs, agencySettings, rawAgency, agencyName, agencyLogo, loading, error }),
+        [properties, deals, tasks, alerts, leads, sharedCatalogs, agencySettings, rawAgency, agencyName, agencyLogo, loading, error]
+    );
+
     return (
-        <DashboardDataContext.Provider value={{ properties, deals, tasks, alerts, leads, sharedCatalogs, agencySettings, rawAgency, agencyName, agencyLogo, loading, error }}>
+        <DashboardDataContext.Provider value={value}>
             {children}
         </DashboardDataContext.Provider>
     );

@@ -18,8 +18,9 @@ import { validateUserAuth } from '../config/authGuard';
 import { saveUserTokens } from './tokenStore';
 import { StoredTokens } from './types';
 
-/** Google Calendar scope required to create / read events. */
+/** Google Calendar scopes — full read/write across all of the user's calendars. */
 const CALENDAR_SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/calendar.events',
 ];
 
@@ -52,8 +53,8 @@ function buildBaseOAuth2Client() {
  * After the user consents, Google will redirect to GOOGLE_REDIRECT_URI
  * with a `code` query parameter, which is then passed to handleOAuthCallback.
  */
-export const getAuthUrl = onCall({ 
-    cors: true,
+export const getAuthUrl = onCall({
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

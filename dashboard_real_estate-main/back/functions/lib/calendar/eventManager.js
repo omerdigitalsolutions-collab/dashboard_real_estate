@@ -94,7 +94,8 @@ async function createCalendarEvent(userId, payload) {
  * Output: { success: true, eventId: string, htmlLink: string }
  */
 exports.createEvent = (0, https_1.onCall)({
-    cors: true,
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
+    invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {
     var _a, _b, _c, _d, _e, _f, _g, _h;
@@ -128,17 +129,21 @@ exports.createEvent = (0, https_1.onCall)({
             id: taskRef.id,
             agencyId: authData.agencyId,
             createdBy: authData.uid,
+            assignedToAgentId: payload.assignedToAgentId || authData.uid,
             title: `פגישה: ${payload.summary}`,
-            description: payload.description || '',
+            description: `${payload.description || ''}\n\nקישור ליומן: ${result.htmlLink}`.trim(),
+            status: 'pending',
             dueDate: firestore_1.Timestamp.fromDate(new Date(payload.start.dateTime)),
-            priority: 'Medium', // Default to Medium, matching frontend case
+            priority: 'Medium',
             isCompleted: false,
             type: 'meeting',
             googleEventId: result.eventId,
-            relatedTo: payload.relatedTo,
             createdAt: firestore_1.Timestamp.now(),
             updatedAt: firestore_1.Timestamp.now(),
         };
+        if (payload.relatedTo) {
+            taskData.relatedTo = payload.relatedTo;
+        }
         await taskRef.set(taskData);
         return Object.assign(Object.assign({ success: true }, result), { taskId: taskRef.id });
     }
@@ -165,7 +170,7 @@ exports.createEvent = (0, https_1.onCall)({
  * Standardizes deletion flow to ensure no orphaned events remain in the calendar.
  */
 exports.deleteEvent = (0, https_1.onCall)({
-    cors: true,
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
     invoker: 'public',
     secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
 }, async (request) => {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { listCalendarEvents } from '../services/calendarService';
 import { AddMeetingModal } from '../components/modals/AddMeetingModal';
+import { getHolidaysForDate, Holiday } from '../utils/holidays';
 import {
     ChevronLeft,
     ChevronRight,
@@ -46,6 +47,28 @@ import {
 import { he } from 'date-fns/locale';
 
 type ViewMode = 'day' | 'week' | 'month' | 'year';
+
+function getRangeForView(view: ViewMode, date: Date): { tMin: string; tMax: string } {
+    const pad = (d: Date, days: number) => new Date(d.getTime() + days * 86400000);
+    let start: Date, end: Date;
+    if (view === 'day') {
+        start = startOfDay(pad(date, -2));
+        end = startOfDay(pad(date, 3));
+    } else if (view === 'week') {
+        const ws = startOfWeek(date, { weekStartsOn: 0 });
+        start = startOfDay(pad(ws, -3));
+        end = startOfDay(pad(endOfWeek(date, { weekStartsOn: 0 }), 4));
+    } else if (view === 'month') {
+        const ms = startOfMonth(date);
+        const me = endOfMonth(date);
+        start = startOfWeek(ms, { weekStartsOn: 0 });
+        end = endOfWeek(me, { weekStartsOn: 0 });
+    } else {
+        start = startOfYear(date);
+        end = endOfYear(date);
+    }
+    return { tMin: start.toISOString(), tMax: end.toISOString() };
+}
 
 interface CalEvent {
     id: string;
@@ -128,15 +151,21 @@ function DayView({ date, events, onAddAt, onEventClick, getColor }: {
         const s = getEventStart(e);
         return s && isSameDay(s, date);
     });
+    const holidays = getHolidaysForDate(format(date, 'yyyy-MM-dd'));
 
     return (
         <div className="flex flex-col flex-1 overflow-auto">
             {/* Day header */}
-            <div className="flex items-center gap-3 px-6 py-3 border-b border-slate-100 bg-white sticky top-0 z-10">
-                <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center font-bold text-lg ${isToday(date) ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>
+            <div className="flex items-start gap-3 px-6 py-3 border-b border-slate-100 bg-white sticky top-0 z-10">
+                <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center font-bold text-lg flex-shrink-0 ${isToday(date) ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>
                     <span className="text-xs leading-none">{format(date, 'EEE', { locale: he })}</span>
                     <span className="text-xl leading-none">{format(date, 'd')}</span>
                 </div>
+                {holidays.length > 0 && (
+                    <div className="flex flex-col gap-0.5 pt-1 flex-1">
+                        {holidays.map((h, i) => <HolidayTag key={i} holiday={h} />)}
+                    </div>
+                )}
             </div>
             <div className="flex flex-1 overflow-y-auto">
                 {/* Time gutter */}
@@ -203,14 +232,20 @@ function WeekView({ date, events, onAddAt, onEventClick, getColor }: {
             {/* Header row */}
             <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
                 <div className="w-16 flex-shrink-0" />
-                {days.map(day => (
-                    <div key={day.toISOString()} className="flex-1 text-center py-2 border-r border-slate-100 last:border-r-0">
-                        <span className="block text-xs text-slate-400">{format(day, 'EEE', { locale: he })}</span>
-                        <span className={`inline-flex w-8 h-8 items-center justify-center rounded-full text-sm font-bold mt-0.5 ${isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>
-                            {format(day, 'd')}
-                        </span>
-                    </div>
-                ))}
+                {days.map(day => {
+                    const dayHolidays = getHolidaysForDate(format(day, 'yyyy-MM-dd'));
+                    return (
+                        <div key={day.toISOString()} className="flex-1 text-center py-2 border-r border-slate-100 last:border-r-0 px-0.5">
+                            <span className="block text-xs text-slate-400">{format(day, 'EEE', { locale: he })}</span>
+                            <span className={`inline-flex w-8 h-8 items-center justify-center rounded-full text-sm font-bold mt-0.5 ${isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-700'}`}>
+                                {format(day, 'd')}
+                            </span>
+                            {dayHolidays.map((h, i) => (
+                                <HolidayTag key={i} holiday={h} compact />
+                            ))}
+                        </div>
+                    );
+                })}
             </div>
             {/* Body */}
             <div className="flex flex-1 overflow-y-auto">
@@ -295,7 +330,9 @@ function MonthView({ date, events, onDayClick, onEventClick, getColor }: {
                         const s = getEventStart(e);
                         return s && isSameDay(s, day);
                     });
+                    const dayHolidays = getHolidaysForDate(format(day, 'yyyy-MM-dd'));
                     const inMonth = isSameMonth(day, date);
+                    const totalSlots = dayHolidays.length + dayEvs.length;
                     return (
                         <div
                             key={day.toISOString()}
@@ -306,11 +343,14 @@ function MonthView({ date, events, onDayClick, onEventClick, getColor }: {
                                 {format(day, 'd')}
                             </div>
                             <div className="space-y-0.5">
-                                {dayEvs.slice(0, 3).map(ev => (
+                                {dayHolidays.map((h, i) => (
+                                    <HolidayTag key={`h${i}`} holiday={h} compact />
+                                ))}
+                                {dayEvs.slice(0, Math.max(0, 3 - dayHolidays.length)).map(ev => (
                                     <EventPill key={ev.id} event={ev} color={getColor(ev)} onClick={() => onEventClick(ev)} compact />
                                 ))}
-                                {dayEvs.length > 3 && (
-                                    <span className="text-[10px] text-slate-400 pr-1">+{dayEvs.length - 3} עוד</span>
+                                {totalSlots > 3 && (
+                                    <span className="text-[10px] text-slate-400 pr-1">+{totalSlots - 3} עוד</span>
                                 )}
                             </div>
                         </div>
@@ -353,13 +393,16 @@ function YearView({ date, events, onMonthClick }: {
                                     const s = getEventStart(e);
                                     return s && isSameDay(s, day);
                                 });
+                                const dayHols = getHolidaysForDate(format(day, 'yyyy-MM-dd'));
+                                const hasJewish = dayHols.some(h => h.type === 'jewish');
+                                const hasChristian = dayHols.some(h => h.type === 'christian');
                                 const inMonth = isSameMonth(day, monthDate);
                                 return (
                                     <div
                                         key={day.toISOString()}
                                         className={`text-center text-[10px] rounded-full w-4 h-4 flex items-center justify-center mx-auto
                                             ${!inMonth ? 'opacity-0 pointer-events-none' : ''}
-                                            ${isToday(day) ? 'bg-blue-600 text-white font-bold' : hasEvent ? 'bg-blue-100 text-blue-700 font-semibold' : 'text-slate-600'}
+                                            ${isToday(day) ? 'bg-blue-600 text-white font-bold' : hasJewish ? 'bg-amber-200 text-amber-800 font-semibold' : hasChristian ? 'bg-red-100 text-red-700 font-semibold' : hasEvent ? 'bg-blue-100 text-blue-700 font-semibold' : 'text-slate-600'}
                                         `}
                                     >
                                         {inMonth ? format(day, 'd') : ''}
@@ -384,6 +427,25 @@ function CurrentTimeLine() {
                 <div className="w-2.5 h-2.5 rounded-full bg-blue-600 -mr-1 flex-shrink-0" />
                 <div className="flex-1 border-t-2 border-blue-600" />
             </div>
+        </div>
+    );
+}
+
+/* ─── Holiday Tag ────────────────────────────────────────────────── */
+function HolidayTag({ holiday, compact = false }: { holiday: Holiday; compact?: boolean }) {
+    const isJewish = holiday.type === 'jewish';
+    const bg = isJewish ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+    const icon = isJewish ? '✡' : '✞';
+    if (compact) {
+        return (
+            <div className={`w-full text-right rounded px-1 py-0.5 text-[10px] font-semibold truncate leading-tight ${bg}`}>
+                {icon} {holiday.name}
+            </div>
+        );
+    }
+    return (
+        <div className={`w-full text-right rounded-md px-1.5 py-0.5 text-[11px] font-semibold truncate leading-tight ${bg}`}>
+            {icon} {holiday.name}
         </div>
     );
 }
@@ -455,15 +517,16 @@ const Calendar = () => {
     const isConnected = !!userData?.googleCalendar?.enabled;
 
     useEffect(() => {
-        if (isConnected) fetchEvents();
-        else setIsLoading(false);
-    }, [isConnected]);
+        if (!isConnected) { setIsLoading(false); return; }
+        const { tMin, tMax } = getRangeForView(view, currentDate);
+        fetchEvents(tMin, tMax);
+    }, [isConnected, view, currentDate]);
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (tMin?: string, tMax?: string) => {
         setIsLoading(true);
         setError('');
         try {
-            const data = await listCalendarEvents();
+            const data = await listCalendarEvents(tMin, tMax);
             setEvents(data || []);
         } catch {
             setError('לא הצלחנו לטעון את האירועים מיומן גוגל.');
@@ -590,7 +653,7 @@ const Calendar = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                     <AlertCircle size={36} className="text-red-400 mb-3" />
                     <p className="text-slate-700 font-semibold mb-3">{error}</p>
-                    <button onClick={fetchEvents} className="text-blue-600 font-bold hover:underline text-sm">
+                    <button onClick={() => { const { tMin, tMax } = getRangeForView(view, currentDate); fetchEvents(tMin, tMax); }} className="text-blue-600 font-bold hover:underline text-sm">
                         נסה שוב
                     </button>
                 </div>
@@ -643,7 +706,7 @@ const Calendar = () => {
             )}
             <AddMeetingModal
                 isOpen={isAddModal}
-                onClose={() => { setIsAddModal(false); fetchEvents(); }}
+                onClose={() => { setIsAddModal(false); const { tMin, tMax } = getRangeForView(view, currentDate); fetchEvents(tMin, tMax); }}
                 initialData={addModalDefaults}
             />
         </div>

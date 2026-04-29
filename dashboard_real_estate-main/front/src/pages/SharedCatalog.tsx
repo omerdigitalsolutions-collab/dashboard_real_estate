@@ -388,15 +388,19 @@ export default function SharedCatalogPage() {
     const getCallPhone = (property: any): string => {
         if (property.listingType === 'exclusive' && property.agentPhone) return property.agentPhone;
         if (property.assignedAgentPhone) return property.assignedAgentPhone;
+        if (property.agentPhone) return property.agentPhone; // fallback for any property phone
         return rawAgencyPhone;
     };
 
     const getWaPhone = (property: any): string => {
-        if (property.listingType === 'exclusive' && property.agentPhone)
-            return property.agentPhone.replace(/\D/g, '').replace(/^0/, '972');
-        if (property.assignedAgentPhone)
-            return property.assignedAgentPhone.replace(/\D/g, '').replace(/^0/, '972');
-        return agencyPhone;
+        let phone = '';
+        if (property.listingType === 'exclusive' && property.agentPhone) phone = property.agentPhone;
+        else if (property.assignedAgentPhone) phone = property.assignedAgentPhone;
+        else if (property.agentPhone) phone = property.agentPhone;
+        else phone = rawAgencyPhone;
+
+        if (!phone) return '';
+        return phone.replace(/\D/g, '').replace(/^0/, '972');
     };
 
     const getWaLink = (property: any): string => {
@@ -446,6 +450,7 @@ export default function SharedCatalogPage() {
             <CatalogPropertyModal
                 property={selectedProperty}
                 agencyPhone={rawAgencyPhone}
+                agencyLogoUrl={agencyLogoUrl}
                 onClose={() => setSelectedProperty(null)}
             />
 
@@ -593,29 +598,27 @@ export default function SharedCatalogPage() {
                                         </p>
                                     )}
 
-                                    {/* Agent / Agency branding — only for office properties */}
-                                    {property.listingType === 'exclusive' && (
-                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
-                                            {property.agentPhotoUrl ? (
-                                                <img
-                                                    src={property.agentPhotoUrl}
-                                                    alt={property.agentName || ''}
-                                                    className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100"
-                                                />
-                                            ) : agencyLogoUrl ? (
-                                                <img src={agencyLogoUrl} alt={agencyName || ''} className="h-5 w-auto max-w-[70px] object-contain shrink-0" />
-                                            ) : property.agentName ? (
-                                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                                    <span className="text-[9px] font-black text-blue-600">
-                                                        {property.agentName.charAt(0)}
-                                                    </span>
-                                                </div>
-                                            ) : null}
-                                            {property.agentName && (
-                                                <span className="text-xs text-slate-500 font-semibold truncate">{property.agentName}</span>
-                                            )}
-                                        </div>
-                                    )}
+                                    {/* Agent / Agency branding */}
+                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-50">
+                                        {property.agentPhotoUrl ? (
+                                            <img
+                                                src={property.agentPhotoUrl}
+                                                alt={property.agentName || ''}
+                                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-slate-100"
+                                            />
+                                        ) : agencyLogoUrl ? (
+                                            <img src={agencyLogoUrl} alt={agencyName || ''} className="h-5 w-auto max-w-[70px] object-contain shrink-0" />
+                                        ) : (property.agentName || agencyName) ? (
+                                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                <span className="text-[9px] font-black text-blue-600">
+                                                    {(property.agentName || agencyName || '?').charAt(0)}
+                                                </span>
+                                            </div>
+                                        ) : null}
+                                        <span className="text-xs text-slate-500 font-semibold truncate">
+                                            {property.agentName || agencyName}
+                                        </span>
+                                    </div>
 
                                     {/* Action buttons: Call + WhatsApp */}
                                     {(getCallPhone(property) || getWaPhone(property)) && (

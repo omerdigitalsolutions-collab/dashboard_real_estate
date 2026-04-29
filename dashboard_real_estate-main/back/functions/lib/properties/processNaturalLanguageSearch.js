@@ -48,7 +48,7 @@ function isRateLimited(ip) {
 }
 async function parseQueryWithGemini(query, apiKey) {
     const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite-preview-06-17' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = `אתה מנתח שאילתות חיפוש נדל"ן. נתח את השאילתה הבאה והחזר JSON בלבד (ללא markdown, ללא הסברים).
 שדות אפשריים: city (string), minPrice (number, ש"ח), maxPrice (number, ש"ח), minRooms (number), maxRooms (number), propertyType (string: "דירה"|"בית פרטי"|"פנטהאוז"|"מסחרי"), transactionType ("forsale"|"rent").
 אם שדה לא מוזכר — השמט אותו. מחירים בש"ח בלבד (אם כתוב מיליון — הכפל ב-1000000).
@@ -204,8 +204,8 @@ exports.processNaturalLanguageSearch = (0, https_1.onRequest)({ secrets: [gemini
         res.status(200).json({ properties: sanitized, totalCount, page: safePage, parsedFilters: activeFilters });
     }
     catch (err) {
-        console.error('processNaturalLanguageSearch error:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('processNaturalLanguageSearch error:', err instanceof Error ? err.message : String(err));
+        res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : String(err) });
     }
 });
 //# sourceMappingURL=processNaturalLanguageSearch.js.map

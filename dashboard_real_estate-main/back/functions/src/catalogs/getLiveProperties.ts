@@ -163,6 +163,36 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
         }
     }
 
+    // Fallback: use catalog creator's contact for properties still missing phone/photo
+    const creatorId: string = catalogData.agentId || '';
+    if (agencyId && creatorId) {
+        const creatorDoc = await db.collection(`agencies/${agencyId}/users`).doc(creatorId).get();
+        if (creatorDoc.exists) {
+            const creator = creatorDoc.data()!;
+            const creatorPhone = creator.phone || '';
+            const creatorPhotoUrl = creator.photoURL || '';
+            const creatorName = creator.name || '';
+
+            for (const prop of liveProperties) {
+                const hasPhone = prop.agentPhone || prop.assignedAgentPhone;
+                if (!hasPhone && creatorPhone) {
+                    if (prop.listingType === 'exclusive') {
+                        prop.agentPhone = creatorPhone;
+                    } else {
+                        prop.assignedAgentPhone = creatorPhone;
+                        if (!prop.assignedAgentName) prop.assignedAgentName = creatorName;
+                    }
+                }
+                if (!prop.agentPhotoUrl && creatorPhotoUrl) {
+                    prop.agentPhotoUrl = creatorPhotoUrl;
+                }
+                if (!prop.agentName && creatorName) {
+                    prop.agentName = creatorName;
+                }
+            }
+        }
+    }
+
     return {
         success: true,
         properties: liveProperties

@@ -7,6 +7,18 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions', 'firebase/storage'],
+          charts: ['recharts'],
+          maps: ['@react-google-maps/api'],
+          grid: ['react-grid-layout', 'react-resizable'],
+        },
+      },
+    },
+  },
   server: {
     headers: {
       // Allows Firebase signInWithPopup to close the Google auth popup correctly

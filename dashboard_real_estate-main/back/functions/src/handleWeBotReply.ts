@@ -119,19 +119,21 @@ const scheduleMeetingDeclaration: FunctionDeclaration = {
 
 const updateLeadRequirementsDeclaration: FunctionDeclaration = {
   name: 'update_lead_requirements',
-  description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג / עיר). עיר אינה חובה — ניתן לחפש בכל נכסי הסוכנות.',
+  description: 'שמור את דרישות הלקוח שאספת. קרא ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג / עיר / שכונה / רחוב). עיר אינה חובה — ניתן לחפש בכל נכסי הסוכנות.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      desiredCity:      { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'ערים מועדפות (עברית) — אופציונלי' },
-      maxBudget:        { type: SchemaType.NUMBER,  description: 'תקציב מקסימלי בשקלים' },
-      minRooms:         { type: SchemaType.NUMBER,  description: 'מינימום חדרים' },
-      maxRooms:         { type: SchemaType.NUMBER,  description: 'מקסימום חדרים' },
-      propertyType:     { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: '"sale" לקנייה, "rent" לשכירות' },
-      mustHaveParking:  { type: SchemaType.BOOLEAN },
-      mustHaveElevator: { type: SchemaType.BOOLEAN },
-      mustHaveBalcony:  { type: SchemaType.BOOLEAN },
-      mustHaveSafeRoom: { type: SchemaType.BOOLEAN },
+      desiredCity:          { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'ערים מועדפות (עברית) — אופציונלי' },
+      desiredNeighborhoods: { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'שכונות מועדפות (עברית) — אופציונלי' },
+      desiredStreet:        { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: 'רחובות מועדפים (עברית) — שמור את שם הרחוב בלבד בלי המספר. לדוגמה: "הרצל" ולא "הרצל 5".' },
+      maxBudget:            { type: SchemaType.NUMBER,  description: 'תקציב מקסימלי בשקלים' },
+      minRooms:             { type: SchemaType.NUMBER,  description: 'מינימום חדרים' },
+      maxRooms:             { type: SchemaType.NUMBER,  description: 'מקסימום חדרים' },
+      propertyType:         { type: SchemaType.ARRAY,   items: { type: SchemaType.STRING }, description: '"sale" לקנייה, "rent" לשכירות' },
+      mustHaveParking:      { type: SchemaType.BOOLEAN },
+      mustHaveElevator:     { type: SchemaType.BOOLEAN },
+      mustHaveBalcony:      { type: SchemaType.BOOLEAN },
+      mustHaveSafeRoom:     { type: SchemaType.BOOLEAN },
     },
     required: [],
   },
@@ -410,11 +412,19 @@ async function classifyIntent(
   leadType: string,
   geminiApiKey: string,
   leadStatus?: string,
+  currentState?: ChatState,
 ): Promise<'buyer' | 'seller' | 'irrelevant'> {
-  // State continuity short-circuits — once a lead has committed to a flow,
-  // don't re-classify each new message.
-  if (leadType === 'seller') return 'seller';
-  if (leadType === 'buyer' && leadStatus === 'searching') return 'buyer';
+  // State continuity short-circuits — only stay-in-flow when actively in a
+  // collection/scheduling state. When state is IDLE (between flows or a
+  // returning customer), always reclassify so a seller who comes back with
+  // a buyer question gets routed correctly. The mid-flow override at the
+  // call site already passes leadType='new' to opt out, so this guard is
+  // effectively "don't override an active collection state".
+  const inActiveFlow = currentState !== undefined && currentState !== 'IDLE';
+  if (inActiveFlow) {
+    if (leadType === 'seller') return 'seller';
+    if (leadType === 'buyer' && leadStatus === 'searching') return 'buyer';
+  }
 
   // Otherwise, let Gemini decide. No keyword fast-paths — those caused
   // false positives ("אני מחפש קונה לדירה שלי" → buyer) and made the
@@ -798,7 +808,16 @@ async function runBuyerFlow(
     } else if (call.name === 'update_lead_requirements') {
       const args = call.args as Record<string, any>;
       const requirements: Record<string, any> = {};
-      if (Array.isArray(args.desiredCity)  && args.desiredCity.length)  requirements.desiredCity = args.desiredCity;
+      if (Array.isArray(args.desiredCity)          && args.desiredCity.length)          requirements.desiredCity          = args.desiredCity;
+      if (Array.isArray(args.desiredNeighborhoods) && args.desiredNeighborhoods.length) requirements.desiredNeighborhoods = args.desiredNeighborhoods;
+      // Street numbers are intentionally stripped — the matching engine compares by
+      // street name only, and Gemini sometimes includes the house number despite
+      // the schema description.
+      if (Array.isArray(args.desiredStreet) && args.desiredStreet.length) {
+        requirements.desiredStreet = args.desiredStreet
+          .map((s: any) => typeof s === 'string' ? s.replace(/\s*\d+\s*$/, '').trim() : '')
+          .filter((s: string) => s.length > 0);
+      }
       if (typeof args.maxBudget  === 'number')  requirements.maxBudget  = args.maxBudget;
       if (typeof args.minRooms   === 'number')  requirements.minRooms   = args.minRooms;
       if (typeof args.maxRooms   === 'number')  requirements.maxRooms   = args.maxRooms;
@@ -916,9 +935,11 @@ async function runBuyerFlow(
     const reqs       = freshLead.data()?.requirements || {};
     const leadName   = leadData.name || customerPhone;
     const reqSummary = [
-      Array.isArray(reqs.desiredCity)   ? reqs.desiredCity.join(', ')                      : null,
-      reqs.minRooms                     ? `${reqs.minRooms} חדרים`                         : null,
-      reqs.maxBudget                    ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
+      Array.isArray(reqs.desiredCity)          && reqs.desiredCity.length          ? reqs.desiredCity.join(', ')                      : null,
+      Array.isArray(reqs.desiredNeighborhoods) && reqs.desiredNeighborhoods.length ? `שכונה: ${reqs.desiredNeighborhoods.join(', ')}`  : null,
+      Array.isArray(reqs.desiredStreet)        && reqs.desiredStreet.length        ? `רחוב ${reqs.desiredStreet.join(', ')}`           : null,
+      reqs.minRooms                                                                ? `${reqs.minRooms} חדרים`                          : null,
+      reqs.maxBudget                                                               ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
     ].filter(Boolean).join(' | ');
 
     const [agentPhone, agentEmail, adminPhone, adminEmail, recentMsgs] = await Promise.all([
@@ -1294,8 +1315,22 @@ export async function handleWeBotReply(
 
     // 6. Route by state
     if (currentState === 'IDLE') {
-      const intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status);
+      let intent = await classifyIntent(incomingMessage, leadData.type || 'new', geminiApiKey, leadData.status, currentState);
       console.log(`[WeBot] Intent=${intent} for lead ${leadId}`);
+
+      // Anti-flip-flop guard: a confirmed buyer/seller is NOT switched to the
+      // opposite type on a short, ambiguous message. Without this, a seller
+      // returning with "היי" or "תודה" could get reclassified to buyer and
+      // start the wrong flow. We only flip on substantive messages: ≥ 4 words
+      // OR a clear directional verb.
+      const wordCount = incomingMessage.trim().split(/\s+/).filter(Boolean).length;
+      const hasDirectionalVerb = /(למכור|לקנות|לשכור|מחפש|מתעניין|לפרסם|להשכיר|בעל\s+נכס|נכס\s+שלי|דירה\s+שלי)/.test(incomingMessage);
+      const isAmbiguous = wordCount < 4 && !hasDirectionalVerb;
+      const isFlip = leadData.type && intent !== 'irrelevant' && intent !== leadData.type;
+      if (isFlip && isAmbiguous) {
+        console.log(`[WeBot] 🛡️ Anti-flip-flop: ignoring ${intent} for type=${leadData.type} on ambiguous "${incomingMessage.substring(0, 30)}"`);
+        intent = 'irrelevant';
+      }
 
       if (intent === 'irrelevant') {
         // Greetings & ambiguous one-liners ("היי", "שלום", "מה קורה") get a
@@ -1316,7 +1351,9 @@ export async function handleWeBotReply(
           // scratch. Falls back to the generic menu otherwise.
           const reqs = leadData.requirements || {};
           const reqSummaryParts = [
-            Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,
+            Array.isArray(reqs.desiredCity)          && reqs.desiredCity.length          ? reqs.desiredCity.join(', ')                     : null,
+            Array.isArray(reqs.desiredNeighborhoods) && reqs.desiredNeighborhoods.length ? `שכונה ${reqs.desiredNeighborhoods.join(', ')}`  : null,
+            Array.isArray(reqs.desiredStreet)        && reqs.desiredStreet.length        ? `רחוב ${reqs.desiredStreet.join(', ')}`          : null,
             reqs.minRooms ? `${reqs.minRooms} חדרים` : null,
             reqs.maxBudget ? `תקציב עד ₪${Number(reqs.maxBudget).toLocaleString('he-IL')}` : null,
           ].filter(Boolean);
@@ -1401,7 +1438,7 @@ export async function handleWeBotReply(
     if (inBuyerFlow || inSellerFlow) {
       // Pass leadType='new' to force a fresh Gemini classification (skip the
       // state-continuity short-circuits in classifyIntent).
-      const freshIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey);
+      const freshIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey, undefined, 'IDLE');
       const wantsBuyer  = freshIntent === 'buyer'  && inSellerFlow;
       const wantsSeller = freshIntent === 'seller' && inBuyerFlow;
 
