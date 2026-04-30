@@ -9,6 +9,8 @@ import {
     orderBy,
     onSnapshot,
     serverTimestamp,
+    arrayUnion,
+    Timestamp,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { AppTask } from '../types';
@@ -159,4 +161,19 @@ export async function deleteTask(task: AppTask): Promise<void> {
         console.error('Error in deleteTask:', error);
         throw new Error('שגיאה במחיקת המשימה. אנא נסה שוב.');
     }
+}
+
+export async function addTaskNote(
+    taskId: string,
+    text: string,
+    createdBy: string
+): Promise<void> {
+    const ref = doc(db, COLLECTION, taskId);
+    await updateDoc(ref, {
+        notes: arrayUnion({
+            text: text.trim(),
+            createdBy,
+            createdAt: Timestamp.now(),
+        }),
+    });
 }

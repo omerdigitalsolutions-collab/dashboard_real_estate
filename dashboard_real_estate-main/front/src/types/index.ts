@@ -310,6 +310,12 @@ export interface Deal {
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
+export interface TaskNote {
+    text: string;
+    createdBy: string;
+    createdAt: Timestamp;
+}
+
 export interface AppTask {
     id: string;
     agencyId: string;
@@ -327,6 +333,7 @@ export interface AppTask {
         name?: string;
     };
     googleEventId?: string;
+    notes?: TaskNote[];
     createdAt?: Timestamp;
 }
 

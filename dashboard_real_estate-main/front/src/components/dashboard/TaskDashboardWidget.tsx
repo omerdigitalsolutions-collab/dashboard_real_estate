@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { AppTask } from '../../types';
-import { toggleTaskCompletion } from '../../services/taskService';
+import { AppTask, TaskNote } from '../../types';
+import { toggleTaskCompletion, addTaskNote } from '../../services/taskService';
+import { useAuth } from '../../context/AuthContext';
 import {
     CheckCircle2,
     Circle,
@@ -11,7 +12,10 @@ import {
     User,
     Home,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    MessageSquare,
+    Send,
+    Loader2
 } from 'lucide-react';
 import { format, isBefore, startOfToday, isToday, isTomorrow } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -29,8 +33,12 @@ const PRIORITIES = {
 };
 
 export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboardWidgetProps) {
+    const { userData } = useAuth();
     const [toggling, setToggling] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [expandedNote, setExpandedNote] = useState<string | null>(null);
+    const [noteText, setNoteText] = useState<Record<string, string>>({});
+    const [savingNote, setSavingNote] = useState<string | null>(null);
 
     // Filter: Show all tasks
     // Sort: High -> Medium -> Low -> Date for open; Completed tasks at the end
@@ -77,12 +85,33 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
         }
     };
 
+    const handleSaveNote = async (task: AppTask) => {
+        const text = noteText[task.id]?.trim();
+        if (!text || !userData?.id) return;
+
+        setSavingNote(task.id);
+        try {
+            await addTaskNote(task.id, text, userData.id);
+            setNoteText(prev => ({ ...prev, [task.id]: '' }));
+            setExpandedNote(null);
+        } catch (err) {
+            console.error('Error saving note:', err);
+        } finally {
+            setSavingNote(null);
+        }
+    };
+
     const getDueLabel = (dateRaw: any) => {
         const date = dateRaw?.toDate ? dateRaw.toDate() : new Date(dateRaw);
         if (isBefore(date, startOfToday())) return { text: 'באיחור', color: 'text-red-400 font-bold', icon: AlertCircle };
         if (isToday(date)) return { text: 'היום', color: 'text-orange-400', icon: Clock };
         if (isTomorrow(date)) return { text: 'מחר', color: 'text-cyan-400', icon: CalendarClock };
         return { text: format(date, 'd MMM', { locale: he }), color: 'text-slate-400', icon: CalendarClock };
+    };
+
+    const formatNoteDate = (dateRaw: any) => {
+        const date = dateRaw?.toDate ? dateRaw.toDate() : new Date(dateRaw);
+        return format(date, 'dd.MM HH:mm', { locale: he });
     };
 
     return (
@@ -113,62 +142,147 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                         {displayData.visible.map(task => {
                             const due = getDueLabel(task.dueDate);
                             const DueIcon = due.icon;
+                            const isNoteExpanded = expandedNote === task.id;
 
                             return (
                                 <div
                                     key={task.id}
-                                    className={`flex items-start gap-3 p-3 rounded-xl transition-all border border-transparent group ${task.isCompleted ? 'bg-slate-800/50 opacity-75' : 'hover:bg-slate-800/50 hover:border-slate-700'
+                                    className={`flex flex-col p-3 rounded-xl transition-all border border-transparent group ${task.isCompleted ? 'bg-slate-800/50 opacity-75' : 'hover:bg-slate-800/50 hover:border-slate-700'
                                         } ${toggling === task.id ? 'opacity-50' : ''}`}
                                 >
-                                    <button
-                                        onClick={() => handleToggle(task)}
-                                        disabled={toggling === task.id}
-                                        className={`mt-0.5 flex-shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-400' : 'text-slate-600 hover:text-cyan-400'
-                                            }`}
-                                    >
-                                        {task.isCompleted ? <CheckCircle size={20} /> : <Circle size={20} />}
-                                    </button>
+                                    {/* Task Header */}
+                                    <div className="flex items-start gap-3">
+                                        <button
+                                            onClick={() => handleToggle(task)}
+                                            disabled={toggling === task.id}
+                                            className={`mt-0.5 flex-shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-400' : 'text-slate-600 hover:text-cyan-400'
+                                                }`}
+                                        >
+                                            {task.isCompleted ? <CheckCircle size={20} /> : <Circle size={20} />}
+                                        </button>
 
-                                    <div className="flex-grow min-w-0 pr-1">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <p className={`text-sm font-semibold line-clamp-1 ${task.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>
-                                                {task.title}
-                                            </p>
-                                            {!task.isCompleted && (
-                                                <div
-                                                    className={`w-2 h-2 rounded-full ${PRIORITIES[task.priority].dot} shrink-0 mt-1.5`}
-                                                    title={`עדיפות: ${PRIORITIES[task.priority].label}`}
-                                                />
+                                        <div className="flex-grow min-w-0 pr-1">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <p className={`text-sm font-semibold line-clamp-1 ${task.isCompleted ? 'text-slate-500 line-through' : 'text-white'}`}>
+                                                    {task.title}
+                                                </p>
+                                                {!task.isCompleted && (
+                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                        <div
+                                                            className={`w-2 h-2 rounded-full ${PRIORITIES[task.priority].dot} mt-1.5`}
+                                                            title={`עדיפות: ${PRIORITIES[task.priority].label}`}
+                                                        />
+                                                        <button
+                                                            onClick={() => setExpandedNote(isNoteExpanded ? null : task.id)}
+                                                            className={`p-1 rounded transition-colors ${isNoteExpanded
+                                                                ? 'text-cyan-400 bg-cyan-400/10'
+                                                                : 'text-slate-500 hover:text-cyan-400 hover:bg-slate-700/50'
+                                                                }`}
+                                                            title="הוסף הערה"
+                                                        >
+                                                            <MessageSquare size={14} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {task.description && (
+                                                <p className={`text-xs mt-1 line-clamp-1 ${task.isCompleted ? 'text-slate-600' : 'text-slate-400'}`}>{task.description}</p>
                                             )}
-                                        </div>
 
-                                        {task.description && (
-                                            <p className={`text-xs mt-1 line-clamp-1 ${task.isCompleted ? 'text-slate-600' : 'text-slate-400'}`}>{task.description}</p>
-                                        )}
-
-                                        <div className="flex items-center gap-3 mt-2 text-xs">
-                                            {task.isCompleted ? (
-                                                <span className="text-slate-500 text-[11px]">בוצע ב-{format(task.completedAt?.toDate ? task.completedAt.toDate() : (task.completedAt instanceof Date ? task.completedAt : new Date((task.completedAt as any)?.seconds * 1000 || Date.now())), 'd MMM', { locale: he })}</span>
-                                            ) : (
-                                                <span className={`flex items-center gap-1 ${due.color}`}>
-                                                    <DueIcon size={12} />
-                                                    {due.text === 'היום' || due.text === 'מחר' || due.text === 'באיחור' ? due.text : `תאריך יעד: ${due.text}`}
-                                                </span>
+                                            {/* Notes Display */}
+                                            {task.notes && task.notes.length > 0 && !isNoteExpanded && (
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {task.notes.slice(-3).map((note, idx) => (
+                                                        <span
+                                                            key={idx}
+                                                            className="inline-flex items-center gap-1 bg-slate-700/50 text-slate-300 text-[10px] px-2 py-1 rounded-full max-w-[200px] truncate"
+                                                            title={note.text}
+                                                        >
+                                                            <MessageSquare size={10} />
+                                                            {note.text.substring(0, 20)}...
+                                                        </span>
+                                                    ))}
+                                                    {task.notes.length > 3 && (
+                                                        <span className="text-[10px] text-slate-400 px-2 py-1">
+                                                            +{task.notes.length - 3}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
 
-                                            {task.relatedTo && (
-                                                <Link
-                                                    to={task.relatedTo.type === 'lead' ? '/leads' : '/properties'}
-                                                    state={{ openId: task.relatedTo.id }}
-                                                    className={`flex items-center gap-1 border-r pr-2 hover:underline hover:text-cyan-400 transition-colors ${task.isCompleted ? 'text-slate-600 border-slate-700' : 'text-slate-400 border-slate-700'}`}
-                                                >
-                                                    {task.relatedTo.type === 'lead' ? <User size={12} /> : <Home size={12} />}
-                                                    {task.relatedTo.type === 'lead' ? 'ליד - ' : 'נכס - '}
-                                                    {task.relatedTo.name || 'מחובר'}
-                                                </Link>
-                                            )}
+                                            <div className="flex items-center gap-3 mt-2 text-xs">
+                                                {task.isCompleted ? (
+                                                    <span className="text-slate-500 text-[11px]">בוצע ב-{format(task.completedAt?.toDate ? task.completedAt.toDate() : (task.completedAt instanceof Date ? task.completedAt : new Date((task.completedAt as any)?.seconds * 1000 || Date.now())), 'd MMM', { locale: he })}</span>
+                                                ) : (
+                                                    <span className={`flex items-center gap-1 ${due.color}`}>
+                                                        <DueIcon size={12} />
+                                                        {due.text === 'היום' || due.text === 'מחר' || due.text === 'באיחור' ? due.text : `תאריך יעד: ${due.text}`}
+                                                    </span>
+                                                )}
+
+                                                {task.relatedTo && (
+                                                    <Link
+                                                        to={task.relatedTo.type === 'lead' ? '/leads' : '/properties'}
+                                                        state={{ openId: task.relatedTo.id }}
+                                                        className={`flex items-center gap-1 border-r pr-2 hover:underline hover:text-cyan-400 transition-colors ${task.isCompleted ? 'text-slate-600 border-slate-700' : 'text-slate-400 border-slate-700'}`}
+                                                    >
+                                                        {task.relatedTo.type === 'lead' ? <User size={12} /> : <Home size={12} />}
+                                                        {task.relatedTo.type === 'lead' ? 'ליד - ' : 'נכס - '}
+                                                        {task.relatedTo.name || 'מחובר'}
+                                                    </Link>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
+
+                                    {/* Note Editor */}
+                                    {isNoteExpanded && (
+                                        <div className="mt-3 ml-8 flex flex-col gap-2">
+                                            {/* Existing Notes */}
+                                            {task.notes && task.notes.length > 0 && (
+                                                <div className="space-y-1.5 pb-2 max-h-32 overflow-y-auto">
+                                                    {task.notes.map((note, idx) => (
+                                                        <div key={idx} className="bg-slate-800/50 rounded-lg p-2 text-xs">
+                                                            <p className="text-slate-200 break-words">{note.text}</p>
+                                                            <p className="text-slate-500 text-[10px] mt-1">
+                                                                {formatNoteDate(note.createdAt)}
+                                                            </p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* New Note Input */}
+                                            <div className="flex gap-2 items-end">
+                                                <textarea
+                                                    value={noteText[task.id] || ''}
+                                                    onChange={(e) => setNoteText(prev => ({ ...prev, [task.id]: e.target.value }))}
+                                                    placeholder="הוסף הערה..."
+                                                    rows={2}
+                                                    className="flex-grow bg-slate-800/50 border border-slate-700 text-slate-100 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 focus:border-cyan-400/50 resize-none"
+                                                    dir="auto"
+                                                />
+                                                <button
+                                                    onClick={() => handleSaveNote(task)}
+                                                    disabled={!noteText[task.id]?.trim() || savingNote === task.id}
+                                                    className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                                                        savingNote === task.id
+                                                            ? 'text-slate-400 bg-slate-800/50'
+                                                            : noteText[task.id]?.trim()
+                                                            ? 'text-cyan-400 bg-cyan-400/10 hover:bg-cyan-400/20'
+                                                            : 'text-slate-600 bg-slate-800/30 cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    {savingNote === task.id ? (
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                    ) : (
+                                                        <Send size={14} />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
