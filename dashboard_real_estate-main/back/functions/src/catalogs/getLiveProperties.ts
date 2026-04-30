@@ -166,12 +166,16 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
     // Fallback: use catalog creator's contact for properties still missing phone/photo
     const creatorId: string = catalogData.agentId || '';
     if (agencyId && creatorId) {
-        const creatorDoc = await db.collection(`agencies/${agencyId}/users`).doc(creatorId).get();
+        // Try agency subcollection first, then fall back to global users collection
+        let creatorDoc = await db.collection(`agencies/${agencyId}/users`).doc(creatorId).get();
+        if (!creatorDoc.exists) {
+            creatorDoc = await db.collection('users').doc(creatorId).get();
+        }
         if (creatorDoc.exists) {
             const creator = creatorDoc.data()!;
             const creatorPhone = creator.phone || '';
             const creatorPhotoUrl = creator.photoURL || '';
-            const creatorName = creator.name || '';
+            const creatorName = creator.displayName || creator.name || '';
 
             for (const prop of liveProperties) {
                 const hasPhone = prop.agentPhone || prop.assignedAgentPhone;

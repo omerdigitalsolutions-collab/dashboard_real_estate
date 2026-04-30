@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindow } from '@react-google-maps/api';
 import { Property } from '../../types';
@@ -91,7 +91,7 @@ interface PropertyMapProps {
     height?: string;
 }
 
-export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
+function PropertyMapComponent({ height = '360px' }: PropertyMapProps) {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
@@ -298,3 +298,5 @@ export default function PropertyMap({ height = '360px' }: PropertyMapProps) {
         </>
     );
 }
+
+export default memo(PropertyMapComponent);

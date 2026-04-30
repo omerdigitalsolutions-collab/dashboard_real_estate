@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { LayoutGrid, PieChart as PieIcon } from 'lucide-react';
 import { Lead } from '../../types';
 import { aggregateLeadStatuses } from '../../utils/analytics';
@@ -50,7 +50,7 @@ interface WidgetLeadStatusChartProps {
     leads: Lead[];
 }
 
-export default function WidgetLeadStatusChart({ leads }: WidgetLeadStatusChartProps) {
+function WidgetLeadStatusChartComponent({ leads }: WidgetLeadStatusChartProps) {
     const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
     const { period, setPeriod } = usePeriod('1m');
     const startDate = periodStartDate(period);
@@ -180,3 +180,5 @@ export default function WidgetLeadStatusChart({ leads }: WidgetLeadStatusChartPr
         </div>
     );
 }
+
+export default memo(WidgetLeadStatusChartComponent);

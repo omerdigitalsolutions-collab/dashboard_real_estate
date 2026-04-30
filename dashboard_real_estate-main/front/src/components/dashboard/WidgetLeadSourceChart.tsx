@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { LayoutGrid, PieChart as PieIcon } from 'lucide-react';
 import { Lead } from '../../types';
 import { aggregateLeadSources } from '../../utils/analytics';
@@ -53,7 +53,7 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
     );
 };
 
-export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartProps) {
+function WidgetLeadSourceChartComponent({ leads }: WidgetLeadSourceChartProps) {
     const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
     const { period, setPeriod } = usePeriod('1m');
     const startDate = periodStartDate(period);
@@ -174,3 +174,5 @@ export default function WidgetLeadSourceChart({ leads }: WidgetLeadSourceChartPr
         </div>
     );
 }
+
+export default memo(WidgetLeadSourceChartComponent);

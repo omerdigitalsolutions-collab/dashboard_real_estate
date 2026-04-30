@@ -17,7 +17,7 @@ const tokenStore_1 = require("./tokenStore");
  * 2. Updates the user's profile to disable Google Calendar integration.
  */
 exports.disconnect = (0, https_1.onCall)({
-    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com'],
+    cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com', 'https://homer.management'],
     invoker: 'public',
 }, async (request) => {
     const authData = await (0, authGuard_1.validateUserAuth)(request);

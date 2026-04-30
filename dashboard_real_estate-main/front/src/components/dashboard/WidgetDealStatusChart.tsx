@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { LayoutGrid, PieChart as PieIcon } from 'lucide-react';
 import { Deal, Agency } from '../../types';
 import { aggregateDealStages } from '../../utils/analytics';
@@ -45,7 +45,7 @@ interface WidgetDealStatusChartProps {
     agencySettings?: Agency['settings'] | null;
 }
 
-export default function WidgetDealStatusChart({ deals, agencySettings }: WidgetDealStatusChartProps) {
+function WidgetDealStatusChartComponent({ deals, agencySettings }: WidgetDealStatusChartProps) {
     const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
     const { period, setPeriod } = usePeriod('1m');
     const startDate = periodStartDate(period);
@@ -172,3 +172,5 @@ export default function WidgetDealStatusChart({ deals, agencySettings }: WidgetD
         </div>
     );
 }
+
+export default memo(WidgetDealStatusChartComponent);

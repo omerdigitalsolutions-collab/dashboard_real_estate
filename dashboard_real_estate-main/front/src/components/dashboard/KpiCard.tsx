@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Users, Handshake, BarChart3, Wallet, Building, Briefcase } from 'lucide-react';
 
 interface KpiCardProps {
@@ -24,7 +25,7 @@ const colorMap: Record<string, { icon: string; bar: string; badge: string }> = {
     violet: { icon: 'bg-violet-500/20 text-violet-400', bar: 'bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.8)]', badge: 'bg-violet-500/20 text-violet-400' },
 };
 
-export default function KpiCard({ title, value, rawValue, target, change, positive, subtitle, icon, color, onClick }: KpiCardProps) {
+function KpiCardComponent({ title, value, rawValue, target, change, positive, subtitle, icon, color, onClick }: KpiCardProps) {
     const Icon = iconMap[icon] ?? DollarSign;
     const colors = colorMap[color] ?? colorMap.blue;
     const pct = Math.min(100, Math.round((rawValue / target) * 100));
@@ -77,3 +78,5 @@ export default function KpiCard({ title, value, rawValue, target, change, positi
         </Component>
     );
 }
+
+export default memo(KpiCardComponent);

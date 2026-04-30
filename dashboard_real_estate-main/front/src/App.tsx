@@ -16,7 +16,8 @@ import { PreferencesProvider } from './context/PreferencesContext';
 import { useAuth } from './context/AuthContext';
 import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
-import OnboardingTour from './components/common/OnboardingTour';
+
+const OnboardingTour = lazy(() => import('./components/common/OnboardingTour'));
 
 // Lazy-loaded routes — kept out of the initial bundle to keep first paint fast.
 const Onboarding = lazy(() => import('./pages/Onboarding'));
