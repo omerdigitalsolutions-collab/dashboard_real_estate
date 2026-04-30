@@ -22,7 +22,6 @@ const HOLIDAYS: Holiday[] = [
     { name: 'חנוכה', date: '2024-12-29', type: 'jewish' },
     { name: 'חנוכה', date: '2024-12-30', type: 'jewish' },
     { name: 'חנוכה', date: '2024-12-31', type: 'jewish' },
-    { name: 'כריסמס', date: '2024-12-25', type: 'christian' },
 
     // ── 2025 ──────────────────────────────────────────────────────────────
     { name: 'חנוכה', date: '2025-01-01', type: 'jewish' },
@@ -64,17 +63,11 @@ const HOLIDAYS: Holiday[] = [
     { name: 'חנוכה', date: '2025-12-19', type: 'jewish' },
     { name: 'חנוכה', date: '2025-12-20', type: 'jewish' },
     { name: 'חנוכה', date: '2025-12-21', type: 'jewish' },
-    { name: 'כריסמס', date: '2025-12-25', type: 'christian' },
-    { name: 'יום ראשון של כריסמס', date: '2025-12-26', type: 'christian' },
-    { name: 'פסחא (קתולי)', date: '2025-04-20', type: 'christian' },
-    { name: 'שישי הטוב', date: '2025-04-18', type: 'christian' },
 
     // ── 2026 ──────────────────────────────────────────────────────────────
     { name: "ט\"ו בשבט", date: '2026-02-12', type: 'jewish' },
     { name: 'פורים', date: '2026-03-05', type: 'jewish' },
     { name: 'שושן פורים', date: '2026-03-06', type: 'jewish' },
-    { name: 'שישי הטוב', date: '2026-04-03', type: 'christian' },
-    { name: 'פסחא', date: '2026-04-05', type: 'christian' },
     { name: 'פסח', date: '2026-04-02', type: 'jewish' },
     { name: 'פסח', date: '2026-04-03', type: 'jewish' },
     { name: 'חול המועד פסח', date: '2026-04-04', type: 'jewish' },
@@ -104,13 +97,10 @@ const HOLIDAYS: Holiday[] = [
     { name: 'חנוכה', date: '2026-12-09', type: 'jewish' },
     { name: 'חנוכה', date: '2026-12-10', type: 'jewish' },
     { name: 'חנוכה', date: '2026-12-11', type: 'jewish' },
-    { name: 'כריסמס', date: '2026-12-25', type: 'christian' },
 
     // ── 2027 ──────────────────────────────────────────────────────────────
     { name: "ט\"ו בשבט", date: '2027-02-01', type: 'jewish' },
     { name: 'פורים', date: '2027-03-23', type: 'jewish' },
-    { name: 'שישי הטוב', date: '2027-03-26', type: 'christian' },
-    { name: 'פסחא', date: '2027-03-28', type: 'christian' },
     { name: 'פסח', date: '2027-04-21', type: 'jewish' },
     { name: 'אחרון של פסח', date: '2027-04-28', type: 'jewish' },
     { name: 'יום השואה', date: '2027-05-04', type: 'jewish' },
@@ -123,7 +113,6 @@ const HOLIDAYS: Holiday[] = [
     { name: 'סוכות', date: '2027-09-15', type: 'jewish' },
     { name: 'שמיני עצרת', date: '2027-09-22', type: 'jewish' },
     { name: 'חנוכה', date: '2027-12-24', type: 'jewish' },
-    { name: 'כריסמס', date: '2027-12-25', type: 'christian' },
 ];
 
 /** Returns all holidays that fall within [from, to] inclusive (YYYY-MM-DD strings). */
