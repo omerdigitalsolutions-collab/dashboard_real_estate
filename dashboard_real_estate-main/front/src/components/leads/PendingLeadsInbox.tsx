@@ -73,7 +73,9 @@ export default function PendingLeadsInbox() {
         }
     };
 
-    if (pendingLeads.length === 0) return null;
+    const isAdmin = userData?.role === 'admin';
+
+    if (pendingLeads.length === 0 || !isAdmin) return null;
 
     return (
         <div className="mb-6 animate-in slide-in-from-top-4 duration-500">

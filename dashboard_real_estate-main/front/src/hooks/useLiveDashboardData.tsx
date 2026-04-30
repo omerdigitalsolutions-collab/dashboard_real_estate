@@ -144,17 +144,34 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             }
         );
 
-        // Tasks (created by current user)
-        const unsubTasks = onSnapshot(
+        // Tasks — two parallel queries merged:
+        // 1. Tasks created by the current user
+        // 2. Tasks explicitly assigned to the current user by an admin
+        // Firestore rules allow reading only own/assigned tasks for non-admins,
+        // so we must query each condition separately (no OR across different fields).
+        let tasksCreated: AppTask[] = [];
+        let tasksAssigned: AppTask[] = [];
+        const mergeTasks = () => {
+            if (!isMounted) return;
+            const seen = new Set<string>();
+            const merged = [...tasksCreated, ...tasksAssigned].filter(t => {
+                if (seen.has(t.id)) return false;
+                seen.add(t.id);
+                return true;
+            });
+            setTasks(merged);
+        };
+
+        const unsubTasksCreated = onSnapshot(
             query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('createdBy', '==', uid)),
-            (snap) => {
-                if (!isMounted) return;
-                setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)));
-            },
-            (err) => {
-                console.error('[useLiveDashboardData] Tasks Error:', err);
-                if (isMounted) setError(err);
-            }
+            (snap) => { tasksCreated = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeTasks(); },
+            (err) => { console.error('[useLiveDashboardData] Tasks (created) Error:', err); if (isMounted) setError(err); }
+        );
+
+        const unsubTasksAssigned = onSnapshot(
+            query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentId', '==', uid)),
+            (snap) => { tasksAssigned = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeTasks(); },
+            (err) => { console.error('[useLiveDashboardData] Tasks (assigned) Error:', err); if (isMounted) setError(err); }
         );
 
         // Leads
@@ -251,7 +268,8 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubProperties();
             unsubWhatsappProperties();
             unsubDeals();
-            unsubTasks();
+            unsubTasksCreated();
+            unsubTasksAssigned();
             unsubLeads();
             unsubAlertsPersonal();
             unsubAlertsBroadcast();

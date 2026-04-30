@@ -4,6 +4,8 @@ import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Property, Deal, Lead, AppUser, AppTask, Alert, PendingLead } from '../types';
 
+// Re-exported for convenience — the canonical implementations are in useLiveDashboardData.
+
 /**
  * Safely converts a Firestore value to a Date object.
  */
@@ -128,8 +130,81 @@ export const useAgents = () => {
     const constraints = useState(() => [where('role', 'in', ['admin', 'agent'])])[0];
     return useAgencyCollection<AppUser>('users', constraints);
 };
-export const useTasks = () => useAgencyCollection<AppTask>('tasks');   // sorted client-side below
-export const useAlerts = () => useAgencyCollection<Alert>('alerts');
+// useTasks — admin sees all agency tasks; non-admin sees only own + assigned tasks (dual query).
+export function useTasks() {
+    const { userData } = useAuth();
+    const agencyId = userData?.agencyId;
+    const uid = userData?.uid;
+    const isAdminUser = userData?.role === 'admin';
+
+    const [data, setData] = useState<AppTask[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (!agencyId || !uid) { setData([]); setLoading(false); return; }
+
+        if (isAdminUser) {
+            const q = query(collection(db, 'tasks'), where('agencyId', '==', agencyId));
+            const unsub = onSnapshot(q,
+                (snap) => { setData(snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask))); setLoading(false); setError(null); },
+                (err) => { setError(err); setLoading(false); }
+            );
+            return () => unsub();
+        }
+
+        // Non-admin: merge created + assigned
+        let created: AppTask[] = [];
+        let assigned: AppTask[] = [];
+        const merge = () => {
+            const seen = new Set<string>();
+            setData([...created, ...assigned].filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; }));
+            setLoading(false);
+            setError(null);
+        };
+        const unsubCreated = onSnapshot(
+            query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('createdBy', '==', uid)),
+            (snap) => { created = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
+            (err) => { setError(err); setLoading(false); }
+        );
+        const unsubAssigned = onSnapshot(
+            query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentId', '==', uid)),
+            (snap) => { assigned = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
+            (err) => { setError(err); setLoading(false); }
+        );
+        return () => { unsubCreated(); unsubAssigned(); };
+    }, [agencyId, uid, isAdminUser]);
+
+    return { data, loading, error };
+}
+
+// useAlerts — only personal (targetAgentId==uid) and broadcast ('all') alerts.
+// The Firestore rule enforces this at the document level; the query must match.
+export function useAlerts() {
+    const { userData } = useAuth();
+    const agencyId = userData?.agencyId;
+    const uid = userData?.uid;
+
+    const [data, setData] = useState<Alert[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (!agencyId || !uid) { setData([]); setLoading(false); return; }
+        const q = query(
+            collection(db, 'alerts'),
+            where('agencyId', '==', agencyId),
+            where('targetAgentId', 'in', [uid, 'all'])
+        );
+        const unsub = onSnapshot(q,
+            (snap) => { setData(snap.docs.map(d => ({ id: d.id, ...d.data() } as Alert))); setLoading(false); setError(null); },
+            (err) => { setError(err); setLoading(false); }
+        );
+        return () => unsub();
+    }, [agencyId, uid]);
+
+    return { data, loading, error };
+}
 export const usePendingLeads = () => useAgencyCollection<PendingLead>('pending_leads');
 
 export function useAgency() {
