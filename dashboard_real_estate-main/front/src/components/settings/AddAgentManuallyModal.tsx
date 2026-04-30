@@ -44,8 +44,8 @@ export default function AddAgentManuallyModal({ onClose, onSuccess }: Props) {
 
         try {
             setLoading(true);
-            const stubId = await addAgentManually(userData.agencyId, { name, phone, role });
-            const link = `https://homer.management/join?token=${stubId}`;
+            const { inviteToken } = await addAgentManually(userData.agencyId, { name, phone, role });
+            const link = `https://homer.management/join?token=${inviteToken}`;
             setJoinLink(link);
         } catch (err: any) {
             console.error('Failed to add agent manually:', err);

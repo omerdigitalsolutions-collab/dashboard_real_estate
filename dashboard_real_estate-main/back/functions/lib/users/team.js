@@ -435,7 +435,6 @@ exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request)
  * Output: { success: true, stubId: string }
  */
 exports.addAgentManually = (0, https_1.onCall)({ cors: true }, async (request) => {
-    var _a;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     if (authData.role !== 'admin') {
         throw new https_1.HttpsError('permission-denied', 'Only admins can add team members.');
@@ -445,19 +444,18 @@ exports.addAgentManually = (0, https_1.onCall)({ cors: true }, async (request) =
         throw new https_1.HttpsError('invalid-argument', 'name is required.');
     }
     const normalizedRole = role === 'admin' ? 'admin' : 'agent';
+    const inviteToken = generateToken();
     const stubRef = await db.collection('users').add({
         uid: null,
-        email: null, // Manually added users might not have email set yet
+        email: null,
         name: name.trim(),
         role: normalizedRole,
         agencyId: authData.agencyId,
         phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
         isActive: true,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
-        inviteToken: generateToken(),
+        inviteToken,
     });
-    const stubDoc = await stubRef.get();
-    const inviteToken = (_a = stubDoc.data()) === null || _a === void 0 ? void 0 : _a.inviteToken;
     return { success: true, stubId: stubRef.id, inviteToken };
 });
 /**

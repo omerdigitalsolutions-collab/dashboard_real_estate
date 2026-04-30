@@ -546,20 +546,18 @@ export const addAgentManually = onCall({ cors: true }, async (request) => {
 
   const normalizedRole: Role = role === 'admin' ? 'admin' : 'agent';
 
+  const inviteToken = generateToken();
   const stubRef = await db.collection('users').add({
     uid: null,
-    email: null, // Manually added users might not have email set yet
+    email: null,
     name: name.trim(),
     role: normalizedRole,
     agencyId: authData.agencyId,
     phone: phone?.trim() || null,
     isActive: true,
     createdAt: FieldValue.serverTimestamp(),
-    inviteToken: generateToken(),
+    inviteToken,
   });
-
-  const stubDoc = await stubRef.get();
-  const inviteToken = stubDoc.data()?.inviteToken;
 
   return { success: true, stubId: stubRef.id, inviteToken };
 });

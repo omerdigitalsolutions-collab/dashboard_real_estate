@@ -91,16 +91,16 @@ export async function deleteAgent(userId: string): Promise<void> {
 }
 
 /**
- * [Cloud Function] Manually adds an agent without an email, returning a stub ID.
+ * [Cloud Function] Manually adds an agent without an email, returning the stub ID and invite token.
  */
 export async function addAgentManually(
     agencyId: string,
     data: { name: string; phone?: string; role: UserRole }
-): Promise<string> {
+): Promise<{ stubId: string; inviteToken: string }> {
     const fn = httpsCallable<
         { name: string; phone?: string; role: string },
-        { success: boolean; stubId: string }
+        { success: boolean; stubId: string; inviteToken: string }
     >(functions, 'users-addAgentManually');
     const res = await fn(data);
-    return res.data.stubId;
+    return { stubId: res.data.stubId, inviteToken: res.data.inviteToken };
 }

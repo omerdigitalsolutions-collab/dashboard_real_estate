@@ -170,14 +170,15 @@ export const claimInviteTokenService = async (token: string): Promise<void> => {
 
 /**
  * Internal system join via code — validates the code and creates/updates a stub user.
+ * Email is taken from the authenticated user's token server-side.
  * Returns the inviteToken.
  */
-export const joinWithCode = async (email: string, joinCode: string): Promise<string> => {
+export const joinWithCode = async (joinCode: string): Promise<string> => {
     try {
-        const fn = httpsCallable<{ email: string; joinCode: string }, { success: boolean; inviteToken: string }>(
+        const fn = httpsCallable<{ joinCode: string }, { success: boolean; inviteToken: string }>(
             functions, 'users-joinWithCode'
         );
-        const result = await fn({ email, joinCode });
+        const result = await fn({ joinCode });
         return result.data.inviteToken;
     } catch (error) {
         console.error('[authService] Error joining with code:', error);
