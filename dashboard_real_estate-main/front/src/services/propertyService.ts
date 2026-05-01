@@ -6,6 +6,7 @@ import {
     getDocs,
     query,
     where,
+    collectionGroup,
     serverTimestamp,
     writeBatch,
     documentId,
@@ -189,6 +190,19 @@ export function getLiveProperties(
         },
         onError
     );
+}
+
+/**
+ * Fetches all properties across all agencies that are marked as collaborative.
+ * Uses a collectionGroup query.
+ */
+export async function getCollaborativeProperties(): Promise<Property[]> {
+    const q = query(
+        collectionGroup(db, 'properties'),
+        where('collaborationStatus', '==', 'collaborative')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Property));
 }
 
 /**

@@ -4,7 +4,7 @@ import {
     X, Phone, Mail, MapPin, Wallet, BedDouble,
     Clock, Building2, Zap, UserCheck, Sparkles, ChevronDown,
     MessageSquare, Send, Loader2, Heart, Link, Copy, Check, ExternalLink,
-    ArrowRightLeft, Calendar
+    ArrowRightLeft, Calendar, Handshake
 } from 'lucide-react';
 import { Lead, AppUser, Property } from '../../types';
 import { updateLead } from '../../services/leadService';
@@ -119,6 +119,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [copied, setCopied] = useState(false);
     const [showAddDealModal, setShowAddDealModal] = useState(false);
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
+    const [isSharingToMarketplace, setIsSharingToMarketplace] = useState(false);
     
     // Sync local state when lead prop changes
     useEffect(() => {
@@ -264,6 +265,24 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
             onUpdated('שגיאה בשיוך הסוכן');
         } finally {
             setAssigning(false);
+        }
+    };
+
+    const handleToggleMarketplace = async () => {
+        if (!lead.id) return;
+
+        setIsSharingToMarketplace(true);
+        try {
+            const newStatus = lead.collaborationStatus === 'collaborative' ? 'private' : 'collaborative';
+            await updateLead(lead.id, {
+                collaborationStatus: newStatus
+            } as any);
+            onUpdated(newStatus === 'collaborative' ? 'הליד שותף במרקטפלייס בהצלחה' : 'הליד הוסר מהמרקטפלייס');
+        } catch (error) {
+            console.error('Error toggling marketplace status:', error);
+            onUpdated('שגיאה בעדכון סטטוס שיתוף');
+        } finally {
+            setIsSharingToMarketplace(false);
         }
     };
 
@@ -496,6 +515,35 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                         </div>
                                     </>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Marketplace Sharing Section */}
+                        <div className="px-6 py-5 border-b border-indigo-500/10 bg-indigo-500/5">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="text-right">
+                                    <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2 mb-1">
+                                        <Handshake size={16} className="text-indigo-400" />
+                                        {lead.collaborationStatus === 'collaborative' ? 'הליד מופיע במרקטפלייס' : 'שתף במרקטפלייס (MLS)'}
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">
+                                        {lead.collaborationStatus === 'collaborative' 
+                                            ? 'הליד חשוף לסוכנויות אחרות לשיתוף פעולה'
+                                            : 'שתף את דרישות הליד עם סוכנויות אחרות כדי למצוא נכס מתאים במהירות'}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleToggleMarketplace}
+                                    disabled={isSharingToMarketplace}
+                                    className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-lg ${
+                                        lead.collaborationStatus === 'collaborative'
+                                            ? 'bg-slate-800 text-rose-400 border border-rose-500/20 hover:bg-rose-500/10'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/20'
+                                    }`}
+                                >
+                                    {isSharingToMarketplace ? <Loader2 size={16} className="animate-spin" /> : <Handshake size={16} />}
+                                    {lead.collaborationStatus === 'collaborative' ? 'הסר מהמרקטפלייס' : 'שתף עכשיו'}
+                                </button>
                             </div>
                         </div>
 

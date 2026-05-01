@@ -152,6 +152,10 @@ export interface Lead {
     notes?: string | null;
     /** Controls whether the AI WhatsApp bot is allowed to auto-reply to this lead. */
     isBotActive?: boolean;
+    // Collaboration fields for Marketplace
+    collaborationStatus?: 'private' | 'collaborative';
+    collaborationTerms?: string;
+    collaborationAgentName?: string; // name of the agent to show in marketplace
     createdAt: Timestamp;
 }
 
@@ -227,6 +231,7 @@ export interface Property {
 
     management: {
         assignedAgentId?: string | null;
+        assignedAgentName?: string | null;
         descriptions?: string | null;
     };
 
@@ -243,6 +248,11 @@ export interface Property {
     externalLink?: string;
     listingId?: string;
     hasAgent?: boolean;
+
+    // Collaboration fields
+    collaborationStatus?: 'private' | 'collaborative';
+    collaborationTerms?: string;
+    sharedWithAgencies?: string[];
 
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
@@ -495,6 +505,20 @@ export interface ContractInstance {
     status: 'draft' | 'sent' | 'signed';
     values: Record<string, string>;
     createdBy: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+}
+
+// ─── Collaborations ───────────────────────────────────────────────────────────
+export interface CollaborationRequest {
+    id: string;
+    propertyId: string;
+    propertyAgencyId: string;
+    requestingAgencyId: string;
+    requestingAgentId: string;
+    leadId?: string;
+    status: 'pending' | 'approved' | 'rejected' | 'contract_signed';
+    terms?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }

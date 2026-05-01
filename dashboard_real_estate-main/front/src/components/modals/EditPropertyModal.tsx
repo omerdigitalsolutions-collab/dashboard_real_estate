@@ -49,6 +49,8 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     );
     const [originalSource, setOriginalSource] = useState(property.originalSource ?? '');
     const [externalLink, setExternalLink] = useState(property.externalLink ?? property.yad2Link ?? '');
+    const [collaborationStatus, setCollaborationStatus] = useState<'private' | 'collaborative'>(property.collaborationStatus || 'private');
+    const [collaborationTerms, setCollaborationTerms] = useState(property.collaborationTerms || '');
 
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -172,12 +174,15 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                 status,
                 management: {
                     assignedAgentId: agentId || property.management?.assignedAgentId || null,
+                    assignedAgentName: agentId ? agents.find(a => (a.uid || a.id) === agentId)?.name || null : property.management?.assignedAgentName || null,
                     descriptions: (description || "").trim() || null,
                 },
                 listingType,
                 isExclusive: listingType === 'exclusive',
                 originalSource: originalSource.trim(),
                 externalLink: externalLink.trim(),
+                collaborationStatus,
+                collaborationTerms: collaborationTerms.trim(),
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
             toast.success('הנכס עודכן בהצלחה ✓');
@@ -357,7 +362,10 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                                         name="editListingType"
                                         value="private"
                                         checked={listingType === 'private'}
-                                        onChange={() => setListingType('private')}
+                                        onChange={() => {
+                                            setListingType('private');
+                                            setCollaborationStatus('private');
+                                        }}
                                         className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span className="text-sm font-medium text-slate-700">רגיל (פרטי)</span>
@@ -381,7 +389,10 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                                         name="editListingType"
                                         value="external"
                                         checked={listingType === 'external'}
-                                        onChange={() => setListingType('external')}
+                                        onChange={() => {
+                                            setListingType('external');
+                                            setCollaborationStatus('private');
+                                        }}
                                         className="w-4 h-4 text-slate-600 focus:ring-slate-500"
                                     />
                                     <span className="text-sm font-medium text-slate-700">🤝 שת"פ</span>
@@ -412,6 +423,56 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                                     dir="ltr"
                                 />
                             </div>
+                        </div>
+
+                        {/* Collaboration Section */}
+                        <div className="pt-4 border-t border-slate-100 space-y-4">
+                            <div>
+                                <label className={labelCls}>שיתוף פעולה (MLS) {listingType !== 'exclusive' && <span className="text-red-500 font-normal ml-1">- זמין רק לנכסים בבלעדיות</span>}</label>
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            setCollaborationStatus('private');
+                                            setCollaborationTerms('');
+                                        }}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${collaborationStatus === 'private' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500'}`}
+                                    >
+                                        פרטי (רק למשרד)
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            if (listingType === 'exclusive') {
+                                                setCollaborationStatus('collaborative');
+                                                if (!collaborationTerms) {
+                                                    setCollaborationTerms(transactionType === 'rent' ? 'עמלה: 1000 ש"ח' : 'עמלה: 5000 ש"ח');
+                                                }
+                                            } else {
+                                                toast.error('רק דירות בבלעדיות יכולות להופיע במרקט פלייס');
+                                            }
+                                        }}
+                                        disabled={listingType !== 'exclusive'}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${collaborationStatus === 'collaborative' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'} ${listingType !== 'exclusive' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        שיתופי (פתוח ל-MLS)
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {collaborationStatus === 'collaborative' && (
+                                <div className="animate-in fade-in slide-in-from-top-2">
+                                    <label className={labelCls}>תנאי שיתוף עמלה (ניתן לעריכה)</label>
+                                    <textarea 
+                                        value={collaborationTerms} 
+                                        onChange={e => setCollaborationTerms(e.target.value)} 
+                                        placeholder='לדוגמה: עמלה 5000 ש"ח' 
+                                        className={inputCls}
+                                        rows={2}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">* ברירת מחדל: 5000 ש"ח למכירה, 1000 ש"ח לשכירות</p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Description */}

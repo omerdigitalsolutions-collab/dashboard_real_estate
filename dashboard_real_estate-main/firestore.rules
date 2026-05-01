@@ -269,8 +269,9 @@ service cloud.firestore {
     // agencyId is enforced by path — no need to check the field inside the doc.
     // ══════════════════════════════════════════════════════════════════════════
     match /agencies/{agencyId}/properties/{propId} {
-      // Public properties are readable without authentication (B2C gallery)
+      // Public properties or collaborative properties are readable by any authenticated user
       allow read: if resource.data.visibility == 'public'
+          || resource.data.collaborationStatus == 'collaborative'
           || (isAuthed() && (inAgency(agencyId) || isSuperAdmin()));
 
       // Direct client creates allowed for agency members (e.g. batch import).
@@ -290,6 +291,13 @@ service cloud.firestore {
           && (isAdmin() || resource.data.management.get('assignedAgentId', null) == request.auth.uid);
     }
 
+    // Support collectionGroup queries for properties
+    match /{path=**}/properties/{propId} {
+      allow read: if resource.data.collaborationStatus == 'collaborative'
+          || resource.data.visibility == 'public'
+          || (isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin()));
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // LEADS
     // Same rationale: create/delete go through Cloud Functions.
@@ -297,7 +305,15 @@ service cloud.firestore {
     match /leads/{leadId} {
       allow read: if isAuthed() && (
         isSuperAdmin() ||
+        resource.data.collaborationStatus == 'collaborative' ||
         (inAgency(resource.data.agencyId) && (isAdmin() || resource.data.assignedAgentId == request.auth.uid))
+      );
+
+      // Support collectionGroup queries for leads (even though leads are top-level, it's good practice)
+      allow list: if isAuthed() && (
+        isSuperAdmin() ||
+        resource.data.collaborationStatus == 'collaborative' ||
+        inAgency(resource.data.agencyId)
       );
 
       // Direct client creates allowed for authenticated agency members (e.g. batch import)
@@ -317,6 +333,27 @@ service cloud.firestore {
       allow delete: if isAuthed()
           && inAgency(resource.data.agencyId)
           && (isAdmin() || resource.data.assignedAgentId == request.auth.uid);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // COLLABORATIONS (Marketplace Requests)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /collaborations/{requestId} {
+      allow read: if isAuthed() && (
+        request.auth.token.get('agencyId', null) == resource.data.fromAgencyId ||
+        request.auth.token.get('agencyId', null) == resource.data.toAgencyId ||
+        isSuperAdmin()
+      );
+      allow create: if isAuthed() && (
+        request.auth.token.get('agencyId', null) == request.resource.data.fromAgencyId ||
+        isSuperAdmin()
+      );
+      allow update: if isAuthed() && (
+        request.auth.token.get('agencyId', null) == resource.data.fromAgencyId ||
+        request.auth.token.get('agencyId', null) == resource.data.toAgencyId ||
+        isSuperAdmin()
+      );
+      allow delete: if isSuperAdmin();
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -532,5 +569,29 @@ service cloud.firestore {
     match /whatsapp_suspicious/{doc} { allow read, write: if false; }
     match /whatsapp_audit_log/{doc} { allow read, write: if false; }
     match /processed_messages/{doc} { allow read, write: if false; }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // COLLABORATIONS
+    // ══════════════════════════════════════════════════════════════════════════
+    match /collaborations/{collabId} {
+      allow read: if isAuthed() && (
+        inAgency(resource.data.propertyAgencyId) || 
+        inAgency(resource.data.requestingAgencyId) || 
+        isSuperAdmin()
+      );
+      
+      allow create: if isAuthed() && (
+        inAgency(request.resource.data.requestingAgencyId) || 
+        isSuperAdmin()
+      ) && isBillingActiveForCaller();
+
+      allow update: if isAuthed() && (
+        inAgency(resource.data.propertyAgencyId) || 
+        inAgency(resource.data.requestingAgencyId) || 
+        isSuperAdmin()
+      );
+
+      allow delete: if isSuperAdmin();
+    }
   }
 }

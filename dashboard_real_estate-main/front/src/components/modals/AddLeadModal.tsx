@@ -35,6 +35,9 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
     const [leadType, setLeadType] = useState<'buyer' | 'seller'>('buyer');
     const [assignedTo, setAssignedTo] = useState('');
 
+    const [collaborationStatus, setCollaborationStatus] = useState<'private' | 'collaborative'>('private');
+    const [collaborationTerms, setCollaborationTerms] = useState('');
+
     // Internal Tabs
     const [activeFormTab, setActiveFormTab] = useState<'personal' | 'property'>('personal');
 
@@ -98,6 +101,7 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
         setWeights({ budget: 5, rooms: 5, location: 5, amenities: 5 });
         setSellerAddress(''); setSellerPrice('');
         setAssignedTo('');
+        setCollaborationStatus('private'); setCollaborationTerms('');
     };
 
     // Google Places Logic
@@ -212,6 +216,9 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                     source,
                     type: leadType,
                     assignedAgentId: assignedTo === '' ? null : assignedTo,
+                    collaborationStatus,
+                    collaborationTerms: collaborationTerms.trim() || undefined,
+                    collaborationAgentName: userData.name || undefined,
                     requirements: {
                         desiredCity: sellerAddress ? [sellerAddress.trim()] : [],
                         maxBudget: sellerPrice ? parseFloat(sellerPrice) : null,
@@ -377,6 +384,49 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                                         ))}
                                     </div>
                                 </div>
+                                
+                                {/* MLS Collaboration Toggle */}
+                                <div className={sectionCls}>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                                                <UserPlus size={14} className="text-blue-500" />
+                                                שיתוף פעולה (MLS)
+                                            </div>
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                פרסם ליד זה במרקטפלייס ללא פרטים מזהים (שם/טלפון) למציאת נכס ממשרד אחר
+                                            </p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={collaborationStatus === 'collaborative'}
+                                                onChange={(e) => {
+                                                    const isChecked = e.target.checked;
+                                                    setCollaborationStatus(isChecked ? 'collaborative' : 'private');
+                                                    if (isChecked && !collaborationTerms) {
+                                                        setCollaborationTerms('חצי-חצי בעמלות');
+                                                    }
+                                                }}
+                                            />
+                                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    {collaborationStatus === 'collaborative' && (
+                                        <div className="mt-3 animate-in fade-in slide-in-from-top-2">
+                                            <label className={labelCls}>תנאי שיתוף עמלות <span className="text-red-500">*</span></label>
+                                            <input
+                                                value={collaborationTerms}
+                                                onChange={e => setCollaborationTerms(e.target.value)}
+                                                placeholder="לדוג׳: חצי-חצי בעמלות, או עמלה מהצד שלי בלבד"
+                                                className={inputCls}
+                                                required={collaborationStatus === 'collaborative'}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
                             </div>
                         )}
 

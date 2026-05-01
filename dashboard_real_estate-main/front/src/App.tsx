@@ -47,6 +47,7 @@ const SignInstancePage = lazy(() => import('./pages/SignInstancePage'));
 const BillingLockScreen = lazy(() => import('./pages/BillingLockScreen'));
 const PendingApproval = lazy(() => import('./pages/PendingApproval'));
 const ExploreGallery = lazy(() => import('./pages/ExploreGallery'));
+const Marketplace = lazy(() => import('./pages/Marketplace'));
 
 /** Wraps the dashboard and renders the lock screen if billing is expired */
 function SubscriptionProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -155,6 +156,7 @@ function App() {
             <Route path="pnl" element={<ErrorBoundary><ProfitAndLossDashboard /></ErrorBoundary>} />
             <Route path="calendar" element={<ErrorBoundary><Calendar /></ErrorBoundary>} />
             <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+            <Route path="marketplace" element={<ErrorBoundary><Marketplace /></ErrorBoundary>} />
             <Route path="contracts" element={<ErrorBoundary><Contracts /></ErrorBoundary>} />
             <Route path="contracts/:dealId/edit" element={<ErrorBoundary><ContractEditor /></ErrorBoundary>} />
             <Route path="contracts/:contractId/logs" element={<ErrorBoundary><ContractAuditLog /></ErrorBoundary>} />

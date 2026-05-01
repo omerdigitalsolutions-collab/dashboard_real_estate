@@ -194,9 +194,12 @@ export async function createSharedCatalog(
 
   await catalogRef.set({
       agencyId,
-      agencyName: agencyData.agencyName || agencyData.name || '',
-      agencyLogoUrl: agencyData.settings?.logoUrl || '',
-      agencyPhone: agencyData.officePhone || agencyData.whatsappIntegration?.phoneNumber || '',
+      agencyName:    agencyData.agencyName || agencyData.name || '',
+      agencyLogoUrl: agencyData.settings?.logoUrl || agencyData.logoUrl || '',
+      agencyPhone:   agencyData.officePhone || agencyData.phoneNumber || agencyData.whatsappIntegration?.phoneNumber || '',
+      // Agent branding — used by SharedCatalogPage to render agent photo + name
+      agentPhotoUrl: agencyData.settings?.agentPhotoUrl || agencyData.agentPhotoUrl || '',
+      agentName:     agencyData.settings?.agentName     || agencyData.agentName     || '',
       leadId,
       leadName,
       propertyIds,

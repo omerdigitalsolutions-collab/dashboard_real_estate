@@ -17,7 +17,7 @@ import KpiCard from '../components/dashboard/KpiCard';
 import UpgradeModal from '../components/ui/UpgradeModal';
 import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
 import { Property, AppUser, Lead, TimeRange } from '../types';
-import { deleteProperty } from '../services/propertyService';
+import { deleteProperty, updateProperty } from '../services/propertyService';
 import { normalizeCity } from '../utils/stringUtils';
 import { translatePropertyKind } from '../utils/formatters';
 
@@ -186,6 +186,23 @@ export default function Properties() {
         }
     };
 
+    const handleShareToMarketplace = async (prop: Property) => {
+        if (!prop.id) return;
+        if (!window.confirm('האם אתה בטוח שברצונך לשתף נכס זה למרקטפלייס? פרטי הבעלים יישארו חסויים.')) return;
+        try {
+            setToast('משתף במרקטפלייס...');
+            await updateProperty(prop.id, {
+                collaborationStatus: 'collaborative'
+            }, prop.isGlobalCityProperty ? prop.address?.city : undefined);
+            setToast('הנכס שותף במרקטפלייס בהצלחה');
+        } catch (error) {
+            console.error('Error sharing to marketplace:', error);
+            alert('שגיאה בשיתוף הנכס');
+        } finally {
+            setTimeout(() => setToast(''), 3000);
+        }
+    };
+
     const filtered = filteredPropertiesByTime.filter((prop: Property) => {
         const normSearch = normalizeCity(search);
         const matchesSearch = !normSearch ||
@@ -298,11 +315,8 @@ export default function Properties() {
     };
 
     const formatPhoneForWhatsApp = (phone?: string) => {
-        if (!phone) return null;
-        const cleaned = phone.replace(/\D/g, '');
-        if (cleaned.startsWith('0')) return `972${cleaned.substring(1)}`;
-        if (cleaned.startsWith('972')) return cleaned;
-        return `972${cleaned}`;
+        if (!phone) return '';
+        return phone.replace(/[^\d]/g, '');
     };
 
     /**
@@ -438,12 +452,20 @@ export default function Properties() {
                             </div>
                         )}
                         <button
+                            onClick={() => navigate('/dashboard/marketplace')}
+                            className="inline-flex items-center gap-2 bg-gradient-to-l from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                        >
+                            <Handshake size={16} />
+                            כניסה למרקטפלייס
+                        </button>
+                        <button
                             onClick={() => setShowImportModal(true)}
                             className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
                         >
                             <Upload size={16} />
                             ייבוא מאקסל / תמונה
                         </button>
+
                         <button
                             onClick={() => setShowAddModal(true)}
                             className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-sm"
@@ -476,11 +498,18 @@ export default function Properties() {
                         </div>
                         <div className="flex items-center gap-2">
                              <button
+                                onClick={() => navigate('/dashboard/marketplace')}
+                                className="w-10 h-10 flex items-center justify-center bg-gradient-to-l from-indigo-600 to-purple-600 text-white rounded-full shadow-sm"
+                            >
+                                <Handshake size={18} />
+                            </button>
+                            <button
                                 onClick={() => setShowImportModal(true)}
                                 className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 text-slate-600 rounded-full shadow-sm"
                             >
                                 <Upload size={18} />
                             </button>
+
                             <div className="relative">
                                 <select
                                     value={timeRange}
@@ -1021,6 +1050,16 @@ export default function Properties() {
                                                     צור עסקה
                                                 </button>
                                             )}
+                                            {!prop.isGlobalCityProperty && prop.collaborationStatus !== 'collaborative' && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleShareToMarketplace(prop); }}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
+                                                    title="שתף למרקטפלייס"
+                                                >
+                                                    <Building2 size={13} />
+                                                    שתף למרקט
+                                                </button>
+                                            )}
                                             {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.management?.assignedAgentId === currentUid) && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setEditingProperty(prop); }}
@@ -1233,6 +1272,15 @@ export default function Properties() {
                                                                 title="צור עסקה"
                                                             >
                                                                 <Handshake size={16} />
+                                                            </button>
+                                                        )}
+                                                        {!prop.isGlobalCityProperty && prop.collaborationStatus !== 'collaborative' && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleShareToMarketplace(prop); }}
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors shrink-0"
+                                                                title="שתף למרקטפלייס"
+                                                            >
+                                                                <Building2 size={16} />
                                                             </button>
                                                         )}
                                                         {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.management?.assignedAgentId === currentUid) && (

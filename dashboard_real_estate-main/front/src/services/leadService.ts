@@ -6,12 +6,24 @@ import {
     onSnapshot,
     doc,
     updateDoc,
-    deleteDoc
+    deleteDoc,
+    collectionGroup,
+    getDocs
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Lead, Property } from '../types';
 import { isCityMatch } from '../utils/stringUtils';
+
+export const getCollaborativeLeads = async (): Promise<Lead[]> => {
+    const q = query(
+        collectionGroup(db, 'leads'),
+        where('collaborationStatus', '==', 'collaborative')
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
+};
+
 export const matchPropertiesForLeadCF = async (agencyId: string, requirements: Lead['requirements']): Promise<{ matches: any[], totalScanned: number }> => {
     const functions = getFunctions(undefined, 'europe-west1');
     const matchCallable = httpsCallable(functions, 'leads-matchPropertiesForLead');
@@ -81,6 +93,34 @@ export const matchPropertiesForLead = (leadRequirements: Lead['requirements'], a
         }
 
         const propertyTypes = leadRequirements.propertyType ?? [];
+        if (propertyTypes.length > 0) {
+            if (!propertyTypes.includes(property.transactionType)) return false;
+        }
+
+        return true;
+    });
+};
+
+export const matchLeadsForProperty = (property: Property, allLeads: Lead[]): Lead[] => {
+    return allLeads.filter(lead => {
+        if (lead.status !== 'new' && lead.status !== 'in_progress' && lead.status !== 'negotiation') return false;
+        
+        const reqs = lead.requirements;
+        if (!reqs) return false;
+
+        if (!isCityMatch(reqs.desiredCity || [], property.address?.city || '')) {
+            return false;
+        }
+
+        if (reqs.maxBudget != null && reqs.maxBudget > 0) {
+            if ((property.financials?.price ?? Infinity) > reqs.maxBudget) return false;
+        }
+
+        if (reqs.minRooms != null && reqs.minRooms > 0) {
+            if ((property.rooms ?? 0) < reqs.minRooms) return false;
+        }
+
+        const propertyTypes = reqs.propertyType ?? [];
         if (propertyTypes.length > 0) {
             if (!propertyTypes.includes(property.transactionType)) return false;
         }

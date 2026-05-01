@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles, Handshake } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import { useAuth } from '../context/AuthContext';
@@ -18,7 +18,7 @@ import PendingLeadsInbox from '../components/leads/PendingLeadsInbox';
 import KpiCard from '../components/dashboard/KpiCard';
 import { Toast, ToastState } from '../components/ui/Toast';
 import { Lead, Property, TimeRange } from '../types';
-import { deleteLead } from '../services/leadService';
+import { deleteLead, updateLead } from '../services/leadService';
 
 const statusColors: Record<string, string> = {
   new: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
@@ -55,6 +55,7 @@ export default function Leads() {
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller'>('buyer');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'createdAt', direction: 'desc' });
   const isMobile = useMediaQuery('(max-width: 768px)');
+  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const rawRange = searchParams.get('range') as TimeRange | null;
@@ -108,7 +109,7 @@ export default function Leads() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const location = useLocation();
-  const navigate = useNavigate();
+
 
   useEffect(() => {
     if (location.state?.openId && leads.length > 0) {
@@ -325,6 +326,13 @@ export default function Leads() {
               >
                 <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
                 ליד חדש
+              </button>
+              <button
+                onClick={() => navigate('/dashboard/marketplace')}
+                className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl transition-all font-black shadow-xl shadow-indigo-500/20 active:scale-95 group"
+              >
+                <Handshake size={20} className="group-hover:rotate-12 transition-transform duration-300" />
+                כניסה למרקטפלייס
               </button>
             </div>
 
@@ -580,6 +588,29 @@ export default function Leads() {
                                  title="התאמה חכמה"
                                >
                                  <Sparkles size={18} fill="currentColor" fillOpacity={0.1} />
+                               </button>
+                             )}
+                             
+                             {/* Share to MLS Quick Action */}
+                             {(!isAgent || lead.assignedAgentId === currentUid) && lead.collaborationStatus !== 'collaborative' && (
+                               <button
+                                 onClick={async (e) => { 
+                                   e.stopPropagation(); 
+                                   try {
+                                     await updateLead(lead.id, {
+                                       collaborationStatus: 'collaborative',
+                                       collaborationTerms: 'חצי-חצי בעמלות',
+                                       collaborationAgentName: userData?.displayName || 'סוכן מהמשרד'
+                                     } as any);
+                                     setToast({ show: true, message: 'הליד פורסם למרקטפלייס בהצלחה!', type: 'success' });
+                                   } catch (err) {
+                                     setToast({ show: true, message: 'שגיאה בפרסום למרקטפלייס', type: 'error' });
+                                   }
+                                 }}
+                                 className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all hover:scale-110"
+                                 title="הכנס דרישות למרקט פלייס"
+                               >
+                                 <Handshake size={18} />
                                </button>
                              )}
                              {lead.phone && (

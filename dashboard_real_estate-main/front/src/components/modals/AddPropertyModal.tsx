@@ -43,6 +43,8 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
     const [originalSource, setOriginalSource] = useState('');
     const [externalLink, setExternalLink] = useState('');
+    const [collaborationStatus, setCollaborationStatus] = useState<'private' | 'collaborative'>('private');
+    const [collaborationTerms, setCollaborationTerms] = useState('');
 
     // AI Extraction State
     const [rawText, setRawText] = useState('');
@@ -219,6 +221,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
         setDescription(''); setImportedImages([]);
         setListingType('private'); setImageFiles([]); setPreviewUrls([]);
         setOriginalSource(''); setExternalLink('');
+        setCollaborationStatus('private'); setCollaborationTerms('');
     };
 
     const handleImageSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -374,6 +377,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 ...(floor ? { floor: parseFloat(floor) } : {}),
                 management: {
                     assignedAgentId: userData.uid || '',
+                    assignedAgentName: userData.name || null,
                     ...(description ? { descriptions: description.trim() } : {}),
                 },
                 media: { images: importedImages },
@@ -383,6 +387,8 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 ...(leadId ? { leadId } : {}),
                 originalSource: originalSource.trim(),
                 externalLink: externalLink.trim(),
+                collaborationStatus,
+                collaborationTerms: collaborationTerms.trim(),
             } as any);
             showToast('הנכס נוסף בהצלחה ✓');
             resetForm();
@@ -636,6 +642,54 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                             </div>
                         </div>
 
+                        {/* Collaboration Section */}
+                        <div className="pt-4 border-t border-slate-100 space-y-4">
+                            <div>
+                                <label className={labelCls}>שיתוף פעולה (MLS) {listingType !== 'exclusive' && <span className="text-red-500 font-normal ml-1">- זמין רק לנכסים בבלעדיות</span>}</label>
+                                <div className="flex bg-slate-100 p-1 rounded-xl">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            setCollaborationStatus('private');
+                                            setCollaborationTerms('');
+                                        }}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${collaborationStatus === 'private' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500'}`}
+                                    >
+                                        פרטי
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            if (listingType === 'exclusive') {
+                                                setCollaborationStatus('collaborative');
+                                                setCollaborationTerms(type === 'rent' ? 'עמלה: 1000 ש"ח' : 'עמלה: 5000 ש"ח');
+                                            } else {
+                                                showToast('רק דירות בבלעדיות יכולות להופיע במרקט פלייס', false);
+                                            }
+                                        }}
+                                        disabled={listingType !== 'exclusive'}
+                                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${collaborationStatus === 'collaborative' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'} ${listingType !== 'exclusive' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        שיתופי (MLS)
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {collaborationStatus === 'collaborative' && (
+                                <div className="animate-in fade-in slide-in-from-top-2">
+                                    <label className={labelCls}>תנאי שיתוף עמלה (ניתן לעריכה)</label>
+                                    <textarea 
+                                        value={collaborationTerms} 
+                                        onChange={e => setCollaborationTerms(e.target.value)} 
+                                        placeholder='לדוגמה: עמלה 5000 ש"ח' 
+                                        className={inputCls}
+                                        rows={2}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">* ברירת מחדל: 5000 ש"ח למכירה, 1000 ש"ח לשכירות</p>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Image Previews (imported) */}
                         {importedImages.length > 0 && (
                             <div>
@@ -660,7 +714,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                         name="listingType"
                                         value="private"
                                         checked={listingType === 'private'}
-                                        onChange={() => setListingType('private')}
+                                        onChange={() => {
+                                            setListingType('private');
+                                            setCollaborationStatus('private');
+                                        }}
                                         className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                                     />
                                     <span className="text-sm font-medium text-slate-700">רגיל (פרטי)</span>
@@ -685,7 +742,10 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                         name="listingType"
                                         value="external"
                                         checked={listingType === 'external'}
-                                        onChange={() => setListingType('external')}
+                                        onChange={() => {
+                                            setListingType('external');
+                                            setCollaborationStatus('private');
+                                        }}
                                         className="w-4 h-4 text-slate-600 focus:ring-slate-500"
                                     />
                                     <span className="text-sm font-medium text-slate-700 flex items-center gap-1">

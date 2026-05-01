@@ -123,6 +123,26 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const [isSavingDescription, setIsSavingDescription] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
+    const [isSharingToMarketplace, setIsSharingToMarketplace] = useState(false);
+
+    const handleToggleMarketplace = async () => {
+        if (!property.id) return;
+
+        setIsSharingToMarketplace(true);
+        try {
+            const newStatus = property.collaborationStatus === 'collaborative' ? 'private' : 'collaborative';
+            await updateProperty(property.id, {
+                collaborationStatus: newStatus
+            }, property.isGlobalCityProperty ? property.address?.city : undefined);
+            
+            toast.success(newStatus === 'collaborative' ? 'הנכס שותף במרקטפלייס בהצלחה' : 'הנכס הוסר מהמרקטפלייס');
+        } catch (error) {
+            console.error('Error toggling marketplace status:', error);
+            toast.error('שגיאה בעדכון סטטוס שיתוף');
+        } finally {
+            setIsSharingToMarketplace(false);
+        }
+    };
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
@@ -997,6 +1017,35 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                     {externalButtonText}
                                     <ArrowUpLeft size={16} />
                                 </a>
+                            </div>
+                        )}
+
+                        {/* Marketplace Sharing Section */}
+                        {!property.isGlobalCityProperty && (
+                            <div className="mb-8 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="text-right">
+                                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                                        <Handshake size={16} className="text-indigo-600" />
+                                        {property.collaborationStatus === 'collaborative' ? 'הנכס מופיע במרקטפלייס' : 'שתף במרקטפלייס (MLS)'}
+                                    </h3>
+                                    <p className="text-xs text-slate-500">
+                                        {property.collaborationStatus === 'collaborative' 
+                                            ? 'הנכס חשוף לסוכנויות אחרות לשיתוף פעולה'
+                                            : 'חשוף את הנכס לסוכנויות אחרות כדי למצוא קונה/שוכר במהירות'}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleToggleMarketplace}
+                                    disabled={isSharingToMarketplace}
+                                    className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm ${
+                                        property.collaborationStatus === 'collaborative'
+                                            ? 'bg-white text-rose-600 border border-rose-200 hover:bg-rose-50'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+                                    }`}
+                                >
+                                    {isSharingToMarketplace ? <Loader2 size={18} className="animate-spin" /> : <Handshake size={18} />}
+                                    {property.collaborationStatus === 'collaborative' ? 'הסר מהמרקטפלייס' : 'שתף עכשיו'}
+                                </button>
                             </div>
                         )}
 

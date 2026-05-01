@@ -31,6 +31,7 @@ const navigation = [
     { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
     { name: 'לידים', href: '/dashboard/leads', icon: Contact },
     { name: 'עסקאות', href: '/dashboard/transactions', icon: Handshake },
+    { name: 'שת״פ (MLS)', href: '/dashboard/marketplace', icon: Handshake },
     { name: 'נכסים', href: '/dashboard/properties', icon: Building2 },
     { name: 'קטלוגים', href: '/dashboard/catalogs', icon: Sparkles },
     { name: 'חוזים', href: '/dashboard/contracts', icon: FileText },
