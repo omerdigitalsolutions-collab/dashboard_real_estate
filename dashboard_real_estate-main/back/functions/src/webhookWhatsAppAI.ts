@@ -24,7 +24,6 @@
 
 import { onRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import axios from 'axios';
 import * as crypto from 'crypto';
 import { defineSecret } from 'firebase-functions/params';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -117,21 +116,6 @@ async function resolveAgencyByInstance(idInstance: string): Promise<string | nul
     return agencyId;
 }
 
-// ─── Helper: Send Green API Message ──────────────────────────────────────────
-
-async function sendGreenApiMessage(
-    creds: GreenApiCreds,
-    waChatId: string,
-    message: string
-): Promise<void> {
-    const sendUrl = `https://7105.api.greenapi.com/waInstance${creds.idInstance}/sendMessage/${creds.apiTokenInstance}`;
-    await axios.post(
-        sendUrl,
-        { chatId: waChatId, message },
-        { timeout: 15_000 }
-    );
-}
-
 // ─── Helper: Upsert Lead ──────────────────────────────────────────────────────
 
 async function upsertLead(
@@ -168,6 +152,7 @@ async function upsertLead(
         status: 'new',
         source: 'WhatsApp Bot',
         isBotActive: true,
+        lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -183,14 +168,15 @@ export const webhookWhatsAppAI = onRequest(
         secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri, resendApiKey],
         timeoutSeconds: 300,
         memory: '1GiB',
-        cpu: 1,             // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
+        cpu: 1,
         minInstances: 1,    // מונע cold-start — שמרן אחד חם תמיד, חוסך 5–30s לכל הודעה ראשונה אחרי השקטה
         concurrency: 40,    // אינסטנס יחיד מטפל במספר הודעות במקביל
     },
     async (req, res) => {
-        // 1. ACK immediately
-        res.status(200).send('OK');
-
+        // Process synchronously so Cloud Run CPU stays active throughout.
+        // res.status(200).send('OK') is deferred to the finally block —
+        // this eliminates the 2-5 minute CPU-throttle delay that happened
+        // when we ACKed early and then ran Gemini/Firestore async.
         try {
             const body = req.body;
             const typeWebhook: string = body?.typeWebhook || body?.event || '';
@@ -209,17 +195,22 @@ export const webhookWhatsAppAI = onRequest(
                 return;
             }
 
-            // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery).
-            // Read is awaited (correctness gate); the marker write is fire-and-forget.
+            // Idempotency: atomically claim this message ID before processing.
+            // Using create() (fails if document exists) prevents race conditions
+            // when Green API retries a webhook we're still processing.
             const idMessageEarly: string | undefined = body?.idMessage;
             if (idMessageEarly) {
                 const processedRef = db.collection('processed_messages').doc(idMessageEarly);
-                const alreadyDone = await processedRef.get();
-                if (alreadyDone.exists) return;
-                processedRef.set({
-                    processedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    instance: idInstance,
-                }).catch((e) => console.warn('[Webhook] processed_messages set failed:', e?.message));
+                try {
+                    await processedRef.create({
+                        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        instance: idInstance,
+                    });
+                } catch (e: any) {
+                    // code 6 = gRPC ALREADY_EXISTS — duplicate delivery, skip
+                    if (e?.code === 6 || e?.message?.includes('ALREADY_EXISTS')) return;
+                    console.warn('[Webhook] processed_messages create failed (non-fatal):', e?.message);
+                }
             }
 
             // Resolve Agency
@@ -378,9 +369,9 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                 }
             } else {
                 // Always create a lead for anyone who messages — never initiate outbound
-                const res = await upsertLead(agencyId, localPhone, senderName);
-                leadId = res.leadId;
-                isBotActive = res.isBotActive;
+                const upserted = await upsertLead(agencyId, localPhone, senderName);
+                leadId = upserted.leadId;
+                isBotActive = upserted.isBotActive;
             }
 
             // Reset follow-up campaign step on any real reply (not opt-out)
@@ -421,6 +412,14 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                     });
                 }
             }
-        } catch (err) { console.error('[Webhook] ❌ Fatal error:', err); }
+        } catch (err) {
+            console.error('[Webhook] ❌ Fatal error:', err);
+        } finally {
+            // Always ACK Green API — whether we processed, skipped, or errored.
+            // Deferred to here (not line 1) so CPU stays fully allocated throughout
+            // Gemini + Firestore work. Early-ACK caused Cloud Run to throttle CPU
+            // to near-zero after res.send(), turning 10s jobs into 3+ minute waits.
+            res.status(200).send('OK');
+        }
     }
 );

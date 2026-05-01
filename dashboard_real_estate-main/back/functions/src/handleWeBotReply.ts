@@ -844,7 +844,14 @@ async function runBuyerFlow(
         const freshLead = await db.collection('leads').doc(leadId).get();
         const reqs: MatchingRequirements = freshLead.data()?.requirements || {};
 
-        const hasAnyReq = reqs.desiredCity?.length || reqs.maxBudget || reqs.minRooms || reqs.maxRooms || reqs.propertyType?.length;
+        const hasAnyReq =
+            reqs.desiredCity?.length ||
+            reqs.desiredNeighborhoods?.length ||
+            reqs.desiredStreet?.length ||
+            (reqs.maxBudget !== undefined && reqs.maxBudget !== null) ||
+            (reqs.minRooms  !== undefined && reqs.minRooms  !== null) ||
+            (reqs.maxRooms  !== undefined && reqs.maxRooms  !== null) ||
+            reqs.propertyType?.length;
         if (!hasAnyReq) {
           functionResult = {
             success: false, reason: 'missing_requirements',
@@ -925,13 +932,14 @@ async function runBuyerFlow(
 
   await sendBotMessage(integration, customerPhone, leadId, finalReply);
 
-  // After catalog is sent → move to CLOSED + notify agent + ask closing question
+  // After catalog is sent → move to SCHEDULING_CALL so the customer can still reply
+  // to schedule a meeting. CLOSED would silently block all messages for 24h.
   if (catalogCreated) {
     await sendBotMessage(integration, customerPhone, leadId,
       'מתי אתה פנוי לשיחה קצרה עם יועץ נדל"ן שלנו?'
     );
 
-    await updateChatState(leadId, 'CLOSED', { closedAt: Date.now() });
+    await updateChatState(leadId, 'SCHEDULING_CALL');
 
     const freshLead  = await db.collection('leads').doc(leadId).get();
     const reqs       = freshLead.data()?.requirements || {};
