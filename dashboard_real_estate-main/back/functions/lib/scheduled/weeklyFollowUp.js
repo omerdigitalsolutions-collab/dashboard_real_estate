@@ -56,6 +56,7 @@ exports.weeklyFollowUp = (0, scheduler_1.onSchedule)({
     timeZone: 'Asia/Jerusalem',
     secrets: [masterKey],
 }, async () => {
+    var _a;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
     // Fetch all active bot agencies
@@ -64,6 +65,8 @@ exports.weeklyFollowUp = (0, scheduler_1.onSchedule)({
         .get();
     for (const agencyDoc of agenciesSnap.docs) {
         const agencyId = agencyDoc.id;
+        if (((_a = agencyDoc.data().weBotConfig) === null || _a === void 0 ? void 0 : _a.followUpEnabled) === false)
+            continue;
         // Decrypt Green API credentials
         const credsDoc = await db
             .collection('agencies').doc(agencyId)
@@ -78,7 +81,7 @@ exports.weeklyFollowUp = (0, scheduler_1.onSchedule)({
         try {
             apiTokenInstance = decryptToken(credsData.encryptedToken, credsData.iv, masterKey.value());
         }
-        catch (_a) {
+        catch (_b) {
             console.warn(`[WeeklyFollowUp] Failed to decrypt creds for agency ${agencyId}`);
             continue;
         }

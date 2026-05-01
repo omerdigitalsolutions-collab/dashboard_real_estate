@@ -158,6 +158,7 @@ const notifyAssignedAgentDeclaration: FunctionDeclaration = {
   },
 };
 
+
 // ─── mapWeBotConfig ───────────────────────────────────────────────────────────
 
 function mapWeBotConfig(raw: Record<string, any>): BotConfig {
@@ -220,6 +221,7 @@ async function findMatchingPropertiesForBot(
   const agencySnap = await db
     .collection('agencies').doc(agencyId).collection('properties')
     .where('status', '==', 'active')
+    .limit(100)
     .get();
   const agencyProps = agencySnap.docs.map(doc => ({ id: doc.id, _collectionPath: agencyPath, ...doc.data() }));
 
@@ -231,7 +233,7 @@ async function findMatchingPropertiesForBot(
         try {
           const snap = await db
             .collection('cities').doc(city).collection('properties')
-            .limit(200).get();
+            .limit(50).get();
           return snap.docs.map(doc => ({ id: doc.id, _collectionPath: `cities/${city}/properties`, isExclusivity: false, ...doc.data() }));
         } catch { return []; }
       })
@@ -432,7 +434,7 @@ async function classifyIntent(
   try {
     const genAI = getGenAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-    const result = await withTimeout('classifyIntent', 5000, () => model.generateContent(
+    const result = await withTimeout('classifyIntent', 8000, () => model.generateContent(
       `סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
       `קטגוריות:\n- buyer: הלקוח מחפש דירה/נכס לקנייה או לשכירות (גם אם השתמש במילים "למכירה"/"להשכרה" — אלו מתייחסות לסטטוס הנכס, לא לכוונת הלקוח).\n` +
       `- seller: הלקוח רוצה למכור/להשכיר/לפרסם את הדירה שלו, או מחפש קונה/שוכר לנכס שלו.\n` +
@@ -682,7 +684,7 @@ async function runBuyerFlow(
   });
 
   const chat = model.startChat({ history: chatHistory });
-  let chatResponse  = await withRetry('chat.sendMessage', () => withTimeout('chat.sendMessage', 12_000, () => chat.sendMessage(incomingMessage)));
+  let chatResponse  = await withRetry('chat.sendMessage', () => withTimeout('chat.sendMessage', 20_000, () => chat.sendMessage(incomingMessage)));
   let finalReply             = '';
   let catalogCreated         = false;
   let sentCatalogUrl: string | null = null;
@@ -717,7 +719,7 @@ async function runBuyerFlow(
       const timeOk = typeof time === 'string' && /^\d{2}:\d{2}$/.test(time);
       const startDateObj = dateOk && timeOk ? new Date(`${date}T${time}:00`) : null;
       if (!startDateObj || Number.isNaN(startDateObj.getTime())) {
-        chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 12_000, () => chat.sendMessage([{
+        chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 20_000, () => chat.sendMessage([{
           functionResponse: {
             name: call.name,
             response: {
@@ -887,7 +889,7 @@ async function runBuyerFlow(
       functionResult = { success: false, reason: 'unknown_function' };
     }
 
-    chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 12_000, () => chat.sendMessage([{
+    chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 20_000, () => chat.sendMessage([{
       functionResponse: { name: call.name, response: functionResult },
     }])));
   }

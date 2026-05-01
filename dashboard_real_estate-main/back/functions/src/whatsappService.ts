@@ -127,7 +127,8 @@ export function buildWeBotPrompt(config: BotConfig, properties: Property[], agen
 
 === מאגר הנכסים הפעילים (RAG Context) ===
 השתמש בנכסים הבאים לתשובות ישירות בשיחה בלבד (לא לבחירה ידנית לקטלוג — הקטלוג נוצר אוטומטית):
-${propertiesText}`;
+${propertiesText}
+`;
 }
 
 // ─── 2. Phone Normaliser ──────────────────────────────────────────────────────

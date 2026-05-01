@@ -22,6 +22,8 @@ interface WeBotFormData {
   customFallbackPolicy: string;
   muteDuration: '1h' | '12h' | '24h';
   guardrails: string;
+  followUpEnabled: boolean;
+  followUpSteps: 1 | 2 | 3 | 4;
 }
 
 // ─── Tooltip Component ────────────────────────────────────────────────────────
@@ -190,6 +192,8 @@ const DEFAULT_FORM: WeBotFormData = {
   customFallbackPolicy: '',
   muteDuration: '1h',
   guardrails: '',
+  followUpEnabled: true,
+  followUpSteps: 4,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -217,10 +221,12 @@ export default function WeBotSettings() {
             customToneOfVoice: savedConfig.customTone ?? '',
             fallbackPolicy: savedConfig.fallbackAction ?? 'human_handoff',
             customFallbackPolicy: savedConfig.customFallbackAction ?? '',
-            muteDuration: savedConfig.firewallMuteHours === 1 ? '1h' 
-                         : savedConfig.firewallMuteHours === 12 ? '12h' 
+            muteDuration: savedConfig.firewallMuteHours === 1 ? '1h'
+                         : savedConfig.firewallMuteHours === 12 ? '12h'
                          : '24h',
             guardrails: savedConfig.generalNotes ?? '',
+            followUpEnabled: savedConfig.followUpEnabled !== false,
+            followUpSteps: savedConfig.followUpSteps ?? 4,
         }));
     });
 
@@ -245,6 +251,8 @@ export default function WeBotSettings() {
             customFallbackAction: form.customFallbackPolicy,
             generalNotes: form.guardrails,
             firewallMuteHours: form.muteDuration === '1h' ? 1 : form.muteDuration === '12h' ? 12 : 24,
+            followUpEnabled: form.followUpEnabled,
+            followUpSteps: form.followUpSteps,
         };
         await updateWeBotConfig(userData.agencyId, payload);
         setSavedOk(true);
@@ -440,6 +448,67 @@ export default function WeBotSettings() {
               מנגנון ה-Firewall מזהה אוטומטית שהסוכן נכנס לשיחה ומשתיק את הבוט כדי למנוע הודעות כפולות ומתסכלות.
             </p>
           </div>
+        </SectionCard>
+
+        {/* ── Group E: Follow-Up Campaign ───────────────────────────── */}
+        <SectionCard
+          icon={<MessageSquare size={16} />}
+          title="Follow-Up אוטומטי ללידים"
+          badge="E"
+        >
+          {/* Main toggle row */}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-300">הפעלת Follow-Up אוטומטי</p>
+              <p className="text-xs text-slate-500 mt-0.5">שלח הודעות המשך אוטומטיות ללידים לא פעילים</p>
+            </div>
+            <MasterToggle
+              checked={form.followUpEnabled}
+              onChange={(v) => update('followUpEnabled', v)}
+            />
+          </div>
+
+          {/* Steps selector — visible only when follow-up is enabled */}
+          {form.followUpEnabled && (
+            <Field
+              label="כמות שלבי הקמפיין"
+              hint="כמה הודעות follow-up לשלוח לכל ליד?"
+              tooltipText="הקמפיין שולח הודעות מרווחות: שלב 1 אחרי 3 ימים, שלב 2 אחרי 4 ימים, שלב 3 אחרי שבוע, שלב 4 שבוע לאחר מכן."
+            >
+              <StyledSelect
+                value={String(form.followUpSteps)}
+                onChange={(v) => update('followUpSteps', Number(v) as 1 | 2 | 3 | 4)}
+                disabled={disabled}
+              >
+                <option value="1">1 הודעה — שלב 1 בלבד (אחרי 3 ימים)</option>
+                <option value="2">2 הודעות — שלבים 1–2 (3 + 4 ימים)</option>
+                <option value="3">3 הודעות — שלבים 1–3 (3 + 4 + 7 ימים)</option>
+                <option value="4">4 הודעות — קמפיין מלא (3 + 4 + 7 + 7 ימים)</option>
+              </StyledSelect>
+            </Field>
+          )}
+
+          {/* Timeline explainer */}
+          {form.followUpEnabled && (
+            <div className="flex items-start gap-2.5 bg-blue-500/8 border border-blue-500/20 rounded-xl p-3.5">
+              <Info size={14} className="text-blue-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-400 leading-relaxed">
+                <strong className="text-slate-300">לוח זמנים:</strong>{' '}
+                שלב 1 — אחרי 3 ימים ממגע אחרון · שלב 2 — 4 ימים לאחר מכן · שלב 3 — שבוע לאחר מכן · שלב 4 — שבוע נוסף (הודעה אחרונה).
+                ניתן להסיר ליד ספציפי מהקמפיין דרך פרופיל הליד.
+              </p>
+            </div>
+          )}
+
+          {/* Disabled state notice */}
+          {!form.followUpEnabled && (
+            <div className="flex items-start gap-2.5 bg-slate-800/60 border border-slate-700 rounded-xl p-3.5">
+              <Info size={14} className="text-slate-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-500 leading-relaxed">
+                ה-Follow-Up כבוי. לידים לא יקבלו הודעות אוטומטיות מהבוט.
+              </p>
+            </div>
+          )}
         </SectionCard>
 
         {/* ── Group C: Guardrails ───────────────────────────────────── */}

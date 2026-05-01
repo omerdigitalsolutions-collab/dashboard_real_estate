@@ -92,7 +92,7 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'monthlyGoals', 'yearlyGoals', 'settings',
               'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
-              'whatsappIntegration', 'updatedAt'
+              'whatsappIntegration', 'weBotConfig', 'updatedAt'
             ])
           );
       allow delete: if isSuperAdmin();
@@ -295,7 +295,10 @@ service cloud.firestore {
     // Same rationale: create/delete go through Cloud Functions.
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId} {
-      allow read: if isAuthed() && (inAgency(resource.data.agencyId) || isSuperAdmin());
+      allow read: if isAuthed() && (
+        isSuperAdmin() ||
+        (inAgency(resource.data.agencyId) && (isAdmin() || resource.data.assignedAgentId == request.auth.uid))
+      );
 
       // Direct client creates allowed for authenticated agency members (e.g. batch import)
       // if they set the correct agencyId and billing is active.
@@ -332,7 +335,10 @@ service cloud.firestore {
     // DEALS
     // ══════════════════════════════════════════════════════════════════════════
     match /deals/{dealId} {
-      allow read: if isAuthed() && inAgency(resource.data.agencyId);
+      allow read: if isAuthed() && (
+        isSuperAdmin() ||
+        (inAgency(resource.data.agencyId) && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.agentId == request.auth.uid))
+      );
       allow create: if isAuthed()
           && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isNonEmptyString(request.resource.data.stage)

@@ -125,6 +125,44 @@ const tools = [
                     required: ['fullName', 'phone'],
                 },
             },
+            {
+                name: 'createProperty',
+                description: 'Creates a new property listing in the agency. You MUST have city, propertyType, price, and transactionType. Ask the user for any missing required field before calling.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        city: { type: generative_ai_1.SchemaType.STRING, description: 'Required. City/town.' },
+                        propertyType: { type: generative_ai_1.SchemaType.STRING, description: 'Required. e.g. דירה, בית, דופלקס, מסחרי.' },
+                        price: { type: generative_ai_1.SchemaType.NUMBER, description: 'Required. Price in ILS.' },
+                        transactionType: { type: generative_ai_1.SchemaType.STRING, description: 'Required. "forsale" or "rent".' },
+                        street: { type: generative_ai_1.SchemaType.STRING, description: 'Optional. Street name.' },
+                        neighborhood: { type: generative_ai_1.SchemaType.STRING, description: 'Optional. Neighborhood.' },
+                        rooms: { type: generative_ai_1.SchemaType.NUMBER, description: 'Optional. Number of rooms.' },
+                        floor: { type: generative_ai_1.SchemaType.NUMBER, description: 'Optional. Floor number.' },
+                        totalFloors: { type: generative_ai_1.SchemaType.NUMBER, description: 'Optional. Total floors in building.' },
+                        squareMeters: { type: generative_ai_1.SchemaType.NUMBER, description: 'Optional. Size in sqm.' },
+                        hasElevator: { type: generative_ai_1.SchemaType.BOOLEAN, description: 'Optional.' },
+                        hasParking: { type: generative_ai_1.SchemaType.BOOLEAN, description: 'Optional.' },
+                        hasBalcony: { type: generative_ai_1.SchemaType.BOOLEAN, description: 'Optional.' },
+                        description: { type: generative_ai_1.SchemaType.STRING, description: 'Optional. Free-text description.' },
+                    },
+                    required: ['city', 'propertyType', 'price', 'transactionType'],
+                },
+            },
+            {
+                name: 'createAgent',
+                description: 'Creates a new agent/user in the agency. You MUST have name and phone. Ask the user for any missing required field before calling.',
+                parameters: {
+                    type: generative_ai_1.SchemaType.OBJECT,
+                    properties: {
+                        name: { type: generative_ai_1.SchemaType.STRING, description: 'Required. Full name.' },
+                        phone: { type: generative_ai_1.SchemaType.STRING, description: 'Required. Phone number.' },
+                        email: { type: generative_ai_1.SchemaType.STRING, description: 'Optional. Email address.' },
+                        role: { type: generative_ai_1.SchemaType.STRING, description: 'Optional. "admin" or "agent". Defaults to "agent".' },
+                    },
+                    required: ['name', 'phone'],
+                },
+            },
         ],
     },
     {
@@ -304,6 +342,81 @@ async function execQueryTasks(db, agencyId) {
         totalPendingTasks: snap.size,
         firstFewTasks: snap.docs.slice(0, 5).map(doc => doc.data().title),
     };
+}
+async function execCreateProperty(db, agencyId, args) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    if (!args.city || !args.propertyType || !args.price || !args.transactionType) {
+        const missing = [
+            !args.city && 'עיר',
+            !args.propertyType && 'סוג נכס',
+            !args.price && 'מחיר',
+            !args.transactionType && 'סוג עסקה (למכירה/להשכרה)',
+        ].filter(Boolean).join(', ');
+        return { error: `חסרים שדות חובה: ${missing}. בקש מהמשתמש להשלים אותם.` };
+    }
+    const ref = db.collection('agencies').doc(agencyId).collection('properties').doc();
+    const fullAddress = [args.street, args.city].filter(Boolean).join(', ');
+    await ref.set({
+        id: ref.id,
+        agencyId,
+        transactionType: args.transactionType === 'rent' ? 'rent' : 'forsale',
+        propertyType: args.propertyType,
+        status: 'active',
+        rooms: (_a = args.rooms) !== null && _a !== void 0 ? _a : null,
+        floor: (_b = args.floor) !== null && _b !== void 0 ? _b : null,
+        totalFloors: (_c = args.totalFloors) !== null && _c !== void 0 ? _c : null,
+        squareMeters: (_d = args.squareMeters) !== null && _d !== void 0 ? _d : null,
+        address: {
+            city: args.city,
+            street: (_e = args.street) !== null && _e !== void 0 ? _e : null,
+            neighborhood: (_f = args.neighborhood) !== null && _f !== void 0 ? _f : null,
+            fullAddress: fullAddress || args.city,
+            coords: null,
+        },
+        features: {
+            hasElevator: (_g = args.hasElevator) !== null && _g !== void 0 ? _g : null,
+            hasParking: (_h = args.hasParking) !== null && _h !== void 0 ? _h : null,
+            hasBalcony: (_j = args.hasBalcony) !== null && _j !== void 0 ? _j : null,
+            hasMamad: null,
+            hasStorage: null,
+            isRenovated: null,
+            isFurnished: null,
+            hasAirConditioning: null,
+        },
+        financials: { price: Math.round(args.price), originalPrice: null },
+        media: { mainImage: null, images: [], videoTourUrl: null },
+        management: { assignedAgentId: null, descriptions: (_k = args.description) !== null && _k !== void 0 ? _k : null },
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true, propertyId: ref.id, message: `נכס חדש נוצר: ${args.propertyType} ב${args.city}.` };
+}
+async function execCreateAgent(db, agencyId, args) {
+    var _a;
+    if (!args.name || !args.phone) {
+        const missing = [!args.name && 'שם', !args.phone && 'טלפון'].filter(Boolean).join(', ');
+        return { error: `חסרים שדות חובה: ${missing}. בקש מהמשתמש להשלים אותם.` };
+    }
+    const normalizedEmail = ((_a = args.email) === null || _a === void 0 ? void 0 : _a.trim()) || null;
+    if (normalizedEmail) {
+        const exists = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+        if (!exists.empty && exists.docs[0].data().uid) {
+            return { error: 'סוכן עם כתובת דוא״ל זו כבר קיים במערכת.' };
+        }
+    }
+    const ref = db.collection('users').doc();
+    await ref.set({
+        uid: null,
+        email: normalizedEmail,
+        name: args.name.trim(),
+        phone: args.phone.trim(),
+        role: args.role === 'admin' ? 'admin' : 'agent',
+        agencyId,
+        isActive: true,
+        createdAt: firestore_1.FieldValue.serverTimestamp(),
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true, agentId: ref.id, message: `סוכן חדש נוצר: ${args.name}.` };
 }
 async function execCreateLead(db, agencyId, uid, args) {
     var _a, _b, _c;
@@ -613,6 +726,12 @@ exports.homerChatBot = (0, https_1.onCall)({
                         break;
                     case 'createLead':
                         toolResult = await execCreateLead(db, agencyId, uid, args);
+                        break;
+                    case 'createProperty':
+                        toolResult = await execCreateProperty(db, agencyId, args);
+                        break;
+                    case 'createAgent':
+                        toolResult = await execCreateAgent(db, agencyId, args);
                         break;
                     case 'queryGoals':
                         toolResult = await execQueryGoals(db, agencyId, uid);

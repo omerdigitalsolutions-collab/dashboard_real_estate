@@ -65,6 +65,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
         const agencyId = userData.agencyId;
         const uid = userData.uid;
+        const isAgent = userData.role === 'agent';
         setLoading(true);
         setError(null);
 
@@ -116,19 +117,48 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             (err) => console.error('[useLiveDashboardData] WhatsApp Properties Error:', err)
         );
 
-        // Deals
-        const unsubDeals = onSnapshot(
-            query(collection(db, 'deals'), where('agencyId', '==', agencyId)),
-            (snap) => {
+        // Deals — admins see all agency deals; agents see only deals they created or are assigned to.
+        // Firestore doesn't support OR across different fields, so agents use two parallel queries.
+        let unsubDeals: () => void;
+        if (isAgent) {
+            let dealsCreated: Deal[] = [];
+            let dealsAsAgent: Deal[] = [];
+            const mergeDeals = () => {
                 if (!isMounted) return;
-                setDeals(snap.docs.map(d => ({ id: d.id, ...d.data() } as Deal)));
+                const seen = new Set<string>();
+                const merged = [...dealsCreated, ...dealsAsAgent].filter(d => {
+                    if (seen.has(d.id)) return false;
+                    seen.add(d.id);
+                    return true;
+                });
+                setDeals(merged);
                 loadedFlags.deals = true; checkLoaded();
-            },
-            (err) => {
-                console.error('[useLiveDashboardData] Deals Error:', err);
-                if (isMounted) { setError(err); loadedFlags.deals = true; checkLoaded(); }
-            }
-        );
+            };
+            const unsubDealsCreated = onSnapshot(
+                query(collection(db, 'deals'), where('agencyId', '==', agencyId), where('createdBy', '==', uid)),
+                (snap) => { dealsCreated = snap.docs.map(d => ({ id: d.id, ...d.data() } as Deal)); mergeDeals(); },
+                (err) => { console.error('[useLiveDashboardData] Deals (createdBy) Error:', err); if (isMounted) { setError(err); loadedFlags.deals = true; checkLoaded(); } }
+            );
+            const unsubDealsAgent = onSnapshot(
+                query(collection(db, 'deals'), where('agencyId', '==', agencyId), where('agentId', '==', uid)),
+                (snap) => { dealsAsAgent = snap.docs.map(d => ({ id: d.id, ...d.data() } as Deal)); mergeDeals(); },
+                (err) => { console.error('[useLiveDashboardData] Deals (agentId) Error:', err); if (isMounted) { setError(err); loadedFlags.deals = true; checkLoaded(); } }
+            );
+            unsubDeals = () => { unsubDealsCreated(); unsubDealsAgent(); };
+        } else {
+            unsubDeals = onSnapshot(
+                query(collection(db, 'deals'), where('agencyId', '==', agencyId)),
+                (snap) => {
+                    if (!isMounted) return;
+                    setDeals(snap.docs.map(d => ({ id: d.id, ...d.data() } as Deal)));
+                    loadedFlags.deals = true; checkLoaded();
+                },
+                (err) => {
+                    console.error('[useLiveDashboardData] Deals Error:', err);
+                    if (isMounted) { setError(err); loadedFlags.deals = true; checkLoaded(); }
+                }
+            );
+        }
 
         // Shared Catalogs
         const unsubCatalogs = onSnapshot(
@@ -174,9 +204,11 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             (err) => { console.error('[useLiveDashboardData] Tasks (assigned) Error:', err); if (isMounted) setError(err); }
         );
 
-        // Leads
+        // Leads — agents see only leads assigned to them; admins see all agency leads.
         const unsubLeads = onSnapshot(
-            query(collection(db, 'leads'), where('agencyId', '==', agencyId)),
+            isAgent
+                ? query(collection(db, 'leads'), where('agencyId', '==', agencyId), where('assignedAgentId', '==', uid))
+                : query(collection(db, 'leads'), where('agencyId', '==', agencyId)),
             (snap) => {
                 if (!isMounted) return;
                 const rawLeads = snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead));
@@ -276,7 +308,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubAgency();
             unsubCatalogs();
         };
-    }, [userData?.agencyId, userData?.uid, userData?.name]);
+    }, [userData?.agencyId, userData?.uid, userData?.name, userData?.role]);
 
     // 2. Global-city property subscriptions. Decoupled — re-runs only when the
     // resolved set of cities actually changes, not on every other Firestore tick.

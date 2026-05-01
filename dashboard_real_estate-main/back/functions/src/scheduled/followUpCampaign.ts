@@ -57,6 +57,9 @@ export const followUpCampaign = onSchedule(
 
     for (const agencyDoc of agenciesSnap.docs) {
       const agencyId = agencyDoc.id;
+      const agencyData = agencyDoc.data();
+      if (agencyData.weBotConfig?.followUpEnabled === false) continue;
+      const maxSteps: number = agencyData.weBotConfig?.followUpSteps ?? 4;
 
       const credsDoc = await db
         .collection('agencies').doc(agencyId)
@@ -93,7 +96,7 @@ export const followUpCampaign = onSchedule(
         if (ACTIVE_CHAT_STATES.has(currentState)) continue;
 
         const currentStep: number = lead.followUpCampaignStep ?? 0;
-        if (currentStep >= 4) continue;
+        if (currentStep >= maxSteps) continue;
 
         const lastInteractionMs: number =
           (lead.lastInteraction as admin.firestore.Timestamp | undefined)?.toDate().getTime()

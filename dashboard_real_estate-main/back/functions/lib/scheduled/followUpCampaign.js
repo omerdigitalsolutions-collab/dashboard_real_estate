@@ -76,13 +76,17 @@ exports.followUpCampaign = (0, scheduler_1.onSchedule)({
     timeZone: 'Asia/Jerusalem',
     secrets: [masterKey],
 }, async () => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     const now = Date.now();
     const agenciesSnap = await db.collection('agencies')
         .where('weBotConfig.isActive', '==', true)
         .get();
     for (const agencyDoc of agenciesSnap.docs) {
         const agencyId = agencyDoc.id;
+        const agencyData = agencyDoc.data();
+        if (((_a = agencyData.weBotConfig) === null || _a === void 0 ? void 0 : _a.followUpEnabled) === false)
+            continue;
+        const maxSteps = (_c = (_b = agencyData.weBotConfig) === null || _b === void 0 ? void 0 : _b.followUpSteps) !== null && _c !== void 0 ? _c : 4;
         const credsDoc = await db
             .collection('agencies').doc(agencyId)
             .collection('private_credentials').doc('whatsapp')
@@ -96,7 +100,7 @@ exports.followUpCampaign = (0, scheduler_1.onSchedule)({
         try {
             apiTokenInstance = decryptToken(credsData.encryptedToken, credsData.iv, masterKey.value());
         }
-        catch (_j) {
+        catch (_m) {
             console.warn(`[FollowUpCampaign] Failed to decrypt creds for agency ${agencyId}`);
             continue;
         }
@@ -113,14 +117,14 @@ exports.followUpCampaign = (0, scheduler_1.onSchedule)({
                 continue;
             // Skip leads in an active conversation state
             const chatState = lead.chatState;
-            const currentState = (_a = chatState === null || chatState === void 0 ? void 0 : chatState.state) !== null && _a !== void 0 ? _a : 'IDLE';
+            const currentState = (_d = chatState === null || chatState === void 0 ? void 0 : chatState.state) !== null && _d !== void 0 ? _d : 'IDLE';
             if (ACTIVE_CHAT_STATES.has(currentState))
                 continue;
-            const currentStep = (_b = lead.followUpCampaignStep) !== null && _b !== void 0 ? _b : 0;
-            if (currentStep >= 4)
+            const currentStep = (_e = lead.followUpCampaignStep) !== null && _e !== void 0 ? _e : 0;
+            if (currentStep >= maxSteps)
                 continue;
-            const lastInteractionMs = (_f = (_d = (_c = lead.lastInteraction) === null || _c === void 0 ? void 0 : _c.toDate().getTime()) !== null && _d !== void 0 ? _d : (_e = lead.createdAt) === null || _e === void 0 ? void 0 : _e.toDate().getTime()) !== null && _f !== void 0 ? _f : 0;
-            const lastCampaignSentMs = (_h = (_g = lead.followUpCampaignLastSentAt) === null || _g === void 0 ? void 0 : _g.toDate().getTime()) !== null && _h !== void 0 ? _h : 0;
+            const lastInteractionMs = (_j = (_g = (_f = lead.lastInteraction) === null || _f === void 0 ? void 0 : _f.toDate().getTime()) !== null && _g !== void 0 ? _g : (_h = lead.createdAt) === null || _h === void 0 ? void 0 : _h.toDate().getTime()) !== null && _j !== void 0 ? _j : 0;
+            const lastCampaignSentMs = (_l = (_k = lead.followUpCampaignLastSentAt) === null || _k === void 0 ? void 0 : _k.toDate().getTime()) !== null && _l !== void 0 ? _l : 0;
             // Use the more recent of the two timestamps as the "last activity"
             const lastActivityMs = Math.max(lastInteractionMs, lastCampaignSentMs);
             const nextStep = currentStep + 1;

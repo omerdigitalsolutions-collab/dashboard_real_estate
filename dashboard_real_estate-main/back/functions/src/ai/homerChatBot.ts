@@ -93,6 +93,44 @@ const tools: Tool[] = [
                     required: ['fullName', 'phone'],
                 },
             },
+            {
+                name: 'createProperty',
+                description: 'Creates a new property listing in the agency. You MUST have city, propertyType, price, and transactionType. Ask the user for any missing required field before calling.',
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        city:            { type: SchemaType.STRING, description: 'Required. City/town.' },
+                        propertyType:    { type: SchemaType.STRING, description: 'Required. e.g. דירה, בית, דופלקס, מסחרי.' },
+                        price:           { type: SchemaType.NUMBER, description: 'Required. Price in ILS.' },
+                        transactionType: { type: SchemaType.STRING, description: 'Required. "forsale" or "rent".' },
+                        street:          { type: SchemaType.STRING, description: 'Optional. Street name.' },
+                        neighborhood:    { type: SchemaType.STRING, description: 'Optional. Neighborhood.' },
+                        rooms:           { type: SchemaType.NUMBER, description: 'Optional. Number of rooms.' },
+                        floor:           { type: SchemaType.NUMBER, description: 'Optional. Floor number.' },
+                        totalFloors:     { type: SchemaType.NUMBER, description: 'Optional. Total floors in building.' },
+                        squareMeters:    { type: SchemaType.NUMBER, description: 'Optional. Size in sqm.' },
+                        hasElevator:     { type: SchemaType.BOOLEAN, description: 'Optional.' },
+                        hasParking:      { type: SchemaType.BOOLEAN, description: 'Optional.' },
+                        hasBalcony:      { type: SchemaType.BOOLEAN, description: 'Optional.' },
+                        description:     { type: SchemaType.STRING, description: 'Optional. Free-text description.' },
+                    },
+                    required: ['city', 'propertyType', 'price', 'transactionType'],
+                },
+            },
+            {
+                name: 'createAgent',
+                description: 'Creates a new agent/user in the agency. You MUST have name and phone. Ask the user for any missing required field before calling.',
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        name:  { type: SchemaType.STRING, description: 'Required. Full name.' },
+                        phone: { type: SchemaType.STRING, description: 'Required. Phone number.' },
+                        email: { type: SchemaType.STRING, description: 'Optional. Email address.' },
+                        role:  { type: SchemaType.STRING, description: 'Optional. "admin" or "agent". Defaults to "agent".' },
+                    },
+                    required: ['name', 'phone'],
+                },
+            },
         ],
     },
     {
@@ -284,6 +322,87 @@ async function execQueryTasks(db: admin.firestore.Firestore, agencyId: string) {
         totalPendingTasks: snap.size,
         firstFewTasks: snap.docs.slice(0, 5).map(doc => doc.data().title),
     };
+}
+
+async function execCreateProperty(db: admin.firestore.Firestore, agencyId: string, args: any) {
+    if (!args.city || !args.propertyType || !args.price || !args.transactionType) {
+        const missing = [
+            !args.city && 'עיר',
+            !args.propertyType && 'סוג נכס',
+            !args.price && 'מחיר',
+            !args.transactionType && 'סוג עסקה (למכירה/להשכרה)',
+        ].filter(Boolean).join(', ');
+        return { error: `חסרים שדות חובה: ${missing}. בקש מהמשתמש להשלים אותם.` };
+    }
+
+    const ref = db.collection('agencies').doc(agencyId).collection('properties').doc();
+    const fullAddress = [args.street, args.city].filter(Boolean).join(', ');
+
+    await ref.set({
+        id: ref.id,
+        agencyId,
+        transactionType: args.transactionType === 'rent' ? 'rent' : 'forsale',
+        propertyType: args.propertyType,
+        status: 'active',
+        rooms: args.rooms ?? null,
+        floor: args.floor ?? null,
+        totalFloors: args.totalFloors ?? null,
+        squareMeters: args.squareMeters ?? null,
+        address: {
+            city: args.city,
+            street: args.street ?? null,
+            neighborhood: args.neighborhood ?? null,
+            fullAddress: fullAddress || args.city,
+            coords: null,
+        },
+        features: {
+            hasElevator: args.hasElevator ?? null,
+            hasParking: args.hasParking ?? null,
+            hasBalcony: args.hasBalcony ?? null,
+            hasMamad: null,
+            hasStorage: null,
+            isRenovated: null,
+            isFurnished: null,
+            hasAirConditioning: null,
+        },
+        financials: { price: Math.round(args.price), originalPrice: null },
+        media: { mainImage: null, images: [], videoTourUrl: null },
+        management: { assignedAgentId: null, descriptions: args.description ?? null },
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, propertyId: ref.id, message: `נכס חדש נוצר: ${args.propertyType} ב${args.city}.` };
+}
+
+async function execCreateAgent(db: admin.firestore.Firestore, agencyId: string, args: any) {
+    if (!args.name || !args.phone) {
+        const missing = [!args.name && 'שם', !args.phone && 'טלפון'].filter(Boolean).join(', ');
+        return { error: `חסרים שדות חובה: ${missing}. בקש מהמשתמש להשלים אותם.` };
+    }
+
+    const normalizedEmail = args.email?.trim() || null;
+    if (normalizedEmail) {
+        const exists = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+        if (!exists.empty && exists.docs[0].data().uid) {
+            return { error: 'סוכן עם כתובת דוא״ל זו כבר קיים במערכת.' };
+        }
+    }
+
+    const ref = db.collection('users').doc();
+    await ref.set({
+        uid: null,
+        email: normalizedEmail,
+        name: args.name.trim(),
+        phone: args.phone.trim(),
+        role: args.role === 'admin' ? 'admin' : 'agent',
+        agencyId,
+        isActive: true,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true, agentId: ref.id, message: `סוכן חדש נוצר: ${args.name}.` };
 }
 
 async function execCreateLead(db: admin.firestore.Firestore, agencyId: string, uid: string, args: any) {
@@ -645,6 +764,12 @@ export const homerChatBot = onCall(
                             break;
                         case 'createLead':
                             toolResult = await execCreateLead(db, agencyId, uid, args);
+                            break;
+                        case 'createProperty':
+                            toolResult = await execCreateProperty(db, agencyId, args);
+                            break;
+                        case 'createAgent':
+                            toolResult = await execCreateAgent(db, agencyId, args);
                             break;
                         case 'queryGoals':
                             toolResult = await execQueryGoals(db, agencyId, uid);

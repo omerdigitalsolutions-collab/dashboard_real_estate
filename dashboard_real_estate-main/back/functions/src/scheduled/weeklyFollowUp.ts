@@ -37,6 +37,7 @@ export const weeklyFollowUp = onSchedule(
 
     for (const agencyDoc of agenciesSnap.docs) {
       const agencyId = agencyDoc.id;
+      if (agencyDoc.data().weBotConfig?.followUpEnabled === false) continue;
 
       // Decrypt Green API credentials
       const credsDoc = await db
