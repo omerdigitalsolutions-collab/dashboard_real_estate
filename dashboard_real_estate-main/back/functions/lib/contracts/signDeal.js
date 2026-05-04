@@ -6,8 +6,9 @@ const firestore_1 = require("firebase-admin/firestore");
 const storage_1 = require("firebase-admin/storage");
 const pdf_lib_1 = require("pdf-lib");
 const authGuard_1 = require("../config/authGuard");
+const notifyContractSigned_1 = require("./notifyContractSigned");
 const db = (0, firestore_1.getFirestore)();
-exports.signDeal = (0, https_1.onCall)({ cors: true }, async (request) => {
+exports.signDeal = (0, https_1.onCall)({ cors: true, secrets: [notifyContractSigned_1.resendApiKeyForContracts] }, async (request) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     // ── 1. Auth (supports both authenticated agents and anonymous clients) ────
     const { dealId, agencyId: requestAgencyId } = request.data;
@@ -201,6 +202,19 @@ exports.signDeal = (0, https_1.onCall)({ cors: true }, async (request) => {
         createdAt: firestore_1.FieldValue.serverTimestamp(),
     });
     await batch.commit();
+    // ── 11. Send notifications (email to client/agent/admin + system alert) ──
+    // Must be awaited: Cloud Functions v2 terminates on return, so fire-and-forget
+    // would silently drop emails before they complete.
+    try {
+        await (0, notifyContractSigned_1.notifyContractSigned)({
+            agencyId,
+            dealId,
+            signedPdfUrl,
+        });
+    }
+    catch (err) {
+        console.error('[signDeal] notifyContractSigned failed (non-fatal):', err);
+    }
     return { success: true, signedPdfUrl };
 });
 //# sourceMappingURL=signDeal.js.map

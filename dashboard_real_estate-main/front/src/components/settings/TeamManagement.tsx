@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw, Trash2, Percent, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw, Trash2, Percent, Loader2, Check, X, Pencil } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useAgency } from '../../hooks/useFirestoreData';
 import { AppUser, UserRole } from '../../types';
 import { getAgencyTeam, updateAgentRole, toggleAgentStatus, deleteAgent } from '../../services/teamService';
 import { updateFranchiseSettings } from '../../services/agencyService';
+import { updateUserProfile } from '../../services/userService';
 import InviteAgentModal from './InviteAgentModal';
 import AddAgentManuallyModal from './AddAgentManuallyModal';
 import EditAgentModal from '../modals/EditAgentModal';
@@ -32,6 +33,122 @@ const StatusBadge = ({ isActive }: { isActive?: boolean }) =>
             מושעה
         </span>
     );
+
+function CommissionCell({
+    member,
+    canEdit,
+    onSave,
+}: {
+    member: AppUser;
+    canEdit: boolean;
+    onSave: (docId: string, value: number) => Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [value, setValue] = useState<string>(String(member.commissionPercent ?? ''));
+    const [saving, setSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (editing && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [editing]);
+
+    const startEdit = () => {
+        setValue(String(member.commissionPercent ?? ''));
+        setEditing(true);
+    };
+
+    const cancel = () => {
+        setEditing(false);
+        setValue(String(member.commissionPercent ?? ''));
+    };
+
+    const save = async () => {
+        const num = Number(value);
+        if (Number.isNaN(num) || num < 0 || num > 100) {
+            toast.error('יש להזין מספר בין 0 ל-100');
+            return;
+        }
+        if (!member.id) return;
+        if (num === (member.commissionPercent ?? -1)) {
+            setEditing(false);
+            return;
+        }
+        setSaving(true);
+        try {
+            await onSave(member.id, num);
+            setEditing(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (!canEdit) {
+        return member.commissionPercent !== undefined && member.commissionPercent !== null ? (
+            <span className="text-xs font-semibold text-violet-600 bg-violet-50 border border-violet-100 px-2.5 py-1 rounded-full">
+                {member.commissionPercent}%
+            </span>
+        ) : (
+            <span className="text-xs text-slate-300 italic">לא הוגדר</span>
+        );
+    }
+
+    if (editing) {
+        return (
+            <div className="inline-flex items-center gap-1">
+                <input
+                    ref={inputRef}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') save();
+                        if (e.key === 'Escape') cancel();
+                    }}
+                    disabled={saving}
+                    className="w-16 border border-violet-300 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 bg-white"
+                />
+                <span className="text-xs text-slate-400">%</span>
+                <button
+                    onClick={save}
+                    disabled={saving}
+                    className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                    title="שמור"
+                >
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                </button>
+                <button
+                    onClick={cancel}
+                    disabled={saving}
+                    className="p-1 rounded-md text-slate-500 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                    title="ביטול"
+                >
+                    <X size={12} />
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <button
+            onClick={startEdit}
+            className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-violet-100 bg-violet-50 hover:bg-violet-100 hover:border-violet-200 transition-colors"
+            title="ערוך עמלה"
+        >
+            <span className="text-xs font-semibold text-violet-600">
+                {member.commissionPercent !== undefined && member.commissionPercent !== null
+                    ? `${member.commissionPercent}%`
+                    : 'הגדר'}
+            </span>
+            <Pencil size={10} className="text-violet-400 group-hover:text-violet-600 transition-colors" />
+        </button>
+    );
+}
 
 function ActionMenu({
     member,
@@ -156,6 +273,16 @@ export default function TeamManagement() {
             showToast(currentlyActive ? 'הסוכן הושעה' : 'הסוכן הופעל מחדש');
         } catch (err: any) {
             toast.error(err?.message || 'עדכון הסטטוס נכשל');
+        }
+    };
+
+    const handleCommissionSave = async (docId: string, value: number) => {
+        try {
+            await updateUserProfile(docId, { commissionPercent: value });
+            showToast('העמלה עודכנה בהצלחה');
+        } catch (err: any) {
+            toast.error(err?.message || 'עדכון העמלה נכשל');
+            throw err;
         }
     };
 
@@ -307,6 +434,7 @@ export default function TeamManagement() {
                                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 text-right">אימייל</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 text-right">תפקיד</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 text-right">סטטוס</th>
+                                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 text-right">עמלה</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 text-right">פעולות</th>
                             </tr>
                         </thead>
@@ -334,21 +462,21 @@ export default function TeamManagement() {
                                         <td className="px-5 py-4"><RoleBadge role={member.role} /></td>
                                         <td className="px-5 py-4"><StatusBadge isActive={member.isActive} /></td>
                                         <td className="px-5 py-4">
-                                            <div className="flex items-center gap-2">
-                                                {member.commissionPercent !== undefined && (
-                                                    <span className="text-xs font-semibold text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
-                                                        {member.commissionPercent}%
-                                                    </span>
-                                                )}
-                                                <ActionMenu
-                                                    member={member}
-                                                    isSelf={isSelf}
-                                                    onRoleChange={handleRoleChange}
-                                                    onStatusToggle={handleStatusToggle}
-                                                    onDelete={handleDelete}
-                                                    onEdit={setEditingAgent}
-                                                />
-                                            </div>
+                                            <CommissionCell
+                                                member={member}
+                                                canEdit={userData?.role === 'admin'}
+                                                onSave={handleCommissionSave}
+                                            />
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <ActionMenu
+                                                member={member}
+                                                isSelf={isSelf}
+                                                onRoleChange={handleRoleChange}
+                                                onStatusToggle={handleStatusToggle}
+                                                onDelete={handleDelete}
+                                                onEdit={setEditingAgent}
+                                            />
                                         </td>
                                     </tr>
                                 );

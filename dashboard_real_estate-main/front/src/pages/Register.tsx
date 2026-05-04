@@ -56,9 +56,10 @@ export default function Register() {
         } catch (err: any) {
             console.error('Registration error:', err);
             if (err.code === 'auth/email-already-in-use') {
-                setError('כתובת האימייל הזו כבר נמצאת בשימוש');
+                // Generic message — avoids confirming whether the email is registered
+                setError('לא ניתן ליצור חשבון עם פרטים אלה. בדוק את הפרטים או נסה להתחבר.');
             } else {
-                setError('שגיאה ביצירת החשבון: ' + err.message);
+                setError('שגיאה ביצירת החשבון. נסה שוב.');
             }
             setIsLoading(false);
         }

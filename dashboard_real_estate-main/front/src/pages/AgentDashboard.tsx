@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
 import { useAgents } from '../hooks/useFirestoreData';
-import { Deal, Lead } from '../types';
+import { Deal, Lead, CallLog } from '../types';
+import { getLiveMissedCalls } from '../services/callLogService';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell,
 } from 'recharts';
 import PropertyMap from '../components/dashboard/PropertyMap';
 import TaskDashboardWidget from '../components/dashboard/TaskDashboardWidget';
-import { TrendingUp, Briefcase, Users, DollarSign, Target } from 'lucide-react';
+import { TrendingUp, Briefcase, Users, DollarSign, Target, Phone, PhoneOff, Clock } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -288,6 +289,16 @@ export default function AgentDashboard() {
 
     const agentName = userData?.name || 'סוכן';
 
+    // Call stats from agent document
+    const agentDoc = useMemo(
+        () => agents?.find((a: any) => a.uid === uid),
+        [agents, uid]
+    );
+    const callStats = (agentDoc as any)?.stats ?? { callsAnswered: 0, callsMissed: 0, totalCallMinutes: 0 };
+    const answerRate = callStats.callsAnswered + callStats.callsMissed > 0
+        ? Math.round((callStats.callsAnswered / (callStats.callsAnswered + callStats.callsMissed)) * 100)
+        : null;
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -364,6 +375,40 @@ export default function AgentDashboard() {
                 <AgentDealsChart deals={myDeals} agencySettings={agencySettings} />
                 <AgentLeadsChart leads={myLeads} />
             </div>
+
+            {/* Call Stats */}
+            {(callStats.callsAnswered > 0 || callStats.callsMissed > 0) && (
+                <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl p-5">
+                    <h2 className="text-sm font-black text-white mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-4 bg-blue-500 rounded-full inline-block" />
+                        סטטיסטיקות שיחות
+                    </h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                            <Phone size={18} className="text-emerald-400 mx-auto mb-2" />
+                            <p className="text-2xl font-black text-white">{callStats.callsAnswered}</p>
+                            <p className="text-[11px] text-slate-400 font-medium mt-1">שיחות שנענו</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                            <PhoneOff size={18} className="text-red-400 mx-auto mb-2" />
+                            <p className="text-2xl font-black text-white">{callStats.callsMissed}</p>
+                            <p className="text-[11px] text-slate-400 font-medium mt-1">שיחות שלא נענו</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                            <Clock size={18} className="text-blue-400 mx-auto mb-2" />
+                            <p className="text-2xl font-black text-white">{callStats.totalCallMinutes}</p>
+                            <p className="text-[11px] text-slate-400 font-medium mt-1">דקות שיחה</p>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700/50">
+                            <TrendingUp size={18} className="text-amber-400 mx-auto mb-2" />
+                            <p className="text-2xl font-black text-white">
+                                {answerRate !== null ? `${answerRate}%` : '—'}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-medium mt-1">אחוז מענה</p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -209,7 +209,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     // For primary media: images take priority, then first video acts as primary
     const primaryVideoAsCover = !hasImages && hasVideos;
 
-    const externalUrl = property.yad2Link || property.externalLink;
+    const externalUrl = property.yad2Link || property.listingUrl || property.externalLink;
     const isYad2Link = !!externalUrl?.startsWith('https://www.yad2.co.il/');
     const externalButtonText = isYad2Link ? 'לינק למודעה ביד 2' : 'מדלן';
     const displayDescription = property.management?.descriptions?.trim() || property.rawDescription?.trim();
@@ -814,19 +814,20 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                             <span className="text-sm font-semibold text-slate-700">{property.squareMeters}</span>
                                         </div>
                                     )}
-                                    {property.contactName ? (
+                                    {property.contactName && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">שם איש קשר</span>
                                             <span className="text-sm font-semibold text-slate-700">{property.contactName}</span>
                                         </div>
-                                    ) : (property.yad2Link || property.externalLink) ? (
+                                    )}
+                                    {externalUrl && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">לינק למודעה</span>
-                                            <a href={property.yad2Link || property.externalLink} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-600 hover:underline">
+                                            <a href={externalUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-600 hover:underline">
                                                 {isYad2Link ? 'צפה ביד 2' : 'צפה במודעה'}
                                             </a>
                                         </div>
-                                    ) : null}
+                                    )}
                                     {property.contactPhone && (
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase block">טלפון איש קשר</span>
@@ -996,7 +997,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                         </div>
 
                         {/* External Link */}
-                        {(property.externalLink || property.yad2Link) && (
+                        {externalUrl && (
                             <div className="mb-8 p-4 bg-orange-50/50 rounded-2xl border border-orange-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">

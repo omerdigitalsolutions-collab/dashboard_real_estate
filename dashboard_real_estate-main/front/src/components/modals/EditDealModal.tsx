@@ -106,14 +106,14 @@ export default function EditDealModal({ deal, isOpen, onClose, onUpdated }: Edit
 
             await updateDeal(deal.id, {
                 propertyId,
-                buyerId: buyerId || undefined, // undefined to remove if empty
-                sellerId: sellerId || undefined,
-                agentId: assignedAgentId || undefined,
+                buyerId: buyerId || null,
+                sellerId: sellerId || null,
+                agentId: assignedAgentId || null,
                 stage,
                 projectedCommission: finalCalculatedCommission,
                 isVatIncluded: includeVat,
-                actualCommission: actualCommission ? Number(actualCommission) : undefined,
-                notes: notes || undefined,
+                actualCommission: actualCommission ? Number(actualCommission) : null,
+                notes: notes || null,
             });
 
             // If the stage was changed to 'won' and it wasn't won before, trigger confetti

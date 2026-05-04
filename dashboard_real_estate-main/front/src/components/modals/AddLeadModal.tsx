@@ -217,8 +217,8 @@ export default function AddLeadModal({ isOpen, onClose }: AddLeadModalProps) {
                     type: leadType,
                     assignedAgentId: assignedTo === '' ? null : assignedTo,
                     collaborationStatus,
-                    collaborationTerms: collaborationTerms.trim() || undefined,
-                    collaborationAgentName: userData.name || undefined,
+                    collaborationTerms: collaborationTerms.trim() || null,
+                    collaborationAgentName: userData.name || null,
                     requirements: {
                         desiredCity: sellerAddress ? [sellerAddress.trim()] : [],
                         maxBudget: sellerPrice ? parseFloat(sellerPrice) : null,

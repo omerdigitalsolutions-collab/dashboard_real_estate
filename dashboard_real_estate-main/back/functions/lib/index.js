@@ -58,6 +58,7 @@ const addDeal_1 = require("./deals/addDeal");
 const updateDeal_1 = require("./deals/updateDeal");
 // ── Contracts Module ───────────────────────────────────────────────────────────
 const signDeal_1 = require("./contracts/signDeal");
+const notifyInstanceSigned_1 = require("./contracts/notifyInstanceSigned");
 // ── Automation Module ──────────────────────────────────────────────────────────
 const globalYad2Webhook_1 = require("./automation/globalYad2Webhook");
 // ── Super Admin Module ─────────────────────────────────────────────────────────
@@ -114,7 +115,7 @@ exports.superadmin = {
     superAdminCleanExistingDescriptionsV2: globalImport_1.superAdminCleanExistingDescriptionsV2
 };
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
-exports.contracts = { signDeal: signDeal_1.signDeal };
+exports.contracts = { signDeal: signDeal_1.signDeal, onContractInstanceSigned: notifyInstanceSigned_1.onContractInstanceSigned };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
 exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign };
 var stripeWebhook_1 = require("./stripeWebhook");

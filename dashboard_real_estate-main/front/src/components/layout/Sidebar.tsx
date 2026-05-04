@@ -10,6 +10,7 @@ import {
   Clock,
   FileText,
   Handshake,
+  Phone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
@@ -27,6 +28,7 @@ const navItems = [
   { to: '/marketplace', label: 'שיתופי (MLS)', icon: Handshake },
   { to: '/contracts', label: 'חוזים', icon: FileText, roles: ['admin'] },
   { to: '/agents', label: 'סוכנים', icon: UserCheck, roles: ['admin'] },
+  { to: '/callcenter', label: 'מרכזיה', icon: Phone, roles: ['admin'] },
   { to: '/settings', label: 'הגדרות', icon: Settings, roles: ['admin'] },
 ];
 

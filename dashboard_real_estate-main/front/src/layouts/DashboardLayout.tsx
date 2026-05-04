@@ -25,6 +25,7 @@ import {
     CalendarDays,
     FileText,
     Sparkles,
+    Phone,
 } from 'lucide-react';
 
 const navigation = [
@@ -38,6 +39,7 @@ const navigation = [
     { name: 'יומן', href: '/dashboard/calendar', icon: CalendarDays },
     { name: 'רווח והפסד', href: '/dashboard/pnl', icon: TrendingUp, roles: ['admin'] },
     { name: 'סוכנים', href: '/dashboard/agents', icon: Users, roles: ['admin'] },
+    { name: 'מרכזיה', href: '/dashboard/callcenter', icon: Phone, roles: ['admin'] },
     { name: 'הגדרות', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
 ];
 

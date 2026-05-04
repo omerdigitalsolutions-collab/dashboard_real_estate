@@ -223,11 +223,11 @@ export default function Properties() {
         if (!matchesMain) return false;
 
         // Filter by Sub Tab
-        const matchesSub = 
+        const matchesSub =
             subFilter === 'all' ||
             (subFilter === 'commercial' ? (prop.propertyType === 'מסחרי') :
              subFilter === 'draft' ? prop.status === 'draft' :
-             prop.transactionType === subFilter && prop.propertyType !== 'מסחרי' && prop.status !== 'draft');
+             (subFilter === 'sale' ? prop.transactionType === 'forsale' : prop.transactionType === 'rent') && prop.propertyType !== 'מסחרי' && prop.status !== 'draft');
 
         // Filter by Rooms
         const matchesRooms = 
@@ -300,9 +300,9 @@ export default function Properties() {
 
         return {
             all: currentMainSet.length,
-            sale: currentMainSet.filter(p => p.type === 'sale' && p.kind !== 'מסחרי' && p.status !== 'draft').length,
-            rent: currentMainSet.filter(p => p.type === 'rent' && p.kind !== 'מסחרי' && p.status !== 'draft').length,
-            commercial: currentMainSet.filter(p => (p.kind === 'מסחרי' || p.type === 'commercial') && p.status !== 'draft').length,
+            sale: currentMainSet.filter(p => p.transactionType === 'forsale' && p.propertyType !== 'מסחרי' && p.status !== 'draft').length,
+            rent: currentMainSet.filter(p => p.transactionType === 'rent' && p.propertyType !== 'מסחרי' && p.status !== 'draft').length,
+            commercial: currentMainSet.filter(p => p.propertyType === 'מסחרי' && p.status !== 'draft').length,
             draft: currentMainSet.filter(p => p.status === 'draft').length,
             // Global totals for main tabs
             myTotal: myProps.length,
@@ -1079,7 +1079,7 @@ export default function Properties() {
                                                     צור עסקה
                                                 </button>
                                             )}
-                                            {!prop.isGlobalCityProperty && prop.collaborationStatus !== 'collaborative' && (
+                                            {!prop.isGlobalCityProperty && prop.status !== 'draft' && prop.collaborationStatus !== 'collaborative' && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleShareToMarketplace(prop); }}
                                                     className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold py-1.5 rounded-lg transition-colors"
@@ -1303,7 +1303,7 @@ export default function Properties() {
                                                                 <Handshake size={16} />
                                                             </button>
                                                         )}
-                                                        {!prop.isGlobalCityProperty && prop.collaborationStatus !== 'collaborative' && (
+                                                        {!prop.isGlobalCityProperty && prop.status !== 'draft' && prop.collaborationStatus !== 'collaborative' && (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleShareToMarketplace(prop); }}
                                                                 className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors shrink-0"

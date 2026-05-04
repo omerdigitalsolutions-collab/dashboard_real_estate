@@ -134,6 +134,10 @@ export default function Transactions() {
       return match ? `${match.address?.city || ''}, ${match.address?.fullAddress || ''}`.replace(/^, |, $/g, '').trim() : '---';
     };
 
+    // Prevent CSV formula injection: prefix values starting with =, +, -, @ with a tab
+    const csvSafe = (val: string): string =>
+      /^[=+\-@\t]/.test(val) ? `\t${val}` : val;
+
     const csvData = (deals as any[]).map(deal => {
       const leadInfo = deal.leadId ? getLeadNameAndPhone(deal.leadId) : { name: '---', phone: '---' };
       const propInfo = deal.propertyId ? getPropertyDetails(deal.propertyId) : '---';
@@ -145,11 +149,11 @@ export default function Transactions() {
 
       const row = [
         deal.id || deal.propertyId || '---',
-        `"${propInfo.replace(/"/g, '""')}"`,
-        `"${leadInfo.name.replace(/"/g, '""')}"`,
-        leadInfo.phone,
-        `"${agentName.replace(/"/g, '""')}"`,
-        `"${getStageLabel(deal.stage).replace(/"/g, '""')}"`,
+        `"${csvSafe(propInfo).replace(/"/g, '""')}"`,
+        `"${csvSafe(leadInfo.name).replace(/"/g, '""')}"`,
+        csvSafe(leadInfo.phone),
+        `"${csvSafe(agentName).replace(/"/g, '""')}"`,
+        `"${csvSafe(getStageLabel(deal.stage)).replace(/"/g, '""')}"`,
         propPrice.toString(),
         deal.projectedCommission?.toString() || '0',
         deal.probability?.toString() || '0',

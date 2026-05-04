@@ -175,7 +175,7 @@ export default function EditLeadModal({ lead, isOpen, onClose, onSuccess }: Edit
                 status,
                 assignedAgentId: assignedTo === '' ? null : assignedTo,
                 collaborationStatus,
-                collaborationTerms: collaborationTerms.trim() || undefined,
+                collaborationTerms: collaborationTerms.trim() || null,
             };
 
             if (leadType === 'buyer') {

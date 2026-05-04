@@ -160,6 +160,35 @@ export interface Lead {
     collaborationStatus?: 'private' | 'collaborative';
     collaborationTerms?: string;
     collaborationAgentName?: string; // name of the agent to show in marketplace
+    // Call tracking
+    lastCallId?: string | null;
+    lastCallAt?: Timestamp | null;
+    callCount?: number;
+    createdAt: Timestamp;
+}
+
+// ─── Call Logs ────────────────────────────────────────────────────────────────
+export type CallStatus = 'ringing' | 'in-progress' | 'completed' | 'missed' | 'failed' | 'busy';
+
+export interface CallLog {
+    id: string;
+    agencyId: string;
+    agentId: string;
+    callSid: string;
+    from: string;
+    to: string;
+    status: CallStatus;
+    direction: 'inbound';
+    duration: number | null;
+    storagePath: string | null;
+    transcription: string | null;
+    summary: string | null;
+    clientName: string | null;
+    leadId: string | null;
+    leadCreated: boolean;
+    missedCallHandled: boolean;
+    startedAt: Timestamp;
+    endedAt: Timestamp | null;
     createdAt: Timestamp;
 }
 
@@ -196,6 +225,7 @@ export interface Property {
     originalGlobalId?: string;
     readonly?: boolean;
     yad2Link?: string;
+    listingUrl?: string;
     leadId?: string;
 
     address: {

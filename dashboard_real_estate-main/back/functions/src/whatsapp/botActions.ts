@@ -229,10 +229,11 @@ export async function createAgent(
       if (!existingSnap.empty) {
         const existingDoc = existingSnap.docs[0];
         if (existingDoc.data().uid) {
+          // Don't expose 'email_exists' reason — avoids email enumeration
           return {
             success: false,
-            reason: 'email_exists',
-            message: `סוכן עם כתובת דוא״ל זו כבר קיים במערכת.`,
+            reason: 'invalid_input',
+            message: 'לא ניתן ליצור את הסוכן עם הפרטים שסופקו.',
           };
         }
       }

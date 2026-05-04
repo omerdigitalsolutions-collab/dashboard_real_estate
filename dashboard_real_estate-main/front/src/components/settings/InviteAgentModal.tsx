@@ -56,7 +56,7 @@ export default function InviteAgentModal({ onClose, onSuccess }: InviteAgentModa
                 email: email.trim().toLowerCase(),
                 name: name.trim(),
                 role,
-                phone: phone.trim() || undefined,
+                phone: phone.trim() || null,
                 appUrl: window.location.origin,
             });
             setInvitationResult(result.data);

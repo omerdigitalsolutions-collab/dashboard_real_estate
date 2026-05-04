@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles, Handshake } from 'lucide-react';
+import { Search, Plus, MessageCircle, MapPin, RefreshCw, ArrowUpDown, ChevronUp, ChevronDown, Upload, Trash2, MessageSquare, Pencil, Home, MoreVertical, Phone, Users, Sparkles, Handshake, PhoneIncoming } from 'lucide-react';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAgents } from '../hooks/useFirestoreData';
 import { useAuth } from '../context/AuthContext';
@@ -17,8 +17,9 @@ import PropertyDetailsModal from '../components/modals/PropertyDetailsModal';
 import PendingLeadsInbox from '../components/leads/PendingLeadsInbox';
 import KpiCard from '../components/dashboard/KpiCard';
 import { Toast, ToastState } from '../components/ui/Toast';
-import { Lead, Property, TimeRange } from '../types';
+import { Lead, Property, TimeRange, CallLog } from '../types';
 import { deleteLead, updateLead } from '../services/leadService';
+import { getLiveMissedCalls } from '../services/callLogService';
 
 const statusColors: Record<string, string> = {
   new: 'bg-sky-500/10 text-sky-400 border border-sky-500/20',
@@ -103,6 +104,7 @@ export default function Leads() {
   const [addingPropertyForLeadId, setAddingPropertyForLeadId] = useState<string | null>(null);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
+  const [missedCallsToday, setMissedCallsToday] = useState(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isBulkWhatsAppModalOpen, setIsBulkWhatsAppModalOpen] = useState(false);
@@ -125,6 +127,21 @@ export default function Leads() {
     if (!profileLeadId) return null;
     return leads.find(l => l.id === profileLeadId) || null;
   }, [profileLeadId, leads]);
+
+  // Missed calls subscription for KPI card
+  useEffect(() => {
+    if (!userData?.agencyId) return;
+    const unsub = getLiveMissedCalls(userData.agencyId, (logs: CallLog[]) => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayCount = logs.filter((l) => {
+        const d = (l.createdAt as any)?.toDate?.();
+        return d && d >= todayStart;
+      }).length;
+      setMissedCallsToday(todayCount);
+    });
+    return () => unsub();
+  }, [userData?.agencyId]);
 
   const handleSort = (key: any) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -307,6 +324,17 @@ export default function Leads() {
             subtitle="פגישות שנקבעו"
             icon="Calendar"
             color="purple"
+          />
+          <KpiCard
+            title="שיחות שלא נענו"
+            value={missedCallsToday.toString()}
+            rawValue={missedCallsToday}
+            target={0}
+            change={missedCallsToday > 0 ? `${missedCallsToday} היום` : 'הכל תואם'}
+            positive={missedCallsToday === 0}
+            subtitle="שיחות נכנסות שלא נענו היום"
+            icon="Phone"
+            color="red"
           />
           </div>
 
@@ -508,7 +536,10 @@ export default function Leads() {
                               {lead.name.charAt(0)}
                             </div>
                             <div>
-                              <span className="block text-sm font-black text-white">{lead.name}</span>
+                              <span className="block text-sm font-black text-white flex items-center gap-1">
+                                {lead.name}
+                                {(lead.callCount ?? 0) > 0 && <PhoneIncoming size={11} className="text-blue-400 flex-shrink-0" />}
+                              </span>
                               <span className="block text-xs text-slate-500 mt-0.5 font-medium" dir="ltr">{lead.phone}</span>
                             </div>
                           </div>

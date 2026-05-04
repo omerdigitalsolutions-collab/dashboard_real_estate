@@ -9,8 +9,9 @@ import { signInWithGooglePopup, signInWithGoogle, getGoogleRedirectResult } from
 type View = 'login' | 'forgot_password';
 
 const FIREBASE_ERROR_MAP: Record<string, string> = {
-    'auth/user-not-found': 'משתמש לא קיים',
-    'auth/wrong-password': 'סיסמה שגויה',
+    // Unified message for credential errors — avoids email enumeration
+    'auth/user-not-found': 'אימייל או סיסמה שגויים',
+    'auth/wrong-password': 'אימייל או סיסמה שגויים',
     'auth/invalid-credential': 'אימייל או סיסמה שגויים',
     'auth/invalid-email': 'כתובת אימייל לא תקינה',
     'auth/user-disabled': 'המשתמש חסום. פנה לתמיכה.',

@@ -7,12 +7,14 @@ import ShareInviteModal from '../components/modals/ShareInviteModal';
 import EditAgentGoalsModal from '../components/modals/EditAgentGoalsModal';
 import EditAgentModal from '../components/modals/EditAgentModal';
 import EmailInviteModal from '../components/modals/EmailInviteModal';
-import { Star, UserPlus, Pencil, UserCog, Trash2, Share2, Mail } from 'lucide-react';
+import { Star, UserPlus, Pencil, UserCog, Trash2, Share2, Mail, Phone } from 'lucide-react';
 import { AppUser } from '../types';
 import { deleteAgent, sendAgentInvite } from '../services/teamService';
 import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Agents() {
+  const navigate = useNavigate();
   const { userData } = useAuth();
   const { data: agentsData, loading: agentsLoading } = useAgentPerformance();
   const { agency, loading: agencyLoading } = useAgency();
@@ -305,16 +307,26 @@ export default function Agents() {
                       >
                         <Pencil size={16} />
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (agent.id) handleDeleteCall(agent.id);
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="מחק סוכן"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/dashboard/callcenter', { state: { agentId: agent.id } });
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="ניהול מספר וירטואלי (מרכזיה)"
+                        >
+                          <Phone size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (agent.id) handleDeleteCall(agent.id);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="מחק סוכן"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                     </>
                   )}
                 </div>

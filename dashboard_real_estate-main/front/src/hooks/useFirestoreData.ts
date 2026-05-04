@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, QueryConstraint, DocumentData, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -35,8 +35,10 @@ function useAgencyCollection<T>(
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
-    // Memoize the query to prevent unnecessary re-subscriptions
-    // Note: additionalConstraints should be stable (e.g. from useMemo or useState in caller)
+    // Capture constraints once — they are always static at call sites, and the default []
+    // would otherwise create a new reference on every render and trigger an infinite loop.
+    const constraintsRef = useRef(additionalConstraints);
+
     useEffect(() => {
         if (!agencyId) {
             setData([]);
@@ -45,7 +47,7 @@ function useAgencyCollection<T>(
         }
 
         const colRef = collection(db, collectionName);
-        const q = query(colRef, where('agencyId', '==', agencyId), ...additionalConstraints);
+        const q = query(colRef, where('agencyId', '==', agencyId), ...constraintsRef.current);
 
         let isMounted = true;
         let unsubscribe = () => { };
@@ -92,7 +94,7 @@ function useAgencyCollection<T>(
             isMounted = false;
             unsubscribe();
         };
-    }, [agencyId, collectionName, additionalConstraints]); // Depend on constraints directly — caller MUST ensure stability
+    }, [agencyId, collectionName]);
 
     return { data, loading, error };
 }

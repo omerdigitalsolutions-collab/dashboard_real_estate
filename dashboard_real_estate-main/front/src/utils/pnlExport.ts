@@ -9,6 +9,16 @@ const escapeHtml = (text: string): string => {
     return div.innerHTML;
 };
 
+// Allow only http/https image URLs to prevent javascript: and data: XSS via src attributes
+const safeImgSrc = (url: string): string | null => {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? url : null;
+    } catch {
+        return null;
+    }
+};
+
 export interface PnLReportData {
     agencyName: string;
     agencyLogo: string;
@@ -127,8 +137,8 @@ export const exportPnLToPDF = (data: PnLReportData, fileName: string) => {
                 </div>
                 <div style="text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 15px;">
-                        ${data.userLogo ? `<img src="${data.userLogo}" style="height: 55px; width: 55px; border-radius: 50%; object-fit: cover; border: 2px solid #f1f5f9;" />` : ''}
-                        ${data.agencyLogo ? `<img src="${data.agencyLogo}" style="max-height: 55px; max-width: 140px; object-fit: contain;" />` : ''}
+                        ${data.userLogo && safeImgSrc(data.userLogo) ? `<img src="${safeImgSrc(data.userLogo)}" style="height: 55px; width: 55px; border-radius: 50%; object-fit: cover; border: 2px solid #f1f5f9;" />` : ''}
+                        ${data.agencyLogo && safeImgSrc(data.agencyLogo) ? `<img src="${safeImgSrc(data.agencyLogo)}" style="max-height: 55px; max-width: 140px; object-fit: contain;" />` : ''}
                     </div>
                     ${data.agencyName ? `
                     <div style="margin-top: 4px;">

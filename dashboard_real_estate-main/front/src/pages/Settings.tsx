@@ -1,6 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
-import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot, Phone, PhoneIncoming, PhoneOff, CheckCircle } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
 import WhatsAppBotSettings from '../components/settings/WeBotSettings';
@@ -17,6 +20,7 @@ import { ISRAEL_CITIES } from '../utils/constants';
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
+  { id: 'virtual-numbers', label: 'מספרים וירטואליים', icon: Phone },
   { id: 'whatsapp-bot', label: 'WhatsApp Bot', icon: Bot },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
@@ -74,6 +78,32 @@ export default function Settings() {
   const [isJoinCodeEnabled, setIsJoinCodeEnabled] = useState(false);
   const [isJoinCodeSaving, setIsJoinCodeSaving] = useState(false);
   const [isJoinCodeGenerating, setIsJoinCodeGenerating] = useState(false);
+
+  // Virtual numbers state
+  const [agents, setAgents] = useState<any[]>([]);
+  const [purchasingForAgent, setPurchasingForAgent] = useState<string | null>(null);
+
+  const loadAgents = useCallback(async () => {
+    if (!userData?.agencyId) return;
+    const snap = await getDocs(collection(db, `agencies/${userData.agencyId}/agents`));
+    setAgents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, [userData?.agencyId]);
+
+  const handlePurchaseNumber = async (agentId: string) => {
+    if (!userData?.agencyId) return;
+    setPurchasingForAgent(agentId);
+    try {
+      const functions = getFunctions(undefined, 'europe-west1');
+      const purchaseFn = httpsCallable(functions, 'calls-purchaseVirtualNumber');
+      const result = await purchaseFn({ agentId, isoCountry: 'IL' }) as any;
+      showToast(`מספר ${result.data.virtualPhone} הוקצה בהצלחה`);
+      await loadAgents();
+    } catch (err: any) {
+      showToast(err?.message ?? 'שגיאה ברכישת המספר', 'error');
+    } finally {
+      setPurchasingForAgent(null);
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'success') toast.success(message);
@@ -546,6 +576,71 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === 'virtual-numbers' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6 animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">מספרים וירטואליים</h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  כל סוכן מקבל מספר ישראלי (+972) משלו. לקוח שמחייג למספר זה — השיחה מוקלטת, מתומללת ומוצמדת אוטומטית לסוכן ולליד המתאים.
+                </p>
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium">
+                  ⚠️ נדרש <strong>Regulatory Bundle ישראלי</strong> מאושר בחשבון Twilio לפני רכישת מספרים +972.
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {agents.length === 0 && (
+                  <button
+                    onClick={loadAgents}
+                    className="text-sm text-blue-600 font-semibold hover:underline"
+                  >
+                    טען רשימת סוכנים
+                  </button>
+                )}
+                {agents.map((agent) => (
+                  <div key={agent.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-black text-sm flex items-center justify-center flex-shrink-0">
+                        {(agent.name ?? '?').charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{agent.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{agent.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {agent.virtualPhone ? (
+                        <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+                          <CheckCircle size={12} />
+                          {agent.virtualPhone}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handlePurchaseNumber(agent.id)}
+                          disabled={purchasingForAgent === agent.id}
+                          className="flex items-center gap-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-full transition-colors disabled:opacity-60"
+                        >
+                          {purchasingForAgent === agent.id
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Phone size={12} />
+                          }
+                          {purchasingForAgent === agent.id ? 'רוכש...' : 'הקצה מספר'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {agents.length > 0 && (
+                <p className="text-xs text-slate-400">
+                  עלות משוערת: ~$5–8 לחודש למספר + $0.013 לדקת שיחה (Twilio)
+                </p>
               )}
             </div>
           )}

@@ -152,6 +152,14 @@ export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollo
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';
 
+// ── Calls Module ──────────────────────────────────────────────────────────────
+import { twilioVoiceInbound } from './calls/twilioVoiceInbound';
+import { twilioRecordingComplete } from './calls/twilioRecordingComplete';
+import { twilioStatusCallback } from './calls/twilioStatusCallback';
+import { purchaseVirtualNumber } from './calls/purchaseVirtualNumber';
+
+export const calls = { twilioVoiceInbound, twilioRecordingComplete, twilioStatusCallback, purchaseVirtualNumber };
+
 // ── AI WhatsApp Bot ────────────────────────────────────────────────────────────
 // Top-level export so the URL is clean (no namespace prefix):
 //   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI

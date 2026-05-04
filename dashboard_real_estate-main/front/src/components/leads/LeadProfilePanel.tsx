@@ -14,10 +14,11 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '../../config/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import BotToggle from './BotToggle';
+import CallLogPanel from './CallLogPanel';
 import AddDealModal from '../modals/AddDealModal';
 import { AddMeetingModal } from '../modals/AddMeetingModal';
 import { PrioritySelector } from '../common/PrioritySelector';
-import { Layers } from 'lucide-react';
+import { Layers, PhoneIncoming } from 'lucide-react';
 
 const conditionLabels: Record<string, string> = {
     new: 'חדש מקבלן',
@@ -111,7 +112,7 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
     const [assignedId, setAssignedId] = useState(lead.assignedAgentId ?? '');
     const [assigning, setAssigning] = useState(false);
     const [agentOpen, setAgentOpen] = useState(false);
-    const [activeSection, setActiveSection] = useState<'details' | 'whatsapp'>('details');
+    const [activeSection, setActiveSection] = useState<'details' | 'whatsapp' | 'calls'>('details');
     const [messages, setMessages] = useState<Message[]>([]);
     const [msgText, setMsgText] = useState('');
     const [sending, setSending] = useState(false);
@@ -333,6 +334,14 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                         <MessageSquare size={16} />
                         ווטסאפ {messages.length > 0 && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/20">{messages.length}</span>}
                     </button>
+                    <button
+                        onClick={() => setActiveSection('calls')}
+                        className={`flex-1 py-3 text-sm font-black transition-all rounded-xl flex items-center justify-center gap-2 ${activeSection === 'calls' ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20 shadow-lg' : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                    >
+                        <PhoneIncoming size={16} />
+                        שיחות {(lead.callCount ?? 0) > 0 && <span className="bg-blue-500/20 text-blue-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-blue-500/20">{lead.callCount}</span>}
+                    </button>
                 </div>
 
                 {/* Status + Type badges */}
@@ -347,6 +356,13 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                         {lead.source}
                     </span>
                 </div>
+
+                {/* Calls Tab (Mobile only) */}
+                {activeSection === 'calls' && (
+                    <div className="flex md:hidden flex-col flex-1 h-0 overflow-y-auto">
+                        <CallLogPanel leadId={lead.id} />
+                    </div>
+                )}
 
                 {/* WhatsApp Tab (Mobile only) */}
                 {activeSection === 'whatsapp' && (
@@ -763,6 +779,17 @@ export default function LeadProfilePanel({ lead, agents, onClose, onUpdated }: L
                                     value={<span className="text-slate-400 font-bold">{lead.createdAt?.toDate().toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' })}</span>}
                                 />
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Calls Section */}
+                    <div className={`flex-1 overflow-hidden flex flex-col bg-slate-900/50 border-r border-slate-800/50 ${activeSection === 'calls' ? 'flex' : 'hidden'}`}>
+                        <div className="px-6 py-3 border-b border-slate-800 flex items-center gap-2">
+                            <PhoneIncoming size={14} className="text-blue-400" />
+                            <span className="text-xs font-black text-slate-300">יומן שיחות</span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <CallLogPanel leadId={lead.id} />
                         </div>
                     </div>
 

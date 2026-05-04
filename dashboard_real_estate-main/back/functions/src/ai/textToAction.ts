@@ -32,6 +32,7 @@ import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { validateUserAuth } from '../config/authGuard';
 
+
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const db = getFirestore();
 
@@ -479,3 +480,108 @@ export const textToActionAgent = onCall(
         }
     }
 );
+
+// ─── Call Recording Analysis ──────────────────────────────────────────────────
+
+/** Structured output from analysing a recorded phone call */
+export interface CallLeadPayload {
+    transcription: string;
+    summary: string;
+    clientName: string | null;
+    budget_max: number | null;
+    rooms: number | null;
+    preferred_location: string | null;
+    property_type: PropertyType;
+    transaction_type: 'sale' | 'rent' | null;
+}
+
+const CALL_ANALYSIS_PROMPT = `אתה מנתח שיחות בין סוכן נדל"ן ולקוח פוטנציאלי.
+השיחה מוקלטת ב-Stereo: ערוץ שמאל = לקוח, ערוץ ימין = סוכן.
+
+תפקידך:
+1. תמלל את השיחה המלאה בעברית — ציין [סוכן] ו[לקוח] לפני כל תור דיבור.
+2. ספק סיכום קצר (2-3 משפטים) של צרכי הלקוח.
+3. חלץ נתונים מובנים.
+
+חוקים:
+- אם שדה לא הוזכר בשיחה — הגדר כ-null.
+- budget_max: מספר שלם בשקלים (לדוגמה "3 מיליון" → 3000000).
+- property_type: "apartment" | "house" | "plot" | "commercial" — תרגם מעברית.
+- transaction_type: "sale" (קנייה/מכירה) | "rent" (שכירות) | null.
+
+החזר JSON בלבד — ללא markdown, ללא הסברים:
+{
+  "transcription": "תמלול מלא עם [סוכן] / [לקוח]...",
+  "summary": "סיכום קצר של צרכי הלקוח...",
+  "clientName": string | null,
+  "budget_max": number | null,
+  "rooms": number | null,
+  "preferred_location": string | null,
+  "property_type": "apartment" | "house" | "plot" | "commercial",
+  "transaction_type": "sale" | "rent" | null
+}`;
+
+/**
+ * Analyses a recorded phone call (stereo MP3) using Gemini.
+ * Transcribes, summarises, and extracts structured lead data in one pass.
+ * Used by twilioRecordingComplete Cloud Function.
+ */
+export async function extractLeadDataFromAudio(
+    audioBase64: string,
+    mimeType: string,
+    apiKey: string
+): Promise<CallLeadPayload> {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const parts: Part[] = [
+        { text: CALL_ANALYSIS_PROMPT },
+        { inlineData: { data: audioBase64, mimeType } },
+    ];
+
+    const result = await model.generateContent(parts);
+    const rawText = stripFences(result.response.text());
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(rawText);
+    } catch {
+        throw new Error('[extractLeadDataFromAudio] Gemini returned invalid JSON');
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('[extractLeadDataFromAudio] Gemini returned non-object');
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    const toStr = (v: unknown): string | null =>
+        typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+    const toNum = (v: unknown): number | null => {
+        if (typeof v === 'number' && isFinite(v)) return Math.round(v);
+        if (typeof v === 'string') {
+            const n = parseFloat(v.replace(/,/g, ''));
+            if (isFinite(n)) return Math.round(n);
+        }
+        return null;
+    };
+
+    const propertyType: PropertyType = VALID_PROPERTY_TYPES.has(obj['property_type'] as PropertyType)
+        ? (obj['property_type'] as PropertyType)
+        : 'apartment';
+
+    const txRaw = toStr(obj['transaction_type']);
+    const transactionType: 'sale' | 'rent' | null =
+        txRaw === 'sale' || txRaw === 'rent' ? txRaw : null;
+
+    return {
+        transcription: toStr(obj['transcription']) ?? '',
+        summary: toStr(obj['summary']) ?? '',
+        clientName: toStr(obj['clientName']),
+        budget_max: toNum(obj['budget_max']),
+        rooms: toNum(obj['rooms']),
+        preferred_location: toStr(obj['preferred_location']),
+        property_type: propertyType,
+        transaction_type: transactionType,
+    };
+}

@@ -69,11 +69,16 @@ export function buildWeBotPrompt(config: BotConfig, properties: Property[], agen
     fallbackText = config.customFallbackAction;
   }
 
+  // Strip newlines and limit length so property fields cannot inject new prompt sections.
+  const sanitizePromptField = (s: string, maxLen = 200): string =>
+    s.replace(/[\r\n]+/g, ' ').replace(/[`]/g, "'").trim().substring(0, maxLen);
+
   const propertiesText = properties.length > 0
     ? properties.map(p =>
-        `- [מזהה: ${p.id}]${p.isExclusive ? ' [exclusive]' : ''} ${p.title} ב${p.address}, ${p.city}` +
+        `- [מזהה: ${sanitizePromptField(p.id, 40)}]${p.isExclusive ? ' [exclusive]' : ''}` +
+        ` ${sanitizePromptField(p.title)} ב${sanitizePromptField(p.address)}, ${sanitizePromptField(p.city, 50)}` +
         ` | ${p.rooms} חדרים | מחיר: ₪${p.price.toLocaleString('he-IL')}` +
-        (p.description ? ` | ${p.description}` : '')
+        (p.description ? ` | ${sanitizePromptField(p.description)}` : '')
       ).join('\n')
     : 'כרגע אין נכסים זמינים במאגר.';
 

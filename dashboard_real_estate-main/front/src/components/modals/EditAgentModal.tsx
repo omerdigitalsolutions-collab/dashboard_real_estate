@@ -65,7 +65,7 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
             if (!docId) throw new Error('מזהה סוכן חסר');
             await updateUserProfile(docId, {
                 name: name.trim(),
-                phone: phone.trim() || undefined,
+                phone: phone.trim() || null,
                 email: email.trim(),
                 role,
                 specializations,
