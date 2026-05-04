@@ -209,9 +209,14 @@ export default function Properties() {
             (prop.address?.city && normalizeCity(prop.address.city).includes(normSearch)) ||
             (prop.address?.fullAddress && normalizeCity(prop.address.fullAddress).includes(normSearch));
         
-        const isMyProperty = !prop.isGlobalCityProperty && prop.status !== 'draft';
+        const isAssignedToMe = prop.management?.assignedAgentId === currentUid;
+        const isMyProperty = isAgent
+            ? (isAssignedToMe && !prop.isGlobalCityProperty && prop.status !== 'draft')
+            : (!prop.isGlobalCityProperty && prop.status !== 'draft');
         const isGeneralPool = prop.isGlobalCityProperty;
-        const isDraft = prop.status === 'draft';
+        const isDraft = isAgent
+            ? (prop.status === 'draft' && isAssignedToMe)
+            : prop.status === 'draft';
 
         // Filter by Main Tab
         const matchesMain = mainFilter === 'my' ? (isMyProperty || isDraft) : isGeneralPool;
@@ -226,8 +231,8 @@ export default function Properties() {
 
         // Filter by Rooms
         const matchesRooms = 
-            roomsFilter === 'all' || 
-            (roomsFilter === '6+' ? (prop.rooms !== undefined && prop.rooms !== null && prop.rooms >= 6) : (prop.rooms?.toString() === roomsFilter));
+            roomsFilter === 'all' ||
+            (roomsFilter === '12+' ? (prop.rooms !== undefined && prop.rooms !== null && prop.rooms >= 12) : (prop.rooms?.toString() === roomsFilter));
 
         return matchesSearch && matchesSub && matchesRooms;
     });
@@ -704,7 +709,19 @@ export default function Properties() {
                                         <option value="4.5">4.5</option>
                                         <option value="5">5</option>
                                         <option value="5.5">5.5</option>
-                                        <option value="6+">6+</option>
+                                        <option value="6">6</option>
+                                        <option value="6.5">6.5</option>
+                                        <option value="7">7</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="8">8</option>
+                                        <option value="8.5">8.5</option>
+                                        <option value="9">9</option>
+                                        <option value="9.5">9.5</option>
+                                        <option value="10">10</option>
+                                        <option value="10.5">10.5</option>
+                                        <option value="11">11</option>
+                                        <option value="11.5">11.5</option>
+                                        <option value="12+">12+</option>
                                     </select>
                                 </div>
                             </div>
@@ -801,7 +818,19 @@ export default function Properties() {
                                         <option value="4.5">4.5</option>
                                         <option value="5">5</option>
                                         <option value="5.5">5.5</option>
-                                        <option value="6+">6+</option>
+                                        <option value="6">6</option>
+                                        <option value="6.5">6.5</option>
+                                        <option value="7">7</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="8">8</option>
+                                        <option value="8.5">8.5</option>
+                                        <option value="9">9</option>
+                                        <option value="9.5">9.5</option>
+                                        <option value="10">10</option>
+                                        <option value="10.5">10.5</option>
+                                        <option value="11">11</option>
+                                        <option value="11.5">11.5</option>
+                                        <option value="12+">12+</option>
                                     </select>
                                 </div>
                             </div>

@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw, Trash2 } from 'lucide-react';
+import { UserPlus, MoreVertical, ShieldCheck, ShieldOff, RefreshCw, Trash2, Percent, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useAgency } from '../../hooks/useFirestoreData';
 import { AppUser, UserRole } from '../../types';
 import { getAgencyTeam, updateAgentRole, toggleAgentStatus, deleteAgent } from '../../services/teamService';
+import { updateFranchiseSettings } from '../../services/agencyService';
 import InviteAgentModal from './InviteAgentModal';
 import AddAgentManuallyModal from './AddAgentManuallyModal';
+import EditAgentModal from '../modals/EditAgentModal';
 import toast from 'react-hot-toast';
 
 const RoleBadge = ({ role }: { role: UserRole }) =>
@@ -36,12 +39,14 @@ function ActionMenu({
     onRoleChange,
     onStatusToggle,
     onDelete,
+    onEdit,
 }: {
     member: AppUser;
     isSelf: boolean;
     onRoleChange: (uid: string, current: UserRole) => void;
     onStatusToggle: (uid: string, current: boolean) => void;
     onDelete: (uid: string) => void;
+    onEdit: (member: AppUser) => void;
 }) {
     const [open, setOpen] = useState(false);
     const isActive = member.isActive !== false;
@@ -65,6 +70,14 @@ function ActionMenu({
                 <>
                     <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
                     <div className="absolute left-0 top-8 z-20 bg-white rounded-xl shadow-xl border border-slate-100 py-1 min-w-[160px]">
+                        <button
+                            onClick={() => { onEdit(member); setOpen(false); }}
+                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                            <RefreshCw size={14} className="text-slate-400" />
+                            עריכת פרטים ועמלה
+                        </button>
+                        <div className="h-px bg-slate-100 my-1" />
                         <button
                             onClick={() => { if (member.id) onRoleChange(member.id, member.role); setOpen(false); }}
                             className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
@@ -96,10 +109,18 @@ function ActionMenu({
 
 export default function TeamManagement() {
     const { userData, currentUser } = useAuth();
+    const { agency } = useAgency();
     const [team, setTeam] = useState<AppUser[]>([]);
     const [showInvite, setShowInvite] = useState(false);
     const [showManual, setShowManual] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [editingAgent, setEditingAgent] = useState<AppUser | null>(null);
+
+    // Franchise settings state
+    const [franchisePercent, setFranchisePercent] = useState<number>(0);
+    const [monthlyFranchiseFee, setMonthlyFranchiseFee] = useState<number | ''>('');
+    const [franchiseSaving, setFranchiseSaving] = useState(false);
+
     const showToast = (msg: string) => {
         toast.success(msg);
     };
@@ -112,6 +133,12 @@ export default function TeamManagement() {
         });
         return unsub;
     }, [userData?.agencyId]);
+
+    useEffect(() => {
+        if (!agency) return;
+        setFranchisePercent(agency.settings?.franchisePercent ?? 0);
+        setMonthlyFranchiseFee(agency.settings?.monthlyFranchiseFee || '');
+    }, [agency]);
 
     const handleRoleChange = async (docId: string, currentRole: UserRole) => {
         try {
@@ -142,8 +169,103 @@ export default function TeamManagement() {
         }
     };
 
+    const handleFranchiseSave = async () => {
+        if (!userData?.agencyId) return;
+        setFranchiseSaving(true);
+        try {
+            await updateFranchiseSettings(
+                userData.agencyId,
+                franchisePercent,
+                monthlyFranchiseFee === '' ? 0 : monthlyFranchiseFee
+            );
+            toast.success('הגדרות זכיינות נשמרו בהצלחה');
+        } catch (err: any) {
+            toast.error(err?.message || 'שגיאה בשמירת הגדרות זכיינות');
+        } finally {
+            setFranchiseSaving(false);
+        }
+    };
+
     return (
-        <div className="space-y-5">
+        <div className="space-y-5" dir="rtl">
+            {/* Franchise / Commission Settings Card */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 bg-amber-50 rounded-xl flex items-center justify-center">
+                        <Percent size={16} className="text-amber-600" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-800">הגדרות עמלות</h3>
+                        <p className="text-xs text-slate-400">הגדר את דמי הזכיינות — ינוכו אוטומטית בדוח רווח והפסד</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Franchise Percent */}
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                            אחוז עמלת זכיינות (%)
+                            <span className="text-slate-400 font-normal mr-1">— מתוך עמלת המשרד</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={0.5}
+                                value={franchisePercent}
+                                onChange={e => setFranchisePercent(Number(e.target.value))}
+                                className="flex-1 accent-amber-500"
+                            />
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={0.5}
+                                    value={franchisePercent}
+                                    onChange={e => setFranchisePercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                    className="w-16 border border-slate-200 rounded-xl px-2.5 py-2 text-sm text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 bg-slate-50 focus:bg-white"
+                                />
+                                <span className="text-sm text-slate-500">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Monthly Franchise Fee */}
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                            דמי זכיינות חודשיים (₪)
+                            <span className="text-slate-400 font-normal mr-1">— לא חובה</span>
+                        </label>
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="number"
+                                min={0}
+                                step={100}
+                                placeholder="0"
+                                value={monthlyFranchiseFee}
+                                onChange={e => setMonthlyFranchiseFee(e.target.value === '' ? '' : Number(e.target.value))}
+                                className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 bg-slate-50 focus:bg-white"
+                            />
+                            <span className="text-sm text-slate-500">₪</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs text-slate-400">ברירת מחדל: 0%. מנוכה אוטומטית מרווח המשרד בדוח רווח והפסד.</p>
+                    <button
+                        onClick={handleFranchiseSave}
+                        disabled={franchiseSaving}
+                        className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                    >
+                        {franchiseSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                        שמור הגדרות
+                    </button>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -212,13 +334,21 @@ export default function TeamManagement() {
                                         <td className="px-5 py-4"><RoleBadge role={member.role} /></td>
                                         <td className="px-5 py-4"><StatusBadge isActive={member.isActive} /></td>
                                         <td className="px-5 py-4">
-                                            <ActionMenu
-                                                member={member}
-                                                isSelf={isSelf}
-                                                onRoleChange={handleRoleChange}
-                                                onStatusToggle={handleStatusToggle}
-                                                onDelete={handleDelete}
-                                            />
+                                            <div className="flex items-center gap-2">
+                                                {member.commissionPercent !== undefined && (
+                                                    <span className="text-xs font-semibold text-violet-600 bg-violet-50 border border-violet-100 px-2 py-0.5 rounded-full">
+                                                        {member.commissionPercent}%
+                                                    </span>
+                                                )}
+                                                <ActionMenu
+                                                    member={member}
+                                                    isSelf={isSelf}
+                                                    onRoleChange={handleRoleChange}
+                                                    onStatusToggle={handleStatusToggle}
+                                                    onDelete={handleDelete}
+                                                    onEdit={setEditingAgent}
+                                                />
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -245,6 +375,15 @@ export default function TeamManagement() {
                     onSuccess={() => {
                         showToast('הסוכן נוסף בהצלחה! 🎉');
                     }}
+                />
+            )}
+
+            {editingAgent && (
+                <EditAgentModal
+                    agent={editingAgent}
+                    isOpen={true}
+                    onClose={() => setEditingAgent(null)}
+                    onSuccess={(msg) => { showToast(msg); setEditingAgent(null); }}
                 />
             )}
 

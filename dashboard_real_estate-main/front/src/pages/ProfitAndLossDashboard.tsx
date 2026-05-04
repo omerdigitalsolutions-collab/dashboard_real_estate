@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useExpenses } from '../hooks/useExpenses';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
-import { useAgency } from '../hooks/useFirestoreData';
+import { useAgency, useAgents } from '../hooks/useFirestoreData';
 import { calculatePipelineStats } from '../utils/analytics';
 import { Wallet, ChevronDown, ChevronUp, UploadCloud, PieChart as PieChartIcon, TrendingDown, TrendingUp, FileText, FileSpreadsheet, Plus, X, RefreshCw, Tag, Trash2, Pencil } from 'lucide-react';
 import AiExpenseImporter from '../components/dashboard/AiExpenseImporter';
@@ -21,7 +21,9 @@ const CATEGORY_HEBREW: Record<string, string> = {
     'תפעול משרד': 'תפעול משרד',
     'שכר': 'שכר',
     'רכבים': 'רכבים',
-    'שונות': 'שונות'
+    'שונות': 'שונות',
+    'עמלות סוכנים': 'עמלות סוכנים',
+    'דמי זכיינות': 'דמי זכיינות',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -33,7 +35,9 @@ const CATEGORY_COLORS: Record<string, string> = {
     'שכר': '#0ea5e9',
     'רכבים': '#f59e0b',
     'Other': '#64748b',
-    'שונות': '#64748b'
+    'שונות': '#64748b',
+    'עמלות סוכנים': '#6366f1',
+    'דמי זכיינות': '#ec4899',
 };
 
 const RANGE_OPTIONS = [
@@ -75,6 +79,7 @@ export default function ProfitAndLossDashboard() {
     const { deals, loading: dataLoading } = useLiveDashboardData();
     const { userData } = useAuth();
     const { agency } = useAgency();
+    const { data: agents } = useAgents();
     const [timeRange, setTimeRange] = useState<'1' | '3' | '6' | '12' | '60' | 'custom'>('1');
     const today = new Date();
     const [customRange, setCustomRange] = useState({
@@ -256,10 +261,22 @@ export default function ProfitAndLossDashboard() {
         }
         const dateRangeLabel = formatDateLabel(startDate, endDate, months, isCustom);
 
+        // Actual months in range (used for monthly franchise fee — custom range needs real calculation)
+        const rangeMonths = isCustom
+            ? Math.max(1, (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1)
+            : months;
+
+        // Build agent lookup for commission percent
+        const agentMap = Object.fromEntries(agents.map(a => [a.id, a]));
+        const franchisePercent = (agency?.settings as any)?.franchisePercent ?? 0;
+        const monthlyFranchiseFeeVal = (agency?.settings as any)?.monthlyFranchiseFee ?? 0;
+
         // 1. Gather all deals in range to calculate income and list for report
         const incomesList: any[] = [];
+        let totalAgentDeductions = 0;
+        let totalFranchisePercentDeductions = 0;
         const rangeDeals = deals.filter(deal => {
-            const dealDateVal = deal.updatedAt || deal.createdAt;
+            const dealDateVal = (deal as any).updatedAt || (deal as any).createdAt;
             const dealDate = dealDateVal?.toDate ? dealDateVal.toDate() : new Date();
 
             if (dealDate >= startDate && dealDate <= endDate) {
@@ -271,6 +288,10 @@ export default function ProfitAndLossDashboard() {
                         deal.projectedCommission ||
                         ((deal as any).value ? (deal as any).value * 0.02 : 0);
                     if (amount > 0) {
+                        const agentId = (deal as any).agentId ?? (deal as any).assignedAgentId ?? (deal as any).createdBy;
+                        const agentCommPct = agentMap[agentId]?.commissionPercent ?? 50;
+                        totalAgentDeductions += amount * (agentCommPct / 100);
+                        totalFranchisePercentDeductions += amount * (franchisePercent / 100);
                         incomesList.push({
                             agentName: (deal as any).assignedAgentName || 'לא משויך',
                             propertyName: (deal as any).propertyName || (deal as any).title || 'עסקה',
@@ -367,6 +388,40 @@ export default function ProfitAndLossDashboard() {
 
         expensesListForReport.sort((a, b) => b.amount - a.amount);
 
+        // Auto-deductions: agent commissions and franchise fees
+        if (totalAgentDeductions > 0) {
+            categoriesMap['עמלות סוכנים'] = {
+                total: totalAgentDeductions,
+                items: [{ title: 'עמלות סוכנים (מחושב אוטומטית)', displayAmount: totalAgentDeductions, timesMultiplied: 1, isRecurring: false }]
+            };
+            totalExpenses += totalAgentDeductions;
+            expensesListForReport.push({
+                category: 'עמלות סוכנים',
+                description: 'עמלות סוכנים (מחושב אוטומטית)',
+                date: '',
+                amount: totalAgentDeductions,
+                isRecurring: false,
+                timesMultiplied: 1
+            });
+        }
+
+        const totalFranchiseDeductions = totalFranchisePercentDeductions + (monthlyFranchiseFeeVal * rangeMonths);
+        if (totalFranchiseDeductions > 0) {
+            categoriesMap['דמי זכיינות'] = {
+                total: totalFranchiseDeductions,
+                items: [{ title: 'דמי זכיינות (מחושב אוטומטית)', displayAmount: totalFranchiseDeductions, timesMultiplied: 1, isRecurring: false }]
+            };
+            totalExpenses += totalFranchiseDeductions;
+            expensesListForReport.push({
+                category: 'דמי זכיינות',
+                description: 'דמי זכיינות (מחושב אוטומטית)',
+                date: '',
+                amount: totalFranchiseDeductions,
+                isRecurring: false,
+                timesMultiplied: 1
+            });
+        }
+
         // 3. Profit calculations
         const profit = income - totalExpenses;
         const margin = income > 0 ? (profit / income) * 100 : 0;
@@ -436,7 +491,7 @@ export default function ProfitAndLossDashboard() {
             reportData,
             incomesList
         };
-    }, [expenses, deals, timeRange, customRange, userData, manualIncomes]);
+    }, [expenses, deals, timeRange, customRange, userData, manualIncomes, agents, agency]);
 
     const { totalExpenses, monthlyIncome, grossMargin, profit, expensesPieData, accordionData, reportData, incomesList } = dashboardData;
 

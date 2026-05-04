@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -10,7 +10,7 @@ import {
 import { getTemplate } from '../services/contractTemplateService';
 import DynamicContractRenderer from '../components/contracts/DynamicContractRenderer';
 import { ContractInstance, ContractTemplate } from '../types';
-import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function SignInstancePage() {
@@ -23,7 +23,10 @@ export default function SignInstancePage() {
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isDone, setIsDone] = useState(false);
+    const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const previewRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!agencyId || !instanceId) {
@@ -72,6 +75,57 @@ export default function SignInstancePage() {
 
     const handleFieldChange = (fieldId: string, value: string) => {
         setValues((prev) => ({ ...prev, [fieldId]: value }));
+    };
+
+    const handleExportPdf = async () => {
+        if (!previewRef.current || !template) return;
+        try {
+            setIsExporting(true);
+            const html2pdf = (await import('html2pdf.js')).default;
+            const clone = previewRef.current.cloneNode(true) as HTMLElement;
+            clone.style.cssText = [
+                'width:740px', 'padding:30px 40px',
+                'font-family:Arial,"Helvetica Neue",Helvetica,sans-serif',
+                'font-size:14px', 'line-height:2', 'direction:rtl',
+                'background:white', 'color:#000', 'box-sizing:border-box', 'overflow:visible',
+            ].join(';');
+            clone.querySelectorAll<HTMLElement>('*').forEach((el) => {
+                el.style.overflow = 'visible';
+                el.style.textOverflow = 'clip';
+                el.style.maxWidth = 'none';
+            });
+            clone.querySelectorAll('input, textarea').forEach((el) => {
+                const input = el as HTMLInputElement | HTMLTextAreaElement;
+                const span = document.createElement('span');
+                const isDate = (input as HTMLInputElement).type === 'date';
+                let display = input.value;
+                if (isDate && display) {
+                    const [y, m, d] = display.split('-');
+                    display = `${d}/${m}/${y}`;
+                }
+                span.style.cssText = [
+                    'display:inline-block', 'border-bottom:1.5px solid #444',
+                    'padding:0 6px', 'margin:0 2px', 'color:#000',
+                    'font-size:13px', 'min-width:80px', 'text-align:center', 'white-space:nowrap',
+                ].join(';');
+                span.textContent = display || '___________';
+                input.replaceWith(span);
+            });
+            await html2pdf().set({
+                margin: [12, 12, 12, 12] as [number, number, number, number],
+                filename: `${template.title} — חתום.pdf`,
+                image: { type: 'jpeg' as const, quality: 0.97 },
+                html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true, windowWidth: 740, scrollX: 0, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+                pagebreak: { mode: ['css', 'legacy'], avoid: 'img' },
+            }).from(clone).save();
+            toast.success('הקובץ הורד בהצלחה');
+        } catch (err) {
+            console.error('[SignInstancePage] PDF export error:', err);
+            toast.error('שגיאה בייצוא PDF');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const handleSign = async () => {
@@ -130,13 +184,33 @@ export default function SignInstancePage() {
         );
     }
 
-    if (isDone) {
+    if (isDone && template) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl border border-green-200 p-8 max-w-md w-full text-center">
-                    <CheckCircle className="inline-block text-green-600 mb-4" size={48} />
-                    <h1 className="text-xl font-bold text-slate-900 mb-2">החוזה נחתם בהצלחה!</h1>
-                    <p className="text-slate-600">תודה על חתימת החוזה. הוא נשמר בבטחה.</p>
+            <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-3xl mx-auto">
+                    <div className="bg-white rounded-2xl border border-green-200 p-8 mb-6 text-center">
+                        <CheckCircle className="inline-block text-green-600 mb-4" size={48} />
+                        <h1 className="text-xl font-bold text-slate-900 mb-2">החוזה נחתם בהצלחה!</h1>
+                        <p className="text-slate-600 mb-4">עותק החוזה נשלח אליך במייל. תודה על חתימת החוזה.</p>
+                        <button
+                            onClick={handleExportPdf}
+                            disabled={isExporting}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                        >
+                            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                            {isExporting ? 'מייצא PDF...' : 'הורד חוזה PDF'}
+                        </button>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8" ref={previewRef}>
+                        <DynamicContractRenderer
+                            taggedText={template.taggedText}
+                            fieldsMetadata={template.fieldsMetadata}
+                            values={values}
+                            onChange={() => {}}
+                            userRole="client"
+                            readOnly
+                        />
+                    </div>
                 </div>
             </div>
         );

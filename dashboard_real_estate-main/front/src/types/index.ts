@@ -39,6 +39,8 @@ export interface Agency {
         themeColor?: string;
         customDealStages?: CustomDealStage[];
         activeGlobalCities?: string[]; // Multiple service regions to pull global properties from
+        franchisePercent?: number;     // % of each deal commission paid to franchisor
+        monthlyFranchiseFee?: number;  // Fixed monthly fee paid to franchisor (₪)
     };
     whatsappIntegration?: {
         status?: string;
@@ -79,6 +81,8 @@ export interface AppUser {
     specializations?: AgentSpecialization[];
     /** Cities or neighborhoods this agent covers */
     serviceAreas?: string[];
+    /** Percentage of deal commission the agent keeps (default 50) */
+    commissionPercent?: number;
     goals?: {
         monthly: {
             revenue: number;

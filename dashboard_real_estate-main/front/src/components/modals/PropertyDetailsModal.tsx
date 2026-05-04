@@ -766,7 +766,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                 <div className="text-xs font-semibold text-slate-500 mb-1">חדרים</div>
                                 <div className="text-base font-bold text-slate-900">{property.rooms || '-'}</div>
                             </div>
-                            {property.features?.parkingSpots != null && (
+                            {property.features?.parkingSpots !== undefined && (
                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                                     <div className="text-xs font-semibold text-slate-500 mb-1">חניות</div>
                                     <div className="text-base font-bold text-slate-900">{property.features?.parkingSpots}</div>

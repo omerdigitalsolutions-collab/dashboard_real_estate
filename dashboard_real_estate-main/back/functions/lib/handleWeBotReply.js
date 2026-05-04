@@ -534,7 +534,7 @@ async function extractTimePreference(message, geminiApiKey) {
 }
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
 async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState = 'IDLE', resendApiKey) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
     // RAG: active properties + chat history in parallel
     const reqsCity = (_b = (_a = leadData.requirements) === null || _a === void 0 ? void 0 : _a.desiredCity) === null || _b === void 0 ? void 0 : _b[0];
     const globalPropPromise = reqsCity ?
@@ -732,7 +732,13 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
             {
                 const freshLead = await db.collection('leads').doc(leadId).get();
                 const reqs = ((_j = freshLead.data()) === null || _j === void 0 ? void 0 : _j.requirements) || {};
-                const hasAnyReq = ((_k = reqs.desiredCity) === null || _k === void 0 ? void 0 : _k.length) || reqs.maxBudget || reqs.minRooms || reqs.maxRooms || ((_l = reqs.propertyType) === null || _l === void 0 ? void 0 : _l.length);
+                const hasAnyReq = ((_k = reqs.desiredCity) === null || _k === void 0 ? void 0 : _k.length) ||
+                    ((_l = reqs.desiredNeighborhoods) === null || _l === void 0 ? void 0 : _l.length) ||
+                    ((_m = reqs.desiredStreet) === null || _m === void 0 ? void 0 : _m.length) ||
+                    (reqs.maxBudget !== undefined && reqs.maxBudget !== null) ||
+                    (reqs.minRooms !== undefined && reqs.minRooms !== null) ||
+                    (reqs.maxRooms !== undefined && reqs.maxRooms !== null) ||
+                    ((_o = reqs.propertyType) === null || _o === void 0 ? void 0 : _o.length);
                 if (!hasAnyReq) {
                     functionResult = {
                         success: false, reason: 'missing_requirements',
@@ -749,7 +755,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                             id: p.id,
                             collectionPath: p._collectionPath || `agencies/${agencyId}/properties`,
                         }));
-                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_m = freshLead.data()) === null || _m === void 0 ? void 0 : _m.name) || 'לקוח', propertyRefs);
+                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_p = freshLead.data()) === null || _p === void 0 ? void 0 : _p.name) || 'לקוח', propertyRefs);
                         catalogCreated = true;
                         sentCatalogUrl = catalogUrl;
                         console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyRefs.length}`);
@@ -804,12 +810,13 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         finalReply = 'תודה על פנייתך. נחזור אליך בהקדם.';
     }
     await sendBotMessage(integration, customerPhone, leadId, finalReply);
-    // After catalog is sent → move to CLOSED + notify agent + ask closing question
+    // After catalog is sent → move to SCHEDULING_CALL so the customer can still reply
+    // to schedule a meeting. CLOSED would silently block all messages for 24h.
     if (catalogCreated) {
         await sendBotMessage(integration, customerPhone, leadId, 'מתי אתה פנוי לשיחה קצרה עם יועץ נדל"ן שלנו?');
-        await updateChatState(leadId, 'CLOSED', { closedAt: Date.now() });
+        await updateChatState(leadId, 'SCHEDULING_CALL');
         const freshLead = await db.collection('leads').doc(leadId).get();
-        const reqs = ((_o = freshLead.data()) === null || _o === void 0 ? void 0 : _o.requirements) || {};
+        const reqs = ((_q = freshLead.data()) === null || _q === void 0 ? void 0 : _q.requirements) || {};
         const leadName = leadData.name || customerPhone;
         const reqSummary = [
             Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,

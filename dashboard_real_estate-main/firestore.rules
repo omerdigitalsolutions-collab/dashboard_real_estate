@@ -252,8 +252,10 @@ service cloud.firestore {
         // Any authenticated user may claim an *unclaimed* stub (uid == null)
         // by writing only their own UID into the uid field. This powers the
         // invite-link join flow without requiring a Cloud Function deployment.
+        // The inAgency check prevents cross-agency stub hijacking.
         || (resource.data.uid == null
             && request.resource.data.uid == request.auth.uid
+            && inAgency(resource.data.agencyId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid']))
         // ── Admin / Super-admin overrides ─────────────────────────────────────
         || isAgencyAdmin(resource.data.agencyId)
@@ -302,18 +304,20 @@ service cloud.firestore {
     // LEADS
     // Same rationale: create/delete go through Cloud Functions.
     // ══════════════════════════════════════════════════════════════════════════
+    // Support collectionGroup queries for leads
+    match /{path=**}/leads/{leadId} {
+      allow read: if isAuthed() && (
+        isSuperAdmin() ||
+        resource.data.collaborationStatus == 'collaborative' ||
+        inAgency(resource.data.agencyId)
+      );
+    }
+
     match /leads/{leadId} {
       allow read: if isAuthed() && (
         isSuperAdmin() ||
         resource.data.collaborationStatus == 'collaborative' ||
         (inAgency(resource.data.agencyId) && (isAdmin() || resource.data.assignedAgentId == request.auth.uid))
-      );
-
-      // Support collectionGroup queries for leads (even though leads are top-level, it's good practice)
-      allow list: if isAuthed() && (
-        isSuperAdmin() ||
-        resource.data.collaborationStatus == 'collaborative' ||
-        inAgency(resource.data.agencyId)
       );
 
       // Direct client creates allowed for authenticated agency members (e.g. batch import)
@@ -322,12 +326,16 @@ service cloud.firestore {
           && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isBillingActiveForCaller();
 
-      // Updates: admins can update any lead. Agents can only update leads assigned to them.
+      // Updates: admins can update any lead. Agents can only update leads assigned to them,
+      // and cannot reassign the lead (change assignedAgentId) — only admins can do that.
       allow update: if isAuthed()
           && (inAgency(resource.data.agencyId) || isSuperAdmin())
           && (agencyIdUnchanged() || isSuperAdmin())
           && isBillingActiveForCaller()
-          && (isAdmin() || isSuperAdmin() || resource.data.assignedAgentId == request.auth.uid);
+          && (isAdmin() || isSuperAdmin() || (
+              resource.data.assignedAgentId == request.auth.uid &&
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignedAgentId'])
+          ));
 
       // Deletes: admins can delete any lead. Agents can only delete leads assigned to them.
       allow delete: if isAuthed()
@@ -336,33 +344,18 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // COLLABORATIONS (Marketplace Requests)
-    // ══════════════════════════════════════════════════════════════════════════
-    match /collaborations/{requestId} {
-      allow read: if isAuthed() && (
-        request.auth.token.get('agencyId', null) == resource.data.fromAgencyId ||
-        request.auth.token.get('agencyId', null) == resource.data.toAgencyId ||
-        isSuperAdmin()
-      );
-      allow create: if isAuthed() && (
-        request.auth.token.get('agencyId', null) == request.resource.data.fromAgencyId ||
-        isSuperAdmin()
-      );
-      allow update: if isAuthed() && (
-        request.auth.token.get('agencyId', null) == resource.data.fromAgencyId ||
-        request.auth.token.get('agencyId', null) == resource.data.toAgencyId ||
-        isSuperAdmin()
-      );
-      allow delete: if isSuperAdmin();
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
     // LEAD MESSAGES
     // ══════════════════════════════════════════════════════════════════════════
     match /leads/{leadId}/messages/{messageId} {
-      allow read, create: if isAuthed() && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
+      // Agents can only read/create messages on leads assigned to them; admins see all.
+      allow read, create: if isAuthed() && (
+        isSuperAdmin() ||
+        (inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId) &&
+          (isAdmin() || get(/databases/$(database)/documents/leads/$(leadId)).data.assignedAgentId == request.auth.uid))
+      );
       allow update: if isAuthed()
           && inAgency(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId)
+          && (isAdmin() || isSuperAdmin() || get(/databases/$(database)/documents/leads/$(leadId)).data.assignedAgentId == request.auth.uid)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
 
       allow delete: if isAuthed() && isAgencyAdmin(get(/databases/$(database)/documents/leads/$(leadId)).data.agencyId);
@@ -575,19 +568,19 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════════════
     match /collaborations/{collabId} {
       allow read: if isAuthed() && (
-        inAgency(resource.data.propertyAgencyId) || 
-        inAgency(resource.data.requestingAgencyId) || 
+        inAgency(resource.data.fromAgencyId) || 
+        inAgency(resource.data.toAgencyId) || 
         isSuperAdmin()
       );
       
       allow create: if isAuthed() && (
-        inAgency(request.resource.data.requestingAgencyId) || 
+        inAgency(request.resource.data.fromAgencyId) || 
         isSuperAdmin()
-      ) && isBillingActiveForCaller();
+      );
 
       allow update: if isAuthed() && (
-        inAgency(resource.data.propertyAgencyId) || 
-        inAgency(resource.data.requestingAgencyId) || 
+        inAgency(resource.data.fromAgencyId) || 
+        inAgency(resource.data.toAgencyId) || 
         isSuperAdmin()
       );
 

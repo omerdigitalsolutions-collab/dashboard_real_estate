@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import SignatureCanvas from 'react-signature-canvas';
-import { PenTool, CheckCircle, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { PenTool, CheckCircle, Loader2, AlertCircle, ArrowLeft, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getContract } from '../services/contractService';
 import { signingService } from '../services/signingService';
@@ -22,6 +22,7 @@ export default function SignaturePage() {
     const [activeSigField, setActiveSigField] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isDone, setIsDone] = useState(false);
+    const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -160,7 +161,9 @@ export default function SignaturePage() {
             await signingService.updateFieldValues(agencyId, contractId, fields);
 
             // Step 2: Trigger Cloud Function to burn PDF
-            await signingService.triggerSignFunction(contract.dealId, agencyId);
+            const result = await signingService.triggerSignFunction(contract.dealId, agencyId);
+            const pdfUrl = (result?.data as any)?.signedPdfUrl;
+            if (pdfUrl) setSignedPdfUrl(pdfUrl);
 
             setIsDone(true);
             toast.success('Contract signed successfully!');
@@ -213,8 +216,20 @@ export default function SignaturePage() {
                     </div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">חוזה חתום!</h1>
                     <p className="text-gray-600 mb-6">
-                        עותק חתום יישלח אליך בדואר במקרוב. תודה על אישור החוזה.
+                        עותק חתום נשלח אליך במייל. תודה על אישור החוזה.
                     </p>
+                    {signedPdfUrl && (
+                        <a
+                            href={signedPdfUrl}
+                            download="חוזה_חתום.pdf"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors mb-3"
+                        >
+                            <Download size={18} />
+                            הורד חוזה PDF
+                        </a>
+                    )}
                     <button
                         onClick={() => navigate('/')}
                         className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors"

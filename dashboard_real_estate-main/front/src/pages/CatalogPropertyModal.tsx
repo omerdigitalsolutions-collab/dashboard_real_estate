@@ -218,6 +218,12 @@ export default function CatalogPropertyModal({ property, agencyPhone, agencyLogo
                                 קומה {property.floor}
                             </span>
                         )}
+                        {property.parkingSpots !== undefined && property.parkingSpots !== null && (
+                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-xl">
+                                <Car size={13} className="text-slate-400" />
+                                {property.parkingSpots} חניות
+                            </span>
+                        )}
                     </div>
 
                     {/* Amenities */}

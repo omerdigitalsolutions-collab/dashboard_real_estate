@@ -68,6 +68,7 @@ import { updateDeal, deleteDeal } from './deals/updateDeal';
 
 // ── Contracts Module ───────────────────────────────────────────────────────────
 import { signDeal } from './contracts/signDeal';
+import { onContractInstanceSigned } from './contracts/notifyInstanceSigned';
 
 // ── Automation Module ──────────────────────────────────────────────────────────
 import { webhookProcessGlobalYad2Email } from './automation/globalYad2Webhook';
@@ -142,7 +143,7 @@ export const superadmin = {
 
 export const deals = { addDeal, updateDeal, deleteDeal };
 
-export const contracts = { signDeal };
+export const contracts = { signDeal, onContractInstanceSigned };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 

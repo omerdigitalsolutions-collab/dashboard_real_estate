@@ -67,6 +67,22 @@ export async function updateAgencySettings(
 }
 
 /**
+ * Updates only the franchise commission fields using dot-notation to avoid
+ * overwriting other settings fields (logoUrl, themeColor, etc.).
+ */
+export async function updateFranchiseSettings(
+    agencyId: string,
+    franchisePercent: number,
+    monthlyFranchiseFee: number
+): Promise<void> {
+    const docRef = doc(db, 'agencies', agencyId);
+    await updateDoc(docRef, {
+        'settings.franchisePercent': franchisePercent,
+        'settings.monthlyFranchiseFee': monthlyFranchiseFee,
+    });
+}
+
+/**
  * Updates WeBot (AI bot) configuration.
  */
 export async function updateWeBotConfig(

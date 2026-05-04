@@ -3,6 +3,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { validateUserAuth } from '../config/authGuard';
+import { notifyContractSigned, resendApiKeyForContracts } from './notifyContractSigned';
 
 // ─── Shared Field Type ────────────────────────────────────────────────────────
 // Must mirror /front/src/shared/types.ts
@@ -29,7 +30,7 @@ interface ContractData {
 
 const db = getFirestore();
 
-export const signDeal = onCall({ cors: true }, async (request) => {
+export const signDeal = onCall({ cors: true, secrets: [resendApiKeyForContracts] }, async (request) => {
     // ── 1. Auth (supports both authenticated agents and anonymous clients) ────
     const { dealId, agencyId: requestAgencyId } = request.data as { dealId: string; agencyId?: string };
 
@@ -264,6 +265,19 @@ export const signDeal = onCall({ cors: true }, async (request) => {
     });
 
     await batch.commit();
+
+    // ── 11. Send notifications (email to client/agent/admin + system alert) ──
+    // Must be awaited: Cloud Functions v2 terminates on return, so fire-and-forget
+    // would silently drop emails before they complete.
+    try {
+        await notifyContractSigned({
+            agencyId,
+            dealId,
+            signedPdfUrl,
+        });
+    } catch (err) {
+        console.error('[signDeal] notifyContractSigned failed (non-fatal):', err);
+    }
 
     return { success: true, signedPdfUrl };
 });

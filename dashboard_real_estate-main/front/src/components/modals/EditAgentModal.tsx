@@ -28,6 +28,7 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
     const [specializations, setSpecializations] = useState<AgentSpecialization[]>(agent.specializations ?? []);
     const [serviceAreas, setServiceAreas] = useState<string[]>(agent.serviceAreas ?? []);
     const [areaInput, setAreaInput] = useState('');
+    const [commissionPercent, setCommissionPercent] = useState<number>(agent.commissionPercent ?? 50);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -69,6 +70,7 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                 role,
                 specializations,
                 serviceAreas,
+                commissionPercent,
             });
             onSuccess?.('פרטי הסוכן עודכנו בהצלחה ✓');
             onClose();
@@ -197,6 +199,38 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                                 <Plus size={16} />
                             </button>
                         </div>
+                    </div>
+
+                    {/* ─── Commission Percent ─── */}
+                    <div className="pt-1 border-t border-slate-100">
+                        <label className={labelCls}>
+                            אחוז עמלת סוכן
+                            <span className="text-slate-400 font-normal mr-1">— כמה אחוז מהעמלה מקבל הסוכן</span>
+                        </label>
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={commissionPercent}
+                                onChange={e => setCommissionPercent(Number(e.target.value))}
+                                className="flex-1 accent-violet-600"
+                            />
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    value={commissionPercent}
+                                    onChange={e => setCommissionPercent(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                    className="w-16 border border-slate-200 rounded-xl px-2.5 py-2 text-sm text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 bg-slate-50 focus:bg-white"
+                                />
+                                <span className="text-sm text-slate-500">%</span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">ברירת מחדל: 50%. מנוכה אוטומטית בדוח רווח והפסד.</p>
                     </div>
 
                     {error && (

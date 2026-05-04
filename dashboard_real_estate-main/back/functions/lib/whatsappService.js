@@ -171,7 +171,7 @@ async function sendWhatsAppMessage(integration, customerPhone, messageText) {
 }
 // ─── 4. Create Shared Catalog ─────────────────────────────────────────────────
 async function createSharedCatalog(db, agencyId, agencyData, leadId, leadName, propertyIds) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const catalogRef = db.collection('shared_catalogs').doc();
     const now = new Date();
     const expiresAt = new Date(now);
@@ -179,8 +179,11 @@ async function createSharedCatalog(db, agencyId, agencyData, leadId, leadName, p
     await catalogRef.set({
         agencyId,
         agencyName: agencyData.agencyName || agencyData.name || '',
-        agencyLogoUrl: ((_a = agencyData.settings) === null || _a === void 0 ? void 0 : _a.logoUrl) || '',
-        agencyPhone: agencyData.officePhone || ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.phoneNumber) || '',
+        agencyLogoUrl: ((_a = agencyData.settings) === null || _a === void 0 ? void 0 : _a.logoUrl) || agencyData.logoUrl || '',
+        agencyPhone: agencyData.officePhone || agencyData.phoneNumber || ((_b = agencyData.whatsappIntegration) === null || _b === void 0 ? void 0 : _b.phoneNumber) || '',
+        // Agent branding — used by SharedCatalogPage to render agent photo + name
+        agentPhotoUrl: ((_c = agencyData.settings) === null || _c === void 0 ? void 0 : _c.agentPhotoUrl) || agencyData.agentPhotoUrl || '',
+        agentName: ((_d = agencyData.settings) === null || _d === void 0 ? void 0 : _d.agentName) || agencyData.agentName || '',
         leadId,
         leadName,
         propertyIds,

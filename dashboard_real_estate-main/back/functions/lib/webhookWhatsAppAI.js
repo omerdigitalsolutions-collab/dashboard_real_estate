@@ -55,14 +55,10 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhookWhatsAppAI = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
-const axios_1 = __importDefault(require("axios"));
 const crypto = __importStar(require("crypto"));
 const params_1 = require("firebase-functions/params");
 const generative_ai_1 = require("@google/generative-ai");
@@ -135,11 +131,6 @@ async function resolveAgencyByInstance(idInstance) {
         instanceAgencyCache.set(idInstance, agencyId);
     return agencyId;
 }
-// ─── Helper: Send Green API Message ──────────────────────────────────────────
-async function sendGreenApiMessage(creds, waChatId, message) {
-    const sendUrl = `https://7105.api.greenapi.com/waInstance${creds.idInstance}/sendMessage/${creds.apiTokenInstance}`;
-    await axios_1.default.post(sendUrl, { chatId: waChatId, message }, { timeout: 15000 });
-}
 // ─── Helper: Upsert Lead ──────────────────────────────────────────────────────
 async function upsertLead(agencyId, phone, rawName) {
     const snap = await db
@@ -168,6 +159,7 @@ async function upsertLead(agencyId, phone, rawName) {
         status: 'new',
         source: 'WhatsApp Bot',
         isBotActive: true,
+        lastInteraction: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     console.log(`[AI Bot] New lead created: ${leadRef.id} for phone ${phone}`);
@@ -179,13 +171,15 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
     secrets: [geminiApiKey, masterKey, webhookSecret, googleClientId, googleClientSecret, googleRedirectUri, resendApiKey],
     timeoutSeconds: 300,
     memory: '1GiB',
-    cpu: 1, // שומר CPU פעיל אחרי res.send() לעיבוד async (Gemini, Firestore, Green API)
+    cpu: 1,
     minInstances: 1, // מונע cold-start — שמרן אחד חם תמיד, חוסך 5–30s לכל הודעה ראשונה אחרי השקטה
     concurrency: 40, // אינסטנס יחיד מטפל במספר הודעות במקביל
 }, async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
-    // 1. ACK immediately
-    res.status(200).send('OK');
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    // Process synchronously so Cloud Run CPU stays active throughout.
+    // res.status(200).send('OK') is deferred to the finally block —
+    // this eliminates the 2-5 minute CPU-throttle delay that happened
+    // when we ACKed early and then ran Gemini/Firestore async.
     try {
         const body = req.body;
         const typeWebhook = (body === null || body === void 0 ? void 0 : body.typeWebhook) || (body === null || body === void 0 ? void 0 : body.event) || '';
@@ -200,18 +194,24 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
             console.log(`[Webhook] ⏭️ Skipping irrelevant type: ${typeWebhook}`);
             return;
         }
-        // Idempotency: skip messages already processed (Meta/Green API at-least-once delivery).
-        // Read is awaited (correctness gate); the marker write is fire-and-forget.
+        // Idempotency: atomically claim this message ID before processing.
+        // Using create() (fails if document exists) prevents race conditions
+        // when Green API retries a webhook we're still processing.
         const idMessageEarly = body === null || body === void 0 ? void 0 : body.idMessage;
         if (idMessageEarly) {
             const processedRef = db.collection('processed_messages').doc(idMessageEarly);
-            const alreadyDone = await processedRef.get();
-            if (alreadyDone.exists)
-                return;
-            processedRef.set({
-                processedAt: admin.firestore.FieldValue.serverTimestamp(),
-                instance: idInstance,
-            }).catch((e) => console.warn('[Webhook] processed_messages set failed:', e === null || e === void 0 ? void 0 : e.message));
+            try {
+                await processedRef.create({
+                    processedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    instance: idInstance,
+                });
+            }
+            catch (e) {
+                // code 6 = gRPC ALREADY_EXISTS — duplicate delivery, skip
+                if ((e === null || e === void 0 ? void 0 : e.code) === 6 || ((_d = e === null || e === void 0 ? void 0 : e.message) === null || _d === void 0 ? void 0 : _d.includes('ALREADY_EXISTS')))
+                    return;
+                console.warn('[Webhook] processed_messages create failed (non-fatal):', e === null || e === void 0 ? void 0 : e.message);
+            }
         }
         // Resolve Agency
         const agencyId = await resolveAgencyByInstance(idInstance);
@@ -232,11 +232,11 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
         // Exclude groups, broadcast lists, status updates, and WhatsApp channels
         const isGroup = chatId.endsWith('@g.us') || chatId.includes('@broadcast') || chatId.includes('@newsletter');
         const isOutbound = typeWebhook === 'outgoingMessageReceived';
-        const rawSender = isOutbound ? (((_d = body === null || body === void 0 ? void 0 : body.chatData) === null || _d === void 0 ? void 0 : _d.chatId) || senderData.chatId) : (senderData.sender || chatId);
+        const rawSender = isOutbound ? (((_e = body === null || body === void 0 ? void 0 : body.chatData) === null || _e === void 0 ? void 0 : _e.chatId) || senderData.chatId) : (senderData.sender || chatId);
         const idMessage = body === null || body === void 0 ? void 0 : body.idMessage;
-        let textMessage = ((_e = messageData.textMessageData) === null || _e === void 0 ? void 0 : _e.textMessage) ||
-            ((_f = messageData.extendedTextMessageData) === null || _f === void 0 ? void 0 : _f.text) ||
-            ((_g = messageData.imageMessageData) === null || _g === void 0 ? void 0 : _g.caption) || '';
+        let textMessage = ((_f = messageData.textMessageData) === null || _f === void 0 ? void 0 : _f.textMessage) ||
+            ((_g = messageData.extendedTextMessageData) === null || _g === void 0 ? void 0 : _g.text) ||
+            ((_h = messageData.imageMessageData) === null || _h === void 0 ? void 0 : _h.caption) || '';
         if (!textMessage) {
             if (messageData.typeMessage === 'imageMessage')
                 textMessage = '[תמונה]';
@@ -254,7 +254,7 @@ exports.webhookWhatsAppAI = (0, https_1.onRequest)({
         const { localPhone } = normalisePhone(rawSender);
         // Scenario A: Groups
         if (isGroup) {
-            const monitoredGroupsRaw = ((_h = agencyData.whatsappIntegration) === null || _h === void 0 ? void 0 : _h.monitoredGroups) || [];
+            const monitoredGroupsRaw = ((_j = agencyData.whatsappIntegration) === null || _j === void 0 ? void 0 : _j.monitoredGroups) || [];
             const monitoredGroupIds = monitoredGroupsRaw.map(g => typeof g === 'string' ? g : g.id);
             if (monitoredGroupIds.includes(chatId) && geminiApiKey.value()) {
                 try {
@@ -305,8 +305,8 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
                             street: parsed.street || null,
                             price: parsed.price || 0,
                             rooms: parsed.rooms || null,
-                            floor: (_j = parsed.floor) !== null && _j !== void 0 ? _j : null,
-                            sqm: (_k = parsed.sqm) !== null && _k !== void 0 ? _k : null,
+                            floor: (_k = parsed.floor) !== null && _k !== void 0 ? _k : null,
+                            sqm: (_l = parsed.sqm) !== null && _l !== void 0 ? _l : null,
                             description: parsed.description || null,
                             type: parsed.type || 'sale',
                             listingType: 'external',
@@ -363,9 +363,9 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
         }
         else {
             // Always create a lead for anyone who messages — never initiate outbound
-            const res = await upsertLead(agencyId, localPhone, senderName);
-            leadId = res.leadId;
-            isBotActive = res.isBotActive;
+            const upserted = await upsertLead(agencyId, localPhone, senderName);
+            leadId = upserted.leadId;
+            isBotActive = upserted.isBotActive;
         }
         // Reset follow-up campaign step on any real reply (not opt-out)
         const isOptOutMsg = ['הסר', 'הסירו', 'הסר אותי', 'הפסיקו', 'stop', 'unsubscribe']
@@ -406,6 +406,13 @@ Return ONLY a JSON object with these fields (no markdown, no explanation):
     }
     catch (err) {
         console.error('[Webhook] ❌ Fatal error:', err);
+    }
+    finally {
+        // Always ACK Green API — whether we processed, skipped, or errored.
+        // Deferred to here (not line 1) so CPU stays fully allocated throughout
+        // Gemini + Firestore work. Early-ACK caused Cloud Run to throttle CPU
+        // to near-zero after res.send(), turning 10s jobs into 3+ minute waits.
+        res.status(200).send('OK');
     }
 });
 //# sourceMappingURL=webhookWhatsAppAI.js.map
