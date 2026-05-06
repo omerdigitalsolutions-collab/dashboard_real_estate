@@ -94,10 +94,12 @@ interface PublicPropertyCardProps {
 }
 
 export function PublicPropertyCard({ property, agency, webotPhone }: PublicPropertyCardProps) {
-    const images: string[] = [
-        ...(property.media?.mainImage ? [property.media.mainImage] : []),
-        ...(property.media?.images || []),
-    ].filter(Boolean);
+    const images: string[] = property.hideImagesFromPublic
+        ? []
+        : [
+            ...(property.media?.mainImage ? [property.media.mainImage] : []),
+            ...(property.media?.images || []),
+        ].filter(Boolean);
 
     const address = property.address?.fullAddress || property.address?.city || '';
     const price = property.financials?.price ?? (property as any).price ?? 0;

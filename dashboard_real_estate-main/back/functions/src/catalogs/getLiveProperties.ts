@@ -73,13 +73,18 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
 
             for (const doc of snap.docs) {
                 const data = doc.data();
+                const hideImages = !!data.hideImagesFromPublic;
                 // Support both new nested schema and legacy flat schema (cities collection)
-                const images: string[] =
+                const rawImages: string[] =
                     data.media?.images ||
                     data.imageUrls ||
                     data.images ||
                     [];
-                const finalImages = images.length > 0 ? images : [PLACEHOLDER_IMAGE];
+                // When the owner opts to hide images from public catalogs, return an empty
+                // array (frontend renders a no-image placeholder) and skip the stock fallback.
+                const finalImages = hideImages
+                    ? []
+                    : (rawImages.length > 0 ? rawImages : [PLACEHOLDER_IMAGE]);
 
                 const city = data.address?.city || data.city || '';
                 const fullAddress = data.address?.fullAddress ||
@@ -92,6 +97,10 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
                 const rawAgentName = data.agentName;
                 const agentName = data.listingType === 'exclusive' && rawAgentName && rawAgentName !== 'true'
                     ? String(rawAgentName) : '';
+
+                const sanitizedMedia = hideImages
+                    ? { mainImage: null, images: [], videoTourUrl: data.media?.videoTourUrl ?? null }
+                    : { ...data.media, images: finalImages };
 
                 liveProperties.push({
                     ...data,
@@ -114,8 +123,9 @@ export const getLiveProperties = onCall({ cors: true }, async (request) => {
                     // Pass through nested objects for richer display
                     features: data.features || null,
                     financials: data.financials || { price },
-                    media: { ...data.media, images: finalImages },
+                    media: sanitizedMedia,
                     management: data.management || null,
+                    hideImagesFromPublic: hideImages,
                 });
             }
         }

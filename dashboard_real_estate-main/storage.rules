@@ -98,7 +98,7 @@ service firebase.storage {
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*')
                     && firestore.get(
-                         /databases/(default)/documents/properties/$(propertyId)
+                         /databases/(default)/documents/agencies/$(agencyId)/properties/$(propertyId)
                        ).data.agencyId == agencyId;
 
       // Only admins or owners can overwrite or delete property images
@@ -117,7 +117,7 @@ service firebase.storage {
                     && request.resource.size < 200 * 1024 * 1024
                     && request.resource.contentType.matches('video/.*')
                     && firestore.get(
-                         /databases/(default)/documents/properties/$(propertyId)
+                         /databases/(default)/documents/agencies/$(agencyId)/properties/$(propertyId)
                        ).data.agencyId == agencyId;
 
       allow update, delete: if request.auth != null

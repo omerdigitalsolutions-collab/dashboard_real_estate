@@ -225,9 +225,13 @@ export const processNaturalLanguageSearch = onRequest(
 
             // Strip internal-only fields before sending to public clients
             const sanitized = paginated.map(p => {
-                const { management, ...rest } = p as any;
+                const { management, media, ...rest } = p as any;
+                const hideImages = !!(p as any).hideImagesFromPublic;
                 return {
                     ...rest,
+                    media: hideImages
+                        ? { mainImage: null, images: [], videoTourUrl: media?.videoTourUrl ?? null }
+                        : (media ?? null),
                     management: {
                         assignedAgentId: management?.assignedAgentId ?? null,
                         descriptions: management?.descriptions ?? null,

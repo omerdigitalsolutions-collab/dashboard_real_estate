@@ -263,6 +263,10 @@ export interface Property {
         videoTourUrl?: string | null;
     };
 
+    // Privacy: when true, do not expose property images on public-facing surfaces
+    // (B2C explore gallery, shared lead catalogs, B2B marketplace).
+    hideImagesFromPublic?: boolean;
+
     management: {
         assignedAgentId?: string | null;
         assignedAgentName?: string | null;
@@ -364,7 +368,8 @@ export interface AppTask {
     id: string;
     agencyId: string;
     createdBy: string; // agentId of who created the task
-    assignedToAgentId?: string; // agentId of who the task is assigned to (may differ from createdBy)
+    assignedToAgentId?: string; // legacy single-assignee field; new writes use assignedToAgentIds
+    assignedToAgentIds?: string[]; // multi-assignee list of UIDs; empty array = personal/admin-only
     title: string;
     description?: string;
     dueDate: Timestamp;

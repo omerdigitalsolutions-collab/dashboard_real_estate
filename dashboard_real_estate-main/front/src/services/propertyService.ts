@@ -69,6 +69,7 @@ export interface NewPropertyData {
     leadId?: string;
     originalSource?: string;
     externalLink?: string;
+    hideImagesFromPublic?: boolean;
 }
 
 /**
@@ -129,6 +130,7 @@ export async function addProperty(
         leadId: restData.leadId ?? null,
         originalSource: restData.originalSource ?? null,
         externalLink: restData.externalLink ?? null,
+        hideImagesFromPublic: restData.hideImagesFromPublic ?? false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });

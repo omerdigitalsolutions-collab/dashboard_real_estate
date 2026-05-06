@@ -142,11 +142,18 @@ export default function Marketplace() {
               className="group bg-slate-800/40 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 shadow-xl"
             >
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src={property.media?.mainImage || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&auto=format&fit=crop&q=60'} 
-                  alt={property.address.fullAddress}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
+                {property.hideImagesFromPublic ? (
+                  <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex flex-col items-center justify-center text-slate-400">
+                    <Home size={36} className="mb-2 opacity-60" />
+                    <span className="text-xs font-medium">תמונות זמינות לפי בקשה</span>
+                  </div>
+                ) : (
+                  <img
+                    src={property.media?.mainImage || (property.media?.images && property.media.images[0]) || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&auto=format&fit=crop&q=60'}
+                    alt={property.address.fullAddress}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                )}
                 <div className="absolute top-3 right-3 px-3 py-1 bg-blue-600/90 text-white text-xs font-bold rounded-full backdrop-blur-md shadow-lg">
                   {property.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                 </div>

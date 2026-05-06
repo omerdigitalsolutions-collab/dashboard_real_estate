@@ -51,6 +51,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
     const [externalLink, setExternalLink] = useState(property.externalLink ?? property.yad2Link ?? '');
     const [collaborationStatus, setCollaborationStatus] = useState<'private' | 'collaborative'>(property.collaborationStatus || 'private');
     const [collaborationTerms, setCollaborationTerms] = useState(property.collaborationTerms || '');
+    const [hideImagesFromPublic, setHideImagesFromPublic] = useState<boolean>(!!property.hideImagesFromPublic);
 
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -183,6 +184,7 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                 externalLink: externalLink.trim(),
                 collaborationStatus,
                 collaborationTerms: collaborationTerms.trim(),
+                hideImagesFromPublic,
             });
             onSuccess?.('הנכס עודכן בהצלחה ✓');
             toast.success('הנכס עודכן בהצלחה ✓');
@@ -479,6 +481,24 @@ export default function EditPropertyModal({ property, isOpen, onClose, onSuccess
                         <div>
                             <label className={labelCls}>תיאור הנכס</label>
                             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="תאר את הנכס בקצרה..." className={inputCls} />
+                        </div>
+
+                        {/* Public images privacy toggle */}
+                        <div className="pt-3 border-t border-slate-100">
+                            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={hideImagesFromPublic}
+                                    onChange={e => setHideImagesFromPublic(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500 rounded"
+                                />
+                                <div className="flex-1">
+                                    <div className="text-sm font-semibold text-slate-700">הסתר תמונות מהקטלוג הציבורי</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                        תמונות הנכס לא יופיעו במאגר הציבורי, בקטלוגים ללקוחות ובמרקטפלייס. ניתן יהיה לראות את התמונות רק בתוך המערכת.
+                                    </div>
+                                </div>
+                            </label>
                         </div>
                     </div>
 

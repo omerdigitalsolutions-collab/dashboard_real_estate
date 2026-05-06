@@ -45,6 +45,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [externalLink, setExternalLink] = useState('');
     const [collaborationStatus, setCollaborationStatus] = useState<'private' | 'collaborative'>('private');
     const [collaborationTerms, setCollaborationTerms] = useState('');
+    const [hideImagesFromPublic, setHideImagesFromPublic] = useState<boolean>(false);
 
     // AI Extraction State
     const [rawText, setRawText] = useState('');
@@ -389,6 +390,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                 externalLink: externalLink.trim(),
                 collaborationStatus,
                 collaborationTerms: collaborationTerms.trim(),
+                hideImagesFromPublic,
             } as any);
             showToast('הנכס נוסף בהצלחה ✓');
             resetForm();
@@ -795,6 +797,24 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
                                     )}
                                 </div>
                             )}
+                        </div>
+
+                        {/* Public images privacy toggle */}
+                        <div className="pt-2 border-t border-slate-100">
+                            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={hideImagesFromPublic}
+                                    onChange={e => setHideImagesFromPublic(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 text-blue-600 focus:ring-blue-500 rounded"
+                                />
+                                <div className="flex-1">
+                                    <div className="text-sm font-semibold text-slate-700">הסתר תמונות מהקטלוג הציבורי</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                        תמונות הנכס לא יופיעו במאגר הציבורי, בקטלוגים ללקוחות ובמרקטפלייס.
+                                    </div>
+                                </div>
+                            </label>
                         </div>
 
                         {/* Actions */}
