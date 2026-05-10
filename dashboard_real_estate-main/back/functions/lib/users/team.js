@@ -10,6 +10,18 @@ const authGuard_1 = require("../config/authGuard");
 const crypto_1 = require("crypto");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const db = (0, firestore_1.getFirestore)();
+// Normalize a phone number to strict E.164 (Israel-aware) for comparison
+// against Firebase Auth's verified `phone_number` claim.
+const normalizeToE164 = (phone) => {
+    const digits = phone.replace(/\D/g, '');
+    if (!digits)
+        return null;
+    if (digits.startsWith('972'))
+        return `+${digits}`;
+    if (digits.startsWith('0'))
+        return `+972${digits.substring(1)}`;
+    return `+${digits}`;
+};
 // ── Cryptographically secure token generation ──────────────────────────────────
 // Uses Node's crypto module instead of Math.random() to produce
 // 24 bytes of randomness → 48-char hex string (entropy: ~144 bits).
@@ -393,6 +405,7 @@ exports.getInviteInfo = (0, https_1.onCall)({ cors: true }, async (request) => {
  * Output: { success: true }
  */
 exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'You must be signed in.');
     }
@@ -417,8 +430,17 @@ exports.completeAgentSetup = (0, https_1.onCall)({ cors: true }, async (request)
     const update = {};
     if (name === null || name === void 0 ? void 0 : name.trim())
         update.name = name.trim();
-    if (phone === null || phone === void 0 ? void 0 : phone.trim())
+    // If a phone is being saved, require that it matches the SMS-verified
+    // phone_number on the caller's Firebase Auth token. This prevents a client
+    // from bypassing the verification modal and submitting an unverified number.
+    if (phone === null || phone === void 0 ? void 0 : phone.trim()) {
+        const claimedE164 = normalizeToE164(phone.trim());
+        const verifiedE164 = (_a = request.auth.token.phone_number) !== null && _a !== void 0 ? _a : null;
+        if (!verifiedE164 || !claimedE164 || verifiedE164 !== claimedE164) {
+            throw new https_1.HttpsError('failed-precondition', 'מספר הטלפון לא אומת');
+        }
         update.phone = phone.trim();
+    }
     if (Object.keys(update).length === 0) {
         throw new https_1.HttpsError('invalid-argument', 'At least name or phone must be provided.');
     }
@@ -834,9 +856,9 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
                 createdAt: firestore_1.FieldValue.serverTimestamp()
             });
         }
-        // Mark stub as consumed inside the same transaction
+        // Delete the stub document inside the same transaction to prevent duplicate users
         if (stubDoc.id !== userUid) {
-            transaction.update(stubDoc.ref, { uid: userUid, claimedAt: firestore_1.FieldValue.serverTimestamp() });
+            transaction.delete(stubDoc.ref);
         }
     });
     // Set custom claims using effectiveRole (not stubData.role) to avoid

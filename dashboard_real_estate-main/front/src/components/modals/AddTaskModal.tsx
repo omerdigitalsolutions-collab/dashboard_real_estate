@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { addTask } from '../../services/taskService';
 import { addAlert } from '../../services/alertService';
-import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target, CalendarDays, UserCheck } from 'lucide-react';
+import { X, Calendar, Flag, AlignLeft, CheckSquare, Loader2, Target, CalendarDays, UserCheck, Users, UserX } from 'lucide-react';
 import { createCalendarEvent } from '../../services/calendarService';
 import { AppUser } from '../../types';
 
@@ -24,7 +24,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
     const [dueDate, setDueDate] = useState('');
     const [relatedEntityType, setRelatedEntityType] = useState<'none' | 'lead' | 'property'>('none');
     const [relatedEntityId, setRelatedEntityId] = useState('');
-    const [assignedToAgentId, setAssignedToAgentId] = useState('');
+    const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
     const [syncToGoogle, setSyncToGoogle] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +38,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
             setDueDate(new Date().toISOString().split('T')[0]);
             setRelatedEntityType('none');
             setRelatedEntityId('');
-            setAssignedToAgentId('');
+            setSelectedAgentIds([]);
             setSyncToGoogle(userData?.googleCalendar?.enabled || false);
             setError('');
         }
@@ -65,9 +65,7 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                 dueDate: new Date(dueDate),
             };
 
-            if (assignedToAgentId) {
-                taskData.assignedToAgentId = assignedToAgentId;
-            }
+            taskData.assignedToAgentIds = selectedAgentIds;
 
             if (description.trim()) {
                 taskData.description = description.trim();
@@ -91,19 +89,19 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
 
             const taskId = await addTask(userData.agencyId, taskData);
 
-            // Send notification alert to the assigned agent (if different from creator)
-            if (assignedToAgentId && assignedToAgentId !== userData.uid) {
-                const assignedAgent = agents.find(a => a.uid === assignedToAgentId || a.id === assignedToAgentId);
-                const agentName = userData.name || 'המנהל';
-                await addAlert(userData.agencyId, {
+            // Send notification alert to each assigned agent (excluding the creator).
+            const recipients = selectedAgentIds.filter(id => id !== userData.uid);
+            if (recipients.length > 0) {
+                const senderName = userData.name || 'המנהל';
+                await Promise.all(recipients.map(agentId => addAlert(userData.agencyId, {
                     agencyId: userData.agencyId,
-                    targetAgentId: assignedToAgentId,
+                    targetAgentId: agentId,
                     title: 'משימה חדשה הוקצתה אליך',
-                    message: `${agentName} הקצה לך את המשימה: "${title.trim()}"${assignedAgent ? '' : ''}`,
+                    message: `${senderName} הקצה לך את המשימה: "${title.trim()}"`,
                     type: 'info',
                     isRead: false,
                     relatedTo: { id: taskId, type: 'task' },
-                });
+                })));
             }
 
             if (syncToGoogle) {
@@ -126,8 +124,20 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
     const inputClasses = "w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none bg-slate-50 focus:bg-white text-slate-700";
     const labelClasses = "block text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1.5";
 
-    // Filter agents list — show all agents in the agency for assignment
+    // Filter agents list — show all team members in the agency (admins + agents)
     const assignableAgents = agents.filter(a => a.uid != null);
+
+    const toggleAgent = (uid: string) => {
+        setSelectedAgentIds(prev =>
+            prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
+        );
+    };
+    const selectAllAgents = () => {
+        setSelectedAgentIds(assignableAgents.map(a => a.uid!));
+    };
+    const clearAgents = () => {
+        setSelectedAgentIds([]);
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
@@ -214,21 +224,57 @@ export default function AddTaskModal({ isOpen, onClose, leads = [], properties =
                         {isAdmin && assignableAgents.length > 0 && (
                             <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/50">
                                 <label className="block text-xs font-semibold text-emerald-700 mb-1.5 flex items-center gap-1.5">
-                                    <UserCheck size={14} /> שיוך משימה לסוכן
+                                    <UserCheck size={14} /> שיוך משימה לסוכנים
                                 </label>
-                                <p className="text-xs text-emerald-600/80 mb-3">הסוכן שנבחר יקבל התראה ויוכל לראות את המשימה בדאשבורד שלו.</p>
-                                <select
-                                    value={assignedToAgentId}
-                                    onChange={e => setAssignedToAgentId(e.target.value)}
-                                    className={inputClasses}
-                                >
-                                    <option value="">ללא שיוך (משימה אישית)</option>
-                                    {assignableAgents.map(agent => (
-                                        <option key={agent.uid || agent.id} value={agent.uid || agent.id}>
-                                            {agent.name} {agent.role === 'admin' ? '(מנהל)' : '(סוכן)'}
-                                        </option>
-                                    ))}
-                                </select>
+                                <p className="text-xs text-emerald-600/80 mb-3">
+                                    בחר סוכן אחד או יותר. כל מי שנבחר יקבל התראה ויוכל לראות ולעדכן את המשימה.
+                                </p>
+
+                                <div className="flex items-center gap-2 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={selectAllAgents}
+                                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                                    >
+                                        <Users size={12} /> כולם
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={clearAgents}
+                                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <UserX size={12} /> ללא (אישית)
+                                    </button>
+                                    <span className="ml-auto text-xs text-emerald-700 font-semibold">
+                                        נבחרו {selectedAgentIds.length} מתוך {assignableAgents.length}
+                                    </span>
+                                </div>
+
+                                <div className="bg-white border border-emerald-100 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100">
+                                    {assignableAgents.map(agent => {
+                                        const uid = agent.uid!;
+                                        const checked = selectedAgentIds.includes(uid);
+                                        return (
+                                            <label
+                                                key={uid}
+                                                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${checked ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => toggleAgent(uid)}
+                                                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                                />
+                                                <span className="text-sm text-slate-700 flex-1">
+                                                    {agent.name}
+                                                </span>
+                                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${agent.role === 'admin' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {agent.role === 'admin' ? 'מנהל' : 'סוכן'}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 

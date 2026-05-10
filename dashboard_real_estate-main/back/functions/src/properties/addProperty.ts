@@ -42,6 +42,7 @@ export const addProperty = onCall({ cors: true }, async (request) => {
         management?: { assignedAgentId?: string; descriptions?: string };
         listingType?: string;
         status?: string;
+        visibility?: 'public' | 'private' | 'draft';
         // Legacy flat fields for backward compat
         city?: string;
         street?: string;
@@ -104,8 +105,10 @@ export const addProperty = onCall({ cors: true }, async (request) => {
             descriptions: data.management?.descriptions || data.description || null,
         },
         listingType: data.listingType || null,
+        visibility: data.visibility || null,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        ...(data.visibility === 'public' ? { publicAt: FieldValue.serverTimestamp() } : {}),
     });
 
     return { success: true, propertyId: propertyRef.id };

@@ -95,6 +95,7 @@ import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
 import { checkTrialExpiryAlerts } from './scheduled/checkTrialExpiryAlerts';
 import { weeklyFollowUp } from './scheduled/weeklyFollowUp';
 import { followUpCampaign } from './scheduled/followUpCampaign';
+import { syncCalendar } from './scheduled/syncCalendar';
 
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/manual_requests';
@@ -147,7 +148,7 @@ export const contracts = { signDeal, onContractInstanceSigned };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 
-export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign };
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign, syncCalendar };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

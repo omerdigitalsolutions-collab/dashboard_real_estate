@@ -180,11 +180,13 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         // Firestore rules allow reading only own/assigned tasks for non-admins,
         // so we must query each condition separately (no OR across different fields).
         let tasksCreated: AppTask[] = [];
-        let tasksAssigned: AppTask[] = [];
+        let tasksAssignedSingle: AppTask[] = [];
+        let tasksAssignedMulti: AppTask[] = [];
+
         const mergeTasks = () => {
             if (!isMounted) return;
             const seen = new Set<string>();
-            const merged = [...tasksCreated, ...tasksAssigned].filter(t => {
+            const merged = [...tasksCreated, ...tasksAssignedSingle, ...tasksAssignedMulti].filter(t => {
                 if (seen.has(t.id)) return false;
                 seen.add(t.id);
                 return true;
@@ -198,10 +200,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             (err) => { console.error('[useLiveDashboardData] Tasks (created) Error:', err); if (isMounted) setError(err); }
         );
 
-        const unsubTasksAssigned = onSnapshot(
+        const unsubTasksAssignedSingle = onSnapshot(
             query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentId', '==', uid)),
-            (snap) => { tasksAssigned = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeTasks(); },
-            (err) => { console.error('[useLiveDashboardData] Tasks (assigned) Error:', err); if (isMounted) setError(err); }
+            (snap) => { tasksAssignedSingle = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeTasks(); },
+            (err) => { console.error('[useLiveDashboardData] Tasks (assigned single) Error:', err); if (isMounted) setError(err); }
+        );
+
+        const unsubTasksAssignedMulti = onSnapshot(
+            query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentIds', 'array-contains', uid)),
+            (snap) => { tasksAssignedMulti = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeTasks(); },
+            (err) => { console.error('[useLiveDashboardData] Tasks (assigned multi) Error:', err); if (isMounted) setError(err); }
         );
 
         // Leads — agents see only leads assigned to them; admins see all agency leads.
@@ -301,7 +309,8 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             unsubWhatsappProperties();
             unsubDeals();
             unsubTasksCreated();
-            unsubTasksAssigned();
+            unsubTasksAssignedSingle();
+            unsubTasksAssignedMulti();
             unsubLeads();
             unsubAlertsPersonal();
             unsubAlertsBroadcast();
@@ -312,7 +321,9 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
 
     // 2. Global-city property subscriptions. Decoupled — re-runs only when the
     // resolved set of cities actually changes, not on every other Firestore tick.
-    const planId = rawAgency?.planId;
+    // NOTE: planId is stored under agency.billing.planId, not at root level.
+    // Fall back chain: billing.planId → subscriptionTier → root planId
+    const planId = rawAgency?.billing?.planId || rawAgency?.subscriptionTier || rawAgency?.planId;
     const mainServiceArea = (rawAgency as any)?.mainServiceArea;
     const activeGlobalCities = agencySettings?.activeGlobalCities;
     const userServiceAreas = userData?.serviceAreas;
@@ -320,6 +331,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const resolvedCities = useMemo(() => {
         if (!userData?.agencyId) return [] as string[];
         const planFeatures = getPlanFeatures(planId);
+        console.log('[useLiveDashboardData] planId resolved:', planId, '| canAccessSourcing:', planFeatures.canAccessSourcing);
         if (!planFeatures.canAccessSourcing) return [];
 
         const agencyCities = activeGlobalCities || (mainServiceArea ? [mainServiceArea] : []);
@@ -335,7 +347,9 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
             !catalogMatches.some(cm => isCityMatch([bc], cm))
         );
 
-        return Array.from(new Set([...catalogMatches, ...uncoveredBaseCities]));
+        const resolved = Array.from(new Set([...catalogMatches, ...uncoveredBaseCities]));
+        console.log('[useLiveDashboardData] resolvedCities:', resolved);
+        return resolved;
     }, [userData?.agencyId, planId, mainServiceArea, activeGlobalCities, userServiceAreas, citiesCatalog]);
 
     // Stable key so the subscription effect only re-runs when the resolved set
@@ -358,10 +372,23 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                     if (!isMounted) return;
                     cityPropsMap[city] = citySnap.docs.map(d => {
                         const data = d.data();
-                        const flatAddr = (typeof data.address === 'string' ? data.address : null) || data.street || 'כתובת חסויה';
+                        
+                        // Robust type mapping (Hebrew & English)
+                        const rawType = (data.type || data.transactionType || '').toString().toLowerCase().trim();
+                        const isRent = rawType === 'rent' || rawType === 'השכרה' || rawType === 'lease';
+                        const mappedTransactionType = data.transactionType || (isRent ? 'rent' : 'forsale');
+
+                        // Robust address normalization
+                        const flatAddr = (typeof data.address === 'string' ? data.address : null) || data.street || data.fullAddress || 'כתובת חסויה';
                         const flatCity = data.city || city;
                         const normalizedAddress = (data.address && typeof data.address === 'object')
-                            ? data.address
+                            ? {
+                                fullAddress: data.address.fullAddress || flatAddr,
+                                city: data.address.city || flatCity,
+                                street: data.address.street || data.street || '',
+                                neighborhood: data.address.neighborhood || data.neighborhood || '',
+                                ...(data.address.coords || (data.lat && data.lng ? { coords: { lat: data.lat, lng: data.lng } } : {})),
+                            }
                             : {
                                 fullAddress: flatAddr,
                                 city: flatCity,
@@ -369,14 +396,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
                                 ...(data.neighborhood ? { neighborhood: data.neighborhood } : {}),
                                 ...(data.lat && data.lng ? { coords: { lat: data.lat, lng: data.lng } } : {}),
                             };
+
                         const normalizedImages = data.media?.images || data.imageUrls || data.images || [];
+                        
                         return {
                             id: d.id,
                             ...data,
                             address: normalizedAddress,
                             financials: data.financials || { price: data.price ?? 0 },
                             media: { ...(data.media || {}), images: normalizedImages },
-                            transactionType: data.transactionType || (data.type === 'rent' ? 'rent' : 'forsale'),
+                            transactionType: mappedTransactionType,
                             propertyType: data.propertyType || data.kind || '',
                             squareMeters: data.squareMeters || data.sqm || null,
                             rooms: data.rooms || data.roomCount || null,

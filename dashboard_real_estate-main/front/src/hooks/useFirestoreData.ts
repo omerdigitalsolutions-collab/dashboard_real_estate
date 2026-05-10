@@ -155,26 +155,42 @@ export function useTasks() {
             return () => unsub();
         }
 
-        // Non-admin: merge created + assigned
+        // Non-admin: merge created + assigned (single) + assigned (multiple)
         let created: AppTask[] = [];
-        let assigned: AppTask[] = [];
+        let assignedSingle: AppTask[] = [];
+        let assignedMulti: AppTask[] = [];
+
         const merge = () => {
             const seen = new Set<string>();
-            setData([...created, ...assigned].filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; }));
+            const merged = [...created, ...assignedSingle, ...assignedMulti].filter(t => {
+                if (seen.has(t.id)) return false;
+                seen.add(t.id);
+                return true;
+            });
+            setData(merged);
             setLoading(false);
             setError(null);
         };
+
         const unsubCreated = onSnapshot(
             query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('createdBy', '==', uid)),
             (snap) => { created = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
-            (err) => { setError(err); setLoading(false); }
+            (err) => { console.error('[useTasks] Created Error:', err); setError(err); setLoading(false); }
         );
-        const unsubAssigned = onSnapshot(
+
+        const unsubAssignedSingle = onSnapshot(
             query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentId', '==', uid)),
-            (snap) => { assigned = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
-            (err) => { setError(err); setLoading(false); }
+            (snap) => { assignedSingle = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
+            (err) => { console.error('[useTasks] Assigned (Single) Error:', err); setError(err); setLoading(false); }
         );
-        return () => { unsubCreated(); unsubAssigned(); };
+
+        const unsubAssignedMulti = onSnapshot(
+            query(collection(db, 'tasks'), where('agencyId', '==', agencyId), where('assignedToAgentIds', 'array-contains', uid)),
+            (snap) => { assignedMulti = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); merge(); },
+            (err) => { console.error('[useTasks] Assigned (Multi) Error:', err); setError(err); setLoading(false); }
+        );
+
+        return () => { unsubCreated(); unsubAssignedSingle(); unsubAssignedMulti(); };
     }, [agencyId, uid, isAdminUser]);
 
     return { data, loading, error };
@@ -384,7 +400,15 @@ export function useAgentPerformance() {
             'bg-cyan-100 text-cyan-600'
         ];
 
-        const data = agents
+        const seenIds = new Set<string>();
+        const uniqueAgents = agents.filter(agent => {
+            const key = agent.uid || agent.id;
+            if (seenIds.has(key)) return false;
+            seenIds.add(key);
+            return true;
+        });
+
+        const data = uniqueAgents
             .map((agent, index) => {
                 const uid = agent.uid;
                 const closedDeals = uid ? deals.filter(d => (d.agentId === uid || d.createdBy === uid) && d.stage === 'won') : [];

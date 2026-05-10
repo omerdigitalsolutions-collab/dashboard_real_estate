@@ -48,9 +48,9 @@ export function getLiveTasks(
             orderBy('dueDate', 'asc')
         );
     } else {
-        // Agents see tasks they created OR tasks explicitly assigned to them by an admin.
-        // Firestore doesn't support OR queries on different fields in one query,
-        // so we run two queries in parallel and merge the results.
+        // Agents see tasks they created OR tasks they're assigned to.
+        // Three parallel queries: createdBy, assignedToAgentIds array-contains (new),
+        // assignedToAgentId (legacy). Merged & deduped by id.
         const qCreated = query(
             collection(db, COLLECTION),
             where('agencyId', '==', agencyId),
@@ -65,16 +65,23 @@ export function getLiveTasks(
             orderBy('dueDate', 'asc')
         );
 
+        const qAssignedMulti = query(
+            collection(db, COLLECTION),
+            where('agencyId', '==', agencyId),
+            where('assignedToAgentIds', 'array-contains', userId),
+            orderBy('dueDate', 'asc')
+        );
+
         let createdTasks: AppTask[] = [];
         let assignedTasks: AppTask[] = [];
+        let assignedMultiTasks: AppTask[] = [];
 
         const mergeAndCallback = () => {
-            const seen = new Set<string>();
-            const merged = [...createdTasks, ...assignedTasks].filter(t => {
-                if (seen.has(t.id)) return false;
-                seen.add(t.id);
-                return true;
-            });
+            const byId = new Map<string, AppTask>();
+            for (const t of [...createdTasks, ...assignedTasks, ...assignedMultiTasks]) {
+                byId.set(t.id, t);
+            }
+            const merged = Array.from(byId.values());
             merged.sort((a: any, b: any) => {
                 const aTime = a.dueDate?.toMillis ? a.dueDate.toMillis() : 0;
                 const bTime = b.dueDate?.toMillis ? b.dueDate.toMillis() : 0;
@@ -91,8 +98,12 @@ export function getLiveTasks(
             (snap) => { assignedTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeAndCallback(); },
             onError
         );
+        const unsubAssignedMulti = onSnapshot(qAssignedMulti,
+            (snap) => { assignedMultiTasks = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppTask)); mergeAndCallback(); },
+            onError
+        );
 
-        return () => { unsubCreated(); unsubAssigned(); };
+        return () => { unsubCreated(); unsubAssigned(); unsubAssignedMulti(); };
     }
 
     return onSnapshot(
@@ -161,6 +172,11 @@ export async function deleteTask(task: AppTask): Promise<void> {
         console.error('Error in deleteTask:', error);
         throw new Error('שגיאה במחיקת המשימה. אנא נסה שוב.');
     }
+}
+
+export function getTaskAssigneeIds(t: AppTask): string[] {
+    if (Array.isArray(t.assignedToAgentIds)) return t.assignedToAgentIds;
+    return t.assignedToAgentId ? [t.assignedToAgentId] : [];
 }
 
 export async function addTaskNote(

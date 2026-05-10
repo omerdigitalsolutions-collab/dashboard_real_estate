@@ -25,7 +25,8 @@ import { useMediaQuery } from '../hooks/useMediaQuery';
 import type { LayoutItem } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { TimeRange } from '../types';
+import { TimeRange, AppUser } from '../types';
+import { getAgencyTeam } from '../services/teamService';
 
 // ─── Default layouts per tab (12-column grid, row-height = 80px) ────────────
 // Finance tab: KPI commissions, financial chart, agency expenses
@@ -75,6 +76,19 @@ export default function Dashboard() {
     if (activeTab === 'finance') setLayoutFinance(l as any);
     else setLayoutOffice(l as any);
   };
+
+  const [team, setTeam] = useState<AppUser[]>([]);
+
+  useEffect(() => {
+    if (!userData?.agencyId) return;
+    const unsub = getAgencyTeam(userData.agencyId, setTeam);
+    return () => unsub();
+  }, [userData?.agencyId]);
+
+  const agentsById = useMemo(
+    () => Object.fromEntries(team.map(a => [a.uid ?? a.id, a])),
+    [team]
+  );
 
   const gridWrapperRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState(1200);
@@ -423,6 +437,7 @@ export default function Dashboard() {
                 <TaskDashboardWidget
                   tasks={tasks as any}
                   onAddClick={() => setIsAddTaskModalOpen(true)}
+                  agentsById={agentsById}
                 />
               </div>
             </div>
@@ -507,6 +522,7 @@ export default function Dashboard() {
         onClose={() => setIsAddTaskModalOpen(false)}
         leads={leads}
         properties={properties}
+        agents={team}
       />
       <ImportModal
         isOpen={isImportModalOpen}

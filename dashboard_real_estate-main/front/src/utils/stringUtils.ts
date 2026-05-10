@@ -5,9 +5,16 @@
 export function normalizeCity(city: string | null | undefined): string {
     if (!city) return '';
     
-    return city
+    let normalized = city
         .toLowerCase()
-        .replace(/[^a-z0-9\u0590-\u05FF]/g, ''); // Remove everything except letters and numbers
+        .trim()
+        .replace(/[^a-z0-9\u0590-\u05FF]/g, ''); // Remove punctuation, spaces, etc.
+    
+    // Handle common Hebrew variations
+    // 1. Remove 'יפו' from 'תל אביב יפו' variations
+    normalized = normalized.replace(/יפו$/, '').replace(/^תלאביביפו$/, 'תלאביב');
+    
+    return normalized;
 }
 
 /**

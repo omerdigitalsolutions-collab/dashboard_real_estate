@@ -12,6 +12,16 @@ const db = getFirestore();
 
 type Role = 'admin' | 'agent';
 
+// Normalize a phone number to strict E.164 (Israel-aware) for comparison
+// against Firebase Auth's verified `phone_number` claim.
+const normalizeToE164 = (phone: string): string | null => {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('972')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+972${digits.substring(1)}`;
+  return `+${digits}`;
+};
+
 // ── Cryptographically secure token generation ──────────────────────────────────
 // Uses Node's crypto module instead of Math.random() to produce
 // 24 bytes of randomness → 48-char hex string (entropy: ~144 bits).
@@ -506,7 +516,18 @@ export const completeAgentSetup = onCall({ cors: true }, async (request) => {
   // Build update payload — only include provided fields
   const update: Record<string, string> = {};
   if (name?.trim()) update.name = name.trim();
-  if (phone?.trim()) update.phone = phone.trim();
+
+  // If a phone is being saved, require that it matches the SMS-verified
+  // phone_number on the caller's Firebase Auth token. This prevents a client
+  // from bypassing the verification modal and submitting an unverified number.
+  if (phone?.trim()) {
+    const claimedE164 = normalizeToE164(phone.trim());
+    const verifiedE164 = (request.auth.token as { phone_number?: string }).phone_number ?? null;
+    if (!verifiedE164 || !claimedE164 || verifiedE164 !== claimedE164) {
+      throw new HttpsError('failed-precondition', 'מספר הטלפון לא אומת');
+    }
+    update.phone = phone.trim();
+  }
 
   if (Object.keys(update).length === 0) {
     throw new HttpsError('invalid-argument', 'At least name or phone must be provided.');
@@ -1004,9 +1025,9 @@ export const claimInviteToken = onCall({ cors: true }, async (request) => {
       });
     }
 
-    // Mark stub as consumed inside the same transaction
+    // Delete the stub document inside the same transaction to prevent duplicate users
     if (stubDoc!.id !== userUid) {
-      transaction.update(stubDoc!.ref, { uid: userUid, claimedAt: FieldValue.serverTimestamp() });
+      transaction.delete(stubDoc!.ref);
     }
   });
 

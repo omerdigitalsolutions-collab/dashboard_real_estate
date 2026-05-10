@@ -66,7 +66,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const authGuard_1 = require("../config/authGuard");
 const db = (0, firestore_1.getFirestore)();
 // Fields that must never be changed by a client update
-const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
+const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'publicAt', 'id'];
 exports.updateProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
     var _a;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
@@ -126,7 +126,8 @@ exports.updateProperty = (0, https_1.onCall)({ cors: true }, async (request) => 
     for (const field of IMMUTABLE_FIELDS) {
         delete safeUpdates[field];
     }
-    await propertyRef.update(Object.assign(Object.assign({}, safeUpdates), { updatedAt: firestore_1.FieldValue.serverTimestamp() }));
+    const isBecomingPublic = updates.visibility === 'public' && propertyData.visibility !== 'public';
+    await propertyRef.update(Object.assign(Object.assign(Object.assign({}, safeUpdates), { updatedAt: firestore_1.FieldValue.serverTimestamp() }), (isBecomingPublic ? { publicAt: firestore_1.FieldValue.serverTimestamp() } : {})));
     return { success: true, propertyId: actualPropertyId };
 });
 //# sourceMappingURL=updateProperty.js.map

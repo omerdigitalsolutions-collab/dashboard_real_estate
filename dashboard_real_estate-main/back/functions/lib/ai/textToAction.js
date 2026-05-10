@@ -28,6 +28,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.textToActionAgent = void 0;
+exports.extractLeadDataFromAudio = extractLeadDataFromAudio;
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const generative_ai_1 = require("@google/generative-ai");
@@ -371,4 +372,82 @@ exports.textToActionAgent = (0, https_1.onCall)({
         };
     }
 });
+const CALL_ANALYSIS_PROMPT = `אתה מנתח שיחות בין סוכן נדל"ן ולקוח פוטנציאלי.
+השיחה מוקלטת ב-Stereo: ערוץ שמאל = לקוח, ערוץ ימין = סוכן.
+
+תפקידך:
+1. תמלל את השיחה המלאה בעברית — ציין [סוכן] ו[לקוח] לפני כל תור דיבור.
+2. ספק סיכום קצר (2-3 משפטים) של צרכי הלקוח.
+3. חלץ נתונים מובנים.
+
+חוקים:
+- אם שדה לא הוזכר בשיחה — הגדר כ-null.
+- budget_max: מספר שלם בשקלים (לדוגמה "3 מיליון" → 3000000).
+- property_type: "apartment" | "house" | "plot" | "commercial" — תרגם מעברית.
+- transaction_type: "sale" (קנייה/מכירה) | "rent" (שכירות) | null.
+
+החזר JSON בלבד — ללא markdown, ללא הסברים:
+{
+  "transcription": "תמלול מלא עם [סוכן] / [לקוח]...",
+  "summary": "סיכום קצר של צרכי הלקוח...",
+  "clientName": string | null,
+  "budget_max": number | null,
+  "rooms": number | null,
+  "preferred_location": string | null,
+  "property_type": "apartment" | "house" | "plot" | "commercial",
+  "transaction_type": "sale" | "rent" | null
+}`;
+/**
+ * Analyses a recorded phone call (stereo MP3) using Gemini.
+ * Transcribes, summarises, and extracts structured lead data in one pass.
+ * Used by twilioRecordingComplete Cloud Function.
+ */
+async function extractLeadDataFromAudio(audioBase64, mimeType, apiKey) {
+    var _a, _b;
+    const genAI = new generative_ai_1.GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const parts = [
+        { text: CALL_ANALYSIS_PROMPT },
+        { inlineData: { data: audioBase64, mimeType } },
+    ];
+    const result = await model.generateContent(parts);
+    const rawText = stripFences(result.response.text());
+    let parsed;
+    try {
+        parsed = JSON.parse(rawText);
+    }
+    catch (_c) {
+        throw new Error('[extractLeadDataFromAudio] Gemini returned invalid JSON');
+    }
+    if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('[extractLeadDataFromAudio] Gemini returned non-object');
+    }
+    const obj = parsed;
+    const toStr = (v) => typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+    const toNum = (v) => {
+        if (typeof v === 'number' && isFinite(v))
+            return Math.round(v);
+        if (typeof v === 'string') {
+            const n = parseFloat(v.replace(/,/g, ''));
+            if (isFinite(n))
+                return Math.round(n);
+        }
+        return null;
+    };
+    const propertyType = VALID_PROPERTY_TYPES.has(obj['property_type'])
+        ? obj['property_type']
+        : 'apartment';
+    const txRaw = toStr(obj['transaction_type']);
+    const transactionType = txRaw === 'sale' || txRaw === 'rent' ? txRaw : null;
+    return {
+        transcription: (_a = toStr(obj['transcription'])) !== null && _a !== void 0 ? _a : '',
+        summary: (_b = toStr(obj['summary'])) !== null && _b !== void 0 ? _b : '',
+        clientName: toStr(obj['clientName']),
+        budget_max: toNum(obj['budget_max']),
+        rooms: toNum(obj['rooms']),
+        preferred_location: toStr(obj['preferred_location']),
+        property_type: propertyType,
+        transaction_type: transactionType,
+    };
+}
 //# sourceMappingURL=textToAction.js.map

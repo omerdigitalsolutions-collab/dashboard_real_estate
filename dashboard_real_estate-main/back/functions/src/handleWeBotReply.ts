@@ -27,6 +27,12 @@ import {
 } from './whatsappService';
 import { evaluateMatch, MatchingProperty, MatchingRequirements } from './leads/matchingEngine';
 import { createCalendarEvent } from './calendar/eventManager';
+import {
+  getOfficeManagerUserId,
+  queryFreeBusy,
+  findFreeSlots,
+  formatSlotHebrew,
+} from './services/googleCalendar';
 
 const db = admin.firestore();
 
@@ -97,6 +103,7 @@ interface StoredChatState {
   extraCriteriaAsked?: boolean;
   closedAt?: number;
   sellerInfoAttempts?: number;
+  pendingIntent?: 'buyer' | 'seller'; // intent captured before name was collected
 }
 
 // ─── Gemini Function Declarations ─────────────────────────────────────────────
@@ -155,6 +162,21 @@ const notifyAssignedAgentDeclaration: FunctionDeclaration = {
       propertyId: { type: SchemaType.STRING, description: 'המזהה של הנכס מהקונטקסט (השדה [מזהה: ...])' },
     },
     required: ['propertyId'],
+  },
+};
+
+const checkAvailabilityDeclaration: FunctionDeclaration = {
+  name: 'check_availability',
+  description: 'בדוק זמינות ביומן מנהל המשרד לתיאום פגישה. מחזיר עד 3 חלונות זמן פנויים בימי העסקים הקרובים. קרא לפני schedule_meeting כדי להציג ללקוח זמנים ריאליים שבהם המשרד פנוי.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      preferredDate: {
+        type: SchemaType.STRING,
+        description: 'תאריך מועדף להתחלת החיפוש YYYY-MM-DD (אופציונלי — ברירת מחדל: היום)',
+      },
+    },
+    required: [],
   },
 };
 
@@ -565,6 +587,32 @@ async function sendEmailNotification(
   }
 }
 
+// ─── generatePropertyTeaser ───────────────────────────────────────────────────
+
+async function generatePropertyTeaser(
+  userMessage: string,
+  properties: Array<{ type: string; city: string; rooms: number | null; price: number | null }>,
+  geminiApiKey: string,
+): Promise<string> {
+  try {
+    const genAI = getGenAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+    const propContext = properties.length
+      ? properties.map(p => `${p.type}${p.city ? ` ב${p.city}` : ''}${p.rooms ? `, ${p.rooms} חדרים` : ''}${p.price ? `, ₪${Number(p.price).toLocaleString('he-IL')}` : ''}`).join(' | ')
+      : 'נכסים מגוונים';
+
+    const result = await withTimeout('generatePropertyTeaser', 6000, () => model.generateContent(
+      `כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${userMessage}".\n` +
+      `נכסים זמינים בסוכנות: ${propContext}.\n` +
+      `הטון: חם ומקצועי. אל תזכיר מחירים ספציפיים. אל תשאל שאלות. רק משפט קבלת פנים קצר.`,
+    ));
+    const text = result.response.text().trim();
+    return text || 'שמחים שפנית אלינו! יש לנו נכסים מעולים שיכולים להתאים לך.';
+  } catch {
+    return 'שמחים שפנית אלינו! יש לנו נכסים מעולים שיכולים להתאים לך.';
+  }
+}
+
 // ─── extractSellerInfo ────────────────────────────────────────────────────────
 
 async function extractSellerInfo(
@@ -672,13 +720,13 @@ async function runBuyerFlow(
 
   const schedulingPrefix =
     currentState === 'SCHEDULING_CALL'
-      ? '⚠️ מצב נוכחי: קטלוג הנכסים כבר נשלח ללקוח. אם הלקוח רוצה לקבוע שיחה/פגישה — שאל תאריך ושעה מועדפים ואז קרא ל-schedule_meeting בלבד. לאחר שהפגישה נקבעה שלח הודעת סיום חמה וחזור ל-IDLE. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
+      ? '⚠️ מצב נוכחי: הלקוח מוכן לתאם פגישה עם המתווך. קרא תחילה ל-check_availability כדי לשלוף את הזמנים הפנויים האמיתיים ביומן — הצג אותם ללקוח ובקש ממנו לבחור. לאחר שהלקוח בחר זמן — קרא ל-schedule_meeting עם הזמן שנבחר. לאחר שהפגישה נקבעה שלח הודעת סיום חמה וחזור ל-IDLE. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
       : '⚡ מהירות מעל הכל: ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג נכס / שכונה), קרא ל-update_lead_requirements ומיד אחר כך ל-create_catalog — אין צורך לדעת עיר. הבוט מחפש בכל נכסי הסוכנות. שאל שאלה אחת בלבד: "יש פרטים נוספים שחשוב לי לדעת לפני שאמצא לך נכסים?" ואז צור קטלוג ללא תלות בתשובה.\n\n';
 
   const genAI = getGenAI(geminiApiKey);
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash-lite',
-    tools: [{ functionDeclarations: [scheduleMeetingDeclaration, updateLeadRequirementsDeclaration, createCatalogDeclaration, notifyAssignedAgentDeclaration] }],
+    tools: [{ functionDeclarations: [scheduleMeetingDeclaration, updateLeadRequirementsDeclaration, createCatalogDeclaration, notifyAssignedAgentDeclaration, checkAvailabilityDeclaration] }],
     toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
     systemInstruction: schedulingPrefix + systemPrompt,
   });
@@ -735,6 +783,37 @@ async function runBuyerFlow(
       const endDate     = new Date(startDateObj);
       endDate.setMinutes(endDate.getMinutes() + durationMins);
       const endDateTime = endDate.toISOString().slice(0, 16) + ':00';
+
+      // Freebusy validation — reject the proposed slot if the Office Manager is
+      // already busy and surface alternatives so Gemini can re-ask the customer.
+      try {
+        const calendarOwner = await getOfficeManagerUserId(agencyId);
+        if (calendarOwner) {
+          const busyForSlot = await queryFreeBusy(calendarOwner, startDateObj.toISOString(), endDate.toISOString());
+          const hasConflict = busyForSlot.some(b => startDateObj < new Date(b.end) && endDate > new Date(b.start));
+          if (hasConflict) {
+            const windowEnd = new Date(startDateObj.getTime() + 3 * 24 * 60 * 60 * 1000);
+            const allBusy   = await queryFreeBusy(calendarOwner, startDateObj.toISOString(), windowEnd.toISOString());
+            const alts      = findFreeSlots(allBusy, startDateObj, windowEnd, durationMins);
+            chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 20_000, () => chat.sendMessage([{
+              functionResponse: {
+                name: call.name,
+                response: {
+                  success: false,
+                  reason: 'time_conflict',
+                  message: 'הזמן שהוצע תפוס ביומן. הצע ללקוח את האלטרנטיבות שלהלן.',
+                  alternatives: alts.map(formatSlotHebrew),
+                },
+              },
+            }])));
+            continue;
+          }
+        }
+      } catch (freeBusyErr) {
+        // If freebusy check fails (network / OAuth) proceed optimistically —
+        // the meeting will be created and the Office Manager can reschedule.
+        console.warn('[WeBot] freebusy validation failed (proceeding optimistically):', freeBusyErr);
+      }
 
       await db.collection('meetings').add({
         agencyId, leadId, date, time, meetingType,
@@ -889,6 +968,42 @@ async function runBuyerFlow(
           agencyId, customerPhone, incomingMessage, propertyId, greenApiCreds, resendApiKey,
         );
         functionResult = { success: result.notified, reason: result.reason };
+      }
+
+    // ── check_availability ────────────────────────────────────────────────────
+    } else if (call.name === 'check_availability') {
+      const { preferredDate } = (call.args || {}) as { preferredDate?: string };
+      const officeManagerId = await getOfficeManagerUserId(agencyId);
+
+      if (!officeManagerId) {
+        functionResult = {
+          success: false,
+          message: 'יומן מנהל המשרד אינו מחובר. שאל את הלקוח על זמן מועדף וקבע ישירות.',
+        };
+      } else {
+        try {
+          const windowStart = preferredDate ? new Date(`${preferredDate}T09:00:00`) : new Date();
+          const windowEnd   = new Date(windowStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+          const busy        = await queryFreeBusy(officeManagerId, windowStart.toISOString(), windowEnd.toISOString());
+          const freeSlots   = findFreeSlots(busy, windowStart, windowEnd, 60);
+
+          if (freeSlots.length > 0) {
+            functionResult = {
+              success: true,
+              freeSlots: freeSlots.map(formatSlotHebrew),
+              message: 'הצג את הזמנים הפנויים ללקוח ובקש ממנו לבחור אחד.',
+            };
+          } else {
+            functionResult = {
+              success: true,
+              freeSlots: [],
+              message: 'אין זמנים פנויים בטווח זה. שאל את הלקוח על תאריך אחר.',
+            };
+          }
+        } catch (availErr) {
+          console.warn('[WeBot] check_availability failed:', availErr);
+          functionResult = { success: false, message: 'לא ניתן לבדוק יומן כרגע. שאל על זמן מועדף.' };
+        }
       }
 
     } else {
@@ -1305,6 +1420,38 @@ export async function handleWeBotReply(
         && !intentKeywords.test(candidate);
       const name = looksLikeName ? candidate : 'לקוח';
       await db.collection('leads').doc(leadId).update({ name, botNameCollected: true });
+
+      // If name was asked in response to a property inquiry, move directly to
+      // scheduling and offer real free slots from the Office Manager's calendar.
+      if (storedChatState.pendingIntent === 'buyer') {
+        await updateChatState(leadId, 'SCHEDULING_CALL');
+
+        let schedulingMsg = `נעים להכיר, ${name}!\n`;
+        try {
+          const officeManagerId = await getOfficeManagerUserId(agencyId);
+          if (officeManagerId) {
+            const windowStart = new Date();
+            const windowEnd   = new Date(windowStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+            const busySlots   = await queryFreeBusy(officeManagerId, windowStart.toISOString(), windowEnd.toISOString());
+            const freeSlots   = findFreeSlots(busySlots, windowStart, windowEnd);
+            if (freeSlots.length > 0) {
+              const formatted = freeSlots.map(formatSlotHebrew).join('\n• ');
+              schedulingMsg += `הנה הזמנים הפנויים לפגישה עם המתווך שלנו:\n• ${formatted}\n\nאיזה זמן מתאים לך?`;
+            } else {
+              schedulingMsg += 'ספר לי מתי נוח לך לפגישה עם המתווך ונסדר.';
+            }
+          } else {
+            schedulingMsg += 'מתי נוח לך לשיחה קצרה עם המתווך שלנו?';
+          }
+        } catch (calErr) {
+          console.warn('[WeBot] freebusy after name collection failed (non-fatal):', calErr);
+          schedulingMsg += 'מתי נוח לך לשיחה קצרה עם המתווך שלנו?';
+        }
+
+        await sendBotMessage(integration, customerPhone, leadId, schedulingMsg);
+        return;
+      }
+
       await updateChatState(leadId, 'IDLE');
       await sendBotMessage(
         integration, customerPhone, leadId,
@@ -1315,11 +1462,40 @@ export async function handleWeBotReply(
 
     if (currentState === 'IDLE' && !leadData.botNameCollected) {
       const agencyDisplayName = agencyData.agencyName || agencyData.name || 'הסוכנות שלנו';
-      await updateChatState(leadId, 'COLLECTING_NAME');
-      await sendBotMessage(
-        integration, customerPhone, leadId,
-        `שלום, אני הנציג הדיגיטלי של ${agencyDisplayName}.\nאשמח לעזור לך לקנות, לשכור או למכור דירה.\nמה שמך?`,
-      );
+
+      // Classify intent so property inquiries get a tailored teaser before we ask for the name.
+      const firstIntent = await classifyIntent(incomingMessage, 'new', geminiApiKey);
+
+      if (firstIntent === 'buyer') {
+        // Load a few active properties for teaser context
+        const teaserPropSnap = await db
+          .collection('agencies').doc(agencyId).collection('properties')
+          .where('status', '==', 'active')
+          .limit(3)
+          .get();
+        const teaserProps = teaserPropSnap.docs.map(d => {
+          const pd = d.data();
+          return {
+            type: pd.propertyType || 'נכס',
+            city: pd.address?.city || '',
+            rooms: pd.rooms ?? null,
+            price: pd.financials?.price ?? null,
+          };
+        });
+
+        const teaser = await generatePropertyTeaser(incomingMessage, teaserProps, geminiApiKey);
+        await updateChatState(leadId, 'COLLECTING_NAME', { pendingIntent: 'buyer' });
+        await sendBotMessage(
+          integration, customerPhone, leadId,
+          `${teaser}\n\nכדי לחבר אותך עם המתווך שלנו, מה שמך?`,
+        );
+      } else {
+        await updateChatState(leadId, 'COLLECTING_NAME');
+        await sendBotMessage(
+          integration, customerPhone, leadId,
+          `שלום, אני הנציג הדיגיטלי של ${agencyDisplayName}.\nאשמח לעזור לך לקנות, לשכור או למכור דירה.\nמה שמך?`,
+        );
+      }
       return;
     }
 

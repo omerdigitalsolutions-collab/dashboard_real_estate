@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AppTask, TaskNote } from '../../types';
+import { AppTask, AppUser } from '../../types';
 import { toggleTaskCompletion, addTaskNote } from '../../services/taskService';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -24,6 +24,7 @@ import { Link } from 'react-router-dom';
 interface TaskDashboardWidgetProps {
     tasks: AppTask[];
     onAddClick: () => void;
+    agentsById?: Record<string, AppUser>;
 }
 
 const PRIORITIES = {
@@ -32,7 +33,7 @@ const PRIORITIES = {
     Low: { dot: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]', label: 'נמוך' }
 };
 
-export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboardWidgetProps) {
+export default function TaskDashboardWidget({ tasks, onAddClick, agentsById }: TaskDashboardWidgetProps) {
     const { userData } = useAuth();
     const [toggling, setToggling] = useState<string | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -193,16 +194,20 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                                             {/* Notes Display */}
                                             {task.notes && task.notes.length > 0 && !isNoteExpanded && (
                                                 <div className="flex flex-wrap gap-1 mt-2">
-                                                    {task.notes.slice(-3).map((note, idx) => (
-                                                        <span
-                                                            key={idx}
-                                                            className="inline-flex items-center gap-1 bg-slate-700/50 text-slate-300 text-[10px] px-2 py-1 rounded-full max-w-[200px] truncate"
-                                                            title={note.text}
-                                                        >
-                                                            <MessageSquare size={10} />
-                                                            {note.text.substring(0, 20)}...
-                                                        </span>
-                                                    ))}
+                                                    {task.notes.slice(-3).map((note, idx) => {
+                                                        const author = agentsById?.[note.createdBy];
+                                                        const isManager = author?.role === 'admin';
+                                                        return (
+                                                            <span
+                                                                key={idx}
+                                                                className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full max-w-[200px] truncate ${isManager ? 'bg-cyan-500/15 text-cyan-300' : 'bg-slate-700/50 text-slate-300'}`}
+                                                                title={`${author?.name || 'משתמש'} (${isManager ? 'מנהל' : 'סוכן'}): ${note.text}`}
+                                                            >
+                                                                <MessageSquare size={10} />
+                                                                {note.text.substring(0, 20)}...
+                                                            </span>
+                                                        );
+                                                    })}
                                                     {task.notes.length > 3 && (
                                                         <span className="text-[10px] text-slate-400 px-2 py-1">
                                                             +{task.notes.length - 3}
@@ -242,14 +247,25 @@ export default function TaskDashboardWidget({ tasks, onAddClick }: TaskDashboard
                                             {/* Existing Notes */}
                                             {task.notes && task.notes.length > 0 && (
                                                 <div className="space-y-1.5 pb-2 max-h-32 overflow-y-auto">
-                                                    {task.notes.map((note, idx) => (
-                                                        <div key={idx} className="bg-slate-800/50 rounded-lg p-2 text-xs">
-                                                            <p className="text-slate-200 break-words">{note.text}</p>
-                                                            <p className="text-slate-500 text-[10px] mt-1">
-                                                                {formatNoteDate(note.createdAt)}
-                                                            </p>
-                                                        </div>
-                                                    ))}
+                                                    {task.notes.map((note, idx) => {
+                                                        const author = agentsById?.[note.createdBy];
+                                                        const authorName = author?.name || 'משתמש';
+                                                        const isManager = author?.role === 'admin';
+                                                        return (
+                                                            <div key={idx} className="bg-slate-800/50 rounded-lg p-2 text-xs">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-slate-300 font-semibold text-[11px]">{authorName}</span>
+                                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isManager ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-700 text-slate-300'}`}>
+                                                                        {isManager ? 'מנהל' : 'סוכן'}
+                                                                    </span>
+                                                                    <span className="text-slate-500 text-[10px] mr-auto">
+                                                                        {formatNoteDate(note.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-slate-200 break-words">{note.text}</p>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
 

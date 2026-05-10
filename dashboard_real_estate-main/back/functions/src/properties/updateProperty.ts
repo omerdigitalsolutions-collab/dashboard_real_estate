@@ -21,7 +21,7 @@ import { validateUserAuth } from '../config/authGuard';
 const db = getFirestore();
 
 // Fields that must never be changed by a client update
-const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'id'];
+const IMMUTABLE_FIELDS = ['agencyId', 'createdAt', 'publicAt', 'id'];
 
 export const updateProperty = onCall({ cors: true }, async (request) => {
     const authData = await validateUserAuth(request);
@@ -108,9 +108,13 @@ export const updateProperty = onCall({ cors: true }, async (request) => {
         delete safeUpdates[field];
     }
 
+    const isBecomingPublic =
+        updates.visibility === 'public' && propertyData.visibility !== 'public';
+
     await propertyRef.update({
         ...safeUpdates,
-        updatedAt: FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(isBecomingPublic ? { publicAt: FieldValue.serverTimestamp() } : {}),
     });
 
     return { success: true, propertyId: actualPropertyId };

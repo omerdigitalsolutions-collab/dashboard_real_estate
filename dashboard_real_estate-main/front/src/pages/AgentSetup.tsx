@@ -4,7 +4,9 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, auth } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { User, CheckCircle2 } from 'lucide-react';
-import { isValidPhone } from '../utils/validation';
+import { isValidPhone, normalizePhoneIL } from '../utils/validation';
+import { checkPhoneAvailableService } from '../services/authService';
+import VerifyPhoneModal from '../components/auth/VerifyPhoneModal';
 
 /**
  * /agent-setup?token=<stubId>
@@ -24,6 +26,8 @@ export default function AgentSetup() {
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
     const [error, setError] = useState('');
+    const [showVerifyModal, setShowVerifyModal] = useState(false);
+    const [normalizedPhone, setNormalizedPhone] = useState('');
 
     // Pre-fill name and phone from stub data or Firebase Auth if available
     useEffect(() => {
@@ -41,23 +45,15 @@ export default function AgentSetup() {
         if (!token) navigate('/');
     }, [token, navigate]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-
-        if (!isValidPhone(phone)) {
-            setError('מספר הטלפון אינו תקין');
-            return;
-        }
-
+    const persistSetup = async (phoneToSave: string) => {
+        setLoading(true);
         try {
-            setLoading(true);
             const completeSetup = httpsCallable<
                 { token: string; name: string; phone: string },
                 { success: boolean }
             >(functions, 'users-completeAgentSetup');
 
-            await completeSetup({ token, name: name.trim(), phone: phone.trim() });
+            await completeSetup({ token, name: name.trim(), phone: phoneToSave });
 
             if (auth.currentUser) {
                 await auth.currentUser.getIdToken(true);
@@ -71,6 +67,53 @@ export default function AgentSetup() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+
+        if (!isValidPhone(phone)) {
+            setError('מספר הטלפון אינו תקין');
+            return;
+        }
+
+        const normalized = normalizePhoneIL(phone);
+        if (!normalized) {
+            setError('מספר הטלפון אינו תקין');
+            return;
+        }
+
+        // If the phone is already verified on the Firebase Auth user (e.g. from a
+        // prior verification or Google account with a verified phone), skip SMS.
+        if (auth.currentUser?.phoneNumber === normalized) {
+            await persistSetup(normalized);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const isAvailable = await checkPhoneAvailableService(normalized);
+            if (!isAvailable) {
+                setError('מספר זה כבר רשום במערכת');
+                return;
+            }
+            setNormalizedPhone(normalized);
+            setShowVerifyModal(true);
+        } catch (err: any) {
+            setError(err.message ?? 'אירעה שגיאה בבדיקת המספר, נסה שנית');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePhoneVerified = async () => {
+        setShowVerifyModal(false);
+        await persistSetup(normalizedPhone);
+    };
+
+    const handleVerifyCancel = () => {
+        setShowVerifyModal(false);
     };
 
     const inputCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all bg-slate-50 focus:bg-white';
@@ -143,6 +186,13 @@ export default function AgentSetup() {
                     )}
                 </div>
             </div>
+
+            <VerifyPhoneModal
+                phone={normalizedPhone}
+                isOpen={showVerifyModal}
+                onVerified={handlePhoneVerified}
+                onCancel={handleVerifyCancel}
+            />
         </div>
     );
 }

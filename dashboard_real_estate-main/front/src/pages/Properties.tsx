@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles, Calendar } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -311,6 +311,12 @@ export default function Properties() {
     }, [filteredPropertiesByTime, mainFilter]);
 
     // Helper functions for Grid View
+    const formatPropertyDate = (ts: any): string => {
+        const ms = ts?.toDate ? ts.toDate().getTime() : ts?.seconds ? ts.seconds * 1000 : 0;
+        if (!ms) return '';
+        return new Date(ms).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
     const getPropertyAgent = (agentId: string) => agents.find((a: AppUser) => a.uid === agentId);
 
     const getPropertyClient = (propertyId: string) => {
@@ -955,13 +961,19 @@ export default function Properties() {
                                                         <h3 className="font-bold text-lg text-slate-800 line-clamp-1">{prop.address?.fullAddress}</h3>
                                                         <span className="font-bold text-lg text-blue-600">₪{(prop.financials?.price || 0).toLocaleString()}</span>
                                                     </div>
-                                                    <p className="text-sm text-slate-500 font-medium mb-4 flex items-center gap-1.5 flex-wrap">
+                                                    <p className="text-sm text-slate-500 font-medium mb-2 flex items-center gap-1.5 flex-wrap">
                                                         <Building2 size={14} className="text-slate-400" />
                                                         {prop.address?.city || 'עיר לא צוינה'}
                                                         {` • ${translatePropertyKind(prop.propertyType)}`}
                                                         {prop.rooms ? ` • ${prop.rooms} חדרים` : ''}
                                                         {prop.features?.parkingSpots != null ? ` • ${prop.features.parkingSpots} חניות` : ''}
                                                     </p>
+                                                    {prop.createdAt && (
+                                                        <p className="text-xs text-slate-400 mb-3 flex items-center gap-1">
+                                                            <Calendar size={11} className="text-slate-300 shrink-0" />
+                                                            נכנס: {formatPropertyDate(prop.createdAt)}
+                                                        </p>
+                                                    )}
                                                 </>
                                             )}
 

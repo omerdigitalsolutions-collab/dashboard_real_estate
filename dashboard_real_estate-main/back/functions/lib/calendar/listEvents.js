@@ -40,7 +40,7 @@ exports.listEvents = (0, https_1.onCall)({
             const listResp = await calendar.calendarList.list({ maxResults: 100 });
             const items = listResp.data.items || [];
             const ids = items
-                .filter(c => c.id && c.selected !== false)
+                .filter(c => c.id && c.selected !== false && !c.id.includes('holiday'))
                 .map(c => c.id);
             if (ids.length > 0)
                 calendarIds = ids;

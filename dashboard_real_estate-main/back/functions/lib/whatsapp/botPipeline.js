@@ -110,7 +110,7 @@ async function processInboundMessage(params) {
     // 1. & 2. Blocklist + Rate limit (parallel, fail-safe)
     const [isBlocked, passedRateLimit] = await Promise.all([
         (0, blocklist_1.checkBlocklist)(phone).catch(() => false), // fail-safe: assume not blocked
-        (0, rateLimiter_1.checkRateLimit)(phone).catch(() => true), // fail-safe: assume passed
+        (0, rateLimiter_1.checkRateLimit)(phone, agencyId).catch(() => true), // fail-safe: assume passed
     ]);
     if (!isBypassPhone && isBlocked) {
         writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'blocklist' });
@@ -152,8 +152,10 @@ async function processInboundMessage(params) {
             writeAuditLog(phone, agencyId, 'blocked', text, { reason: 'auto_block_injection', score: newScore });
             return;
         }
-        writeAuditLog(phone, agencyId, 'inbound', sanitized, { injectionScore: newScore, flagged: true });
-        // Continue — system prompt handles the injection attempt gracefully
+        // Never forward injection attempts to Gemini — reply generically and stop.
+        await sendDirect(creds, waChatId, 'לא הצלחתי להבין את הבקשה. אשמח לעזור אם תנסח מחדש.');
+        writeAuditLog(phone, agencyId, 'blocked', sanitized, { injectionScore: newScore, flagged: true, reason: 'injection_blocked_pre_ai' });
+        return;
     }
     else {
         writeAuditLog(phone, agencyId, 'inbound', sanitized);

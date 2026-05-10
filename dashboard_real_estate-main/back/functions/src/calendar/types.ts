@@ -68,6 +68,13 @@ export interface CalendarEventPayload {
         type: 'lead' | 'property';
         name: string;
     };
+
+    /** Buyer lead ID linked to this meeting. */
+    buyerId?: string;
+    /** Seller lead ID linked to this meeting. */
+    sellerId?: string;
+    /** Property ID linked to this meeting. */
+    propertyId?: string;
 }
 
 // ── Create Event Result ───────────────────────────────────────────────────────
@@ -90,7 +97,8 @@ export interface AppTask {
     id: string;
     agencyId: string;
     createdBy: string;
-    assignedToAgentId?: string;
+    assignedToAgentId?: string; // legacy single-assignee
+    assignedToAgentIds?: string[]; // multi-assignee list of UIDs
     title: string;
     description?: string;
     status?: string;
@@ -105,6 +113,9 @@ export interface AppTask {
         type: 'lead' | 'property';
         name?: string;
     };
+    buyerId?: string;
+    sellerId?: string;
+    propertyId?: string;
     createdAt?: any;
     updatedAt?: any;
 }

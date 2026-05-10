@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInviteInfo = exports.webhookWhatsAppAI = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.getInviteInfo = exports.webhookWhatsAppAI = exports.calls = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -71,6 +71,7 @@ const checkTrialExpiry_1 = require("./scheduled/checkTrialExpiry");
 const checkTrialExpiryAlerts_1 = require("./scheduled/checkTrialExpiryAlerts");
 const weeklyFollowUp_1 = require("./scheduled/weeklyFollowUp");
 const followUpCampaign_1 = require("./scheduled/followUpCampaign");
+const syncCalendar_1 = require("./scheduled/syncCalendar");
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 const manual_requests_1 = require("./billing/manual_requests");
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
@@ -117,11 +118,17 @@ exports.superadmin = {
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.contracts = { signDeal: signDeal_1.signDeal, onContractInstanceSigned: notifyInstanceSigned_1.onContractInstanceSigned };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
-exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign };
+exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign, syncCalendar: syncCalendar_1.syncCalendar };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");
 Object.defineProperty(exports, "maxPaymentWebhook", { enumerable: true, get: function () { return maxWebhook_1.maxPaymentWebhook; } });
+// ── Calls Module ──────────────────────────────────────────────────────────────
+const twilioVoiceInbound_1 = require("./calls/twilioVoiceInbound");
+const twilioRecordingComplete_1 = require("./calls/twilioRecordingComplete");
+const twilioStatusCallback_1 = require("./calls/twilioStatusCallback");
+const purchaseVirtualNumber_1 = require("./calls/purchaseVirtualNumber");
+exports.calls = { twilioVoiceInbound: twilioVoiceInbound_1.twilioVoiceInbound, twilioRecordingComplete: twilioRecordingComplete_1.twilioRecordingComplete, twilioStatusCallback: twilioStatusCallback_1.twilioStatusCallback, purchaseVirtualNumber: purchaseVirtualNumber_1.purchaseVirtualNumber };
 // ── AI WhatsApp Bot ────────────────────────────────────────────────────────────
 // Top-level export so the URL is clean (no namespace prefix):
 //   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI

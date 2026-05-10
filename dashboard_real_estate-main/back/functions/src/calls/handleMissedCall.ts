@@ -88,7 +88,7 @@ export async function handleMissedCall(params: {
         priority: 'High',
         status: 'pending',
         dueDate: admin.firestore.Timestamp.fromDate(dueDate),
-        assignedToAgentId: agentId,
+        assignedToAgentIds: [agentId],
         relatedTo: { type: 'lead', id: leadId },
         createdBy: 'system',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

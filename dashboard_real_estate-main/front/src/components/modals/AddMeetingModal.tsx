@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { createEvent } from '../../services/calendarService';
 import { getAgencyTeam } from '../../services/teamService';
-import { getLiveLeads, addLead } from '../../services/leadService';
+import { getLiveLeads } from '../../services/leadService';
 import { getLiveProperties } from '../../services/propertyService';
 import { AppUser, Lead, Property } from '../../types';
-import { X, Calendar, MapPin, AlignLeft, Loader2, Link as LinkIcon, UserPlus, Phone, CheckCircle2, MessageCircle, Building2, User } from 'lucide-react';
+import { X, Calendar, MapPin, AlignLeft, Loader2, Link as LinkIcon, Phone, CheckCircle2, MessageCircle, Building2, User, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AddMeetingModalProps {
@@ -15,6 +15,10 @@ interface AddMeetingModalProps {
         summary?: string;
         description?: string;
         location?: string;
+        startDate?: string;
+        startTime?: string;
+        endDate?: string;
+        endTime?: string;
         relatedEntityType?: 'lead' | 'property';
         relatedEntityId?: string;
         relatedEntityName?: string;
@@ -31,24 +35,22 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
     const [startTime, setStartTime] = useState('');
     const [endDate, setEndDate] = useState('');
     const [endTime, setEndTime] = useState('');
-    
+
     // Team & List selection
     const [teamMembers, setTeamMembers] = useState<AppUser[]>([]);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [properties, setProperties] = useState<Property[]>([]);
-    
+
     const [selectedAgentId, setSelectedAgentId] = useState<string>('none');
-    const [selectedLeadId, setSelectedLeadId] = useState<string>('none');
+    const [selectedBuyerId, setSelectedBuyerId] = useState<string>('none');
+    const [selectedSellerId, setSelectedSellerId] = useState<string>('none');
     const [selectedPropertyId, setSelectedPropertyId] = useState<string>('none');
-    
-    const [clientName, setClientName] = useState('');
+
     const [clientPhone, setClientPhone] = useState('');
-    const [isQuickLead, setIsQuickLead] = useState(false);
-    const [isExistingLeadMode, setIsExistingLeadMode] = useState(true);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
-    
+
     // Success View state
     const [isSuccess, setIsSuccess] = useState(false);
     const [meetingLink, setMeetingLink] = useState('');
@@ -75,44 +77,64 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
             setDescription(initialData?.description || '');
             setLocation(initialData?.location || '');
             setClientPhone(initialData?.clientPhone || '');
-            setClientName(initialData?.relatedEntityName || '');
-            
+
+            // Reset selections first, then apply any pre-selections from initialData
+            setSelectedAgentId('none');
+            setSelectedBuyerId('none');
+            setSelectedSellerId('none');
+            setSelectedPropertyId('none');
+            setIsSuccess(false);
+            setMeetingLink('');
+            setError('');
+
             if (initialData?.relatedEntityType === 'lead' && initialData.relatedEntityId) {
-                setSelectedLeadId(initialData.relatedEntityId);
-                setIsExistingLeadMode(true);
+                setSelectedBuyerId(initialData.relatedEntityId);
             } else if (initialData?.relatedEntityType === 'property' && initialData.relatedEntityId) {
                 setSelectedPropertyId(initialData.relatedEntityId);
             }
 
-            // Default to today + 1 hour
-            const now = new Date();
-            const start = new Date(now.getTime() + 60 * 60 * 1000);
-            const end = new Date(start.getTime() + 60 * 60 * 1000);
-            
-            setStartDate(start.toISOString().split('T')[0]);
-            setStartTime(start.toTimeString().slice(0, 5));
-            setEndDate(end.toISOString().split('T')[0]);
-            setEndTime(end.toTimeString().slice(0, 5));
-            
-            setSelectedAgentId('none');
-            setIsSuccess(false);
-            setMeetingLink('');
-            setError('');
-            setIsQuickLead(false);
+            // Use passed date/time values when available, otherwise default to now + 1 hour
+            if (initialData?.startDate) {
+                setStartDate(initialData.startDate);
+                setStartTime(initialData.startTime || '09:00');
+                setEndDate(initialData.endDate || initialData.startDate);
+                setEndTime(initialData.endTime || '10:00');
+            } else {
+                const now = new Date();
+                const start = new Date(now.getTime() + 60 * 60 * 1000);
+                const end = new Date(start.getTime() + 60 * 60 * 1000);
+                setStartDate(start.toISOString().split('T')[0]);
+                setStartTime(start.toTimeString().slice(0, 5));
+                setEndDate(end.toISOString().split('T')[0]);
+                setEndTime(end.toTimeString().slice(0, 5));
+            }
         }
     }, [isOpen, initialData]);
 
     if (!isOpen || !userData) return null;
 
-    const handleLeadChange = (id: string) => {
-        setSelectedLeadId(id);
+    const handleBuyerChange = (id: string) => {
+        setSelectedBuyerId(id);
         if (id !== 'none') {
             const lead = leads.find(l => l.id === id);
             if (lead) {
                 setClientPhone(lead.phone || '');
-                setClientName(lead.name);
-                if (!summary || summary === 'פגישה חדשה') {
-                    setSummary(`פגישה עם ${lead.name}`);
+                if (!summary) setSummary(`פגישה עם ${lead.name}`);
+            }
+        }
+    };
+
+    const handleSellerChange = (id: string) => {
+        setSelectedSellerId(id);
+        if (id !== 'none') {
+            const lead = leads.find(l => l.id === id);
+            if (lead) {
+                if (!clientPhone) setClientPhone(lead.phone || '');
+                // Auto-fill location from seller's linked property
+                const sellerProperty = properties.find(p => p.leadId === id);
+                if (sellerProperty?.address?.fullAddress) {
+                    setLocation(sellerProperty.address.fullAddress);
+                    setSelectedPropertyId(sellerProperty.id);
                 }
             }
         }
@@ -124,9 +146,9 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
             const prop = properties.find(p => p.id === id);
             if (prop) {
                 setLocation(`${prop.address?.fullAddress}${prop.address?.city ? `, ${prop.address.city}` : ''}`);
-                if (!summary || summary.includes('פגישה')) {
-                    const lead = leads.find(l => l.id === selectedLeadId);
-                    setSummary(`פגישה בנכס: ${prop.address?.fullAddress} ${lead ? `(עם ${lead.name})` : ''}`);
+                if (!summary) {
+                    const buyer = leads.find(l => l.id === selectedBuyerId);
+                    setSummary(`פגישה בנכס: ${prop.address?.fullAddress}${buyer ? ` (עם ${buyer.name})` : ''}`);
                 }
             }
         }
@@ -134,7 +156,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!summary.trim()) {
             setError('יש להזין כותרת לפגישה');
             return;
@@ -154,26 +176,10 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
 
         try {
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            let finalLeadId = selectedLeadId === 'none' ? null : selectedLeadId;
-            let finalClientName = clientName;
 
-            // Handle Quick Lead Creation
-            if (!isExistingLeadMode && isQuickLead && clientPhone) {
-                try {
-                    const newLeadId = await addLead(userData.agencyId, {
-                        name: clientName || 'לקוח מפגישה',
-                        phone: clientPhone,
-                        status: 'new',
-                        source: 'calendar',
-                    }) as string;
-                    finalLeadId = newLeadId;
-                    finalClientName = clientName || 'לקוח מפגישה';
-                    toast.success('ליד חדש נוצר במערכת');
-                } catch (leadErr) {
-                    console.error('Error creating quick lead:', leadErr);
-                    toast.error('שגיאה ביצירת ליד חדש, ממשיך בקביעת הפגישה...');
-                }
-            }
+            const finalBuyerId = selectedBuyerId !== 'none' ? selectedBuyerId : null;
+            const finalSellerId = selectedSellerId !== 'none' ? selectedSellerId : null;
+            const finalPropertyId = selectedPropertyId !== 'none' ? selectedPropertyId : null;
 
             const attendees = [];
             const agent = teamMembers.find(m => m.id === selectedAgentId);
@@ -181,15 +187,18 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                 attendees.push({ email: agent.email, displayName: agent.name });
             }
 
-            // Determine relatedTo for backend task
+            // Primary CRM link: seller > buyer > property
             let relatedTo: any = undefined;
-            if (selectedPropertyId !== 'none') {
-                relatedTo = { type: 'property', id: selectedPropertyId, name: location };
-            } else if (finalLeadId) {
-                relatedTo = { type: 'lead', id: finalLeadId, name: finalClientName };
+            if (finalSellerId) {
+                const seller = leads.find(l => l.id === finalSellerId);
+                relatedTo = { type: 'lead', id: finalSellerId, name: seller?.name || '' };
+            } else if (finalBuyerId) {
+                const buyer = leads.find(l => l.id === finalBuyerId);
+                relatedTo = { type: 'lead', id: finalBuyerId, name: buyer?.name || '' };
+            } else if (finalPropertyId) {
+                relatedTo = { type: 'property', id: finalPropertyId, name: location };
             }
 
-            // Create Google Calendar event + CRM task (single backend call)
             const res = await createEvent({
                 summary: summary.trim(),
                 description: description.trim(),
@@ -199,12 +208,15 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                 attendees: attendees.length > 0 ? attendees : undefined,
                 assignedToAgentId: selectedAgentId !== 'none' ? selectedAgentId : userData.uid,
                 relatedTo,
+                ...(finalBuyerId && { buyerId: finalBuyerId }),
+                ...(finalSellerId && { sellerId: finalSellerId }),
+                ...(finalPropertyId && { propertyId: finalPropertyId }),
             });
 
             if (res?.htmlLink) {
                 setMeetingLink(res.htmlLink);
             }
-            
+
             toast.success('הפגישה נוצרה וסונכרנה למערכת');
             setIsSuccess(true);
         } catch (err: any) {
@@ -239,7 +251,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
     return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" dir="rtl">
             <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-                
+
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 shrink-0">
                     <div className="flex items-center gap-3">
@@ -271,7 +283,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                 {startDate} בשעה {startTime}
                             </p>
                         </div>
-                        
+
                         <div className="space-y-4">
                             {selectedAgentId !== 'none' && (
                                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -279,7 +291,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                     <p className="text-xs text-slate-500 mb-3">
                                         זימון רשמי יישלח למייל של הסוכן אוטומטית. ניתן גם לעדכן בוואטסאפ:
                                     </p>
-                                    <button 
+                                    <button
                                         onClick={handleSendAgentWhatsApp}
                                         className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-2.5 rounded-xl transition-all shadow-md text-sm"
                                     >
@@ -302,7 +314,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                             className="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500/20"
                                         />
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={handleSendClientWhatsApp}
                                         className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-2.5 rounded-xl transition-all shadow-md text-sm"
                                     >
@@ -345,79 +357,40 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                 />
                             </div>
 
+                            {/* Buyer & Seller */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">שיוך לליד</label>
-                                        <button 
-                                            type="button"
-                                            onClick={() => {
-                                                setIsExistingLeadMode(!isExistingLeadMode);
-                                                setSelectedLeadId('none');
-                                            }}
-                                            className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold hover:bg-blue-100 transition-colors"
-                                        >
-                                            {isExistingLeadMode ? 'ליד חדש?' : 'בחר מהרשימה'}
-                                        </button>
-                                    </div>
-                                    
-                                    {isExistingLeadMode ? (
-                                        <div className="relative">
-                                            <User size={16} className="absolute right-3 top-3 text-slate-400" />
-                                            <select
-                                                value={selectedLeadId}
-                                                onChange={(e) => handleLeadChange(e.target.value)}
-                                                className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 appearance-none"
-                                            >
-                                                <option value="none">-- בחר ליד מהרשימה --</option>
-                                                {leads.map(lead => (
-                                                    <option key={lead.id} value={lead.id}>
-                                                        {lead.name} {lead.phone ? `(${lead.phone})` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            <div className="relative">
-                                                <User size={16} className="absolute right-3 top-3 text-slate-400" />
-                                                <input
-                                                    type="text"
-                                                    value={clientName}
-                                                    onChange={e => setClientName(e.target.value)}
-                                                    className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm"
-                                                    placeholder="שם הלקוח..."
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-2 px-1">
-                                                <input 
-                                                    type="checkbox" 
-                                                    id="quickLead" 
-                                                    checked={isQuickLead}
-                                                    onChange={e => setIsQuickLead(e.target.checked)}
-                                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
-                                                />
-                                                <label htmlFor="quickLead" className="text-xs text-slate-500 font-medium cursor-pointer">
-                                                    הוסף אוטומטית כליד חדש במערכת
-                                                </label>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">נכס רלוונטי (אופציונלי)</label>
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">קונה</label>
                                     <div className="relative">
-                                        <Building2 size={16} className="absolute right-3 top-3 text-slate-400" />
+                                        <User size={16} className="absolute right-3 top-3 text-slate-400" />
                                         <select
-                                            value={selectedPropertyId}
-                                            onChange={(e) => handlePropertyChange(e.target.value)}
+                                            value={selectedBuyerId}
+                                            onChange={(e) => handleBuyerChange(e.target.value)}
                                             className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 appearance-none"
                                         >
-                                            <option value="none">-- בחר נכס (אופציונלי) --</option>
-                                            {properties.map(p => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.address?.fullAddress} {p.address?.city ? `, ${p.address.city}` : ''}
+                                            <option value="none">-- בחר קונה --</option>
+                                            {leads.map(lead => (
+                                                <option key={lead.id} value={lead.id}>
+                                                    {lead.name}{lead.phone ? ` (${lead.phone})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">מוכר</label>
+                                    <div className="relative">
+                                        <User size={16} className="absolute right-3 top-3 text-slate-400" />
+                                        <select
+                                            value={selectedSellerId}
+                                            onChange={(e) => handleSellerChange(e.target.value)}
+                                            className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 appearance-none"
+                                        >
+                                            <option value="none">-- בחר מוכר --</option>
+                                            {leads.map(lead => (
+                                                <option key={lead.id} value={lead.id}>
+                                                    {lead.name}{lead.phone ? ` (${lead.phone})` : ''}
                                                 </option>
                                             ))}
                                         </select>
@@ -425,6 +398,27 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                 </div>
                             </div>
 
+                            {/* Property */}
+                            <div className="space-y-1.5">
+                                <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">נכס רלוונטי (אופציונלי)</label>
+                                <div className="relative">
+                                    <Building2 size={16} className="absolute right-3 top-3 text-slate-400" />
+                                    <select
+                                        value={selectedPropertyId}
+                                        onChange={(e) => handlePropertyChange(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 appearance-none"
+                                    >
+                                        <option value="none">-- בחר נכס (אופציונלי) --</option>
+                                        {properties.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.address?.fullAddress}{p.address?.city ? `, ${p.address.city}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Date/Time */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="block text-xs font-bold text-slate-500 tracking-wider">התחלה</label>
@@ -442,6 +436,7 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                 </div>
                             </div>
 
+                            {/* Agent & Phone */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">שיוך לסוכן</label>
@@ -467,33 +462,46 @@ export const AddMeetingModal = ({ isOpen, onClose, initialData }: AddMeetingModa
                                             type="tel"
                                             value={clientPhone}
                                             onChange={e => setClientPhone(e.target.value)}
-                                            disabled={isExistingLeadMode && selectedLeadId !== 'none'}
-                                            className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 disabled:opacity-60"
+                                            className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20"
                                             placeholder="05X-XXXXXXX"
                                         />
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Location */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">מיקום</label>
                                 <div className="relative">
                                     <MapPin size={16} className="absolute right-3 top-3 text-slate-400" />
-                                    <input type="text" value={location} onChange={e => setLocation(e.target.value)} className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder="כתובת..." />
+                                    <input
+                                        type="text"
+                                        value={location}
+                                        onChange={e => setLocation(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20"
+                                        placeholder="כתובת..."
+                                    />
                                 </div>
                             </div>
 
+                            {/* Description */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">תיאור</label>
                                 <div className="relative">
                                     <AlignLeft size={16} className="absolute right-3 top-3 text-slate-400" />
-                                    <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20" placeholder="פרטים נוספים..." />
+                                    <textarea
+                                        value={description}
+                                        onChange={e => setDescription(e.target.value)}
+                                        rows={2}
+                                        className="w-full bg-slate-50 border border-slate-200/60 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20"
+                                        placeholder="פרטים נוספים..."
+                                    />
                                 </div>
                             </div>
                         </div>
 
                         <div className="pt-2 sticky bottom-0 bg-white pb-2 flex gap-3">
-                             <button
+                            <button
                                 type="submit"
                                 disabled={isSubmitting}
                                 className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg disabled:opacity-50"

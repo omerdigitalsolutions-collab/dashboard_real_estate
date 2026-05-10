@@ -840,22 +840,30 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                             <span className="text-sm font-semibold text-slate-700">{property.features.parkingSpots}</span>
                                         </div>
                                     )}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">מרפסת</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasBalcony ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasBalcony ? 'כן' : 'לא'}</span>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">מעלית</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasElevator ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasElevator ? 'כן' : 'לא'}</span>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">ממ"ד</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasMamad ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasMamad ? 'כן' : 'לא'}</span>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">יש תיווך</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasAgent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasAgent ? 'כן' : 'לא'}</span>
-                                    </div>
+                                    {(property.features?.hasBalcony === true || property.features?.hasBalcony === false) && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מרפסת</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasBalcony ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasBalcony ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {(property.features?.hasElevator === true || property.features?.hasElevator === false) && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">מעלית</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasElevator ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasElevator ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {(property.features?.hasMamad === true || property.features?.hasMamad === false) && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">ממ"ד</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.features?.hasMamad ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{property.features?.hasMamad ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
+                                    {typeof property.hasAgent === 'boolean' && (
+                                        <div className="space-y-1">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">יש תיווך</span>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${property.hasAgent ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{property.hasAgent ? 'כן' : 'לא'}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -877,7 +885,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                 <div className="flex items-center gap-3 w-full sm:w-auto">
                                     {(() => {
                                         const phone = property.isGlobalCityProperty
-                                            ? (agency?.officePhone || agency?.billing?.ownerPhone)
+                                            ? property.contactPhone
                                             : (agents.find(a => a.uid === property.management?.assignedAgentId || a.id === property.management?.assignedAgentId)?.phone || property.contactPhone);
                                         
                                         if (!phone) return null;

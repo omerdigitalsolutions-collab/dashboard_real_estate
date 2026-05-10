@@ -395,20 +395,29 @@ service cloud.firestore {
     // TASKS
     // ══════════════════════════════════════════════════════════════════════════
     match /tasks/{taskId} {
-      // Agents can read their own tasks or tasks assigned to them.
-      // Admins can read all tasks in their agency.
+      // Agents can read tasks they created, tasks assigned to them (legacy single field),
+      // or tasks where they appear in the assignedToAgentIds array. Admins read all.
       allow read: if isAuthed() && inAgency(resource.data.agencyId)
-          && (isAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
+          && (isAdmin()
+              || resource.data.createdBy == request.auth.uid
+              || resource.data.assignedToAgentId == request.auth.uid
+              || (resource.data.assignedToAgentIds is list
+                  && request.auth.uid in resource.data.assignedToAgentIds));
 
       allow create: if isAuthed()
           && (inAgency(request.resource.data.agencyId) || isSuperAdmin())
           && isNonEmptyString(request.resource.data.title);
 
-      // Agents can update tasks they created OR tasks assigned to them (e.g. task completion).
+      // Agents can update tasks they created OR tasks they're assigned to (single or multi).
       allow update: if isAuthed()
           && (inAgency(resource.data.agencyId) || isSuperAdmin())
           && (agencyIdUnchanged() || isSuperAdmin())
-          && (isAdmin() || isSuperAdmin() || resource.data.createdBy == request.auth.uid || resource.data.assignedToAgentId == request.auth.uid);
+          && (isAdmin()
+              || isSuperAdmin()
+              || resource.data.createdBy == request.auth.uid
+              || resource.data.assignedToAgentId == request.auth.uid
+              || (resource.data.assignedToAgentIds is list
+                  && request.auth.uid in resource.data.assignedToAgentIds));
 
       // Agents can delete tasks they created. Admins can delete any task.
       allow delete: if isAuthed()

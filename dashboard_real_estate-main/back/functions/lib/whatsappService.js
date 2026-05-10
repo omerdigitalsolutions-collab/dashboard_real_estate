@@ -72,10 +72,13 @@ function buildWeBotPrompt(config, properties, agencyName = 'הסוכנות של�
     if (config.fallbackAction === 'custom' && config.customFallbackAction) {
         fallbackText = config.customFallbackAction;
     }
+    // Strip newlines and limit length so property fields cannot inject new prompt sections.
+    const sanitizePromptField = (s, maxLen = 200) => s.replace(/[\r\n]+/g, ' ').replace(/[`]/g, "'").trim().substring(0, maxLen);
     const propertiesText = properties.length > 0
-        ? properties.map(p => `- [מזהה: ${p.id}]${p.isExclusive ? ' [exclusive]' : ''} ${p.title} ב${p.address}, ${p.city}` +
+        ? properties.map(p => `- [מזהה: ${sanitizePromptField(p.id, 40)}]${p.isExclusive ? ' [exclusive]' : ''}` +
+            ` ${sanitizePromptField(p.title)} ב${sanitizePromptField(p.address)}, ${sanitizePromptField(p.city, 50)}` +
             ` | ${p.rooms} חדרים | מחיר: ₪${p.price.toLocaleString('he-IL')}` +
-            (p.description ? ` | ${p.description}` : '')).join('\n')
+            (p.description ? ` | ${sanitizePromptField(p.description)}` : '')).join('\n')
         : 'כרגע אין נכסים זמינים במאגר.';
     return `אתה הבוט החכם של סוכנות הנדל"ן "${agencyName}". אתה משרת לקוחות שמחפשים לקנות, לשכור, או למכור נכס — לא סוכנים.
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     MapPin, Bed, MessageCircle, Home, ChevronLeft, ChevronRight,
     Maximize, Maximize2, Layers, Phone, X, Search, Sparkles, Bell,
-    Loader2, Video, SlidersHorizontal, ArrowUpDown, ChevronDown,
+    Loader2, Video, SlidersHorizontal, ArrowUpDown, ChevronDown, Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { doc, getDoc } from 'firebase/firestore';
@@ -73,10 +73,27 @@ async function fetchAgency(agencyId: string) {
     } catch { return null; }
 }
 
-function isNew(createdAt?: any) {
-    if (!createdAt) return false;
-    const ms = createdAt?.toDate ? createdAt.toDate().getTime()
-        : createdAt?.seconds ? createdAt.seconds * 1000 : 0;
+function tsToMs(ts: any): number {
+    if (!ts) return 0;
+    return ts?.toDate ? ts.toDate().getTime() : ts?.seconds ? ts.seconds * 1000 : 0;
+}
+
+function formatDate(ts: any): string {
+    const ms = tsToMs(ts);
+    if (!ms) return '';
+    return new Date(ms).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function isNewToday(p: { publicAt?: any; createdAt?: any }): boolean {
+    const ms = tsToMs(p.publicAt || p.createdAt);
+    if (!ms) return false;
+    const d = new Date(ms);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function isNewWeek(p: { publicAt?: any; createdAt?: any }): boolean {
+    const ms = tsToMs(p.publicAt || p.createdAt);
     return ms > 0 && (Date.now() - ms) / 86_400_000 <= 7;
 }
 
@@ -522,7 +539,8 @@ export default function ExploreGallery() {
                         {properties.map((property, idx) => {
                             const propId = property.id || String(idx);
                             const displayLocation = [property.address, property.city].filter(Boolean).join(', ');
-                            const badge = isNew(property.createdAt);
+                            const todayBadge = isNewToday(property);
+                            const recentBadge = !todayBadge && isNewWeek(property);
                             const waMsg = encodeURIComponent(`היי, אני מתעניין/ת בנכס ב${displayLocation} (מזהה: ${propId}). אפשר לקבל פרטים?`);
                             const waLink = property.agentPhone ? `https://wa.me/${property.agentPhone}?text=${waMsg}` : null;
                             const callPhone = property.agentPhone ? `0${property.agentPhone.replace(/^972/, '')}` : null;
@@ -540,7 +558,8 @@ export default function ExploreGallery() {
                                     <div className="relative">
                                         <ImageCarousel images={property.images} videos={property.videoUrl ? [property.videoUrl] : []} alt={displayLocation} onZoom={setZoomedImage} />
                                         <div className="absolute top-2.5 right-2.5 z-20 flex flex-col gap-1.5 items-end pointer-events-none">
-                                            {badge && <div className="bg-blue-500/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md"><span className="text-[10px] font-black text-white">✨ חדש</span></div>}
+                                            {todayBadge && <div className="bg-green-500/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md"><span className="text-[10px] font-black text-white">🔥 חדש היום</span></div>}
+                                            {recentBadge && <div className="bg-blue-500/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-md"><span className="text-[10px] font-black text-white">✨ חדש</span></div>}
                                         </div>
                                         <div className="absolute bottom-2.5 left-2.5 z-20">
                                             <span className={`px-2.5 py-1 text-[10px] font-black rounded-lg shadow backdrop-blur-sm ${property.transactionType === 'rent' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
@@ -550,10 +569,17 @@ export default function ExploreGallery() {
                                     </div>
 
                                     <div className="p-4 flex flex-col flex-1 text-right cursor-pointer" onClick={() => setSelectedProperty(property)}>
-                                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
                                             <MapPin size={11} className="text-slate-300 shrink-0" />
                                             <span className="truncate font-medium">{displayLocation || 'מיקום לא צוין'}</span>
                                         </div>
+
+                                        {property.createdAt && (
+                                            <div className="flex items-center gap-1 text-[10px] text-slate-300 mb-2">
+                                                <Calendar size={9} />
+                                                <span>נכנס: {formatDate(property.createdAt)}</span>
+                                            </div>
+                                        )}
 
                                         <div className="text-2xl font-black text-slate-900 mb-3 tracking-tight">
                                             ₪{(property.price || 0).toLocaleString()}

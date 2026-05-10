@@ -17,8 +17,11 @@ exports.createCalendarEvent = createCalendarEvent;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const googleapis_1 = require("googleapis");
+const params_1 = require("firebase-functions/params");
 const authGuard_1 = require("../config/authGuard");
 const oauthClient_1 = require("./oauthClient");
+const notifications_1 = require("./notifications");
+const masterKey = (0, params_1.defineSecret)('ENCRYPTION_MASTER_KEY');
 // ── Core Utility ──────────────────────────────────────────────────────────────
 /**
  * Creates a Google Calendar event on behalf of the authenticated user.
@@ -83,22 +86,24 @@ async function createCalendarEvent(userId, payload) {
  *
  * Input:
  * {
- *   summary:     string,
- *   description?: string,
- *   location?:   string,
- *   start:       { dateTime: string, timeZone: string },
- *   end:         { dateTime: string, timeZone: string },
- *   attendees?:  Array<{ email: string, displayName?: string }>
+ *   summary:           string,
+ *   description?:      string,
+ *   location?:         string,
+ *   start:             { dateTime: string, timeZone: string },
+ *   end:               { dateTime: string, timeZone: string },
+ *   attendees?:        Array<{ email: string, displayName?: string }>,
+ *   assignedToAgentId?: string,
+ *   relatedTo?:        { id: string, type: 'lead' | 'property', name: string }
  * }
  *
- * Output: { success: true, eventId: string, htmlLink: string }
+ * Output: { success: true, eventId: string, htmlLink: string, taskId: string }
  */
 exports.createEvent = (0, https_1.onCall)({
     cors: [/^https?:\/\/localhost(:\d+)?$/, 'https://dashboard-6f9d1.web.app', 'https://dashboard-6f9d1.firebaseapp.com', 'https://homer.management'],
     invoker: 'public',
-    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI']
+    secrets: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI', masterKey],
 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const authData = await (0, authGuard_1.validateUserAuth)(request);
     const data = request.data;
     // ── Input validation ────────────────────────────────────────────────────
@@ -117,19 +122,42 @@ exports.createEvent = (0, https_1.onCall)({
         location: (_g = data.location) === null || _g === void 0 ? void 0 : _g.trim(),
         start: data.start,
         end: data.end,
-        attendees: data.attendees,
+        attendees: data.attendees ? [...data.attendees] : [],
+        assignedToAgentId: data.assignedToAgentId,
+        relatedTo: data.relatedTo,
     };
+    const db = (0, firestore_1.getFirestore)();
+    // ── Agent attendee injection ────────────────────────────────────────────
+    // Look up the assigned agent's email and add them as a Google Calendar
+    // attendee so they receive the invite email (sendUpdates:'all' is set).
+    if (data.assignedToAgentId) {
+        try {
+            const agentDoc = await db.collection('users').doc(data.assignedToAgentId).get();
+            if (agentDoc.exists) {
+                const agentData = agentDoc.data();
+                const agentEmail = agentData.email;
+                if (agentEmail) {
+                    const alreadyIncluded = payload.attendees.some(a => a.email === agentEmail);
+                    if (!alreadyIncluded) {
+                        payload.attendees.push({ email: agentEmail, displayName: (_h = agentData.name) !== null && _h !== void 0 ? _h : undefined });
+                    }
+                }
+            }
+        }
+        catch (agentErr) {
+            console.warn('[calendar] Agent lookup for attendees failed (non-fatal):', agentErr);
+        }
+    }
     try {
         // 1. Create the event in Google Calendar
         const result = await createCalendarEvent(authData.uid, payload);
         // 2. Synchronize with CRM by creating a Task
-        const db = (0, firestore_1.getFirestore)();
         const taskRef = db.collection('tasks').doc();
         const taskData = {
             id: taskRef.id,
             agencyId: authData.agencyId,
             createdBy: authData.uid,
-            assignedToAgentId: payload.assignedToAgentId || authData.uid,
+            assignedToAgentIds: [payload.assignedToAgentId || authData.uid],
             title: `פגישה: ${payload.summary}`,
             description: `${payload.description || ''}\n\nקישור ליומן: ${result.htmlLink}`.trim(),
             status: 'pending',
@@ -144,7 +172,22 @@ exports.createEvent = (0, https_1.onCall)({
         if (payload.relatedTo) {
             taskData.relatedTo = payload.relatedTo;
         }
+        if (data.buyerId)
+            taskData.buyerId = data.buyerId;
+        if (data.sellerId)
+            taskData.sellerId = data.sellerId;
+        if (data.propertyId)
+            taskData.propertyId = data.propertyId;
         await taskRef.set(taskData);
+        // 3. WhatsApp notifications (fire-and-forget — never blocks the response)
+        (0, notifications_1.sendCalendarNotifications)({
+            agencyId: authData.agencyId,
+            htmlLink: result.htmlLink,
+            eventSummary: payload.summary,
+            assignedAgentId: data.assignedToAgentId,
+            relatedTo: payload.relatedTo,
+            encryptionMasterKey: masterKey.value(),
+        }).catch(err => console.warn('[calendar] Notification error (non-fatal):', err));
         return Object.assign(Object.assign({ success: true }, result), { taskId: taskRef.id });
     }
     catch (error) {
@@ -152,8 +195,7 @@ exports.createEvent = (0, https_1.onCall)({
             throw error;
         console.error('[calendar] createEvent error:', error);
         // Status 401 or specific OAuth 'invalid_grant' suggests a broken connection
-        if (error.code === 401 || ((_h = error.message) === null || _h === void 0 ? void 0 : _h.includes('invalid_grant'))) {
-            const db = (0, firestore_1.getFirestore)();
+        if (error.code === 401 || ((_j = error.message) === null || _j === void 0 ? void 0 : _j.includes('invalid_grant'))) {
             await db.collection('users').doc(authData.uid).update({
                 'googleCalendar.enabled': false,
             });

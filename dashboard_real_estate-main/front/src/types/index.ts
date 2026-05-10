@@ -218,6 +218,7 @@ export interface Property {
     source?: string;
     listingType?: 'exclusive' | 'external' | 'private';
     visibility?: 'public' | 'private' | 'draft';
+    publicAt?: Timestamp | null;
     slug?: string;
     seoDescription?: string;
     isGlobalCityProperty?: boolean;
@@ -382,6 +383,9 @@ export interface AppTask {
         name?: string;
     };
     googleEventId?: string;
+    buyerId?: string;
+    sellerId?: string;
+    propertyId?: string;
     notes?: TaskNote[];
     createdAt?: Timestamp;
 }

@@ -24,23 +24,13 @@ exports.addProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
         `${((_e = data.address) === null || _e === void 0 ? void 0 : _e.street) || data.street || ''} ${city}`.trim();
     // ── Write to subcollection ──────────────────────────────────────────────────
     const propertyRef = db.collection('agencies').doc(agencyId).collection('properties').doc();
-    await propertyRef.set({
-        agencyId,
-        transactionType: data.transactionType || (data.type === 'rent' ? 'rent' : 'forsale'),
-        propertyType: data.propertyType || '',
-        status: data.status || 'active',
-        rooms: (_f = data.rooms) !== null && _f !== void 0 ? _f : null,
-        floor: (_g = data.floor) !== null && _g !== void 0 ? _g : null,
-        totalFloors: (_h = data.totalFloors) !== null && _h !== void 0 ? _h : null,
-        squareMeters: (_j = data.squareMeters) !== null && _j !== void 0 ? _j : null,
-        address: {
+    await propertyRef.set(Object.assign({ agencyId, transactionType: data.transactionType || (data.type === 'rent' ? 'rent' : 'forsale'), propertyType: data.propertyType || '', status: data.status || 'active', rooms: (_f = data.rooms) !== null && _f !== void 0 ? _f : null, floor: (_g = data.floor) !== null && _g !== void 0 ? _g : null, totalFloors: (_h = data.totalFloors) !== null && _h !== void 0 ? _h : null, squareMeters: (_j = data.squareMeters) !== null && _j !== void 0 ? _j : null, address: {
             city: city.trim(),
             street: ((_k = data.address) === null || _k === void 0 ? void 0 : _k.street) || data.street || '',
             number: ((_l = data.address) === null || _l === void 0 ? void 0 : _l.number) || '',
             neighborhood: ((_m = data.address) === null || _m === void 0 ? void 0 : _m.neighborhood) || '',
             fullAddress,
-        },
-        features: {
+        }, features: {
             hasElevator: (_p = (_o = data.features) === null || _o === void 0 ? void 0 : _o.hasElevator) !== null && _p !== void 0 ? _p : null,
             hasParking: (_r = (_q = data.features) === null || _q === void 0 ? void 0 : _q.hasParking) !== null && _r !== void 0 ? _r : null,
             parkingSpots: (_t = (_s = data.features) === null || _s === void 0 ? void 0 : _s.parkingSpots) !== null && _t !== void 0 ? _t : null,
@@ -50,24 +40,17 @@ exports.addProperty = (0, https_1.onCall)({ cors: true }, async (request) => {
             isRenovated: (_1 = (_0 = data.features) === null || _0 === void 0 ? void 0 : _0.isRenovated) !== null && _1 !== void 0 ? _1 : null,
             isFurnished: (_3 = (_2 = data.features) === null || _2 === void 0 ? void 0 : _2.isFurnished) !== null && _3 !== void 0 ? _3 : null,
             hasAirConditioning: (_5 = (_4 = data.features) === null || _4 === void 0 ? void 0 : _4.hasAirConditioning) !== null && _5 !== void 0 ? _5 : null,
-        },
-        financials: {
+        }, financials: {
             price,
             originalPrice: (_7 = (_6 = data.financials) === null || _6 === void 0 ? void 0 : _6.originalPrice) !== null && _7 !== void 0 ? _7 : null,
-        },
-        media: {
+        }, media: {
             mainImage: (_9 = (_8 = data.media) === null || _8 === void 0 ? void 0 : _8.mainImage) !== null && _9 !== void 0 ? _9 : null,
             images: (_11 = (_10 = data.media) === null || _10 === void 0 ? void 0 : _10.images) !== null && _11 !== void 0 ? _11 : [],
             videoTourUrl: (_13 = (_12 = data.media) === null || _12 === void 0 ? void 0 : _12.videoTourUrl) !== null && _13 !== void 0 ? _13 : null,
-        },
-        management: {
+        }, management: {
             assignedAgentId: ((_14 = data.management) === null || _14 === void 0 ? void 0 : _14.assignedAgentId) || data.agentId || null,
             descriptions: ((_15 = data.management) === null || _15 === void 0 ? void 0 : _15.descriptions) || data.description || null,
-        },
-        listingType: data.listingType || null,
-        createdAt: firestore_1.FieldValue.serverTimestamp(),
-        updatedAt: firestore_1.FieldValue.serverTimestamp(),
-    });
+        }, listingType: data.listingType || null, visibility: data.visibility || null, createdAt: firestore_1.FieldValue.serverTimestamp(), updatedAt: firestore_1.FieldValue.serverTimestamp() }, (data.visibility === 'public' ? { publicAt: firestore_1.FieldValue.serverTimestamp() } : {})));
     return { success: true, propertyId: propertyRef.id };
 });
 //# sourceMappingURL=addProperty.js.map
