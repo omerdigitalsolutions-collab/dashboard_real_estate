@@ -93,10 +93,15 @@ async function sendCalendarNotifications(params) {
     // ── Notify assigned agent ──────────────────────────────────────────────
     if (assignedAgentId) {
         sends.push((async () => {
-            var _a;
             try {
                 const agentDoc = await db.collection('users').doc(assignedAgentId).get();
-                const phone = (_a = agentDoc.data()) === null || _a === void 0 ? void 0 : _a.phone;
+                if (!agentDoc.exists)
+                    return;
+                const agentData = agentDoc.data();
+                // Tenant isolation: only notify agents in the same agency
+                if (agentData.agencyId !== agencyId)
+                    return;
+                const phone = agentData.phone;
                 if (!phone)
                     return;
                 await (0, whatsappService_1.sendWhatsAppMessage)(integration, phone, `📅 *נקבעה פגישה חדשה ביומן שלך*\n${eventSummary}\n\nלצפייה ביומן:\n${htmlLink}`);

@@ -581,7 +581,7 @@ function buildPropertyDefaults(
     return {
         agencyId,
         transactionType: row.type === 'rent' ? 'rent' : 'forsale',
-        propertyType: row.kind || 'דירה',
+        propertyType: row.type === 'commercial' ? 'מסחרי' : (row.kind || 'דירה'),
         status: extra?.status || 'active',
         rooms: row.rooms ?? null,
         floor: row.floor ?? null,

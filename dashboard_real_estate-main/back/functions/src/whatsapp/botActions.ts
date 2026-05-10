@@ -148,15 +148,35 @@ export async function createLead(
   }
 
   try {
+    let phone = params.phone.trim().replace(/\D/g, '');
+    if (phone.startsWith('972')) phone = '0' + phone.substring(3);
+
+    const existing = await db
+      .collection('leads')
+      .where('agencyId', '==', agencyId)
+      .where('phone', '==', phone)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      const existingId = existing.docs[0].id;
+      console.log(`[BotActions] Lead already exists: ${existingId} | phone ${phone}`);
+      return {
+        success: true,
+        leadId: existingId,
+        message: `ליד קיים כבר במערכת: ${params.name}.`,
+      };
+    }
+
     const leadRef = db.collection('leads').doc();
 
     await leadRef.set({
       agencyId,
       name: params.name.trim(),
-      phone: params.phone.trim(),
+      phone,
       email: params.email?.trim() || null,
       source: 'WhatsApp WeBot (Free Text)',
-      type: 'buyer', // Default: buyers; can be overridden in chat flow
+      type: 'buyer',
       status: 'new',
       requirements: {
         desiredCity: params.preferredCity ? [params.preferredCity.trim()] : [],

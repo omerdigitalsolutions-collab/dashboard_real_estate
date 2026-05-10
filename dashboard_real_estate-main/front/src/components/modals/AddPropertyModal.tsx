@@ -28,7 +28,7 @@ export default function AddPropertyModal({ isOpen, onClose, leadId }: AddPropert
     const [selectedAddress, setSelectedAddress] = useState<{ address: string, city: string, lat: number, lng: number } | null>(null);
 
     const [city, setCity] = useState('');
-    const [type, setType] = useState<'sale' | 'rent' | 'commercial'>('sale');
+    const [type, setType] = useState<'sale' | 'rent'>('sale');
     const [kind, setKind] = useState('דירה');
     const [price, setPrice] = useState('');
     const [rooms, setRooms] = useState('');

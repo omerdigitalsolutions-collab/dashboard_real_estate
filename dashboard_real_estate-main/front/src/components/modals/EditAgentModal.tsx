@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, UserCog, Loader2, MapPin, Plus } from 'lucide-react';
 import { updateUserProfile } from '../../services/userService';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AppUser, UserRole, AgentSpecialization } from '../../types';
 import { isValidEmail, isValidPhone } from '../../utils/validation';
 
@@ -29,6 +30,8 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
     const [serviceAreas, setServiceAreas] = useState<string[]>(agent.serviceAreas ?? []);
     const [areaInput, setAreaInput] = useState('');
     const [commissionPercent, setCommissionPercent] = useState<number>(agent.commissionPercent ?? 50);
+    // isAvailableForLeads: undefined treated as true
+    const [isAvailableForLeads, setIsAvailableForLeads] = useState<boolean>(agent.isAvailableForLeads !== false);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -63,6 +66,8 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
         try {
             const docId = agent.id || agent.uid;
             if (!docId) throw new Error('מזהה סוכן חסר');
+
+            // Profile fields — via direct Firestore write
             await updateUserProfile(docId, {
                 name: name.trim(),
                 phone: phone.trim() || null,
@@ -72,6 +77,16 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                 serviceAreas,
                 commissionPercent,
             });
+
+            // Availability — always route through the callable so backend validation runs
+            // (e.g., prevents setting suspended agents as available)
+            const initialAvailability = agent.isAvailableForLeads !== false;
+            if (isAvailableForLeads !== initialAvailability) {
+                const fns = getFunctions(undefined, 'europe-west1');
+                const updateAvailability = httpsCallable(fns, 'users-updateAgentAvailability');
+                await updateAvailability({ targetUserId: docId, isAvailable: isAvailableForLeads });
+            }
+
             onSuccess?.('פרטי הסוכן עודכנו בהצלחה ✓');
             onClose();
         } catch (err: any) {
@@ -231,6 +246,30 @@ export default function EditAgentModal({ agent, isOpen, onClose, onSuccess }: Ed
                             </div>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">ברירת מחדל: 50%. מנוכה אוטומטית בדוח רווח והפסד.</p>
+                    </div>
+
+                    {/* ─── Lead Distribution Availability ─── */}
+                    <div className="pt-1 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-semibold text-slate-700">זמין לקבלת לידים אוטומטית</p>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                    {isAvailableForLeads
+                                        ? 'הסוכן בתור לחלוקה הבאה'
+                                        : 'לא זמין — לא יקבל לידים אוטומטית'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsAvailableForLeads(v => !v)}
+                                className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 ${isAvailableForLeads ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                                aria-label="Toggle lead availability"
+                            >
+                                <span
+                                    className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform duration-200 ${isAvailableForLeads ? 'translate-x-[18px]' : 'translate-x-0'}`}
+                                />
+                            </button>
+                        </div>
                     </div>
 
                     {error && (

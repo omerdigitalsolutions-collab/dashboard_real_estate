@@ -20,7 +20,7 @@ import { Property, AppUser, Lead, TimeRange } from '../types';
 import { deleteProperty, updateProperty } from '../services/propertyService';
 import { normalizeCity } from '../utils/stringUtils';
 import { translatePropertyKind } from '../utils/formatters';
-
+import { COMMERCIAL_PROPERTY_TYPES } from '../utils/constants';
 
 export default function Properties() {
     const { properties = [], loading: propertiesLoading } = useLiveDashboardData();
@@ -225,9 +225,9 @@ export default function Properties() {
         // Filter by Sub Tab
         const matchesSub =
             subFilter === 'all' ||
-            (subFilter === 'commercial' ? (prop.propertyType === 'מסחרי') :
+            (subFilter === 'commercial' ? (COMMERCIAL_PROPERTY_TYPES.includes(prop.propertyType)) :
              subFilter === 'draft' ? prop.status === 'draft' :
-             (subFilter === 'sale' ? prop.transactionType === 'forsale' : prop.transactionType === 'rent') && prop.propertyType !== 'מסחרי' && prop.status !== 'draft');
+             (subFilter === 'sale' ? prop.transactionType === 'forsale' : prop.transactionType === 'rent') && !COMMERCIAL_PROPERTY_TYPES.includes(prop.propertyType) && prop.status !== 'draft');
 
         // Filter by Rooms
         const matchesRooms = 
@@ -300,9 +300,9 @@ export default function Properties() {
 
         return {
             all: currentMainSet.length,
-            sale: currentMainSet.filter(p => p.transactionType === 'forsale' && p.propertyType !== 'מסחרי' && p.status !== 'draft').length,
-            rent: currentMainSet.filter(p => p.transactionType === 'rent' && p.propertyType !== 'מסחרי' && p.status !== 'draft').length,
-            commercial: currentMainSet.filter(p => p.propertyType === 'מסחרי' && p.status !== 'draft').length,
+            sale: currentMainSet.filter(p => p.transactionType === 'forsale' && !COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) && p.status !== 'draft').length,
+            rent: currentMainSet.filter(p => p.transactionType === 'rent' && !COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) && p.status !== 'draft').length,
+            commercial: currentMainSet.filter(p => COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) && p.status !== 'draft').length,
             draft: currentMainSet.filter(p => p.status === 'draft').length,
             // Global totals for main tabs
             myTotal: myProps.length,
@@ -906,8 +906,8 @@ export default function Properties() {
                                             />
                                             {/* Property type badge (top-right) */}
                                             <div className="absolute top-3 right-3 flex flex-col gap-2">
-                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : prop.propertyType === 'מסחרי' ? 'bg-orange-600/90 text-white' : prop.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                    {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : prop.propertyType === 'מסחרי' ? 'מסחרי' : prop.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
+                                                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm backdrop-blur-md ${prop.status === 'draft' ? 'bg-amber-500/90 text-white' : COMMERCIAL_PROPERTY_TYPES.includes(prop.propertyType) ? 'bg-orange-600/90 text-white' : prop.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                    {prop.status === 'draft' ? 'טיוטה (דרוש עריכה)' : COMMERCIAL_PROPERTY_TYPES.includes(prop.propertyType) ? 'מסחרי' : prop.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                                                 </span>
                                             </div>
                                             {/* Listing-type badge (top-left) */}

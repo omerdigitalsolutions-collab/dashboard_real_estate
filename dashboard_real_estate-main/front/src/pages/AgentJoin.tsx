@@ -7,13 +7,6 @@ import { auth } from '../config/firebase';
 import { Building2, Mail, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-// Safely escape HTML special characters to prevent XSS
-const escapeHtml = (text: string): string => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
-
 interface InviteInfo {
     agencyName: string;
     agentName: string;
@@ -145,8 +138,8 @@ export default function AgentJoin() {
             try {
                 await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
             } catch (signInErr: any) {
-                if (signInErr.code === 'auth/user-not-found') {
-                    // Create new account
+                if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
+                    // Create new account (auth/user-not-found deprecated in newer Firebase SDK)
                     await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
                 } else if (signInErr.code === 'auth/wrong-password') {
                     setErrorMsg('הסיסמה אינה נכונה');
@@ -209,10 +202,10 @@ export default function AgentJoin() {
                         <div className="space-y-6">
                             <div className="text-center">
                                 <p className="text-slate-500 text-sm">שלום,</p>
-                                <p className="text-2xl font-bold text-slate-900 mt-1">{escapeHtml(info.agentName)}</p>
+                                <p className="text-2xl font-bold text-slate-900 mt-1">{info.agentName}</p>
                                 <p className="text-slate-500 text-sm mt-2">
                                     הוזמנת להצטרף לסוכנות{' '}
-                                    <span className="font-semibold text-slate-700">{escapeHtml(info.agencyName)}</span>
+                                    <span className="font-semibold text-slate-700">{info.agencyName}</span>
                                 </p>
                             </div>
 
@@ -239,6 +232,11 @@ export default function AgentJoin() {
                             {/* Choose auth method */}
                             {authMode === 'choose' && (
                                 <div className="space-y-3">
+                                    {errorMsg && (
+                                        <div className="text-xs text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+                                            {errorMsg}
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handleGoogleSignIn}
                                         className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700 font-semibold py-3.5 rounded-2xl transition-all"

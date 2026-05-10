@@ -313,24 +313,6 @@ export default function SharedCatalogPage() {
         fetchCatalogAndProperties();
     }, [token]);
 
-    const notifyAgentOfLike = useCallback(async (property: any) => {
-        if (!catalog) return;
-        const agentPhone: string | undefined = property.agentPhone || (catalog as any).agencyOwnerPhone;
-        const recipientPhone = agentPhone || catalog.agencyPhone;
-        if (!recipientPhone) return;
-        const cleanPhone = recipientPhone.replace(/\D/g, '').replace(/^0/, '972');
-        const leadName = catalog.leadName || 'לקוח';
-        const addr = toStreetOnly(property.address || 'נכס ללא כתובת');
-        const message = `🏠 *לייק מהקטלוג!*\nהלקוח ${leadName} לחץ על "אהבתי" על הנכס ב${addr}.\n\nכדאי ליצור קשר בקרוב 😊`;
-        try {
-            const fns = getFunctions(undefined, 'europe-west1');
-            const cfSendWa = httpsCallable<{ phone: string; message: string }, { success: boolean }>(fns, 'whatsapp-sendWhatsappMessage');
-            await cfSendWa({ phone: cleanPhone, message });
-        } catch (e) {
-            console.warn('[catalog] Failed to send like notification via WA CF:', e);
-        }
-    }, [catalog]);
-
     const notifyLeadOfLike = useCallback(async (catalogToken: string, property: any) => {
         try {
             const fns = getFunctions(undefined, 'europe-west1');
@@ -355,7 +337,6 @@ export default function SharedCatalogPage() {
         });
         if (isAdding) {
             setShowToast(true);
-            notifyAgentOfLike(property);
             if (token) notifyLeadOfLike(token, property);
         }
     };

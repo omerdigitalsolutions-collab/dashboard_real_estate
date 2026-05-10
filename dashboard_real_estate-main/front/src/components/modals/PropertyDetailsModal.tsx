@@ -124,6 +124,37 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     const [isImporting, setIsImporting] = useState(false);
     const [showAddMeetingModal, setShowAddMeetingModal] = useState(false);
     const [isSharingToMarketplace, setIsSharingToMarketplace] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [isSavingChanges, setIsSavingChanges] = useState(false);
+    // Ref mirrors hasUnsavedChanges so the property-sync useEffect can read it
+    // without being in its dependency array (avoids re-running on every save).
+    const hasUnsavedChangesRef = useRef(false);
+
+    const handleClose = () => {
+        if (hasUnsavedChanges) {
+            if (!confirm('יש שינויים שלא נשמרו. האם אתה בטוח שברצונך לסגור?')) return;
+        }
+        onClose();
+    };
+
+    const handleSaveChanges = async () => {
+        setIsSavingChanges(true);
+        try {
+            await updateProperty(
+                property.id,
+                { media: { images: imageUrls, videoTourUrl: videoUrls[0] || null } },
+                property.isGlobalCityProperty ? property.address?.city : undefined
+            );
+            hasUnsavedChangesRef.current = false;
+            setHasUnsavedChanges(false);
+            toast.success('השינויים נשמרו בהצלחה ✓');
+        } catch (error) {
+            console.error('Error saving changes:', error);
+            toast.error('שגיאה בשמירת השינויים');
+        } finally {
+            setIsSavingChanges(false);
+        }
+    };
 
     const handleToggleMarketplace = async () => {
         if (!property.id) return;
@@ -162,17 +193,22 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         }
     }, [property]);
 
-    // Sync state when property prop changes
+    // Sync state when property prop changes.
+    // Media fields are only reset when there are no local unsaved changes — this
+    // prevents a parent Firestore listener from overwriting freshly uploaded files
+    // that are waiting for the user to click Save.
     useEffect(() => {
         setEditedDescription(property.management?.descriptions || property.rawDescription || '');
-        if (property.media?.images) {
-            setImageUrls(property.media.images);
-        }
-        setVideoUrl(property.media?.videoTourUrl ?? undefined);
-        if (property.media?.videoTourUrl) {
-            setVideoUrls([property.media.videoTourUrl]);
-        } else {
-            setVideoUrls([]);
+        if (!hasUnsavedChangesRef.current) {
+            if (property.media?.images) {
+                setImageUrls(property.media.images);
+            }
+            setVideoUrl(property.media?.videoTourUrl ?? undefined);
+            if (property.media?.videoTourUrl) {
+                setVideoUrls([property.media.videoTourUrl]);
+            } else {
+                setVideoUrls([]);
+            }
         }
     }, [property]);
     // Add keyboard navigation
@@ -254,8 +290,9 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
             );
             const combinedUrls = [...imageUrls, ...newUrls];
             setImageUrls(combinedUrls);
-            await updateProperty(property.id, { media: { images: combinedUrls } }, property.isGlobalCityProperty ? property.address?.city : undefined);
-            toast.success('התמונות הועלו בהצלחה ✓');
+            hasUnsavedChangesRef.current = true;
+            setHasUnsavedChanges(true);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
             console.error('Error uploading images:', error);
             toast.error('אירעה שגיאה בהעלאת התמונות.');
@@ -264,27 +301,20 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         }
     };
 
-    const handleDeleteImage = async (index: number) => {
+    const handleDeleteImage = (index: number) => {
         if (!confirm('האם אתה בטוח שברצונך למחוק תמונה זו?')) return;
 
-        try {
-            const newImages = imageUrls.filter((_, i) => i !== index);
-            setImageUrls(newImages);
-            await updateProperty(property.id, { media: { images: newImages } }, property.isGlobalCityProperty ? property.address?.city : undefined);
-            
-            // Adjust active index if needed
-            if (activeImageIndex >= newImages.length) {
-                setActiveImageIndex(Math.max(0, newImages.length - 1));
-            }
-            
-            toast.success('התמונה נמחקה בהצלחה');
-        } catch (error) {
-            console.error('Error deleting image:', error);
-            toast.error('שגיאה במחיקת התמונה');
+        const newImages = imageUrls.filter((_, i) => i !== index);
+        setImageUrls(newImages);
+        hasUnsavedChangesRef.current = true;
+        setHasUnsavedChanges(true);
+
+        if (activeImageIndex >= newImages.length) {
+            setActiveImageIndex(Math.max(0, newImages.length - 1));
         }
     };
 
-    const handleDragEnd = async (event: DragEndEvent) => {
+    const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
@@ -294,23 +324,16 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         if (oldIndex === -1 || newIndex === -1) return;
 
         const newImages = arrayMove(imageUrls, oldIndex, newIndex);
-        
-        // Immediate UI Update
         setImageUrls(newImages);
-        
-        try {
-            await updateProperty(property.id, { media: { images: newImages } }, property.isGlobalCityProperty ? property.address?.city : undefined);
-            // Sync active index to the moved image
-            if (activeImageIndex === oldIndex) {
-                setActiveImageIndex(newIndex);
-            } else if (activeImageIndex > oldIndex && activeImageIndex <= newIndex) {
-                setActiveImageIndex(activeImageIndex - 1);
-            } else if (activeImageIndex < oldIndex && activeImageIndex >= newIndex) {
-                setActiveImageIndex(activeImageIndex + 1);
-            }
-        } catch (error) {
-            console.error('Error reordering images:', error);
-            toast.error('שגיאה בשינוי סדר התמונות');
+        hasUnsavedChangesRef.current = true;
+        setHasUnsavedChanges(true);
+
+        if (activeImageIndex === oldIndex) {
+            setActiveImageIndex(newIndex);
+        } else if (activeImageIndex > oldIndex && activeImageIndex <= newIndex) {
+            setActiveImageIndex(activeImageIndex - 1);
+        } else if (activeImageIndex < oldIndex && activeImageIndex >= newIndex) {
+            setActiveImageIndex(activeImageIndex + 1);
         }
     };
 
@@ -384,9 +407,9 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
             );
             const newVideoUrls = [...videoUrls, url];
             setVideoUrls(newVideoUrls);
-            setVideoUrl(newVideoUrls[0]); // keep legacy field in sync
-            await updateProperty(property.id, { media: { images: imageUrls, videoTourUrl: newVideoUrls[0] || null } }, property.isGlobalCityProperty ? property.address?.city : undefined);
-            toast.success('הסרטון הועלה בהצלחה ✓');
+            setVideoUrl(newVideoUrls[0]);
+            hasUnsavedChangesRef.current = true;
+            setHasUnsavedChanges(true);
         } catch (error) {
             console.error('Error uploading video:', error);
             toast.error('אירעה שגיאה בהעלאת הסרטון.');
@@ -396,18 +419,13 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
         }
     };
 
-    const handleDeleteVideo = async (index: number) => {
+    const handleDeleteVideo = (index: number) => {
         if (!confirm('האם אתה בטוח שברצונך למחוק את הסרטון?')) return;
-        try {
-            const newVideoUrls = videoUrls.filter((_, i) => i !== index);
-            setVideoUrls(newVideoUrls);
-            setVideoUrl(newVideoUrls[0]);
-            await updateProperty(property.id, { media: { images: imageUrls, videoTourUrl: newVideoUrls[0] || null } }, property.isGlobalCityProperty ? property.address?.city : undefined);
-            toast.success('הסרטון נמחק בהצלחה');
-        } catch (error) {
-            console.error('Error deleting video:', error);
-            toast.error('שגיאה במחיקת הסרטון');
-        }
+        const newVideoUrls = videoUrls.filter((_, i) => i !== index);
+        setVideoUrls(newVideoUrls);
+        setVideoUrl(newVideoUrls[0]);
+        hasUnsavedChangesRef.current = true;
+        setHasUnsavedChanges(true);
     };
 
     const formatPhoneForWhatsApp = (phone?: string) => {
@@ -441,7 +459,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
     return (
         <>
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleClose} />
 
                 <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" dir="rtl">
                     {/* Header */}
@@ -514,7 +532,7 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                                 <Calendar size={16} />
                                 <span className="hidden sm:inline">קבע פגישה</span>
                             </button>
-                            <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
+                            <button onClick={handleClose} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
@@ -1102,6 +1120,21 @@ export default function PropertyDetailsModal({ property, agents, leads, agency, 
                         </div>
 
                     </div>
+
+                    {/* Save Changes Footer */}
+                    {hasUnsavedChanges && (
+                        <div className="border-t border-blue-100 bg-blue-50 px-6 py-3 flex items-center justify-between gap-3 flex-shrink-0">
+                            <span className="text-sm text-blue-700 font-medium">יש שינויים שלא נשמרו</span>
+                            <button
+                                onClick={handleSaveChanges}
+                                disabled={isSavingChanges}
+                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                            >
+                                {isSavingChanges && <Loader2 size={16} className="animate-spin" />}
+                                שמור שינויים
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

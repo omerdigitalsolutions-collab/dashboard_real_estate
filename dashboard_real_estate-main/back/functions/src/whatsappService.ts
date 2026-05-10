@@ -189,7 +189,8 @@ export async function createSharedCatalog(
   agencyData: admin.firestore.DocumentData,
   leadId: string,
   leadName: string,
-  propertyIds: Array<string | { id: string; collectionPath: string }>
+  propertyIds: Array<string | { id: string; collectionPath: string }>,
+  agentId?: string,
 ): Promise<string> {
   const catalogRef = db.collection('shared_catalogs').doc();
 
@@ -199,9 +200,10 @@ export async function createSharedCatalog(
 
   await catalogRef.set({
       agencyId,
+      agentId:       agentId || '',
       agencyName:    agencyData.agencyName || agencyData.name || '',
       agencyLogoUrl: agencyData.settings?.logoUrl || agencyData.logoUrl || '',
-      agencyPhone:   agencyData.officePhone || agencyData.phoneNumber || agencyData.whatsappIntegration?.phoneNumber || '',
+      agencyPhone:   agencyData.officePhone || agencyData.billing?.ownerPhone || agencyData.whatsappIntegration?.phoneNumber || agencyData.phone || '',
       // Agent branding — used by SharedCatalogPage to render agent photo + name
       agentPhotoUrl: agencyData.settings?.agentPhotoUrl || agencyData.agentPhotoUrl || '',
       agentName:     agencyData.settings?.agentName     || agencyData.agentName     || '',

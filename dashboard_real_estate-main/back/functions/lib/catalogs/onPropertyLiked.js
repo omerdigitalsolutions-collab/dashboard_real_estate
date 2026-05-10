@@ -51,7 +51,7 @@ function decryptToken(encryptedData, ivText, secret) {
     return decrypted;
 }
 exports.onPropertyLiked = (0, https_1.onCall)({ cors: true, region: 'europe-west1', secrets: [masterKey] }, async (request) => {
-    var _a;
+    var _a, _b, _c, _d, _e, _f;
     const { catalogId, propertyId, propertyAddress } = request.data;
     if (!catalogId || !propertyId)
         return { success: false };
@@ -65,7 +65,23 @@ exports.onPropertyLiked = (0, https_1.onCall)({ cors: true, region: 'europe-west
     const addr = (propertyAddress === null || propertyAddress === void 0 ? void 0 : propertyAddress.trim()) || 'הנכס';
     if (!agencyId)
         return { success: false };
-    // CRM notification (always, even for general catalogs without a lead)
+    // ─── Resolve assigned agent from property document ───────────────────────
+    let assignedAgentId = null;
+    const propertyIds = catalog.propertyIds || [];
+    const propertyEntry = propertyIds.find((p) => (typeof p === 'string' ? p : p.id) === propertyId);
+    const collectionPath = typeof propertyEntry === 'object' && (propertyEntry === null || propertyEntry === void 0 ? void 0 : propertyEntry.collectionPath)
+        ? propertyEntry.collectionPath
+        : `agencies/${agencyId}/properties`;
+    try {
+        const propertySnap = await db.doc(`${collectionPath}/${propertyId}`).get();
+        if (propertySnap.exists) {
+            assignedAgentId = ((_b = propertySnap.data().management) === null || _b === void 0 ? void 0 : _b.assignedAgentId) || null;
+        }
+    }
+    catch (e) {
+        console.warn('[onPropertyLiked] property lookup failed:', e);
+    }
+    // ─── Legacy CRM notification (kept for backwards compatibility) ──────────
     db.collection('notifications').add({
         agencyId,
         leadId: leadId !== null && leadId !== void 0 ? leadId : null,
@@ -77,15 +93,41 @@ exports.onPropertyLiked = (0, https_1.onCall)({ cors: true, region: 'europe-west
         isRead: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch((e) => console.warn('[onPropertyLiked] notification write failed:', e.message));
-    // WhatsApp to lead — only if catalog is tied to a specific lead
-    if (!leadId)
-        return { success: true };
-    const leadSnap = await db.collection('leads').doc(leadId).get();
-    if (!leadSnap.exists)
-        return { success: true };
-    const phone = leadSnap.data().phone;
-    if (!phone)
-        return { success: true };
+    // ─── Fetch agency admins ──────────────────────────────────────────────────
+    const adminSnap = await db.collection('users')
+        .where('agencyId', '==', agencyId)
+        .where('role', '==', 'admin')
+        .get();
+    const alertBase = {
+        agencyId,
+        leadId: leadId !== null && leadId !== void 0 ? leadId : null,
+        leadName,
+        type: 'catalog_like',
+        title: '❤️ לייק מהקטלוג!',
+        message: `${leadName} לחץ על "אהבתי" על הנכס ב${addr}`,
+        link: leadId ? `/dashboard/leads/${leadId}` : `/dashboard/properties`,
+        propertyId,
+        propertyAddress: addr,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    // Alert for the assigned agent
+    if (assignedAgentId) {
+        db.collection('alerts').add(Object.assign(Object.assign({}, alertBase), { targetAgentId: assignedAgentId })).catch((e) => console.warn('[onPropertyLiked] agent alert write failed:', e.message));
+    }
+    // Alerts for admins (skip if admin is the assigned agent to avoid duplicates)
+    let hasAdmins = false;
+    for (const adminDoc of adminSnap.docs) {
+        hasAdmins = true;
+        if (adminDoc.id === assignedAgentId)
+            continue;
+        db.collection('alerts').add(Object.assign(Object.assign({}, alertBase), { targetAgentId: adminDoc.id })).catch((e) => console.warn('[onPropertyLiked] admin alert write failed:', e.message));
+    }
+    // Fallback: broadcast to all if no agent and no admins found
+    if (!assignedAgentId && !hasAdmins) {
+        db.collection('alerts').add(Object.assign(Object.assign({}, alertBase), { targetAgentId: 'all' })).catch((e) => console.warn('[onPropertyLiked] broadcast alert write failed:', e.message));
+    }
+    // ─── WhatsApp credentials ─────────────────────────────────────────────────
     const credsDoc = await db
         .collection('agencies').doc(agencyId)
         .collection('private_credentials').doc('whatsapp')
@@ -99,17 +141,57 @@ exports.onPropertyLiked = (0, https_1.onCall)({ cors: true, region: 'europe-west
     try {
         apiTokenInstance = decryptToken(credsData.encryptedToken, credsData.iv, masterKey.value());
     }
-    catch (_b) {
+    catch (_g) {
         console.warn(`[onPropertyLiked] Failed to decrypt creds for agency ${agencyId}`);
         return { success: true };
     }
     const integration = { idInstance: credsData.idInstance, apiTokenInstance, isConnected: true };
-    const message = `היי ${leadName}! 🏠 ראינו שאהבת את הנכס ב${addr}. נציג שלנו יחזור אליך בקרוב – תודה על ההתעניינות! 😊`;
+    const staffMessage = `❤️ *לייק מהקטלוג!*\n${leadName} לחץ על "אהבתי" על הנכס ב${addr}.\n\nכדאי ליצור קשר בקרוב! 😊`;
+    // ─── WhatsApp to assigned agent ───────────────────────────────────────────
+    let agentPhone = null;
+    if (assignedAgentId) {
+        try {
+            const agentDoc = await db.collection('users').doc(assignedAgentId).get();
+            agentPhone = ((_c = agentDoc.data()) === null || _c === void 0 ? void 0 : _c.phone) || ((_d = agentDoc.data()) === null || _d === void 0 ? void 0 : _d.phoneNumber) || null;
+            if (agentPhone) {
+                await (0, whatsappService_1.sendWhatsAppMessage)(integration, agentPhone, staffMessage);
+                console.log(`[onPropertyLiked] ✅ WA sent to agent ${assignedAgentId}`);
+            }
+        }
+        catch (e) {
+            console.warn('[onPropertyLiked] Failed to send WA to agent:', e);
+        }
+    }
+    // ─── WhatsApp to admins ───────────────────────────────────────────────────
+    for (const adminDoc of adminSnap.docs) {
+        const adminPhone = ((_e = adminDoc.data()) === null || _e === void 0 ? void 0 : _e.phone) || ((_f = adminDoc.data()) === null || _f === void 0 ? void 0 : _f.phoneNumber);
+        if (!adminPhone)
+            continue;
+        if (adminPhone === agentPhone)
+            continue; // skip if same person
+        try {
+            await (0, whatsappService_1.sendWhatsAppMessage)(integration, adminPhone, staffMessage);
+            console.log(`[onPropertyLiked] ✅ WA sent to admin ${adminDoc.id}`);
+        }
+        catch (e) {
+            console.warn('[onPropertyLiked] Failed to send WA to admin:', e);
+        }
+    }
+    // ─── WhatsApp to lead (only for catalogs tied to a specific lead) ─────────
+    if (!leadId)
+        return { success: true };
+    const leadSnap = await db.collection('leads').doc(leadId).get();
+    if (!leadSnap.exists)
+        return { success: true };
+    const phone = leadSnap.data().phone;
+    if (!phone)
+        return { success: true };
+    const leadMessage = `היי ${leadName}! 🏠 ראינו שאהבת את הנכס ב${addr}. נציג שלנו יחזור אליך בקרוב – תודה על ההתעניינות! 😊`;
     try {
-        const sent = await (0, whatsappService_1.sendWhatsAppMessage)(integration, phone, message);
+        const sent = await (0, whatsappService_1.sendWhatsAppMessage)(integration, phone, leadMessage);
         if (sent) {
             db.collection(`leads/${leadId}/messages`).add({
-                text: message,
+                text: leadMessage,
                 direction: 'outbound',
                 senderPhone: 'bot',
                 source: 'whatsapp_ai_bot',
@@ -117,7 +199,7 @@ exports.onPropertyLiked = (0, https_1.onCall)({ cors: true, region: 'europe-west
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
                 isRead: true,
             }).catch((e) => console.warn('[onPropertyLiked] message log failed:', e.message));
-            console.log(`[onPropertyLiked] ✅ Sent like confirmation to lead ${leadId} (${phone})`);
+            console.log(`[onPropertyLiked] ✅ WA sent to lead ${leadId}`);
         }
     }
     catch (err) {

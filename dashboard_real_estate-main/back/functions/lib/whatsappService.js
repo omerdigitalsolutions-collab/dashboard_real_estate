@@ -173,7 +173,7 @@ async function sendWhatsAppMessage(integration, customerPhone, messageText) {
     }
 }
 // ─── 4. Create Shared Catalog ─────────────────────────────────────────────────
-async function createSharedCatalog(db, agencyId, agencyData, leadId, leadName, propertyIds) {
+async function createSharedCatalog(db, agencyId, agencyData, leadId, leadName, propertyIds, agentId) {
     var _a, _b, _c, _d;
     const catalogRef = db.collection('shared_catalogs').doc();
     const now = new Date();

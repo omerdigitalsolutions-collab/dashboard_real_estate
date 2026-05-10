@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Combine, Loader2, Info } from 'lucide-react';
 import { Property } from '../../types';
 import { mergeProperties } from '../../services/propertyService';
+import { COMMERCIAL_PROPERTY_TYPES } from '../../utils/constants';
 
 interface DuplicateGroup {
     signature: string;
@@ -140,8 +141,8 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                                                 <div className="relative h-24 rounded-lg overflow-hidden bg-slate-100">
                                                     <img src={p.media.images[0]} alt="Prop" className="w-full h-full object-cover" />
                                                     <div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
-                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.propertyType === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                            {p.status === 'draft' ? 'טיוטה' : p.propertyType === 'מסחרי' ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                            {p.status === 'draft' ? 'טיוטה' : COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -149,8 +150,8 @@ export default function MergePropertiesModal({ isOpen, onClose, groups, onMerged
                                                 <div className="relative h-24 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center text-xs text-slate-400">
                                                     אין תמונה
                                                     <div className="absolute top-1.5 right-1.5 flex flex-col gap-1">
-                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : p.propertyType === 'מסחרי' ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
-                                                            {p.status === 'draft' ? 'טיוטה' : p.propertyType === 'מסחרי' ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md ${p.status === 'draft' ? 'bg-amber-500/90 text-white' : COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) ? 'bg-orange-600/90 text-white' : p.transactionType === 'forsale' ? 'bg-blue-600/90 text-white' : 'bg-emerald-600/90 text-white'}`}>
+                                                            {p.status === 'draft' ? 'טיוטה' : COMMERCIAL_PROPERTY_TYPES.includes(p.propertyType) ? 'מסחרי' : p.transactionType === 'forsale' ? 'למכירה' : 'להשכרה'}
                                                         </span>
                                                     </div>
                                                 </div>

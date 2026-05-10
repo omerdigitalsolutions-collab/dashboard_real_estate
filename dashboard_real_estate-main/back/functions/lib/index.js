@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInviteInfo = exports.webhookWhatsAppAI = exports.calls = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.users = exports.agencies = void 0;
+exports.getInviteInfo = exports.webhookWhatsAppAI = exports.calls = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.distribution = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -19,6 +19,10 @@ require("./config/admin");
 const onboarding_1 = require("./agencies/onboarding");
 // ── Users Module ───────────────────────────────────────────────────────────────
 const team_1 = require("./users/team");
+const updateAgentAvailability_1 = require("./users/updateAgentAvailability");
+// ── Distribution Module ────────────────────────────────────────────────────────
+const distributeLead_1 = require("./distribution/distributeLead");
+const distributeProperty_1 = require("./distribution/distributeProperty");
 // ── Tasks Module ───────────────────────────────────────────────────────────────
 const cleanup_1 = require("./tasks/cleanup");
 // ── Properties Module ──────────────────────────────────────────────────────────
@@ -86,7 +90,8 @@ const manual_requests_1 = require("./billing/manual_requests");
 //   catalogs-generateCatalog
 //   calendar-getAuthUrl  |  calendar-handleOAuthCallback  |  calendar-createEvent
 exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, checkPhoneAvailable: onboarding_1.checkPhoneAvailable, captureLead: onboarding_1.captureLead };
-exports.users = { inviteAgent: team_1.inviteAgent, sendAgentInvite: team_1.sendAgentInvite, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually, generateAgencyJoinCode: team_1.generateAgencyJoinCode, saveAgencyJoinCode: team_1.saveAgencyJoinCode, joinWithCode: team_1.joinWithCode, claimInviteToken: team_1.claimInviteToken };
+exports.users = { inviteAgent: team_1.inviteAgent, sendAgentInvite: team_1.sendAgentInvite, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually, generateAgencyJoinCode: team_1.generateAgencyJoinCode, saveAgencyJoinCode: team_1.saveAgencyJoinCode, joinWithCode: team_1.joinWithCode, claimInviteToken: team_1.claimInviteToken, updateAgentAvailability: updateAgentAvailability_1.updateAgentAvailability };
+exports.distribution = { distributeLead: distributeLead_1.distributeLead, distributeProperty: distributeProperty_1.distributeProperty };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
 exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch, importPropertyFromUrl: importPropertyFromUrl_1.importPropertyFromUrl };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };

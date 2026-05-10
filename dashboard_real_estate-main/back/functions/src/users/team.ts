@@ -328,6 +328,8 @@ export const inviteAgent = onCall(
           inviteToken,
           agencyId: authData.agencyId,
           role: normalizedRole,
+          name: derivedName,
+          phone: phone?.trim() || null,
           updatedAt: FieldValue.serverTimestamp()
         });
         stubId = existingDoc.id;
@@ -340,6 +342,9 @@ export const inviteAgent = onCall(
           agencyId: authData.agencyId,
           phone: phone?.trim() || null,
           isActive: true,
+          isAvailableForLeads: true,
+          lastLeadAssignedAt: null,
+          lastPropertyAssignedAt: null,
           createdAt: FieldValue.serverTimestamp(),
           inviteToken,
         });
@@ -355,6 +360,9 @@ export const inviteAgent = onCall(
         agencyId: authData.agencyId,
         phone: phone?.trim() || null,
         isActive: true,
+        isAvailableForLeads: true,
+        lastLeadAssignedAt: null,
+        lastPropertyAssignedAt: null,
         createdAt: FieldValue.serverTimestamp(),
         inviteToken,
       });
@@ -576,6 +584,9 @@ export const addAgentManually = onCall({ cors: true }, async (request) => {
     agencyId: authData.agencyId,
     phone: phone?.trim() || null,
     isActive: true,
+    isAvailableForLeads: true,
+    lastLeadAssignedAt: null,
+    lastPropertyAssignedAt: null,
     createdAt: FieldValue.serverTimestamp(),
     inviteToken,
   });
@@ -773,12 +784,14 @@ export const joinWithCode = onCall({ cors: true }, async (request) => {
     .get();
 
   if (!userSnap.empty) {
-    const existing = userSnap.docs[0].data() as { uid?: string | null };
+    const existing = userSnap.docs[0].data() as { uid?: string | null; agencyId?: string };
     if (existing.uid) {
       throw new HttpsError('already-exists', 'A user with this email is already registered. Please log in directly.');
     }
-    // If it's a stub, we can potentially reuse it or update it. 
-    // For now, let's update it to the new agency if they are joining via a specific code.
+    // Stub exists — only reuse if it belongs to the same agency (avoid silently hijacking another agency's invite)
+    if (existing.agencyId && existing.agencyId !== agencyId) {
+      throw new HttpsError('already-exists', 'כתובת האימייל הזו כבר ממתינה להצטרפות לסוכנות אחרת. פנה למנהל שלך לביטול ההזמנה הקיימת.');
+    }
     const stubRef = userSnap.docs[0].ref;
     const inviteToken = generateToken();
     await stubRef.update({
@@ -795,10 +808,13 @@ export const joinWithCode = onCall({ cors: true }, async (request) => {
   await db.collection('users').add({
     uid: null,
     email: normalizedEmail,
-    name: normalizedEmail.split('@')[0], // Default name from email prefix
+    name: normalizedEmail.split('@')[0],
     role: 'agent',
     agencyId,
     isActive: true,
+    isAvailableForLeads: true,
+    lastLeadAssignedAt: null,
+    lastPropertyAssignedAt: null,
     inviteToken,
     createdAt: FieldValue.serverTimestamp()
   });
@@ -839,11 +855,10 @@ export const sendAgentInvite = onCall(
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check for existing user in same agency
+    // Check globally (not just within agency) to prevent cross-agency duplicate stubs
     const existingSnap = await db
       .collection('users')
       .where('email', '==', normalizedEmail)
-      .where('agencyId', '==', authData.agencyId)
       .limit(1)
       .get();
 
@@ -872,12 +887,16 @@ export const sendAgentInvite = onCall(
         role: 'agent',
         agencyId: authData.agencyId,
         isActive: true,
+        isAvailableForLeads: true,
+        lastLeadAssignedAt: null,
+        lastPropertyAssignedAt: null,
         createdAt: FieldValue.serverTimestamp(),
         inviteToken,
       });
     } else {
       await existingSnap.docs[0].ref.update({
         inviteToken,
+        agencyId: authData.agencyId,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }
@@ -1020,6 +1039,9 @@ export const claimInviteToken = onCall({ cors: true }, async (request) => {
         role: effectiveRole,
         agencyId: stubData.agencyId,
         isActive: true,
+        isAvailableForLeads: true,
+        lastLeadAssignedAt: null,
+        lastPropertyAssignedAt: null,
         inviteToken: token.trim(),
         createdAt: FieldValue.serverTimestamp()
       });

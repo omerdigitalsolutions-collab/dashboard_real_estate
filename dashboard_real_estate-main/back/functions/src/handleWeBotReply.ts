@@ -601,8 +601,10 @@ async function generatePropertyTeaser(
       ? properties.map(p => `${p.type}${p.city ? ` ב${p.city}` : ''}${p.rooms ? `, ${p.rooms} חדרים` : ''}${p.price ? `, ₪${Number(p.price).toLocaleString('he-IL')}` : ''}`).join(' | ')
       : 'נכסים מגוונים';
 
+    // Cap the embedded user text to prevent prompt inflation / injection attempts
+    const safeMsg = userMessage.replace(/"/g, "'").substring(0, 120);
     const result = await withTimeout('generatePropertyTeaser', 6000, () => model.generateContent(
-      `כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${userMessage}".\n` +
+      `כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${safeMsg}".\n` +
       `נכסים זמינים בסוכנות: ${propContext}.\n` +
       `הטון: חם ומקצועי. אל תזכיר מחירים ספציפיים. אל תשאל שאלות. רק משפט קבלת פנים קצר.`,
     ));
@@ -720,7 +722,7 @@ async function runBuyerFlow(
 
   const schedulingPrefix =
     currentState === 'SCHEDULING_CALL'
-      ? '⚠️ מצב נוכחי: הלקוח מוכן לתאם פגישה עם המתווך. קרא תחילה ל-check_availability כדי לשלוף את הזמנים הפנויים האמיתיים ביומן — הצג אותם ללקוח ובקש ממנו לבחור. לאחר שהלקוח בחר זמן — קרא ל-schedule_meeting עם הזמן שנבחר. לאחר שהפגישה נקבעה שלח הודעת סיום חמה וחזור ל-IDLE. אל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
+      ? '⚠️ מצב נוכחי: הלקוח מוכן לתאם פגישה עם המתווך. פעל כך:\n1. קרא ל-check_availability כדי לשלוף את הזמנים הפנויים.\n2. הצע ללקוח את הזמן הפנוי הראשון בשפה טבעית — לדוגמה: "מחר בשעה 10:00 יהיה לך נוח? אם לא, תכתוב מתי אפשרי."\n3. אם הלקוח מאשר — קרא ל-schedule_meeting עם הזמן שנבחר.\n4. אם הלקוח דוחה ומציע זמן אחר — קרא שוב ל-check_availability עם התאריך שהציע, ואשר או הצע חלופה.\n5. לאחר קביעת הפגישה שלח הודעת סיום חמה וחזור ל-IDLE.\nאל תקרא שוב ל-update_lead_requirements או ל-create_catalog.\n\n'
       : '⚡ מהירות מעל הכל: ברגע שיש לך לפחות פרמטר אחד (חדרים / תקציב / סוג נכס / שכונה), קרא ל-update_lead_requirements ומיד אחר כך ל-create_catalog — אין צורך לדעת עיר. הבוט מחפש בכל נכסי הסוכנות. שאל שאלה אחת בלבד: "יש פרטים נוספים שחשוב לי לדעת לפני שאמצא לך נכסים?" ואז צור קטלוג ללא תלות בתשובה.\n\n';
 
   const genAI = getGenAI(geminiApiKey);
@@ -948,6 +950,7 @@ async function runBuyerFlow(
             const catalogUrl  = await createSharedCatalog(
               db, agencyId, agencyData, leadId,
               freshLead.data()?.name || 'לקוח', propertyRefs,
+              leadData.assignedAgentId || '',
             );
             catalogCreated = true;
             sentCatalogUrl = catalogUrl;
@@ -1028,8 +1031,10 @@ async function runBuyerFlow(
         ? `${finalReply.trimEnd()}\n\n📋 קטלוג הנכסים שלך:\n${sentCatalogUrl}`
         : `הנה קטלוג הנכסים המותאם לך 🏠\n${sentCatalogUrl}`;
     }
-    // Invite to schedule a consultation call
-    if (!finalReply.includes('שיחה') && !finalReply.includes('פגישה') && !finalReply.includes('ייעוץ')) {
+    // Invite to schedule — only when catalog was NOT created in this turn
+    // (catalogCreated always sends a proactive slot invitation separately, so
+    // appending a second scheduling question here would send two conflicting prompts).
+    if (!catalogCreated && !finalReply.includes('שיחה') && !finalReply.includes('פגישה') && !finalReply.includes('ייעוץ')) {
       finalReply += '\n\nהיועץ שלנו זמין לדון איתך על הנכסים ולסייע בקבלת ההחלטה.\nמתי נוח לך לשיחת ייעוץ?';
     }
   }
@@ -1050,9 +1055,27 @@ async function runBuyerFlow(
   // After catalog is sent → move to SCHEDULING_CALL so the customer can still reply
   // to schedule a meeting. CLOSED would silently block all messages for 24h.
   if (catalogCreated) {
-    await sendBotMessage(integration, customerPhone, leadId,
-      'מתי אתה פנוי לשיחה קצרה עם יועץ נדל"ן שלנו?'
-    );
+    // Proactively propose the first free slot from the Office Manager's calendar.
+    // Falls back to an open-ended question when no calendar is connected or no
+    // slots are available in the next 3 days.
+    let schedulingInvite: string;
+    try {
+      const omId = await getOfficeManagerUserId(agencyId);
+      if (omId) {
+        const now = new Date();
+        const end = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+        const busy = await queryFreeBusy(omId, now.toISOString(), end.toISOString());
+        const free = findFreeSlots(busy, now, end);
+        schedulingInvite = free.length > 0
+          ? `${formatSlotHebrew(free[0])} יהיה לך נוח לשיחה עם יועץ נדל"ן שלנו?\nאם לא, תכתוב מתי אפשרי.`
+          : 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
+      } else {
+        schedulingInvite = 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
+      }
+    } catch {
+      schedulingInvite = 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
+    }
+    await sendBotMessage(integration, customerPhone, leadId, schedulingInvite);
 
     await updateChatState(leadId, 'SCHEDULING_CALL');
 
@@ -1435,17 +1458,16 @@ export async function handleWeBotReply(
             const busySlots   = await queryFreeBusy(officeManagerId, windowStart.toISOString(), windowEnd.toISOString());
             const freeSlots   = findFreeSlots(busySlots, windowStart, windowEnd);
             if (freeSlots.length > 0) {
-              const formatted = freeSlots.map(formatSlotHebrew).join('\n• ');
-              schedulingMsg += `הנה הזמנים הפנויים לפגישה עם המתווך שלנו:\n• ${formatted}\n\nאיזה זמן מתאים לך?`;
+              schedulingMsg += `${formatSlotHebrew(freeSlots[0])} יהיה לך נוח לשיחה עם יועץ נדל"ן שלנו?\nאם לא, תכתוב מתי אפשרי.`;
             } else {
-              schedulingMsg += 'ספר לי מתי נוח לך לפגישה עם המתווך ונסדר.';
+              schedulingMsg += 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
             }
           } else {
-            schedulingMsg += 'מתי נוח לך לשיחה קצרה עם המתווך שלנו?';
+            schedulingMsg += 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
           }
         } catch (calErr) {
           console.warn('[WeBot] freebusy after name collection failed (non-fatal):', calErr);
-          schedulingMsg += 'מתי נוח לך לשיחה קצרה עם המתווך שלנו?';
+          schedulingMsg += 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
         }
 
         await sendBotMessage(integration, customerPhone, leadId, schedulingMsg);

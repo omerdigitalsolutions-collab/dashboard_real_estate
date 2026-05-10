@@ -101,45 +101,49 @@ function isNewWeek(p: { publicAt?: any; createdAt?: any }): boolean {
 function ImageCarousel({ images, videos = [], alt, onZoom }: {
     images: string[]; videos?: string[]; alt: string; onZoom?: (url: string) => void;
 }) {
-    const [current, setCurrent] = useState(0);
-    const [vid, setVid] = useState(0);
     const imgs = images.slice(0, 5);
+    const total = videos.length + imgs.length;
+    const [current, setCurrent] = useState(0);
 
-    if (imgs.length === 0) {
-        if (videos.length > 0) {
-            return (
-                <div className="relative h-52 bg-black overflow-hidden rounded-t-2xl group">
-                    <video key={videos[vid]} src={videos[vid]} controls playsInline className="w-full h-full object-contain" onClick={e => e.stopPropagation()} />
-                    {videos.length > 1 && (
-                        <>
-                            <button onClick={e => { e.stopPropagation(); setVid(i => (i - 1 + videos.length) % videos.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-colors"><ChevronLeft size={14} /></button>
-                            <button onClick={e => { e.stopPropagation(); setVid(i => (i + 1) % videos.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-colors"><ChevronRight size={14} /></button>
-                            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex gap-1 pointer-events-none">{videos.map((_, i) => <div key={i} className={`h-1 rounded-full transition-all ${i === vid ? 'bg-white w-5' : 'bg-white/50 w-1.5'}`} />)}</div>
-                        </>
-                    )}
-                    <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-black/50 text-white text-xs font-semibold px-2 py-0.5 rounded-lg pointer-events-none"><Video size={10} /><span>{vid + 1}/{videos.length}</span></div>
-                </div>
-            );
-        }
+    if (total === 0) {
         return <div className="h-52 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-300 rounded-t-2xl"><Home size={36} /></div>;
     }
 
+    const isVideo = current < videos.length;
+    const imgIndex = current - videos.length;
+    const currentSrc = isVideo ? videos[current] : imgs[imgIndex];
+
     return (
-        <div className="relative h-52 bg-slate-100 overflow-hidden select-none rounded-t-2xl">
-            {imgs.map((src, i) => (
-                <img key={i} src={src} alt={alt} onClick={e => { e.stopPropagation(); onZoom?.(imgs[current]); }}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 cursor-zoom-in ${i === current ? 'opacity-100' : 'opacity-0'}`} />
-            ))}
-            {onZoom && <button onClick={e => { e.stopPropagation(); onZoom(imgs[current]); }} className="absolute bottom-10 right-2 z-20 w-8 h-8 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors" title="הגדל"><Maximize2 size={13} /></button>}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none z-10" />
-            {imgs.length > 1 && (
+        <div className={`relative h-52 overflow-hidden select-none rounded-t-2xl group ${isVideo ? 'bg-black' : 'bg-slate-100'}`}>
+            {isVideo ? (
+                <video key={currentSrc} src={currentSrc} controls playsInline className="w-full h-full object-contain" onClick={e => e.stopPropagation()} />
+            ) : (
                 <>
-                    <button onClick={e => { e.stopPropagation(); setCurrent(i => (i - 1 + imgs.length) % imgs.length); }} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"><ChevronLeft size={14} /></button>
-                    <button onClick={e => { e.stopPropagation(); setCurrent(i => (i + 1) % imgs.length); }} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"><ChevronRight size={14} /></button>
-                    <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex gap-1">
-                        {imgs.map((_, i) => <button key={i} onClick={e => { e.stopPropagation(); setCurrent(i); }} className={`h-1 rounded-full transition-all ${i === current ? 'bg-white w-5' : 'bg-white/50 w-1.5'}`} />)}
-                    </div>
+                    {imgs.map((src, i) => (
+                        <img key={i} src={src} alt={alt} onClick={e => { e.stopPropagation(); onZoom?.(currentSrc); }}
+                            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 cursor-zoom-in ${i === imgIndex ? 'opacity-100' : 'opacity-0'}`} />
+                    ))}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none z-10" />
+                    {onZoom && <button onClick={e => { e.stopPropagation(); onZoom(currentSrc); }} className="absolute bottom-10 right-2 z-20 w-8 h-8 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors" title="הגדל"><Maximize2 size={13} /></button>}
                 </>
+            )}
+            {total > 1 && (
+                <>
+                    <button onClick={e => { e.stopPropagation(); setCurrent(i => (i - 1 + total) % total); }} className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-colors"><ChevronLeft size={14} /></button>
+                    <button onClick={e => { e.stopPropagation(); setCurrent(i => (i + 1) % total); }} className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 bg-black/40 hover:bg-black/70 text-white rounded-full flex items-center justify-center backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-colors"><ChevronRight size={14} /></button>
+                    {!isVideo && (
+                        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex gap-1 pointer-events-none">
+                            {Array.from({ length: total }).map((_, i) => (
+                                <div key={i} className={`h-1 rounded-full transition-all ${i === current ? 'bg-white w-5' : 'bg-white/50 w-1.5'}`} />
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+            {isVideo && (
+                <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-black/50 text-white text-xs font-semibold px-2 py-0.5 rounded-lg pointer-events-none">
+                    <Video size={10} /><span>סרטון{videos.length > 1 ? ` ${current + 1}/${videos.length}` : ''}</span>
+                </div>
             )}
         </div>
     );

@@ -6,6 +6,7 @@ import { Maximize2, Minimize2, X, MapPin, Target, Loader2 } from 'lucide-react';
 import { useLiveDashboardData } from '../../hooks/useLiveDashboardData';
 import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
+import { COMMERCIAL_PROPERTY_TYPES } from '../../utils/constants';
 import { db } from '../../config/firebase';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 
@@ -23,7 +24,7 @@ const ISRAEL_CENTER = { lat: 31.7683, lng: 35.2137 };
 
 // ─── Custom SVG marker factory ────────────────────────────────────────────────
 function getGoogleMarkerIcon(listingType: 'sale' | 'rent', kind?: string): google.maps.Icon | string {
-    const isCommercial = kind === 'מסחרי';
+    const isCommercial = COMMERCIAL_PROPERTY_TYPES.includes(kind ?? '');
     const isRent = listingType === 'rent';
 
     let bg = '#06b6d4';     // cyan → for sale

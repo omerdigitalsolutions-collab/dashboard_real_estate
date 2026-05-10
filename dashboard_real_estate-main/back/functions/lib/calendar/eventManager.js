@@ -135,11 +135,17 @@ exports.createEvent = (0, https_1.onCall)({
             const agentDoc = await db.collection('users').doc(data.assignedToAgentId).get();
             if (agentDoc.exists) {
                 const agentData = agentDoc.data();
-                const agentEmail = agentData.email;
-                if (agentEmail) {
-                    const alreadyIncluded = payload.attendees.some(a => a.email === agentEmail);
-                    if (!alreadyIncluded) {
-                        payload.attendees.push({ email: agentEmail, displayName: (_h = agentData.name) !== null && _h !== void 0 ? _h : undefined });
+                // Tenant isolation: only inject attendees from the same agency
+                if (agentData.agencyId !== authData.agencyId) {
+                    console.warn('[calendar] assignedToAgentId belongs to a different agency — skipping attendee injection');
+                }
+                else {
+                    const agentEmail = agentData.email;
+                    if (agentEmail) {
+                        const alreadyIncluded = payload.attendees.some(a => a.email === agentEmail);
+                        if (!alreadyIncluded) {
+                            payload.attendees.push({ email: agentEmail, displayName: (_h = agentData.name) !== null && _h !== void 0 ? _h : undefined });
+                        }
                     }
                 }
             }

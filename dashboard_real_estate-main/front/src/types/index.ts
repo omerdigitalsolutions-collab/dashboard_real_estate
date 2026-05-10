@@ -50,6 +50,11 @@ export interface Agency {
     isWhatsappConnected?: boolean;
     joinCode?: string;
     isJoinCodeEnabled?: boolean;
+    distributionConfig?: {
+        leadsEnabled: boolean;
+        propertiesEnabled: boolean;
+        strictness: 'strict' | 'flexible';
+    };
     createdAt: Timestamp;
 }
 
@@ -93,6 +98,12 @@ export interface AppUser {
             deals: number;
         };
     };
+    /** Whether agent is available to receive automatically distributed leads/properties */
+    isAvailableForLeads?: boolean;
+    /** Timestamp of last automatic lead assignment — used for round-robin ordering */
+    lastLeadAssignedAt?: Timestamp | null;
+    /** Timestamp of last automatic property assignment — used for round-robin ordering */
+    lastPropertyAssignedAt?: Timestamp | null;
     Preferences?: UserPreferences;
     whatsappTemplates?: { id: string; name: string; content: string }[];
     googleCalendar?: {
@@ -434,7 +445,17 @@ export interface SharedCatalog {
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
-export type AlertType = 'warning' | 'info' | 'deal_won';
+export type AlertType =
+    | 'warning'
+    | 'info'
+    | 'deal_won'
+    | 'property_match'
+    | 'global_property_match'
+    | 'external_property_match'
+    | 'lead_assigned'
+    | 'property_assigned'
+    | 'unassigned_lead'
+    | 'unassigned_property';
 
 export interface Alert {
     id: string;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot, Phone, PhoneIncoming, PhoneOff, CheckCircle } from 'lucide-react';
+import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot, Phone, PhoneIncoming, PhoneOff, CheckCircle, Shuffle } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -12,7 +12,7 @@ import { auth } from '../config/firebase';
 import toast from 'react-hot-toast';
 import { uploadProfilePicture } from '../services/storageService';
 import { updateUserProfile } from '../services/userService';
-import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings, updateAgencyName, generateJoinCode, saveJoinCode } from '../services/agencyService';
+import { getAgencyData, updateAgencyGoals, uploadAndSaveAgencyLogo, updateAgencySettings, updateAgencyName, generateJoinCode, saveJoinCode, updateDistributionConfig } from '../services/agencyService';
 import { Copy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { isValidPhone } from '../utils/validation';
 import { ISRAEL_CITIES } from '../utils/constants';
@@ -20,6 +20,7 @@ import { ISRAEL_CITIES } from '../utils/constants';
 const sections = [
   { id: 'profile', label: 'פרופיל אישי', icon: Users2 },
   { id: 'team', label: 'ניהול צוות', icon: Users2 },
+  { id: 'distribution', label: 'אוטומציה וחלוקה', icon: Shuffle },
   { id: 'virtual-numbers', label: 'מספרים וירטואליים', icon: Phone },
   { id: 'whatsapp-bot', label: 'WhatsApp Bot', icon: Bot },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
@@ -79,6 +80,12 @@ export default function Settings() {
   const [isJoinCodeSaving, setIsJoinCodeSaving] = useState(false);
   const [isJoinCodeGenerating, setIsJoinCodeGenerating] = useState(false);
 
+  // Distribution config state
+  const [distLeadsEnabled, setDistLeadsEnabled] = useState(false);
+  const [distPropertiesEnabled, setDistPropertiesEnabled] = useState(false);
+  const [distStrictness, setDistStrictness] = useState<'strict' | 'flexible'>('flexible');
+  const [distSaving, setDistSaving] = useState(false);
+
   // Virtual numbers state
   const [agents, setAgents] = useState<any[]>([]);
   const [purchasingForAgent, setPurchasingForAgent] = useState<string | null>(null);
@@ -129,6 +136,12 @@ export default function Settings() {
       
       setJoinCodeInput(agency.joinCode || '');
       setIsJoinCodeEnabled(agency.isJoinCodeEnabled ?? false);
+
+      if (agency.distributionConfig) {
+        setDistLeadsEnabled(agency.distributionConfig.leadsEnabled);
+        setDistPropertiesEnabled(agency.distributionConfig.propertiesEnabled);
+        setDistStrictness(agency.distributionConfig.strictness);
+      }
     });
     return () => unsub();
   }, [userData?.agencyId]);
@@ -805,6 +818,114 @@ export default function Settings() {
               <div className="flex justify-end pt-4 border-t border-slate-100 mt-8">
                 <button onClick={handleSaveAgencyGoals} disabled={agencyGoalsSaving} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50">
                   {agencyGoalsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור יעדים'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'distribution' && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-8 animate-in fade-in duration-300">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <Shuffle size={18} className="text-violet-500" />
+                  אוטומציה וחלוקה
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  הגדר כיצד לידים ונכסים חדשים יחולקו אוטומטית לסוכנים בהתאם להתמחות ואזורי שירות.
+                </p>
+              </div>
+
+              {/* Main toggles */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <h3 className="font-bold text-slate-800 text-sm">הפעלת חלוקה אוטומטית</h3>
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">חלוקת לידים אוטומטית</p>
+                    <p className="text-xs text-slate-400 mt-0.5">לידים חדשים שמגיעים ללא שיוך יחולקו אוטומטית לסוכן המתאים</p>
+                  </div>
+                  <button
+                    onClick={() => setDistLeadsEnabled(v => !v)}
+                    className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 ${distLeadsEnabled ? 'bg-violet-600' : 'bg-slate-200'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform duration-200 ${distLeadsEnabled ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">חלוקת נכסים אוטומטית</p>
+                    <p className="text-xs text-slate-400 mt-0.5">נכסים חדשים שנוספים ללא שיוך יחולקו אוטומטית לסוכן המתאים</p>
+                  </div>
+                  <button
+                    onClick={() => setDistPropertiesEnabled(v => !v)}
+                    className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 flex-shrink-0 ${distPropertiesEnabled ? 'bg-violet-600' : 'bg-slate-200'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform duration-200 ${distPropertiesEnabled ? 'translate-x-[18px]' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Strictness */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                  <h3 className="font-bold text-slate-800 text-sm">רמת הדיוק בחלוקה</h3>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    {
+                      val: 'flexible' as const,
+                      label: 'גמיש',
+                      desc: 'המערכת תנסה למצוא סוכן מומחה לאזור ולסוג העסקה. אם לא נמצא — תחלק לסוכן הפנוי הבא בתור.',
+                    },
+                    {
+                      val: 'strict' as const,
+                      label: 'קשיח',
+                      desc: 'ליד יחולק רק לסוכן שמוגדר לאזור ולסוג העסקה בדיוק. אם לא נמצא — תקבל התראה לשיוך ידני.',
+                    },
+                  ].map(opt => (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setDistStrictness(opt.val)}
+                      className={`text-right p-4 rounded-xl border-2 transition-all ${distStrictness === opt.val
+                        ? 'border-violet-500 bg-violet-50'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'}`}
+                    >
+                      <p className={`text-sm font-bold ${distStrictness === opt.val ? 'text-violet-700' : 'text-slate-700'}`}>
+                        {opt.label}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  onClick={async () => {
+                    if (!userData?.agencyId) return;
+                    setDistSaving(true);
+                    try {
+                      await updateDistributionConfig(userData.agencyId, {
+                        leadsEnabled: distLeadsEnabled,
+                        propertiesEnabled: distPropertiesEnabled,
+                        strictness: distStrictness,
+                      });
+                      showToast('הגדרות החלוקה נשמרו בהצלחה');
+                    } catch {
+                      showToast('שגיאה בשמירת ההגדרות', 'error');
+                    } finally {
+                      setDistSaving(false);
+                    }
+                  }}
+                  disabled={distSaving}
+                  className="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  {distSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שמור הגדרות'}
                 </button>
               </div>
             </div>

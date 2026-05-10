@@ -92,7 +92,7 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'monthlyGoals', 'yearlyGoals', 'settings',
               'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
-              'whatsappIntegration', 'weBotConfig', 'updatedAt'
+              'whatsappIntegration', 'weBotConfig', 'distributionConfig', 'updatedAt'
             ])
           );
       allow delete: if isSuperAdmin();
@@ -248,15 +248,6 @@ service cloud.firestore {
       allow update: if isAuthed() && (
         // Normal profile edits (name, phone, avatar etc.) — cannot change role, agency, or commission
         (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'agencyId', 'commissionPercent']))
-        // ── Invite Claim ──────────────────────────────────────────────────────
-        // Any authenticated user may claim an *unclaimed* stub (uid == null)
-        // by writing only their own UID into the uid field. This powers the
-        // invite-link join flow without requiring a Cloud Function deployment.
-        // The inAgency check prevents cross-agency stub hijacking.
-        || (resource.data.uid == null
-            && request.resource.data.uid == request.auth.uid
-            && inAgency(resource.data.agencyId)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid']))
         // ── Admin / Super-admin overrides ─────────────────────────────────────
         || isAgencyAdmin(resource.data.agencyId)
         || isSuperAdmin()
@@ -575,6 +566,14 @@ service cloud.firestore {
     // PHONES — virtual number routing table, Admin SDK only
     // ══════════════════════════════════════════════════════════════════════════
     match /phones/{phoneNumber} {
+      allow read, write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // JOIN CODES — Admin SDK (Cloud Functions) only
+    // Mapping of join code → agencyId. Clients never read/write directly.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /joinCodes/{code} {
       allow read, write: if false;
     }
 

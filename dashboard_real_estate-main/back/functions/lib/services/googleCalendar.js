@@ -102,15 +102,29 @@ async function queryFreeBusy(userId, timeMin, timeMax) {
  *  - Are in the future (>= now)
  * Returns at most 3 slots.
  */
+function getJerusalemHour(date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jerusalem',
+        hour: '2-digit',
+        hour12: false,
+    }).formatToParts(date);
+    const hourPart = parts.find(p => p.type === 'hour');
+    return hourPart ? parseInt(hourPart.value, 10) : 0;
+}
 function findFreeSlots(busySlots, windowStart, windowEnd, durationMins = 60) {
     const results = [];
     const stepMs = durationMins * 60 * 1000;
     const now = new Date();
     // Clone to avoid mutating the caller's date
     const cursor = new Date(windowStart);
-    // Round up to next clean hour boundary so we propose tidy times
+    // Round to a clean hour boundary. Only advance to the *next* hour if there
+    // are sub-hour components — this preserves a 09:00 windowStart instead of
+    // bumping it to 10:00 (which happened with the unconditional +1 hour).
+    const hadSubHour = cursor.getMinutes() > 0 || cursor.getSeconds() > 0 || cursor.getMilliseconds() > 0;
     cursor.setMinutes(0, 0, 0);
-    cursor.setHours(cursor.getHours() + 1);
+    if (hadSubHour) {
+        cursor.setHours(cursor.getHours() + 1);
+    }
     while (cursor < windowEnd && results.length < 3) {
         const slotEnd = new Date(cursor.getTime() + stepMs);
         if (slotEnd > windowEnd)
@@ -119,12 +133,8 @@ function findFreeSlots(busySlots, windowStart, windowEnd, durationMins = 60) {
             cursor.setTime(cursor.getTime() + stepMs);
             continue;
         }
-        // Jerusalem local hour (UTC+2 or UTC+3 depending on DST)
-        // We use a simple UTC offset approximation: Israel is UTC+2/+3.
-        // The googleapis freebusy call already uses Asia/Jerusalem, so busy slots
-        // are in UTC. We check working hours by converting to Jerusalem time.
-        const jerusalemOffset = 2 * 60; // conservative — enough for scheduling guard
-        const localHour = (cursor.getUTCHours() * 60 + cursor.getUTCMinutes() + jerusalemOffset) / 60 % 24;
+        // Use Intl API for DST-safe Jerusalem hour (Israel is UTC+2 in winter, UTC+3 in summer).
+        const localHour = getJerusalemHour(cursor);
         if (localHour >= 9 && localHour < 18) {
             const isOverlap = busySlots.some(busy => {
                 const bs = new Date(busy.start);
@@ -143,19 +153,19 @@ function findFreeSlots(busySlots, windowStart, windowEnd, durationMins = 60) {
 /**
  * Formats a TimeSlot as a human-readable Hebrew string.
  * Example: "יום שלישי, 14 במאי בשעה 10:00"
+ *
+ * Uses Intl.DateTimeFormat with Asia/Jerusalem timezone so DST is handled
+ * correctly (Israel is UTC+2 in winter, UTC+3 in summer).
  */
 function formatSlotHebrew(slot) {
     const date = new Date(slot.start);
-    const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-    // Convert UTC to Jerusalem time (UTC+2 conservative — handles most of the year)
-    const jerusalemMs = date.getTime() + 2 * 60 * 60 * 1000;
-    const jDate = new Date(jerusalemMs);
-    const day = dayNames[jDate.getUTCDay()];
-    const dayNum = jDate.getUTCDate();
-    const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-    const month = monthNames[jDate.getUTCMonth()];
-    const hours = String(jDate.getUTCHours()).padStart(2, '0');
-    const minutes = String(jDate.getUTCMinutes()).padStart(2, '0');
-    return `יום ${day}, ${dayNum} ב${month} בשעה ${hours}:${minutes}`;
+    const tz = 'Asia/Jerusalem';
+    const weekday = date.toLocaleDateString('he-IL', { timeZone: tz, weekday: 'long' });
+    const dayNum = date.toLocaleDateString('he-IL', { timeZone: tz, day: 'numeric' });
+    const month = date.toLocaleDateString('he-IL', { timeZone: tz, month: 'long' });
+    // en-GB always produces "HH:MM" (24-hour, colon-separated) — more reliable
+    // than he-IL which may include AM/PM markers in some Node.js versions.
+    const time = date.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+    return `${weekday}, ${dayNum} ב${month} בשעה ${time}`;
 }
 //# sourceMappingURL=googleCalendar.js.map

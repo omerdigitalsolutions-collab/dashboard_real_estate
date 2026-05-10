@@ -30,7 +30,7 @@ exports.syncCalendar = (0, scheduler_1.onSchedule)({
     timeoutSeconds: 540,
     secrets: [googleClientId, googleClientSecret, googleRedirectUri],
 }, async () => {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e;
     const db = (0, firestore_1.getFirestore)();
     const now = new Date();
     const timeMin = now.toISOString();
@@ -141,9 +141,15 @@ exports.syncCalendar = (0, scheduler_1.onSchedule)({
             // ── Diff: detect changes in summary or start time ──────────
             const expectedTitle = gcalEvent.summary ? `פגישה: ${gcalEvent.summary}` : undefined;
             const summaryChanged = expectedTitle !== undefined && taskData.title !== expectedTitle;
-            const currentStart = (_f = (_e = taskData.dueDate) === null || _e === void 0 ? void 0 : _e.toDate()) === null || _f === void 0 ? void 0 : _f.toISOString();
-            const startChanged = gcalEvent.startDateTime !== undefined &&
-                currentStart !== gcalEvent.startDateTime;
+            // Compare as epoch milliseconds — avoids false positives from
+            // timezone-offset format differences between Firestore UTC timestamps
+            // ("2025-06-15T08:00:00.000Z") and Google Calendar local strings
+            // ("2025-06-15T11:00:00+03:00"), which represent the same instant.
+            const currentStartMs = (_e = taskData.dueDate) === null || _e === void 0 ? void 0 : _e.toMillis();
+            const gcalStartMs = gcalEvent.startDateTime
+                ? new Date(gcalEvent.startDateTime).getTime()
+                : undefined;
+            const startChanged = gcalStartMs !== undefined && currentStartMs !== gcalStartMs;
             if (!summaryChanged && !startChanged)
                 continue;
             const updateFields = { updatedAt: firestore_1.Timestamp.now() };

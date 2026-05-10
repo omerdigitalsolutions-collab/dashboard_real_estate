@@ -285,6 +285,9 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
                 agencyId: authData.agencyId,
                 phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
                 isActive: true,
+                isAvailableForLeads: true,
+                lastLeadAssignedAt: null,
+                lastPropertyAssignedAt: null,
                 createdAt: firestore_1.FieldValue.serverTimestamp(),
                 inviteToken,
             });
@@ -301,6 +304,9 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
             agencyId: authData.agencyId,
             phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
             isActive: true,
+            isAvailableForLeads: true,
+            lastLeadAssignedAt: null,
+            lastPropertyAssignedAt: null,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
             inviteToken,
         });
@@ -475,6 +481,9 @@ exports.addAgentManually = (0, https_1.onCall)({ cors: true }, async (request) =
         agencyId: authData.agencyId,
         phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
         isActive: true,
+        isAvailableForLeads: true,
+        lastLeadAssignedAt: null,
+        lastPropertyAssignedAt: null,
         createdAt: firestore_1.FieldValue.serverTimestamp(),
         inviteToken,
     });

@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import { twilioAccountSid, twilioAuthToken } from '../notifications/smsService';
 import { validateUserAuth } from '../config/authGuard';
 
-const BASE_URL = 'https://europe-west1-dashboard-6f9d1.cloudfunctions.net';
+const BASE_URL = 'https://europe-west1-homer-crm.cloudfunctions.net';
 
 /**
  * Admin-only callable function to purchase a Twilio phone number and assign

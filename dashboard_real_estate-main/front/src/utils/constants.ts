@@ -1,3 +1,5 @@
+export const COMMERCIAL_PROPERTY_TYPES = ['מסחרי', 'משרד', 'חנות', 'תעשייה', 'קליניקה', 'מחסן'] as const;
+
 export const cityCoordinates: Record<string, { x: number; y: number }> = {
     'תל אביב': { x: 30, y: 35 },
     'רמת גן': { x: 35, y: 38 },

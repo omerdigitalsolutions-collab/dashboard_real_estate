@@ -83,6 +83,21 @@ export async function updateFranchiseSettings(
 }
 
 /**
+ * Updates the agency's lead/property distribution configuration.
+ */
+export async function updateDistributionConfig(
+    agencyId: string,
+    config: {
+        leadsEnabled: boolean;
+        propertiesEnabled: boolean;
+        strictness: 'strict' | 'flexible';
+    }
+): Promise<void> {
+    const docRef = doc(db, 'agencies', agencyId);
+    await updateDoc(docRef, { distributionConfig: config });
+}
+
+/**
  * Updates WeBot (AI bot) configuration.
  */
 export async function updateWeBotConfig(
