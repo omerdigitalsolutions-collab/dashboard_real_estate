@@ -34,6 +34,7 @@ import {
     AlertCircle,
     PlayCircle,
     Timer,
+    Bot,
 } from 'lucide-react';
 import { useGlobalStats, AgencyRow } from '../hooks/useGlobalStats';
 import { useAuth } from '../context/AuthContext';
@@ -43,9 +44,10 @@ import GlobalPropertyImport from '../components/superadmin/GlobalPropertyImport'
 import AgencyUsageWidget from '../components/superadmin/AgencyUsageWidget';
 import SubscriptionRequestsManager from '../components/superadmin/SubscriptionRequestsManager';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../config/firebase';
+import { functions, db } from '../config/firebase';
 import { useAuthUsers } from '../hooks/useAuthUsers';
 import ActiveTrialsWidget from '../components/superadmin/ActiveTrialsWidget';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // ─── Tooltip customisation ───────────────────────────────────────────────────
 const NeonBarTooltip = ({ active, payload, label }: any) => {
@@ -228,6 +230,61 @@ export default function SuperAdminDashboard() {
     const { setUserData, userData } = useAuth();
     const { authUsers, loading: authLoading, error: authError } = useAuthUsers();
     const navigate = useNavigate();
+
+    // ─── Homer Sales Bot state ───────────────────────────────────────────────
+    const [botSettings, setBotSettings] = useState<{ isActive: boolean; mode: 'agents' | 'demo'; updatedAt?: any } | null>(null);
+    const [botLoading, setBotLoading] = useState(true);
+    const [botSaving, setBotSaving] = useState(false);
+
+    useEffect(() => {
+        const ref = doc(db, 'homer_settings', 'salesBot');
+        const unsub = onSnapshot(ref, (snap) => {
+            if (snap.exists()) {
+                const d = snap.data();
+                setBotSettings({ isActive: d.isActive ?? false, mode: d.mode ?? 'agents', updatedAt: d.updatedAt });
+            } else {
+                setBotSettings({ isActive: false, mode: 'agents' });
+            }
+            setBotLoading(false);
+        }, () => setBotLoading(false));
+        return unsub;
+    }, []);
+
+    const handleToggleBot = async () => {
+        if (botSaving || !botSettings) return;
+        setBotSaving(true);
+        try {
+            const ref = doc(db, 'homer_settings', 'salesBot');
+            await setDoc(ref, {
+                ...botSettings,
+                isActive: !botSettings.isActive,
+                updatedAt: serverTimestamp(),
+                updatedBy: userData?.uid ?? 'superadmin',
+            }, { merge: true });
+        } catch (err: any) {
+            alert('שגיאה בעדכון סטטוס הבוט: ' + err.message);
+        } finally {
+            setBotSaving(false);
+        }
+    };
+
+    const handleBotModeChange = async (mode: 'agents' | 'demo') => {
+        if (botSaving || !botSettings) return;
+        setBotSaving(true);
+        try {
+            const ref = doc(db, 'homer_settings', 'salesBot');
+            await setDoc(ref, {
+                ...botSettings,
+                mode,
+                updatedAt: serverTimestamp(),
+                updatedBy: userData?.uid ?? 'superadmin',
+            }, { merge: true });
+        } catch (err: any) {
+            alert('שגיאה בעדכון מצב הבוט: ' + err.message);
+        } finally {
+            setBotSaving(false);
+        }
+    };
 
     // DEBUG: Log counts to console for developer tracing
     console.log('[DEBUG] SuperAdminDashboard State:', {
@@ -1008,6 +1065,113 @@ export default function SuperAdminDashboard() {
                         <AgencyUsageWidget agencyId={selectedAgency.id} agencyName={selectedAgency.name ?? undefined} />
                     </div>
                 )}
+
+                {/* ── Homer Sales Bot ─────────────────────────────────────── */}
+                <div
+                    className="rounded-2xl border p-6"
+                    style={{
+                        background: 'rgba(15,23,42,0.8)',
+                        borderColor: 'rgba(6,182,212,0.2)',
+                        boxShadow: '0 0 30px rgba(6,182,212,0.05)',
+                    }}
+                >
+                    <div className="flex items-center gap-3 mb-6">
+                        <div
+                            className="p-2.5 rounded-xl"
+                            style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)' }}
+                        >
+                            <Bot className="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-white">בוט מכירות הומר</h2>
+                            <p className="text-xs text-slate-400">מנהל שיחות וואצפ עם בעלי משרדי תיווך שמתעניינים במערכת</p>
+                        </div>
+                    </div>
+
+                    {botLoading ? (
+                        <div className="flex items-center gap-2 text-slate-400 text-sm">
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>טוען...</span>
+                        </div>
+                    ) : (
+                        <div className="space-y-5">
+                            {/* Mode selector */}
+                            <div>
+                                <p className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">מצב בוט</p>
+                                <div className="flex gap-3">
+                                    {(['agents', 'demo'] as const).map((m) => (
+                                        <button
+                                            key={m}
+                                            onClick={() => handleBotModeChange(m)}
+                                            disabled={botSaving}
+                                            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                                                botSettings?.mode === m
+                                                    ? 'bg-cyan-500/20 border-cyan-500/60 text-cyan-300'
+                                                    : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:border-slate-500'
+                                            }`}
+                                        >
+                                            {m === 'agents' ? 'סוכני נדלן' : 'הדגמת מערכת'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Toggle */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-white">סטטוס</p>
+                                    {botSettings?.updatedAt && (
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            עודכן לאחרונה:{' '}
+                                            {botSettings.updatedAt.toDate?.().toLocaleString('he-IL', {
+                                                dateStyle: 'short',
+                                                timeStyle: 'short',
+                                            }) ?? '—'}
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={handleToggleBot}
+                                    disabled={botSaving}
+                                    className={`relative inline-flex h-8 w-16 items-center rounded-full border-2 transition-all duration-300 ${
+                                        botSettings?.isActive
+                                            ? 'bg-cyan-500/30 border-cyan-500/60'
+                                            : 'bg-slate-700/50 border-slate-600'
+                                    } ${botSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:opacity-90'}`}
+                                    title={botSettings?.isActive ? 'כבה בוט' : 'הפעל בוט'}
+                                >
+                                    <span
+                                        className={`inline-block h-5 w-5 transform rounded-full shadow-lg transition-transform duration-300 ${
+                                            botSettings?.isActive
+                                                ? 'translate-x-8 bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.6)]'
+                                                : 'translate-x-1 bg-slate-400'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* Status badge */}
+                            <div className="flex items-center gap-2">
+                                {botSettings?.isActive ? (
+                                    <>
+                                        <span className="relative flex h-2.5 w-2.5">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500" />
+                                        </span>
+                                        <span className="text-xs font-semibold text-cyan-400">פעיל — עונה להודעות נכנסות</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="relative flex h-2.5 w-2.5">
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" />
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-500">כבוי</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div >
     );

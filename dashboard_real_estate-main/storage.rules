@@ -247,5 +247,18 @@ service firebase.storage {
                                       || (mediaType == 'videos' && request.resource.contentType.matches('video/.*'))
                                     );
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CALL RECORDINGS — written by Cloud Functions (Admin SDK), read by agents
+    // Auto-deleted after 30 days via GCS Lifecycle Rule (configure in console)
+    // ══════════════════════════════════════════════════════════════════════════
+    match /agencies/{agencyId}/recordings/{fileName} {
+      allow read: if request.auth != null
+                  && (
+                    isSuperAdmin()
+                    || request.auth.token.agencyId == agencyId
+                  );
+      allow write: if false; // Admin SDK only
+    }
   }
 }

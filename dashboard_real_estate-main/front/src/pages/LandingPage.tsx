@@ -125,15 +125,15 @@ export default function LandingPage() {
         }
     };
 
-    // Auto-scroll to training section when navigating to /training
+    // Auto-scroll to training section when navigating to /training or /#training
     useEffect(() => {
-        if (location.pathname === '/training') {
+        if (location.pathname === '/training' || location.hash === '#training') {
             const el = document.getElementById('training');
             if (el) {
                 setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
             }
         }
-    }, [location.pathname]);
+    }, [location.pathname, location.hash]);
 
     const handleScrollToTraining = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -142,7 +142,7 @@ export default function LandingPage() {
     };
 
     const handleCopyTrainingLink = () => {
-        navigator.clipboard.writeText('https://homer.management/#training');
+        navigator.clipboard.writeText('https://homer.management/training');
         setLinkCopied(true);
         setTimeout(() => setLinkCopied(false), 2000);
     };

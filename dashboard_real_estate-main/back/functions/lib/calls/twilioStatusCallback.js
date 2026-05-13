@@ -75,7 +75,7 @@ exports.twilioStatusCallback = (0, https_1.onRequest)({ secrets: [smsService_1.t
         return;
     }
     const { agencyId, agentId } = phoneSnap.data();
-    const agentRef = db.doc(`agencies/${agencyId}/agents/${agentId}`);
+    const agentRef = db.collection('users').doc(agentId);
     if (MISSED_STATUSES.has(callStatus)) {
         await db.collection('callLogs').doc(callSid).update({
             status: 'missed',

@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles, Calendar } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles, Calendar, ShieldCheck } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useSuperAdmin } from '../hooks/useSuperAdmin';
+import { useSuperAdminAllCityProperties } from '../hooks/useSuperAdminAllCityProperties';
 
 import AddPropertyModal from '../components/modals/AddPropertyModal';
 import EditPropertyModal from '../components/modals/EditPropertyModal';
@@ -23,7 +25,7 @@ import { translatePropertyKind } from '../utils/formatters';
 import { COMMERCIAL_PROPERTY_TYPES } from '../utils/constants';
 
 export default function Properties() {
-    const { properties = [], loading: propertiesLoading } = useLiveDashboardData();
+    const { properties: agencyProperties = [], loading: agencyLoading } = useLiveDashboardData();
     const { data: agents = [] } = useAgents();
     const { data: leads = [] } = useLeads();
     const { data: deals = [] } = useDeals();
@@ -34,8 +36,20 @@ export default function Properties() {
     const currentUid = userData?.uid;
     const isMobile = useMediaQuery('(max-width: 768px)');
 
+    const { isSuperAdmin } = useSuperAdmin();
+    const { properties: allCityProperties, loading: cityLoading, cityCount } = useSuperAdminAllCityProperties(isSuperAdmin);
+
+    // Super admin sees all city properties from every city; regular users see their agency properties
+    const properties = isSuperAdmin ? allCityProperties : agencyProperties;
+    const propertiesLoading = isSuperAdmin ? cityLoading : agencyLoading;
+
     const [search, setSearch] = useState('');
     const [mainFilter, setMainFilter] = useState<'my' | 'general'>('my');
+
+    // Super admin always shows the general pool (all city properties)
+    useEffect(() => {
+        if (isSuperAdmin) setMainFilter('general');
+    }, [isSuperAdmin]);
     const [subFilter, setSubFilter] = useState('all');
     const [roomsFilter, setRoomsFilter] = useState<string>('all');
     const [sortConfig, setSortConfig] = useState<{ key: 'price' | 'createdAt', direction: 'asc' | 'desc' } | null>({ key: 'createdAt', direction: 'desc' });
@@ -421,6 +435,14 @@ export default function Properties() {
 
     return (
         <div className="space-y-4 sm:space-y-6" dir="rtl">
+            {/* Super Admin mode banner */}
+            {isSuperAdmin && (
+                <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-2xl px-4 py-3 text-sm font-semibold shadow-sm">
+                    <ShieldCheck size={18} className="text-indigo-500 shrink-0" />
+                    <span>מצב Super Admin — מציג את כל נכסי המאגר הציבורי מ-{cityCount} ערים</span>
+                </div>
+            )}
+
             {/* Header Area */}
             {!isMobile ? (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -555,7 +577,7 @@ export default function Properties() {
                         </button>
                         <button
                             onClick={() => {
-                                if (!features.canAccessSourcing) {
+                                if (!features.canAccessSourcing && !isSuperAdmin) {
                                     setShowUpgradeModal(true);
                                     return;
                                 }

@@ -821,7 +821,7 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                             id: p.id,
                             collectionPath: p._collectionPath || `agencies/${agencyId}/properties`,
                         }));
-                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_p = freshLead.data()) === null || _p === void 0 ? void 0 : _p.name) || 'לקוח', propertyRefs);
+                        const catalogUrl = await (0, whatsappService_1.createSharedCatalog)(db, agencyId, agencyData, leadId, ((_p = freshLead.data()) === null || _p === void 0 ? void 0 : _p.name) || 'לקוח', propertyRefs, leadData.assignedAgentId || '');
                         catalogCreated = true;
                         sentCatalogUrl = catalogUrl;
                         console.log(`[WeBot] 📄 Catalog created: lead=${leadId} URL=${catalogUrl} count=${propertyRefs.length}`);

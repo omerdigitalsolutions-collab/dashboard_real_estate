@@ -57,10 +57,7 @@ export const twilioVoiceInbound = onRequest(
         const { agencyId, agentId } = phoneSnap.data()!;
 
         // Fetch agent's real mobile number for Dial
-        const agentSnap = await db
-            .collection(`agencies/${agencyId}/agents`)
-            .doc(agentId)
-            .get();
+        const agentSnap = await db.collection('users').doc(agentId).get();
         const realPhone: string | null = agentSnap.data()?.realPhone ?? null;
 
         // Create initial call log

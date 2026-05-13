@@ -38,7 +38,7 @@ const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const smsService_1 = require("../notifications/smsService");
 const authGuard_1 = require("../config/authGuard");
-const BASE_URL = 'https://europe-west1-dashboard-6f9d1.cloudfunctions.net';
+const BASE_URL = 'https://europe-west1-homer-crm.cloudfunctions.net';
 /**
  * Admin-only callable function to purchase a Twilio phone number and assign
  * it to an agent. Requires Israeli Regulatory Bundle to be pre-approved in

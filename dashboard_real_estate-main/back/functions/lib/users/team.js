@@ -272,6 +272,8 @@ exports.inviteAgent = (0, https_1.onCall)({ secrets: [resendApiKey], cors: true 
                 inviteToken,
                 agencyId: authData.agencyId,
                 role: normalizedRole,
+                name: derivedName,
+                phone: (phone === null || phone === void 0 ? void 0 : phone.trim()) || null,
                 updatedAt: firestore_1.FieldValue.serverTimestamp()
             });
             stubId = existingDoc.id;
@@ -656,8 +658,10 @@ exports.joinWithCode = (0, https_1.onCall)({ cors: true }, async (request) => {
         if (existing.uid) {
             throw new https_1.HttpsError('already-exists', 'A user with this email is already registered. Please log in directly.');
         }
-        // If it's a stub, we can potentially reuse it or update it. 
-        // For now, let's update it to the new agency if they are joining via a specific code.
+        // Stub exists — only reuse if it belongs to the same agency (avoid silently hijacking another agency's invite)
+        if (existing.agencyId && existing.agencyId !== agencyId) {
+            throw new https_1.HttpsError('already-exists', 'כתובת האימייל הזו כבר ממתינה להצטרפות לסוכנות אחרת. פנה למנהל שלך לביטול ההזמנה הקיימת.');
+        }
         const stubRef = userSnap.docs[0].ref;
         const inviteToken = generateToken();
         await stubRef.update({
@@ -673,10 +677,13 @@ exports.joinWithCode = (0, https_1.onCall)({ cors: true }, async (request) => {
     await db.collection('users').add({
         uid: null,
         email: normalizedEmail,
-        name: normalizedEmail.split('@')[0], // Default name from email prefix
+        name: normalizedEmail.split('@')[0],
         role: 'agent',
         agencyId,
         isActive: true,
+        isAvailableForLeads: true,
+        lastLeadAssignedAt: null,
+        lastPropertyAssignedAt: null,
         inviteToken,
         createdAt: firestore_1.FieldValue.serverTimestamp()
     });
@@ -707,11 +714,10 @@ exports.sendAgentInvite = (0, https_1.onCall)({ secrets: [resendApiKey], cors: t
         throw new https_1.HttpsError('permission-denied', 'Only admins can invite new team members.');
     }
     const normalizedEmail = email.trim().toLowerCase();
-    // Check for existing user in same agency
+    // Check globally (not just within agency) to prevent cross-agency duplicate stubs
     const existingSnap = await db
         .collection('users')
         .where('email', '==', normalizedEmail)
-        .where('agencyId', '==', authData.agencyId)
         .limit(1)
         .get();
     if (!existingSnap.empty) {
@@ -736,6 +742,9 @@ exports.sendAgentInvite = (0, https_1.onCall)({ secrets: [resendApiKey], cors: t
             role: 'agent',
             agencyId: authData.agencyId,
             isActive: true,
+            isAvailableForLeads: true,
+            lastLeadAssignedAt: null,
+            lastPropertyAssignedAt: null,
             createdAt: firestore_1.FieldValue.serverTimestamp(),
             inviteToken,
         });
@@ -743,6 +752,7 @@ exports.sendAgentInvite = (0, https_1.onCall)({ secrets: [resendApiKey], cors: t
     else {
         await existingSnap.docs[0].ref.update({
             inviteToken,
+            agencyId: authData.agencyId,
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
     }
@@ -861,6 +871,9 @@ exports.claimInviteToken = (0, https_1.onCall)({ cors: true }, async (request) =
                 role: effectiveRole,
                 agencyId: stubData.agencyId,
                 isActive: true,
+                isAvailableForLeads: true,
+                lastLeadAssignedAt: null,
+                lastPropertyAssignedAt: null,
                 inviteToken: token.trim(),
                 createdAt: firestore_1.FieldValue.serverTimestamp()
             });

@@ -82,10 +82,7 @@ exports.twilioVoiceInbound = (0, https_1.onRequest)({ secrets: [smsService_1.twi
     }
     const { agencyId, agentId } = phoneSnap.data();
     // Fetch agent's real mobile number for Dial
-    const agentSnap = await db
-        .collection(`agencies/${agencyId}/agents`)
-        .doc(agentId)
-        .get();
+    const agentSnap = await db.collection('users').doc(agentId).get();
     const realPhone = (_c = (_b = agentSnap.data()) === null || _b === void 0 ? void 0 : _b.realPhone) !== null && _c !== void 0 ? _c : null;
     // Create initial call log
     await db.collection('callLogs').doc(callSid).set({

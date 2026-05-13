@@ -524,7 +524,8 @@ service cloud.firestore {
     }
     // Server-managed active trials collection
     match /activeTrials/{document=**} {
-      allow read, write: if false;
+      allow read: if isSuperAdmin();
+      allow write: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -592,6 +593,19 @@ service cloud.firestore {
     match /whatsapp_suspicious/{doc} { allow read, write: if false; }
     match /whatsapp_audit_log/{doc} { allow read, write: if false; }
     match /processed_messages/{doc} { allow read, write: if false; }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // HOMER SALES BOT — settings writable by Super Admin, prospects server-only
+    // ══════════════════════════════════════════════════════════════════════════
+    match /homer_settings/{doc} {
+      allow read, write: if isSuperAdmin();
+    }
+    match /homer_prospects/{doc=**} {
+      allow read, write: if false;
+    }
+    match /homer_processed_messages/{doc} {
+      allow read, write: if false;
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // COLLABORATIONS

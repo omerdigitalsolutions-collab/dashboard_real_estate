@@ -49,8 +49,10 @@ export const webhookProcessGlobalYad2Email = onRequest({
     }
 
     const htmlBody = req.body?.htmlBody;
-    if (!htmlBody) {
-        res.status(400).json({ success: false, error: 'Missing htmlBody' });
+    const propertiesPayload = req.body?.properties;
+
+    if (!htmlBody && !Array.isArray(propertiesPayload)) {
+        res.status(400).json({ success: false, error: 'Missing htmlBody or properties array' });
         return;
     }
 
@@ -92,6 +94,82 @@ export const webhookProcessGlobalYad2Email = onRequest({
         console.error("[Self-Healing] Error during migration:", healError);
     }
 
+    // ── מסלול A: נתונים מובנים מהגיליון (sendTodayToFirebase) ────────────────
+    if (Array.isArray(propertiesPayload)) {
+        try {
+            const batch = db.batch();
+            let count = 0;
+
+            for (const prop of propertiesPayload) {
+                const cityRaw = String(prop.city ?? '').trim();
+                const streetStr = String(prop.street ?? '').trim();
+                const priceNum = Number(prop.price) || 0;
+                const roomsNum = Number(prop.rooms) || 0;
+
+                if (!cityRaw || !priceNum) {
+                    console.warn('Skipping invalid structured property:', prop);
+                    continue;
+                }
+
+                const normalizedCityName = normalizeCityName(cityRaw);
+                const hashInput = `${streetStr}_${priceNum}_${roomsNum}`;
+                const hashId = crypto.createHash('sha256').update(hashInput).digest('hex');
+
+                const cityRef = db.collection('cities').doc(normalizedCityName);
+                batch.set(cityRef, {
+                    exists: true,
+                    lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+
+                const resolvedDealType: 'sale' | 'rent' = prop.dealType === 'rent' ? 'rent' : 'sale';
+                const transactionType: 'forsale' | 'rent' = resolvedDealType === 'rent' ? 'rent' : 'forsale';
+                const agencyName = String(prop.agencyName ?? '').trim();
+
+                batch.set(cityRef.collection('properties').doc(hashId), {
+                    city: normalizedCityName,
+                    street: streetStr,
+                    price: priceNum,
+                    isPublic: true,
+                    source: 'sheets_today',
+                    siteSource: 'yad2',
+
+                    transactionType,
+                    propertyType: String(prop.propertyType ?? ''),
+                    rooms: roomsNum || null,
+                    floor: null,
+                    squareMeters: Number(prop.sqm) || null,
+
+                    address: {
+                        fullAddress: streetStr ? `${streetStr}, ${normalizedCityName}` : normalizedCityName,
+                        city: normalizedCityName,
+                        street: streetStr,
+                    },
+
+                    features: {},
+                    financials: { price: priceNum },
+                    media: { images: [] },
+                    management: agencyName ? { agentName: agencyName } : {},
+
+                    ...(agencyName ? { agentName: agencyName } : {}),
+                    ...(prop.id ? { yad2Id: String(prop.id) } : {}),
+                    listingType: agencyName ? 'external' : 'private',
+
+                    createdAt: new Date(),
+                    ingestedAt: new Date(),
+                }, { merge: true });
+
+                count++;
+            }
+
+            if (count > 0) await batch.commit();
+            console.log(`[Structured] Inserted ${count} properties from sheets`);
+        } catch (error: any) {
+            console.error('Error processing structured properties:', error);
+        }
+        return;
+    }
+
+    // ── מסלול B: HTML דרך Gemini ──────────────────────────────────────────────
     try {
         const apiKey = geminiApiKey.value();
         if (!apiKey) {

@@ -172,6 +172,11 @@ export const calls = { twilioVoiceInbound, twilioRecordingComplete, twilioStatus
 //   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI
 export { webhookWhatsAppAI } from './webhookWhatsAppAI';
 
+// ── Homer Sales Bot ────────────────────────────────────────────────────────────
+// Top-level export for Homer's own sales bot webhook:
+//   https://europe-west1-<project-id>.cloudfunctions.net/webhookHomerSalesBot
+export { webhookHomerSalesBot } from './sales/webhookHomerSalesBot';
+
 // ── Public Invite Info ────────────────────────────────────────────────────────
 // Top-level export to avoid hyphenated routing issues in v2
 export { getInviteInfo } from './users/team';

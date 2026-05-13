@@ -10,7 +10,7 @@
  *   - users.*      → user / team operations
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInviteInfo = exports.webhookWhatsAppAI = exports.calls = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.distribution = exports.users = exports.agencies = void 0;
+exports.getInviteInfo = exports.webhookHomerSalesBot = exports.webhookWhatsAppAI = exports.calls = exports.maxPaymentWebhook = exports.stripeWebhook = exports.scheduled = exports.billing = exports.contracts = exports.deals = exports.superadmin = exports.automation = exports.calendar = exports.ai = exports.whatsapp = exports.alerts = exports.catalogs = exports.leads = exports.properties = exports.tasks = exports.distribution = exports.users = exports.agencies = void 0;
 // Initialize Admin SDK first (order matters)
 const v2_1 = require("firebase-functions/v2");
 (0, v2_1.setGlobalOptions)({ region: 'europe-west1' });
@@ -139,6 +139,11 @@ exports.calls = { twilioVoiceInbound: twilioVoiceInbound_1.twilioVoiceInbound, t
 //   https://europe-west1-<project-id>.cloudfunctions.net/webhookWhatsAppAI
 var webhookWhatsAppAI_1 = require("./webhookWhatsAppAI");
 Object.defineProperty(exports, "webhookWhatsAppAI", { enumerable: true, get: function () { return webhookWhatsAppAI_1.webhookWhatsAppAI; } });
+// ── Homer Sales Bot ────────────────────────────────────────────────────────────
+// Top-level export for Homer's own sales bot webhook:
+//   https://europe-west1-<project-id>.cloudfunctions.net/webhookHomerSalesBot
+var webhookHomerSalesBot_1 = require("./sales/webhookHomerSalesBot");
+Object.defineProperty(exports, "webhookHomerSalesBot", { enumerable: true, get: function () { return webhookHomerSalesBot_1.webhookHomerSalesBot; } });
 // ── Public Invite Info ────────────────────────────────────────────────────────
 // Top-level export to avoid hyphenated routing issues in v2
 var team_2 = require("./users/team");

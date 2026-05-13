@@ -339,30 +339,28 @@ export default function Leads() {
           </div>
 
           {/* Action Buttons Aligned with KPI +10% line */}
-          <div className="flex lg:flex-col items-center lg:items-end justify-between lg:justify-start gap-4 lg:w-[320px] pt-4 lg:pt-2">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="flex items-center gap-2 px-5 py-3.5 bg-slate-800/50 border border-slate-700 text-slate-300 rounded-2xl hover:bg-slate-800 hover:text-white transition-all font-bold shadow-lg"
-              >
-                <Upload size={18} className="text-slate-400" />
-                ייבוא לידים
-              </button>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl transition-all font-black shadow-xl shadow-blue-500/20 active:scale-95 group"
-              >
-                <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-                ליד חדש
-              </button>
-              <button
-                onClick={() => navigate('/dashboard/marketplace')}
-                className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl transition-all font-black shadow-xl shadow-indigo-500/20 active:scale-95 group"
-              >
-                <Handshake size={20} className="group-hover:rotate-12 transition-transform duration-300" />
-                כניסה למרקטפלייס
-              </button>
-            </div>
+          <div className="flex lg:flex-col items-center lg:items-stretch justify-between lg:justify-start gap-3 lg:w-[220px] pt-4 lg:pt-2">
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-800/50 border border-slate-700 text-slate-300 rounded-2xl hover:bg-slate-800 hover:text-white transition-all font-bold shadow-lg"
+            >
+              <Upload size={18} className="text-slate-400" />
+              ייבוא לידים
+            </button>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl transition-all font-black shadow-xl shadow-blue-500/20 active:scale-95 group"
+            >
+              <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+              ליד חדש
+            </button>
+            <button
+              onClick={() => navigate('/dashboard/marketplace')}
+              className="flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl transition-all font-black shadow-xl shadow-indigo-500/20 active:scale-95 group"
+            >
+              <Handshake size={20} className="group-hover:rotate-12 transition-transform duration-300" />
+              כניסה למרקטפלייס
+            </button>
 
             {selectedLeadIds.size > 0 && (
               <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right duration-300">

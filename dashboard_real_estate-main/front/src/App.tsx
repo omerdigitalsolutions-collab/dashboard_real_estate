@@ -16,6 +16,7 @@ import { PreferencesProvider } from './context/PreferencesContext';
 import { useAuth } from './context/AuthContext';
 import { DashboardDataProvider } from './hooks/useLiveDashboardData';
 import { useSubscriptionGuard } from './hooks/useSubscriptionGuard';
+import { useSuperAdmin } from './hooks/useSuperAdmin';
 
 const OnboardingTour = lazy(() => import('./components/common/OnboardingTour'));
 
@@ -50,11 +51,13 @@ const ExploreGallery = lazy(() => import('./pages/ExploreGallery'));
 const Marketplace = lazy(() => import('./pages/Marketplace'));
 const CallCenter = lazy(() => import('./pages/CallCenter'));
 
-/** Wraps the dashboard and renders the lock screen if billing is expired */
+/** Wraps the dashboard and renders the lock screen if billing is expired.
+ *  Super admins bypass the lock entirely — they have no agency billing. */
 function SubscriptionProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isLockedOut, loading } = useSubscriptionGuard();
-  if (loading) return null;
-  if (isLockedOut) return <BillingLockScreen />;
+  const { isLockedOut, loading: billingLoading } = useSubscriptionGuard();
+  const { isSuperAdmin, loading: saLoading } = useSuperAdmin();
+  if (billingLoading || saLoading) return null;
+  if (!isSuperAdmin && isLockedOut) return <BillingLockScreen />;
   return <>{children}</>;
 }
 

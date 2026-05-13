@@ -49,7 +49,7 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
     timeoutSeconds: 300,
     memory: '512MiB',
 }, async (req, res) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (req.method !== 'POST') {
         res.status(405).send('Method Not Allowed');
         return;
@@ -73,13 +73,14 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
             return;
         }
     }
-    catch (_d) {
+    catch (_j) {
         res.status(200).json({ success: true });
         return;
     }
     const htmlBody = (_a = req.body) === null || _a === void 0 ? void 0 : _a.htmlBody;
-    if (!htmlBody) {
-        res.status(400).json({ success: false, error: 'Missing htmlBody' });
+    const propertiesPayload = (_b = req.body) === null || _b === void 0 ? void 0 : _b.properties;
+    if (!htmlBody && !Array.isArray(propertiesPayload)) {
+        res.status(400).json({ success: false, error: 'Missing htmlBody or properties array' });
         return;
     }
     // מחזיר 200 מיידית — Apps Script לא יחכה
@@ -111,6 +112,48 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
     catch (healError) {
         console.error("[Self-Healing] Error during migration:", healError);
     }
+    // ── מסלול A: נתונים מובנים מהגיליון (sendTodayToFirebase) ────────────────
+    if (Array.isArray(propertiesPayload)) {
+        try {
+            const batch = db.batch();
+            let count = 0;
+            for (const prop of propertiesPayload) {
+                const cityRaw = String((_c = prop.city) !== null && _c !== void 0 ? _c : '').trim();
+                const streetStr = String((_d = prop.street) !== null && _d !== void 0 ? _d : '').trim();
+                const priceNum = Number(prop.price) || 0;
+                const roomsNum = Number(prop.rooms) || 0;
+                if (!cityRaw || !priceNum) {
+                    console.warn('Skipping invalid structured property:', prop);
+                    continue;
+                }
+                const normalizedCityName = (0, cityUtils_1.normalizeCityName)(cityRaw);
+                const hashInput = `${streetStr}_${priceNum}_${roomsNum}`;
+                const hashId = crypto.createHash('sha256').update(hashInput).digest('hex');
+                const cityRef = db.collection('cities').doc(normalizedCityName);
+                batch.set(cityRef, {
+                    exists: true,
+                    lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+                const resolvedDealType = prop.dealType === 'rent' ? 'rent' : 'sale';
+                const transactionType = resolvedDealType === 'rent' ? 'rent' : 'forsale';
+                const agencyName = String((_e = prop.agencyName) !== null && _e !== void 0 ? _e : '').trim();
+                batch.set(cityRef.collection('properties').doc(hashId), Object.assign(Object.assign(Object.assign({ city: normalizedCityName, street: streetStr, price: priceNum, isPublic: true, source: 'sheets_today', siteSource: 'yad2', transactionType, propertyType: String((_f = prop.propertyType) !== null && _f !== void 0 ? _f : ''), rooms: roomsNum || null, floor: null, squareMeters: Number(prop.sqm) || null, address: {
+                        fullAddress: streetStr ? `${streetStr}, ${normalizedCityName}` : normalizedCityName,
+                        city: normalizedCityName,
+                        street: streetStr,
+                    }, features: {}, financials: { price: priceNum }, media: { images: [] }, management: agencyName ? { agentName: agencyName } : {} }, (agencyName ? { agentName: agencyName } : {})), (prop.id ? { yad2Id: String(prop.id) } : {})), { listingType: agencyName ? 'external' : 'private', createdAt: new Date(), ingestedAt: new Date() }), { merge: true });
+                count++;
+            }
+            if (count > 0)
+                await batch.commit();
+            console.log(`[Structured] Inserted ${count} properties from sheets`);
+        }
+        catch (error) {
+            console.error('Error processing structured properties:', error);
+        }
+        return;
+    }
+    // ── מסלול B: HTML דרך Gemini ──────────────────────────────────────────────
     try {
         const apiKey = geminiApiKey.value();
         if (!apiKey) {
@@ -122,7 +165,7 @@ exports.webhookProcessGlobalYad2Email = (0, https_1.onRequest)({
         // Priority 1: explicit source field sent from Apps Script
         // Priority 2: scan HTML for known domain strings
         const htmlLower = htmlBody.toLowerCase();
-        const explicitSource = ((_c = (_b = req.body) === null || _b === void 0 ? void 0 : _b.source) !== null && _c !== void 0 ? _c : '').toLowerCase();
+        const explicitSource = ((_h = (_g = req.body) === null || _g === void 0 ? void 0 : _g.source) !== null && _h !== void 0 ? _h : '').toLowerCase();
         let detectedSource = 'unknown';
         if (explicitSource === 'yad2' || explicitSource === 'madlan') {
             detectedSource = explicitSource;
