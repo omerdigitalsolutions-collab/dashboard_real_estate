@@ -26,10 +26,13 @@ import { sanitizeInput } from '../whatsapp/security/sanitizeInput';
 import { detectInjection } from '../whatsapp/security/detectInjection';
 
 const db = admin.firestore();
-const DAILY_REPLY_LIMIT = 4;
+const DAILY_REPLY_LIMIT_AGENTS = 4;
+const DAILY_REPLY_LIMIT_DEMO = 10;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const HOMER_TEAM_PHONE = '0507706024';
 const TRAINING_URL = 'https://homer.management/training';
+const AGENTS_COLLECTION = 'homer_prospects';
+const DEMO_COLLECTION = 'homer_demo_prospects';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +68,8 @@ function withTimeout<T>(label: string, ms: number, fn: () => Promise<T>): Promis
   });
 }
 
-const SYSTEM_PROMPT = `אתה בוט המכירות של homer — מערכת CRM לסוכנויות נדל"ן ישראליות.
+// B2B: targets real estate agency owners who want to purchase Homer
+const AGENTS_SYSTEM_PROMPT = `אתה בוט המכירות של homer — מערכת CRM לסוכנויות נדל"ן ישראליות.
 
 == מי אתה מדבר איתו ==
 בעלי משרדי תיווך שהתעניינו במערכת homer ושלחו הודעה לוואצפ שלנו. הם עדיין לא לקוחות.
@@ -92,6 +96,28 @@ const SYSTEM_PROMPT = `אתה בוט המכירות של homer — מערכת CR
 
 == function calls ==
 קרא לפונקציות כשיש מידע לשמור. ניתן לקרוא בכל שלב של השיחה.`;
+
+// Demo: simulates Homer acting as an agency's own AI WhatsApp bot (B2C experience)
+const DEMO_SYSTEM_PROMPT = `אתה "הומר" — בוט הנדל"ן של משרד תיווך לדוגמה. זוהי הדגמה של המוצר homer.
+
+== מי אתה מדבר איתו ==
+אדם שמתעניין בנכסים — קונה, מוכר או שוכר. זוהי הדגמה בלבד; אין עסקאות אמיתיות.
+
+== המטרה ==
+1. לזהות האם הם מחפשים לקנות, למכור או לשכור
+2. לאסוף העדפות: אזור, תקציב, גודל
+3. להציג 2-3 נכסים לדוגמה (המצא נכסים סבירים — הם פיקטיביים)
+4. להציע לתאם ביקור עם סוכן (סוכן פיקטיבי לדוגמה)
+5. אם שואלים "מי מאחורי הבוט" — ניתן לציין: "זוהי הדגמה של מערכת homer"
+
+== כללים ==
+1. ענה תמיד בעברית טבעית וחמה
+2. היה קצר — לא יותר מ-3 משפטים בתשובה אחת
+3. הנכסים הם לדוגמה בלבד — אל תציג אותם כאמיתיים
+4. אל תדון במחירים אמיתיים של homer; זה לא רלוונטי לשיחה זו
+
+== function calls ==
+קרא לפונקציות כשיש מידע לשמור על המתעניין. ניתן לקרוא בכל שלב.`;
 
 const functionDeclarations: FunctionDeclaration[] = [
   {
@@ -152,8 +178,9 @@ const functionDeclarations: FunctionDeclaration[] = [
 
 async function getRepliesInfo(
   phone: string,
+  collection: string,
 ): Promise<{ dailyReplies: number; isFirstToday: boolean }> {
-  const snap = await db.collection('homer_prospects').doc(phone).get();
+  const snap = await db.collection(collection).doc(phone).get();
   if (!snap.exists) return { dailyReplies: 0, isFirstToday: true };
 
   const data = snap.data()!;
@@ -167,8 +194,8 @@ async function getRepliesInfo(
   return { dailyReplies, isFirstToday };
 }
 
-async function incrementDailyReplies(phone: string, wasWindowExpired: boolean): Promise<void> {
-  const ref = db.collection('homer_prospects').doc(phone);
+async function incrementDailyReplies(phone: string, wasWindowExpired: boolean, collection: string): Promise<void> {
+  const ref = db.collection(collection).doc(phone);
   await ref.update({
     dailyReplies: wasWindowExpired ? 1 : admin.firestore.FieldValue.increment(1),
     lastReplyAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -177,9 +204,9 @@ async function incrementDailyReplies(phone: string, wasWindowExpired: boolean): 
 
 // ─── Chat history ─────────────────────────────────────────────────────────────
 
-async function loadHistory(phone: string): Promise<Content[]> {
+async function loadHistory(phone: string, collection: string): Promise<Content[]> {
   const snap = await db
-    .collection(`homer_prospects/${phone}/messages`)
+    .collection(`${collection}/${phone}/messages`)
     .orderBy('timestamp', 'asc')
     .limitToLast(16)
     .get();
@@ -201,6 +228,11 @@ async function loadHistory(phone: string): Promise<Content[]> {
 export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<void> {
   const { phone, text, geminiApiKey, homerIntegration, botMode } = params;
 
+  const isDemo = botMode === 'demo';
+  const collection = isDemo ? DEMO_COLLECTION : AGENTS_COLLECTION;
+  const dailyLimit = isDemo ? DAILY_REPLY_LIMIT_DEMO : DAILY_REPLY_LIMIT_AGENTS;
+  const systemPrompt = isDemo ? DEMO_SYSTEM_PROMPT : AGENTS_SYSTEM_PROMPT;
+
   // 1. Sanitize + injection check
   const sanitized = sanitizeInput(text);
   const { isInjection } = detectInjection(sanitized);
@@ -210,16 +242,16 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
   }
 
   // 2. Daily reply guard — read before any writes
-  const { dailyReplies, isFirstToday } = await getRepliesInfo(phone);
-  if (dailyReplies >= DAILY_REPLY_LIMIT) {
-    console.log(`[HomerSalesBot] Daily limit reached for ${phone}, ignoring`);
+  const { dailyReplies, isFirstToday } = await getRepliesInfo(phone, collection);
+  if (dailyReplies >= dailyLimit) {
+    console.log(`[HomerSalesBot] Daily limit reached for ${phone} (mode=${botMode}), ignoring`);
     return;
   }
 
   const replyWindowExpired = dailyReplies === 0 && !isFirstToday ? true : isFirstToday;
 
-  // 3. Upsert prospect doc
-  const prospectRef = db.collection('homer_prospects').doc(phone);
+  // 3. Upsert prospect doc in the correct collection
+  const prospectRef = db.collection(collection).doc(phone);
   const prospectSnap = await prospectRef.get();
   const isNew = !prospectSnap.exists;
   const prospectData = isNew ? {} : (prospectSnap.data() as Record<string, any>);
@@ -241,8 +273,8 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
     );
   }
 
-  // 4. Notify Homer team on first inbound message in 24 h window
-  if (isFirstToday) {
+  // 4. Notify Homer team on first inbound message — only in agents mode (not demo)
+  if (!isDemo && isFirstToday) {
     const notifyText = [
       '🔔 הודעה חדשה מפרוספקט ב-homer!',
       `טלפון: ${phone}`,
@@ -258,12 +290,12 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
   }
 
   // 5. Load chat history for context
-  const history = await loadHistory(phone);
+  const history = await loadHistory(phone, collection);
 
-  // 6. Call Gemini
+  // 6. Call Gemini with mode-specific prompt
   const model = getGenAI(geminiApiKey).getGenerativeModel({
     model: 'gemini-2.5-flash-preview-05-20',
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: systemPrompt,
     tools: [{ functionDeclarations }],
   });
 
@@ -314,17 +346,20 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
 
       if (call.name === 'request_human_rep') {
         await prospectRef.update({ wantsHumanRep: true });
-        const repNotify = [
-          '🆘 פרוספקט מבקש נציג אנושי!',
-          `טלפון: ${phone}`,
-          prospectData.name ? `שם: ${prospectData.name}` : null,
-          prospectData.agencyName ? `משרד: ${prospectData.agencyName}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n');
-        sendWhatsAppMessage(homerIntegration, HOMER_TEAM_PHONE, repNotify).catch(e =>
-          console.warn('[HomerSalesBot] human-rep notify failed:', e.message),
-        );
+        // Only notify the real team when talking to real prospects (agents mode)
+        if (!isDemo) {
+          const repNotify = [
+            '🆘 פרוספקט מבקש נציג אנושי!',
+            `טלפון: ${phone}`,
+            prospectData.name ? `שם: ${prospectData.name}` : null,
+            prospectData.agencyName ? `משרד: ${prospectData.agencyName}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n');
+          sendWhatsAppMessage(homerIntegration, HOMER_TEAM_PHONE, repNotify).catch(e =>
+            console.warn('[HomerSalesBot] human-rep notify failed:', e.message),
+          );
+        }
         fnResults.push({ functionResponse: { name: call.name, response: { ok: true } } });
       }
     }
@@ -346,10 +381,10 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
   }
 
   // 9. Increment daily counter
-  await incrementDailyReplies(phone, replyWindowExpired);
+  await incrementDailyReplies(phone, replyWindowExpired, collection);
 
   // 10. Log inbound + outbound messages (fire-and-forget)
-  const msgCol = db.collection(`homer_prospects/${phone}/messages`);
+  const msgCol = db.collection(`${collection}/${phone}/messages`);
   const ts = admin.firestore.FieldValue.serverTimestamp();
   Promise.all([
     msgCol.add({ text: sanitized, direction: 'inbound', timestamp: ts }),
