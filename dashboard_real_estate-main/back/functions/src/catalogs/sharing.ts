@@ -84,3 +84,38 @@ export const generateCatalog = onCall({ cors: true }, async (request) => {
         url
     };
 });
+
+export const updateCatalog = onCall({ cors: true }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+
+    const { catalogId, propertyIds } = request.data as {
+        catalogId?: string;
+        propertyIds?: Array<{ id: string; collectionPath: string }>;
+    };
+
+    if (!catalogId?.trim()) throw new HttpsError('invalid-argument', 'catalogId is required.');
+    if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+        throw new HttpsError('invalid-argument', 'propertyIds must be a non-empty array.');
+    }
+
+    const catalogDoc = await db.doc(`shared_catalogs/${catalogId}`).get();
+    if (!catalogDoc.exists) {
+        throw new HttpsError('not-found', 'Catalog not found.');
+    }
+    const agencyId: string = catalogDoc.data()!.agencyId;
+    if (!agencyId) throw new HttpsError('internal', 'Catalog is missing agencyId.');
+
+    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
+    if (!callerDoc.exists || callerDoc.data()?.agencyId !== agencyId) {
+        throw new HttpsError('permission-denied', 'You do not belong to this agency.');
+    }
+
+    await db.doc(`shared_catalogs/${catalogId}`).update({
+        propertyIds,
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true };
+});

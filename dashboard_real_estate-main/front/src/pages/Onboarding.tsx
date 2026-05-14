@@ -175,6 +175,7 @@ export default function Onboarding() {
                     await updateAgencyGoals(authResult.agencyId, {
                         commissions: Number(monthlyAgencyRevenue) || 100000,
                         deals: Number(monthlyAgencyDeals) || 5,
+                        leads: 20,
                     });
                 }
 

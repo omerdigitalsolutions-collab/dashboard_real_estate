@@ -248,7 +248,7 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
     return;
   }
 
-  const replyWindowExpired = dailyReplies === 0 && !isFirstToday ? true : isFirstToday;
+  const replyWindowExpired = dailyReplies === 0 || isFirstToday;
 
   // 3. Upsert prospect doc in the correct collection
   const prospectRef = db.collection(collection).doc(phone);
@@ -330,10 +330,11 @@ export async function handleHomerSalesBot(params: HomerSalesBotParams): Promise<
 
       if (call.name === 'advance_state') {
         const valid: ChatState[] = ['INTRO', 'QUALIFYING', 'CLOSING', 'DONE'];
-        if (valid.includes(args.nextState)) {
+        const stateValid = valid.includes(args.nextState);
+        if (stateValid) {
           await prospectRef.update({ chatState: args.nextState });
         }
-        fnResults.push({ functionResponse: { name: call.name, response: { ok: true } } });
+        fnResults.push({ functionResponse: { name: call.name, response: { ok: stateValid } } });
       }
 
       if (call.name === 'schedule_training') {

@@ -256,7 +256,6 @@ export default function SuperAdminDashboard() {
         try {
             const ref = doc(db, 'homer_settings', 'salesBot');
             await setDoc(ref, {
-                ...botSettings,
                 isActive: !botSettings.isActive,
                 updatedAt: serverTimestamp(),
                 updatedBy: userData?.uid ?? 'superadmin',
@@ -270,11 +269,11 @@ export default function SuperAdminDashboard() {
 
     const handleBotModeChange = async (mode: 'agents' | 'demo') => {
         if (botSaving || !botSettings) return;
+        if (mode === botSettings.mode) return;
         setBotSaving(true);
         try {
             const ref = doc(db, 'homer_settings', 'salesBot');
             await setDoc(ref, {
-                ...botSettings,
                 mode,
                 updatedAt: serverTimestamp(),
                 updatedBy: userData?.uid ?? 'superadmin',
@@ -1158,7 +1157,7 @@ export default function SuperAdminDashboard() {
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
                                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500" />
                                         </span>
-                                        <span className="text-xs font-semibold text-cyan-400">פעיל — עונה להודעות נכנסות</span>
+                                        <span className="text-xs font-semibold text-cyan-400">פעיל — {botSettings?.mode === 'agents' ? 'סוכני נדלן' : 'הדגמת מערכת'}</span>
                                     </>
                                 ) : (
                                     <>

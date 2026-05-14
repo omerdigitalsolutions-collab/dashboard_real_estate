@@ -327,7 +327,7 @@ async function generateConversationSummary(leadType, recentMessages, sellerInfo,
         const genAI = getGenAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
         const conversation = recentMessages.join('\n');
-        const result = await withTimeout('summary', 6000, () => model.generateContent(`סכם את השיחה הבאה בין בוט נדל"ן לבין לקוח קונה בשתי שורות קצרות בעברית.\n\n${conversation}`));
+        const result = await withTimeout('summary', 15000, () => model.generateContent(`סכם את השיחה הבאה בין בוט נדל"ן לבין לקוח קונה בשתי שורות קצרות בעברית.\n\n${conversation}`));
         return result.response.text().trim().substring(0, 200);
     }
     catch (err) {
@@ -394,7 +394,7 @@ async function classifyIntent(message, leadType, geminiApiKey, leadStatus, curre
     try {
         const genAI = getGenAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-        const result = await withTimeout('classifyIntent', 8000, () => model.generateContent(`סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
+        const result = await withTimeout('classifyIntent', 20000, () => model.generateContent(`סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
             `קטגוריות:\n- buyer: הלקוח מחפש דירה/נכס לקנייה או לשכירות (גם אם השתמש במילים "למכירה"/"להשכרה" — אלו מתייחסות לסטטוס הנכס, לא לכוונת הלקוח).\n` +
             `- seller: הלקוח רוצה למכור/להשכיר/לפרסם את הדירה שלו, או מחפש קונה/שוכר לנכס שלו.\n` +
             `- irrelevant: ברכות בלבד, ספאם, תגובה לא ברורה.\n\n` +
@@ -512,7 +512,7 @@ async function generatePropertyTeaser(userMessage, properties, geminiApiKey) {
             : 'נכסים מגוונים';
         // Cap the embedded user text to prevent prompt inflation / injection attempts
         const safeMsg = userMessage.replace(/"/g, "'").substring(0, 120);
-        const result = await withTimeout('generatePropertyTeaser', 6000, () => model.generateContent(`כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${safeMsg}".\n` +
+        const result = await withTimeout('generatePropertyTeaser', 15000, () => model.generateContent(`כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${safeMsg}".\n` +
             `נכסים זמינים בסוכנות: ${propContext}.\n` +
             `הטון: חם ומקצועי. אל תזכיר מחירים ספציפיים. אל תשאל שאלות. רק משפט קבלת פנים קצר.`));
         const text = result.response.text().trim();
@@ -527,7 +527,7 @@ async function extractSellerInfo(message, geminiApiKey) {
     try {
         const genAI = getGenAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-        const result = await withTimeout('extractSellerInfo', 6000, () => model.generateContent(`חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
+        const result = await withTimeout('extractSellerInfo', 15000, () => model.generateContent(`חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
             `{"address":"כתובת מלאה או null","propertyType":"דירה/בית/דופלקס/פנטהאוס/מסחרי או null"}`));
         const text = result.response.text().replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(text);
@@ -553,7 +553,7 @@ async function extractTimePreference(message, geminiApiKey) {
         const genAI = getGenAI(geminiApiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
         const today = new Date().toLocaleDateString('he-IL');
-        const result = await withTimeout('extractTimePreference', 6000, () => model.generateContent(`חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${trimmed}"\n` +
+        const result = await withTimeout('extractTimePreference', 15000, () => model.generateContent(`חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${trimmed}"\n` +
             `החזר JSON בלבד. אם אין במסר אזכור של יום/שעה/תאריך, החזר null.\n` +
             `{"timeText":"תיאור הזמן הקריא בעברית, או null"}`));
         const parsed = JSON.parse(result.response.text().replace(/```json|```/g, '').trim());
@@ -569,7 +569,7 @@ async function extractTimePreference(message, geminiApiKey) {
 }
 // ─── Buyer Flow (Gemini function-calling pipeline) ────────────────────────────
 async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, geminiApiKey, agencyData, leadData, integration, currentMsgDocId, greenApiCreds, currentState = 'IDLE', resendApiKey) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
     // RAG: active properties + chat history in parallel
     const reqsCity = (_b = (_a = leadData.requirements) === null || _a === void 0 ? void 0 : _a.desiredCity) === null || _b === void 0 ? void 0 : _b[0];
     const globalPropPromise = reqsCity ?
@@ -886,6 +886,16 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
         chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 20000, () => chat.sendMessage([{
                 functionResponse: { name: call.name, response: functionResult },
             }])));
+        // If Gemini returned no function calls and empty text after a function result,
+        // nudge it once to produce a reply instead of going silent.
+        if (((_s = (_r = (_q = chatResponse.response).functionCalls) === null || _r === void 0 ? void 0 : _r.call(_q)) !== null && _s !== void 0 ? _s : []).length === 0 &&
+            !chatResponse.response.text().trim()) {
+            const nudge = await withRetry('chat.nudge', () => withTimeout('chat.nudge', 15000, () => chat.sendMessage('המשך ושלח ללקוח הודעה מתאימה בהתאם לתוצאה.')));
+            if (nudge.response.text().trim()) {
+                finalReply = nudge.response.text();
+                break;
+            }
+        }
     }
     if (iterCount >= 5 && !finalReply.trim()) {
         console.warn(`[WeBot] Hit max iterations (5) for lead ${leadId}`);
@@ -937,13 +947,13 @@ async function runBuyerFlow(agencyId, leadId, customerPhone, incomingMessage, ge
                 schedulingInvite = 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
             }
         }
-        catch (_r) {
+        catch (_u) {
             schedulingInvite = 'מתי נוח לך לשיחה קצרה עם יועץ נדל"ן שלנו?';
         }
         await sendBotMessage(integration, customerPhone, leadId, schedulingInvite);
         await updateChatState(leadId, 'SCHEDULING_CALL');
         const freshLead = await db.collection('leads').doc(leadId).get();
-        const reqs = ((_q = freshLead.data()) === null || _q === void 0 ? void 0 : _q.requirements) || {};
+        const reqs = ((_t = freshLead.data()) === null || _t === void 0 ? void 0 : _t.requirements) || {};
         const leadName = leadData.name || customerPhone;
         const reqSummary = [
             Array.isArray(reqs.desiredCity) && reqs.desiredCity.length ? reqs.desiredCity.join(', ') : null,

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateCatalog = void 0;
+exports.updateCatalog = exports.generateCatalog = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const db = (0, firestore_1.getFirestore)();
@@ -69,5 +69,33 @@ exports.generateCatalog = (0, https_1.onCall)({ cors: true }, async (request) =>
         catalogId: catalogRef.id,
         url
     };
+});
+exports.updateCatalog = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const { catalogId, propertyIds } = request.data;
+    if (!(catalogId === null || catalogId === void 0 ? void 0 : catalogId.trim()))
+        throw new https_1.HttpsError('invalid-argument', 'catalogId is required.');
+    if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+        throw new https_1.HttpsError('invalid-argument', 'propertyIds must be a non-empty array.');
+    }
+    const catalogDoc = await db.doc(`shared_catalogs/${catalogId}`).get();
+    if (!catalogDoc.exists) {
+        throw new https_1.HttpsError('not-found', 'Catalog not found.');
+    }
+    const agencyId = catalogDoc.data().agencyId;
+    if (!agencyId)
+        throw new https_1.HttpsError('internal', 'Catalog is missing agencyId.');
+    const callerDoc = await db.doc(`users/${request.auth.uid}`).get();
+    if (!callerDoc.exists || ((_a = callerDoc.data()) === null || _a === void 0 ? void 0 : _a.agencyId) !== agencyId) {
+        throw new https_1.HttpsError('permission-denied', 'You do not belong to this agency.');
+    }
+    await db.doc(`shared_catalogs/${catalogId}`).update({
+        propertyIds,
+        updatedAt: firestore_1.FieldValue.serverTimestamp(),
+    });
+    return { success: true };
 });
 //# sourceMappingURL=sharing.js.map

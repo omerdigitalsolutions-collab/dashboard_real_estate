@@ -81,14 +81,19 @@ export async function saveCatalogLikes(token: string, likedPropertyIds: string[]
 }
 
 /**
- * Updates an existing catalog's property IDs.
+ * Updates an existing catalog's property IDs via Cloud Function (Admin SDK bypasses client rules).
  */
 export async function updateCatalog(token: string, propertyIds: Array<string | { id: string; collectionPath: string }>): Promise<void> {
-    const docRef = doc(db, COLLECTION, token);
-    await updateDoc(docRef, {
-        propertyIds,
-        updatedAt: new Date() // track when it was last updated
-    });
+    const fns = getFunctions(undefined, 'europe-west1');
+    const updateCatalogCF = httpsCallable<
+        { catalogId: string; propertyIds: Array<string | { id: string; collectionPath: string }> },
+        { success: boolean }
+    >(fns, 'catalogs-updateCatalog');
+
+    const result = await updateCatalogCF({ catalogId: token, propertyIds });
+    if (!result.data.success) {
+        throw new Error('Failed to update catalog from server');
+    }
 }
 
 /**

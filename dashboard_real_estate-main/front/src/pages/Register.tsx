@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { Loader2, Mail, Lock, User } from 'lucide-react';
 import { signInWithGooglePopup, checkUserExists } from '../services/authService';
@@ -47,9 +47,14 @@ export default function Register() {
 
         try {
             // 1. Create the user in Firebase Auth
-            await createUserWithEmailAndPassword(auth, email, password);
+            const result = await createUserWithEmailAndPassword(auth, email, password);
 
-            // 2. Redirect to Onboarding
+            // 2. Set displayName so Onboarding can prefill it
+            if (name.trim()) {
+                await updateProfile(result.user, { displayName: name.trim() });
+            }
+
+            // 3. Redirect to Onboarding
             navigate('/onboarding');
             setIsLoading(false);
 

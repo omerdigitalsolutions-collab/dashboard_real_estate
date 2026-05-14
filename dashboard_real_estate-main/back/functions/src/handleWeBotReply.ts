@@ -370,7 +370,7 @@ async function generateConversationSummary(
     const genAI = getGenAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const conversation = recentMessages.join('\n');
-    const result = await withTimeout('summary', 6000, () => model.generateContent(
+    const result = await withTimeout('summary', 15000, () => model.generateContent(
       `סכם את השיחה הבאה בין בוט נדל"ן לבין לקוח קונה בשתי שורות קצרות בעברית.\n\n${conversation}`,
     ));
     return result.response.text().trim().substring(0, 200);
@@ -456,7 +456,7 @@ async function classifyIntent(
   try {
     const genAI = getGenAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-    const result = await withTimeout('classifyIntent', 8000, () => model.generateContent(
+    const result = await withTimeout('classifyIntent', 20000, () => model.generateContent(
       `סווג את ההודעה הבאה לאחת מ-3 קטגוריות. החזר JSON בלבד.\n\nהודעה: "${message}"\n\n` +
       `קטגוריות:\n- buyer: הלקוח מחפש דירה/נכס לקנייה או לשכירות (גם אם השתמש במילים "למכירה"/"להשכרה" — אלו מתייחסות לסטטוס הנכס, לא לכוונת הלקוח).\n` +
       `- seller: הלקוח רוצה למכור/להשכיר/לפרסם את הדירה שלו, או מחפש קונה/שוכר לנכס שלו.\n` +
@@ -603,7 +603,7 @@ async function generatePropertyTeaser(
 
     // Cap the embedded user text to prevent prompt inflation / injection attempts
     const safeMsg = userMessage.replace(/"/g, "'").substring(0, 120);
-    const result = await withTimeout('generatePropertyTeaser', 6000, () => model.generateContent(
+    const result = await withTimeout('generatePropertyTeaser', 15000, () => model.generateContent(
       `כתוב משפט אחד קצר בעברית (עד 20 מילים) המקבל בחמימות לקוח שפנה בהודעה הזו: "${safeMsg}".\n` +
       `נכסים זמינים בסוכנות: ${propContext}.\n` +
       `הטון: חם ומקצועי. אל תזכיר מחירים ספציפיים. אל תשאל שאלות. רק משפט קבלת פנים קצר.`,
@@ -624,7 +624,7 @@ async function extractSellerInfo(
   try {
     const genAI = getGenAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-    const result = await withTimeout('extractSellerInfo', 6000, () => model.generateContent(
+    const result = await withTimeout('extractSellerInfo', 15000, () => model.generateContent(
       `חלץ פרטי נכס מהמסר הבא. החזר JSON בלבד.\n\nמסר: "${message}"\n\n` +
       `{"address":"כתובת מלאה או null","propertyType":"דירה/בית/דופלקס/פנטהאוס/מסחרי או null"}`
     ));
@@ -653,7 +653,7 @@ async function extractTimePreference(message: string, geminiApiKey: string): Pro
     const genAI = getGenAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const today = new Date().toLocaleDateString('he-IL');
-    const result = await withTimeout('extractTimePreference', 6000, () => model.generateContent(
+    const result = await withTimeout('extractTimePreference', 15000, () => model.generateContent(
       `חלץ העדפת זמן מהמסר. תאריך היום: ${today}.\nמסר: "${trimmed}"\n` +
       `החזר JSON בלבד. אם אין במסר אזכור של יום/שעה/תאריך, החזר null.\n` +
       `{"timeText":"תיאור הזמן הקריא בעברית, או null"}`
@@ -1017,6 +1017,21 @@ async function runBuyerFlow(
     chatResponse = await withRetry('chat.sendMessage(fn)', () => withTimeout('chat.sendMessage(fn)', 20_000, () => chat.sendMessage([{
       functionResponse: { name: call.name, response: functionResult },
     }])));
+
+    // If Gemini returned no function calls and empty text after a function result,
+    // nudge it once to produce a reply instead of going silent.
+    if (
+      (chatResponse.response.functionCalls?.() ?? []).length === 0 &&
+      !chatResponse.response.text().trim()
+    ) {
+      const nudge = await withRetry('chat.nudge', () => withTimeout('chat.nudge', 15_000, () =>
+        chat.sendMessage('המשך ושלח ללקוח הודעה מתאימה בהתאם לתוצאה.')
+      ));
+      if (nudge.response.text().trim()) {
+        finalReply = nudge.response.text();
+        break;
+      }
+    }
   }
 
   if (iterCount >= 5 && !finalReply.trim()) {

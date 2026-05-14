@@ -603,6 +603,9 @@ service cloud.firestore {
     match /homer_prospects/{doc=**} {
       allow read, write: if false;
     }
+    match /homer_demo_prospects/{doc=**} {
+      allow read, write: if false;
+    }
     match /homer_processed_messages/{doc} {
       allow read, write: if false;
     }

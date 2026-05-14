@@ -46,7 +46,7 @@ import { getLiveLeads } from './leads/getLiveLeads';
 import { matchPropertiesForLead } from './leads/matchPropertiesForLead';
 
 // ── Catalogs Module ────────────────────────────────────────────────────────────
-import { generateCatalog } from './catalogs/sharing';
+import { generateCatalog, updateCatalog as updateCatalogCF } from './catalogs/sharing';
 import { getLiveProperties as catalogsGetLiveProperties } from './catalogs/getLiveProperties';
 import { onPropertyLiked } from './catalogs/onPropertyLiked';
 
@@ -122,7 +122,7 @@ export const distribution = { distributeLead, distributeProperty };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
 export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
-export const catalogs = { generateCatalog, getLiveProperties: catalogsGetLiveProperties, onPropertyLiked };
+export const catalogs = { generateCatalog, updateCatalog: updateCatalogCF, getLiveProperties: catalogsGetLiveProperties, onPropertyLiked };
 export const alerts = { triggerSystemAlert };
 export const whatsapp = { connectAgencyWhatsApp, disconnectAgencyWhatsApp, generateWhatsAppQR, checkWhatsAppStatus, sendWhatsappMessage, syncLeadChat, getGroups, disconnectWhatsApp };
 export const ai = { askAgencyAgent, extractAiData, askCopilot, getSmartInsights, textToActionAgent, homerChatBot, parseContractText };

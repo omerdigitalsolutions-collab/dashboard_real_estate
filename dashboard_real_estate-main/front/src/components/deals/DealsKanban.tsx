@@ -40,7 +40,8 @@ function DealCard({
     isOverlay,
     canEdit = true,
     onDelete,
-    onClick
+    onClick,
+    onContractClick,
 }: {
     deal: Deal;
     buyer?: Lead;
@@ -50,6 +51,7 @@ function DealCard({
     canEdit?: boolean;
     onDelete: (id: string) => void;
     onClick?: (deal: Deal) => void;
+    onContractClick?: (deal: Deal) => void;
 }) {
     const navigate = useNavigate();
     const {
@@ -106,10 +108,16 @@ function DealCard({
                 </div>
 
                 <div className="flex items-center gap-1 opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity">
-                    {/* Contract button — shown for all; green when contract exists */}
+                    {/* Contract button — navigates to editor if contract exists, opens picker otherwise */}
                     <button
-                        onClick={() => navigate(`/dashboard/contracts/${deal.id}/edit`)}
-                        title={deal.contract?.contractId ? 'ערוך חוזה' : 'צור חוזה'}
+                        onClick={() => {
+                            if (deal.contract?.contractId) {
+                                navigate(`/dashboard/contracts/${deal.id}/edit`);
+                            } else {
+                                onContractClick?.(deal);
+                            }
+                        }}
+                        title={deal.contract?.contractId ? 'ערוך חוזה' : 'שייך חוזה'}
                         className={`p-1.5 rounded-lg transition-colors ${
                             deal.contract?.status === 'completed'
                                 ? 'text-green-500 hover:bg-green-50'
@@ -162,6 +170,7 @@ function DealsColumn({
     properties,
     onDelete,
     onOpenProfile,
+    onContractClick,
     currentUid,
     isAgent
 }: {
@@ -171,6 +180,7 @@ function DealsColumn({
     properties: Property[];
     onDelete: (id: string) => void;
     onOpenProfile: (deal: Deal) => void;
+    onContractClick: (deal: Deal) => void;
     currentUid: string | undefined;
     isAgent: boolean;
 }) {
@@ -205,6 +215,7 @@ function DealsColumn({
                                 canEdit={canEdit}
                                 onDelete={onDelete}
                                 onClick={onOpenProfile}
+                                onContractClick={onContractClick}
                             />
                         );
                     })}
@@ -218,6 +229,7 @@ function DealsColumn({
 import { Settings } from 'lucide-react';
 import DealStagesModal from '../modals/DealStagesModal';
 import DealProfileModal from '../modals/DealProfileModal';
+import DealContractModal from './DealContractModal';
 
 export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
     const { userData } = useAuth();
@@ -257,6 +269,9 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
 
     // For Deal Profile
     const [profileModalDeal, setProfileModalDeal] = useState<Deal | null>(null);
+
+    // For Contract Picker
+    const [contractModalDeal, setContractModalDeal] = useState<Deal | null>(null);
 
     useEffect(() => {
         setDeals(liveDeals);
@@ -400,6 +415,7 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                                         properties={properties}
                                         onDelete={handleDelete}
                                         onOpenProfile={setProfileModalDeal}
+                                        onContractClick={setContractModalDeal}
                                         currentUid={currentUid}
                                         isAgent={isAgent}
                                     />
@@ -426,6 +442,7 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                                         properties={properties}
                                         onDelete={handleDelete}
                                         onOpenProfile={setProfileModalDeal}
+                                        onContractClick={setContractModalDeal}
                                         currentUid={currentUid}
                                         isAgent={isAgent}
                                     />
@@ -506,6 +523,14 @@ export default function DealsKanban({ dealsProps }: { dealsProps?: Deal[] }) {
                 <DealStagesModal
                     isOpen={isSettingsModalOpen}
                     onClose={() => setIsSettingsModalOpen(false)}
+                />
+            )}
+
+            {contractModalDeal && (
+                <DealContractModal
+                    deal={contractModalDeal}
+                    isOpen={!!contractModalDeal}
+                    onClose={() => setContractModalDeal(null)}
                 />
             )}
         </div>
