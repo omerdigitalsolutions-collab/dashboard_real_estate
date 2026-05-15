@@ -59,15 +59,28 @@ const FALLBACK_MAP: Record<string, string> = {
 };
 
 export function buildWeBotPrompt(config: BotConfig, properties: Property[], agencyName = 'הסוכנות שלנו'): string {
+  // Sanitizes admin-supplied config text to prevent prompt injection via newlines / fake section headers.
+  const sanitizeConfigField = (s: string, maxLen: number): string =>
+    (s ?? '')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/={3,}|-{3,}/g, '—')
+      .replace(/[<>]/g, '')
+      .trim()
+      .substring(0, maxLen);
+
+  const safeAgencyName = sanitizeConfigField(agencyName, 80);
+
   let toneText = TONE_MAP[config.tone] ?? TONE_MAP.professional;
   if (config.tone === 'custom' && config.customTone) {
-    toneText = config.customTone;
+    toneText = sanitizeConfigField(config.customTone, 500);
   }
-  
+
   let fallbackText = FALLBACK_MAP[config.fallbackAction] ?? FALLBACK_MAP.human_handoff;
   if (config.fallbackAction === 'custom' && config.customFallbackAction) {
-    fallbackText = config.customFallbackAction;
+    fallbackText = sanitizeConfigField(config.customFallbackAction, 500);
   }
+
+  const safeGeneralNotes = sanitizeConfigField(config.generalNotes ?? '', 1500);
 
   // Strip newlines and limit length so property fields cannot inject new prompt sections.
   const sanitizePromptField = (s: string, maxLen = 200): string =>
@@ -82,7 +95,7 @@ export function buildWeBotPrompt(config: BotConfig, properties: Property[], agen
       ).join('\n')
     : 'כרגע אין נכסים זמינים במאגר.';
 
-  return `אתה הבוט החכם של סוכנות הנדל"ן "${agencyName}". אתה משרת לקוחות שמחפשים לקנות, לשכור, או למכור נכס — לא סוכנים.
+  return `אתה הבוט החכם של סוכנות הנדל"ן "${safeAgencyName}". אתה משרת לקוחות שמחפשים לקנות, לשכור, או למכור נכס — לא סוכנים.
 
 === מטרה ===
 המטרה שלך היא אחת: לשלוח ללקוח קטלוג נכסים מותאם אישית, ולאחר מכן לתאם שיחת ייעוץ עם יועץ נדל"ן. כל שאר הפעולות (שאלות, הסברים) הן רק אמצעי להגיע למטרה זו.
@@ -97,7 +110,7 @@ export function buildWeBotPrompt(config: BotConfig, properties: Property[], agen
 === אישיות הבוט ===
 - סגנון דיבור: ${toneText}
 - כאשר אינך יודע תשובה או הנכס לא קיים במאגר: ${fallbackText}
-- הנחיות ספציפיות מהמשרד: ${config.generalNotes?.trim() || 'אין הנחיות נוספות.'}
+- הנחיות ספציפיות מהמשרד: ${safeGeneralNotes || 'אין הנחיות נוספות.'}
 
 === תהליך עבודה עם לקוח ===
 עקוב אחרי השלבים הבאים לפי סדר:

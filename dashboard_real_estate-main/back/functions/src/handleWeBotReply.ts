@@ -188,12 +188,15 @@ function mapWeBotConfig(raw: Record<string, any>): BotConfig {
     professional: 'professional',
     friendly_emoji: 'friendly_emoji',
     direct_sales: 'direct_sales',
+    custom: 'custom',
   };
   return {
     isActive:             raw.isActive !== false,
     tone:                 toneMap[raw.tone] ?? 'professional',
     customTone:           raw.customTone,
-    fallbackAction:       raw.fallbackAction === 'collect_details' ? 'collect_details' : 'human_handoff',
+    fallbackAction:       raw.fallbackAction === 'collect_details' ? 'collect_details'
+                        : raw.fallbackAction === 'custom'           ? 'custom'
+                        : 'human_handoff',
     customFallbackAction: raw.customFallbackAction,
     firewallMuteHours:    typeof raw.firewallMuteHours === 'number' ? raw.firewallMuteHours : 12,
     generalNotes:         raw.generalNotes || '',

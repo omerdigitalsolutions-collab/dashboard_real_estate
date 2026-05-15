@@ -167,12 +167,15 @@ function mapWeBotConfig(raw) {
         professional: 'professional',
         friendly_emoji: 'friendly_emoji',
         direct_sales: 'direct_sales',
+        custom: 'custom',
     };
     return {
         isActive: raw.isActive !== false,
         tone: (_a = toneMap[raw.tone]) !== null && _a !== void 0 ? _a : 'professional',
         customTone: raw.customTone,
-        fallbackAction: raw.fallbackAction === 'collect_details' ? 'collect_details' : 'human_handoff',
+        fallbackAction: raw.fallbackAction === 'collect_details' ? 'collect_details'
+            : raw.fallbackAction === 'custom' ? 'custom'
+                : 'human_handoff',
         customFallbackAction: raw.customFallbackAction,
         firewallMuteHours: typeof raw.firewallMuteHours === 'number' ? raw.firewallMuteHours : 12,
         generalNotes: raw.generalNotes || '',

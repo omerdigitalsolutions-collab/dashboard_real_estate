@@ -64,14 +64,23 @@ const FALLBACK_MAP = {
 };
 function buildWeBotPrompt(config, properties, agencyName = 'הסוכנות שלנו') {
     var _a, _b, _c;
+    // Sanitizes admin-supplied config text to prevent prompt injection via newlines / fake section headers.
+    const sanitizeConfigField = (s, maxLen) => (s !== null && s !== void 0 ? s : '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/={3,}|-{3,}/g, '—')
+        .replace(/[<>]/g, '')
+        .trim()
+        .substring(0, maxLen);
+    const safeAgencyName = sanitizeConfigField(agencyName, 80);
     let toneText = (_a = TONE_MAP[config.tone]) !== null && _a !== void 0 ? _a : TONE_MAP.professional;
     if (config.tone === 'custom' && config.customTone) {
-        toneText = config.customTone;
+        toneText = sanitizeConfigField(config.customTone, 500);
     }
     let fallbackText = (_b = FALLBACK_MAP[config.fallbackAction]) !== null && _b !== void 0 ? _b : FALLBACK_MAP.human_handoff;
     if (config.fallbackAction === 'custom' && config.customFallbackAction) {
-        fallbackText = config.customFallbackAction;
+        fallbackText = sanitizeConfigField(config.customFallbackAction, 500);
     }
+    const safeGeneralNotes = sanitizeConfigField((_c = config.generalNotes) !== null && _c !== void 0 ? _c : '', 1500);
     // Strip newlines and limit length so property fields cannot inject new prompt sections.
     const sanitizePromptField = (s, maxLen = 200) => s.replace(/[\r\n]+/g, ' ').replace(/[`]/g, "'").trim().substring(0, maxLen);
     const propertiesText = properties.length > 0
@@ -80,7 +89,7 @@ function buildWeBotPrompt(config, properties, agencyName = 'הסוכנות של�
             ` | ${p.rooms} חדרים | מחיר: ₪${p.price.toLocaleString('he-IL')}` +
             (p.description ? ` | ${sanitizePromptField(p.description)}` : '')).join('\n')
         : 'כרגע אין נכסים זמינים במאגר.';
-    return `אתה הבוט החכם של סוכנות הנדל"ן "${agencyName}". אתה משרת לקוחות שמחפשים לקנות, לשכור, או למכור נכס — לא סוכנים.
+    return `אתה הבוט החכם של סוכנות הנדל"ן "${safeAgencyName}". אתה משרת לקוחות שמחפשים לקנות, לשכור, או למכור נכס — לא סוכנים.
 
 === מטרה ===
 המטרה שלך היא אחת: לשלוח ללקוח קטלוג נכסים מותאם אישית, ולאחר מכן לתאם שיחת ייעוץ עם יועץ נדל"ן. כל שאר הפעולות (שאלות, הסברים) הן רק אמצעי להגיע למטרה זו.
@@ -95,7 +104,7 @@ function buildWeBotPrompt(config, properties, agencyName = 'הסוכנות של�
 === אישיות הבוט ===
 - סגנון דיבור: ${toneText}
 - כאשר אינך יודע תשובה או הנכס לא קיים במאגר: ${fallbackText}
-- הנחיות ספציפיות מהמשרד: ${((_c = config.generalNotes) === null || _c === void 0 ? void 0 : _c.trim()) || 'אין הנחיות נוספות.'}
+- הנחיות ספציפיות מהמשרד: ${safeGeneralNotes || 'אין הנחיות נוספות.'}
 
 === תהליך עבודה עם לקוח ===
 עקוב אחרי השלבים הבאים לפי סדר:

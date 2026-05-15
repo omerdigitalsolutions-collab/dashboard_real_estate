@@ -32,6 +32,7 @@ import { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete } from './tasks/
 import { getLiveProperties } from './properties/getLiveProperties';
 import { addProperty } from './properties/addProperty';
 import { updateProperty } from './properties/updateProperty';
+import { claimProperty } from './properties/claimProperty';
 import { deleteProperty } from './properties/deleteProperty';
 import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty } from './properties/geocode';
 import { onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking } from './properties/matchmaking';
@@ -95,12 +96,17 @@ import { superAdminHealSelf } from './superadmin/healAdmin';
 import { superAdminSetPlan } from './superadmin/setAgencyPlan';
 import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2, superAdminConsolidateCityV2, superAdminPurgeOldGlobalPropertiesV2, superAdminCleanExistingDescriptionsV2 } from './admin/globalImport';
 
+// ── Facebook Module ────────────────────────────────────────────────────────────
+import { searchFBGroups } from './facebook/searchGroups';
+import { refreshFBCookies } from './facebook/refreshCookies';
+
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
 import { checkTrialExpiryAlerts } from './scheduled/checkTrialExpiryAlerts';
 import { weeklyFollowUp } from './scheduled/weeklyFollowUp';
 import { followUpCampaign } from './scheduled/followUpCampaign';
 import { syncCalendar } from './scheduled/syncCalendar';
+import { facebookScanner } from './scheduled/facebookScanner';
 
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 import { onSubscriptionRequestCreated, onNewAgencyRegistered } from './billing/manual_requests';
@@ -120,7 +126,7 @@ export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead 
 export const users = { inviteAgent, sendAgentInvite, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken, updateAgentAvailability };
 export const distribution = { distributeLead, distributeProperty };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl };
+export const properties = { getLiveProperties, addProperty, updateProperty, claimProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, updateCatalog: updateCatalogCF, getLiveProperties: catalogsGetLiveProperties, onPropertyLiked };
 export const alerts = { triggerSystemAlert };
@@ -148,13 +154,15 @@ export const superadmin = {
     superAdminCleanExistingDescriptionsV2
 };
 
+export const facebook = { searchFBGroups, refreshFBCookies };
+
 export const deals = { addDeal, updateDeal, deleteDeal };
 
 export const contracts = { signDeal, onContractInstanceSigned };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 
-export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign, syncCalendar };
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign, syncCalendar, facebookScanner };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot, Phone, PhoneIncoming, PhoneOff, CheckCircle, Shuffle } from 'lucide-react';
+import { Bell, Globe, Users2, Camera, Loader2, Target, CalendarDays, BarChart4, X, Plus, Building, Bot, Phone, PhoneIncoming, PhoneOff, CheckCircle, Shuffle, Facebook } from 'lucide-react';
 import TeamManagement from '../components/settings/TeamManagement';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -7,6 +7,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { WhatsAppSettings } from '../components/settings/WhatsAppSettings';
 import { GoogleCalendarSettings } from '../components/settings/GoogleCalendarSettings';
 import WhatsAppBotSettings from '../components/settings/WeBotSettings';
+import FBScraperSettings from '../components/settings/FBScraperSettings';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
 import toast from 'react-hot-toast';
@@ -23,6 +24,7 @@ const sections = [
   { id: 'distribution', label: 'אוטומציה וחלוקה', icon: Shuffle },
   { id: 'virtual-numbers', label: 'מספרים וירטואליים', icon: Phone },
   { id: 'whatsapp-bot', label: 'WhatsApp Bot', icon: Bot },
+  { id: 'facebook-hunter', label: 'סורק פייסבוק', icon: Facebook },
   { id: 'goals', label: 'יעדי משרד ואזורי שירות', icon: Target },
   { id: 'notifications', label: 'התראות', icon: Bell },
   { id: 'integrations', label: 'אינטגרציות', icon: Globe },
@@ -660,6 +662,10 @@ export default function Settings() {
 
           {activeSection === 'whatsapp-bot' && (
             <WhatsAppBotSettings />
+          )}
+
+          {activeSection === 'facebook-hunter' && (
+            <FBScraperSettings />
           )}
 
           {activeSection === 'goals' && (

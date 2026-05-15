@@ -284,6 +284,15 @@ export async function mergeProperties(
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 /**
+ * Claims a property for the current agent (sets assignedAgentId).
+ */
+export async function claimProperty(propertyId: string): Promise<void> {
+    const functions = getFunctions(undefined, 'europe-west1');
+    const claimFn = httpsCallable<{ propertyId: string }, { success: boolean }>(functions, 'properties-claimProperty');
+    await claimFn({ propertyId });
+}
+
+/**
  * Calls the backend Cloud Function to delete a property.
  */
 export async function deleteProperty(propertyId: string): Promise<void> {

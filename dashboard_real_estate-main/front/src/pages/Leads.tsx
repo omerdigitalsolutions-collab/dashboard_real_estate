@@ -50,6 +50,7 @@ export default function Leads() {
   const { data: agents } = useAgents();
   const { userData } = useAuth();
   const isAgent = userData?.role === 'agent';
+  const isAdmin = userData?.role === 'admin';
   const currentUid = userData?.uid;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
@@ -396,7 +397,7 @@ export default function Leads() {
           </div>
         </div>
 
-        <PendingLeadsInbox />
+        {isAdmin && <PendingLeadsInbox />}
 
         <div className="bg-[#0f172a]/80 backdrop-blur-md rounded-2xl shadow-xl border border-slate-800 overflow-hidden mt-6">
           {/* Tabs */}

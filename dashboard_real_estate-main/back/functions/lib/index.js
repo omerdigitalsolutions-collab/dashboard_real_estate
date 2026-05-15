@@ -29,6 +29,7 @@ const cleanup_1 = require("./tasks/cleanup");
 const getLiveProperties_1 = require("./properties/getLiveProperties");
 const addProperty_1 = require("./properties/addProperty");
 const updateProperty_1 = require("./properties/updateProperty");
+const claimProperty_1 = require("./properties/claimProperty");
 const deleteProperty_1 = require("./properties/deleteProperty");
 const geocode_1 = require("./properties/geocode");
 const matchmaking_1 = require("./properties/matchmaking");
@@ -76,6 +77,7 @@ const checkTrialExpiryAlerts_1 = require("./scheduled/checkTrialExpiryAlerts");
 const weeklyFollowUp_1 = require("./scheduled/weeklyFollowUp");
 const followUpCampaign_1 = require("./scheduled/followUpCampaign");
 const syncCalendar_1 = require("./scheduled/syncCalendar");
+const facebookScanner_1 = require("./scheduled/facebookScanner");
 // ── Billing / Subscriptions ────────────────────────────────────────────────────
 const manual_requests_1 = require("./billing/manual_requests");
 // ── Exports ───────────────────────────────────────────────────────────────────────────────────
@@ -93,7 +95,7 @@ exports.agencies = { createAgencyAccount: onboarding_1.createAgencyAccount, chec
 exports.users = { inviteAgent: team_1.inviteAgent, sendAgentInvite: team_1.sendAgentInvite, updateAgentRole: team_1.updateAgentRole, toggleAgentStatus: team_1.toggleAgentStatus, deleteAgent: team_1.deleteAgent, completeAgentSetup: team_1.completeAgentSetup, addAgentManually: team_1.addAgentManually, generateAgencyJoinCode: team_1.generateAgencyJoinCode, saveAgencyJoinCode: team_1.saveAgencyJoinCode, joinWithCode: team_1.joinWithCode, claimInviteToken: team_1.claimInviteToken, updateAgentAvailability: updateAgentAvailability_1.updateAgentAvailability };
 exports.distribution = { distributeLead: distributeLead_1.distributeLead, distributeProperty: distributeProperty_1.distributeProperty };
 exports.tasks = { cleanupTasksOnLeadDelete: cleanup_1.cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete: cleanup_1.cleanupTasksOnPropertyDelete };
-exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch, importPropertyFromUrl: importPropertyFromUrl_1.importPropertyFromUrl };
+exports.properties = { getLiveProperties: getLiveProperties_1.getLiveProperties, addProperty: addProperty_1.addProperty, updateProperty: updateProperty_1.updateProperty, claimProperty: claimProperty_1.claimProperty, deleteProperty: deleteProperty_1.deleteProperty, getCoordinates: geocode_1.getCoordinates, getAddressSuggestions: geocode_1.getAddressSuggestions, getPlaceDetails: geocode_1.getPlaceDetails, geocodeNewProperty: geocode_1.geocodeNewProperty, onPropertyCreatedMatchmaking: matchmaking_1.onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking: matchmaking_1.onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking: matchmaking_1.onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch: processNaturalLanguageSearch_1.processNaturalLanguageSearch, importPropertyFromUrl: importPropertyFromUrl_1.importPropertyFromUrl };
 exports.leads = { webhookReceiveLead: webhookReceiveLead_1.webhookReceiveLead, addLead: addLead_1.addLead, updateLead: updateLead_1.updateLead, getLiveLeads: getLiveLeads_1.getLiveLeads, matchPropertiesForLead: matchPropertiesForLead_1.matchPropertiesForLead };
 exports.catalogs = { generateCatalog: sharing_1.generateCatalog, updateCatalog: sharing_1.updateCatalog, getLiveProperties: getLiveProperties_2.getLiveProperties, onPropertyLiked: onPropertyLiked_1.onPropertyLiked };
 exports.alerts = { triggerSystemAlert: triggers_1.triggerSystemAlert };
@@ -123,7 +125,7 @@ exports.superadmin = {
 exports.deals = { addDeal: addDeal_1.addDeal, updateDeal: updateDeal_1.updateDeal, deleteDeal: updateDeal_1.deleteDeal };
 exports.contracts = { signDeal: signDeal_1.signDeal, onContractInstanceSigned: notifyInstanceSigned_1.onContractInstanceSigned };
 exports.billing = { onSubscriptionRequestCreated: manual_requests_1.onSubscriptionRequestCreated, onNewAgencyRegistered: manual_requests_1.onNewAgencyRegistered };
-exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign, syncCalendar: syncCalendar_1.syncCalendar };
+exports.scheduled = { checkTrialExpiry: checkTrialExpiry_1.checkTrialExpiry, checkTrialExpiryAlerts: checkTrialExpiryAlerts_1.checkTrialExpiryAlerts, weeklyFollowUp: weeklyFollowUp_1.weeklyFollowUp, followUpCampaign: followUpCampaign_1.followUpCampaign, syncCalendar: syncCalendar_1.syncCalendar, facebookScanner: facebookScanner_1.facebookScanner };
 var stripeWebhook_1 = require("./stripeWebhook");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return stripeWebhook_1.stripeWebhookHandler; } });
 var maxWebhook_1 = require("./maxWebhook");

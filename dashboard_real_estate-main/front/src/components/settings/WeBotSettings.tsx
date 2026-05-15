@@ -356,6 +356,7 @@ export default function WeBotSettings() {
                   disabled={disabled}
                   rows={2}
                   dir="rtl"
+                  maxLength={500}
                   placeholder="הקלד כאן את סגנון הדיבור המועדף עליך..."
                   className="w-full resize-none bg-slate-800/80 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-600"
                 />
@@ -384,6 +385,7 @@ export default function WeBotSettings() {
                   disabled={disabled}
                   rows={2}
                   dir="rtl"
+                  maxLength={500}
                   placeholder="הקלד כאן מה הבוט צריך לעשות..."
                   className="w-full resize-none bg-slate-800/80 border border-slate-700 text-slate-200 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:border-slate-600"
                 />
@@ -527,6 +529,7 @@ export default function WeBotSettings() {
               disabled={disabled}
               rows={6}
               dir="rtl"
+              maxLength={1500}
               placeholder={
                 'לדוגמה: אנחנו סגורים בשבתות, לעולם אל תמסור מספר דירה או קומה לפני שהלקוח מגיע למשרד, עמלת התיווך שלנו היא תמיד 2% + מע״מ...'
               }
@@ -534,9 +537,9 @@ export default function WeBotSettings() {
             />
             <div className="flex justify-between items-center mt-1.5">
               <p className="text-[11px] text-slate-600">
-                {form.guardrails.length} / 2000 תווים
+                {form.guardrails.length} / 1500 תווים
               </p>
-              {form.guardrails.length > 1800 && (
+              {form.guardrails.length > 1350 && (
                 <p className="text-[11px] text-amber-400">מתקרבים למגבלת התווים</p>
               )}
             </div>

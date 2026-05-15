@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../config/firebase';
 import { SharedCatalog } from '../types';
@@ -81,19 +81,15 @@ export async function saveCatalogLikes(token: string, likedPropertyIds: string[]
 }
 
 /**
- * Updates an existing catalog's property IDs via Cloud Function (Admin SDK bypasses client rules).
+ * Updates an existing catalog's property IDs directly in Firestore.
+ * The security rule allows agency members to update propertyIds + updatedAt.
  */
 export async function updateCatalog(token: string, propertyIds: Array<string | { id: string; collectionPath: string }>): Promise<void> {
-    const fns = getFunctions(undefined, 'europe-west1');
-    const updateCatalogCF = httpsCallable<
-        { catalogId: string; propertyIds: Array<string | { id: string; collectionPath: string }> },
-        { success: boolean }
-    >(fns, 'catalogs-updateCatalog');
-
-    const result = await updateCatalogCF({ catalogId: token, propertyIds });
-    if (!result.data.success) {
-        throw new Error('Failed to update catalog from server');
-    }
+    const catalogRef = doc(db, 'shared_catalogs', token);
+    await updateDoc(catalogRef, {
+        propertyIds,
+        updatedAt: serverTimestamp(),
+    });
 }
 
 /**

@@ -26,6 +26,7 @@ import {
     FileText,
     Sparkles,
     Phone,
+    Facebook,
 } from 'lucide-react';
 
 const navigation = [
@@ -40,6 +41,7 @@ const navigation = [
     { name: 'רווח והפסד', href: '/dashboard/pnl', icon: TrendingUp, roles: ['admin'] },
     { name: 'סוכנים', href: '/dashboard/agents', icon: Users, roles: ['admin'] },
     { name: 'מרכזיה', href: '/dashboard/callcenter', icon: Phone, roles: ['admin'] },
+    { name: 'סורק פייסבוק', href: '/dashboard/facebook-leads', icon: Facebook, roles: ['admin'] },
     { name: 'הגדרות', href: '/dashboard/settings', icon: Settings, roles: ['admin'] },
 ];
 

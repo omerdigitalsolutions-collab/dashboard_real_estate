@@ -55,6 +55,7 @@ export interface Agency {
         propertiesEnabled: boolean;
         strictness: 'strict' | 'flexible';
     };
+    facebookScraper?: FacebookScraperConfig;
     createdAt: Timestamp;
 }
 
@@ -585,4 +586,47 @@ export interface CollaborationRequest {
     terms?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+}
+
+// ─── Facebook Scraper ────────────────────────────────────────────────────────
+
+export interface FBGroupConfig {
+    url: string;
+    defaultCity: string;
+    name?: string;
+}
+
+export interface FacebookScraperConfig {
+    enabled: boolean;
+    groups: FBGroupConfig[];
+    updatedAt?: Timestamp;
+}
+
+export type FBLeadStatus = 'new' | 'contacted' | 'irrelevant';
+export type FBLeadType = 'PRIVATE' | 'BROKER';
+
+export interface FBLead {
+    id: string;
+    agencyId: string;
+    sourceGroup: string;
+    city: string;
+    publisherName: string;
+    publishedAt: string;
+    text: string;
+    postUrl: string;
+    phone: string | null;
+    thumbnail: string | null;
+    type: FBLeadType;
+    leadId: string | null;
+    propertyId: string | null;
+    status: FBLeadStatus;
+    createdAt: Timestamp;
+}
+
+export interface FBGroupSearchResult {
+    name: string;
+    url: string;
+    followerText: string | null;
+    isPrivate: boolean;
+    description: string;
 }

@@ -50,6 +50,7 @@ const PendingApproval = lazy(() => import('./pages/PendingApproval'));
 const ExploreGallery = lazy(() => import('./pages/ExploreGallery'));
 const Marketplace = lazy(() => import('./pages/Marketplace'));
 const CallCenter = lazy(() => import('./pages/CallCenter'));
+const FBLeads = lazy(() => import('./pages/FBLeads'));
 
 /** Wraps the dashboard and renders the lock screen if billing is expired.
  *  Super admins bypass the lock entirely — they have no agency billing. */
@@ -162,6 +163,7 @@ function App() {
             <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             <Route path="marketplace" element={<ErrorBoundary><Marketplace /></ErrorBoundary>} />
             <Route path="callcenter" element={<ErrorBoundary><CallCenter /></ErrorBoundary>} />
+            <Route path="facebook-leads" element={<ErrorBoundary><FBLeads /></ErrorBoundary>} />
             <Route path="contracts" element={<ErrorBoundary><Contracts /></ErrorBoundary>} />
             <Route path="contracts/:dealId/edit" element={<ErrorBoundary><ContractEditor /></ErrorBoundary>} />
             <Route path="contracts/:contractId/logs" element={<ErrorBoundary><ContractAuditLog /></ErrorBoundary>} />

@@ -4,6 +4,7 @@ import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
+import { claimProperty } from '../services/propertyService';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSuperAdmin } from '../hooks/useSuperAdmin';
 import { useSuperAdminAllCityProperties } from '../hooks/useSuperAdminAllCityProperties';
@@ -44,7 +45,8 @@ export default function Properties() {
     const propertiesLoading = isSuperAdmin ? cityLoading : agencyLoading;
 
     const [search, setSearch] = useState('');
-    const [mainFilter, setMainFilter] = useState<'my' | 'general'>('my');
+    const [mainFilter, setMainFilter] = useState<'my' | 'general' | 'pool'>('my');
+    const [claimingPropertyId, setClaimingPropertyId] = useState<string | null>(null);
 
     // Super admin always shows the general pool (all city properties)
     useEffect(() => {
@@ -217,23 +219,41 @@ export default function Properties() {
         }
     };
 
+    const handleClaimProperty = async (prop: Property) => {
+        if (!prop.id || claimingPropertyId) return;
+        setClaimingPropertyId(prop.id);
+        try {
+            await claimProperty(prop.id);
+            setToast('הנכס שויך אליך בהצלחה');
+            setTimeout(() => setToast(''), 3000);
+        } catch (err: any) {
+            alert(err?.message || 'שגיאה בשיוך הנכס');
+        } finally {
+            setClaimingPropertyId(null);
+        }
+    };
+
     const filtered = filteredPropertiesByTime.filter((prop: Property) => {
         const normSearch = normalizeCity(search);
         const matchesSearch = !normSearch ||
             (prop.address?.city && normalizeCity(prop.address.city).includes(normSearch)) ||
             (prop.address?.fullAddress && normalizeCity(prop.address.fullAddress).includes(normSearch));
-        
+
         const isAssignedToMe = prop.management?.assignedAgentId === currentUid;
         const isMyProperty = isAgent
             ? (isAssignedToMe && !prop.isGlobalCityProperty && prop.status !== 'draft')
             : (!prop.isGlobalCityProperty && prop.status !== 'draft');
         const isGeneralPool = prop.isGlobalCityProperty;
+        const isUnassignedPool = !prop.isGlobalCityProperty && !prop.management?.assignedAgentId && prop.status !== 'draft';
         const isDraft = isAgent
             ? (prop.status === 'draft' && isAssignedToMe)
             : prop.status === 'draft';
 
         // Filter by Main Tab
-        const matchesMain = mainFilter === 'my' ? (isMyProperty || isDraft) : isGeneralPool;
+        const matchesMain =
+            mainFilter === 'my' ? (isMyProperty || isDraft) :
+            mainFilter === 'pool' ? isUnassignedPool :
+            isGeneralPool;
         if (!matchesMain) return false;
 
         // Filter by Sub Tab
@@ -309,8 +329,11 @@ export default function Properties() {
     const tabCounts = useMemo(() => {
         const myProps = filteredPropertiesByTime.filter(p => !p.isGlobalCityProperty || p.status === 'draft');
         const generalProps = filteredPropertiesByTime.filter(p => p.isGlobalCityProperty);
-        
-        const currentMainSet = mainFilter === 'my' ? myProps : generalProps;
+        const poolProps = filteredPropertiesByTime.filter(p =>
+            !p.isGlobalCityProperty && !p.management?.assignedAgentId && p.status !== 'draft'
+        );
+
+        const currentMainSet = mainFilter === 'my' ? myProps : mainFilter === 'pool' ? poolProps : generalProps;
 
         return {
             all: currentMainSet.length,
@@ -321,6 +344,7 @@ export default function Properties() {
             // Global totals for main tabs
             myTotal: myProps.length,
             generalTotal: generalProps.length,
+            poolTotal: poolProps.length,
         };
     }, [filteredPropertiesByTime, mainFilter]);
 
@@ -567,35 +591,52 @@ export default function Properties() {
                         <button
                             onClick={() => setMainFilter('my')}
                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                                mainFilter === 'my' 
-                                ? 'bg-white text-blue-600 shadow-sm' 
+                                mainFilter === 'my'
+                                ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Building size={16} />
                             הנכסים שלי
                         </button>
-                        <button
-                            onClick={() => {
-                                if (!features.canAccessSourcing && !isSuperAdmin) {
-                                    setShowUpgradeModal(true);
-                                    return;
-                                }
-                                setMainFilter('general');
-                                setSubFilter('all');
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                                mainFilter === 'general' 
-                                ? 'bg-white text-cyan-600 shadow-sm' 
-                                : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                        >
-                            <Search size={16} />
-                            מאגר כללי
-                            {!features.canAccessSourcing && (
-                                <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-lg border border-amber-200">Pro</span>
-                            )}
-                        </button>
+                        {isAgent ? (
+                            <button
+                                onClick={() => {
+                                    setMainFilter('pool');
+                                    setSubFilter('all');
+                                }}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                    mainFilter === 'pool'
+                                    ? 'bg-white text-purple-600 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Search size={16} />
+                                מאגר הסוכנות
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => {
+                                    if (!features.canAccessSourcing && !isSuperAdmin) {
+                                        setShowUpgradeModal(true);
+                                        return;
+                                    }
+                                    setMainFilter('general');
+                                    setSubFilter('all');
+                                }}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                                    mainFilter === 'general'
+                                    ? 'bg-white text-cyan-600 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Search size={16} />
+                                מאגר כללי
+                                {!features.canAccessSourcing && (
+                                    <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-lg border border-amber-200">Pro</span>
+                                )}
+                            </button>
+                        )}
                     </div>
 
                     {/* Sub Filter Tabs (Mobile) */}
@@ -759,8 +800,8 @@ export default function Properties() {
                                 <button
                                     onClick={() => setMainFilter('my')}
                                     className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                                        mainFilter === 'my' 
-                                        ? 'bg-white shadow-md text-blue-600' 
+                                        mainFilter === 'my'
+                                        ? 'bg-white shadow-md text-blue-600'
                                         : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                                     }`}
                                 >
@@ -770,27 +811,47 @@ export default function Properties() {
                                         {tabCounts.myTotal}
                                     </span>
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        if (!features.canAccessSourcing) {
-                                            setShowUpgradeModal(true);
-                                            return;
-                                        }
-                                        setMainFilter('general');
-                                        setSubFilter('all');
-                                    }}
-                                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                                        mainFilter === 'general' 
-                                        ? 'bg-white shadow-md text-cyan-600' 
-                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
-                                    }`}
-                                >
-                                    <Search size={16} />
-                                    מאגר כללי
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${mainFilter === 'general' ? 'bg-cyan-50 text-cyan-500' : 'bg-slate-200 text-slate-500'}`}>
-                                        {tabCounts.generalTotal}
-                                    </span>
-                                </button>
+                                {isAgent ? (
+                                    <button
+                                        onClick={() => {
+                                            setMainFilter('pool');
+                                            setSubFilter('all');
+                                        }}
+                                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                            mainFilter === 'pool'
+                                            ? 'bg-white shadow-md text-purple-600'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                        }`}
+                                    >
+                                        <Search size={16} />
+                                        מאגר הסוכנות
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${mainFilter === 'pool' ? 'bg-purple-50 text-purple-600' : 'bg-slate-200 text-slate-500'}`}>
+                                            {tabCounts.poolTotal}
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            if (!features.canAccessSourcing) {
+                                                setShowUpgradeModal(true);
+                                                return;
+                                            }
+                                            setMainFilter('general');
+                                            setSubFilter('all');
+                                        }}
+                                        className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                                            mainFilter === 'general'
+                                            ? 'bg-white shadow-md text-cyan-600'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                                        }`}
+                                    >
+                                        <Search size={16} />
+                                        מאגר כללי
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${mainFilter === 'general' ? 'bg-cyan-50 text-cyan-500' : 'bg-slate-200 text-slate-500'}`}>
+                                            {tabCounts.generalTotal}
+                                        </span>
+                                    </button>
+                                )}
                             </div>
                         )}
                         {!isMobile && (
@@ -1113,6 +1174,17 @@ export default function Properties() {
                                                     צור עסקה
                                                 </button>
                                             )}
+                                            {mainFilter === 'pool' && isAgent && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleClaimProperty(prop); }}
+                                                    disabled={claimingPropertyId === prop.id}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                                                    title="שייך נכס אליך"
+                                                >
+                                                    <UserIcon size={13} />
+                                                    {claimingPropertyId === prop.id ? 'משייך...' : 'שייך אלי'}
+                                                </button>
+                                            )}
                                             {!prop.isGlobalCityProperty && prop.status !== 'draft' && prop.collaborationStatus !== 'collaborative' && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleShareToMarketplace(prop); }}
@@ -1344,6 +1416,16 @@ export default function Properties() {
                                                                 title="שתף למרקטפלייס"
                                                             >
                                                                 <Building2 size={16} />
+                                                            </button>
+                                                        )}
+                                                        {mainFilter === 'pool' && isAgent && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleClaimProperty(prop); }}
+                                                                disabled={claimingPropertyId === prop.id}
+                                                                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0 disabled:opacity-50"
+                                                                title="שייך נכס אליך"
+                                                            >
+                                                                <UserIcon size={16} />
                                                             </button>
                                                         )}
                                                         {!prop.readonly && !prop.isGlobalCityProperty && (!isAgent || prop.management?.assignedAgentId === currentUid) && (

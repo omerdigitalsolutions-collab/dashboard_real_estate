@@ -92,7 +92,7 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'monthlyGoals', 'yearlyGoals', 'settings',
               'agencyName', 'slogan', 'officePhone', 'licenseNumber', 'mainServiceArea', 'specialization',
-              'whatsappIntegration', 'weBotConfig', 'distributionConfig', 'updatedAt'
+              'whatsappIntegration', 'weBotConfig', 'distributionConfig', 'facebookScraper', 'updatedAt'
             ])
           );
       allow delete: if isSuperAdmin();
@@ -561,6 +561,32 @@ service cloud.firestore {
         inAgency(resource.data.agencyId)
       );
       allow create, update, delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // FB LEADS — written by Cloud Function (Admin SDK).
+    // Agency admins can read their own records and update only the status field.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /fb_leads/{leadId} {
+      allow read: if isAuthed() && (
+        isSuperAdmin() ||
+        inAgency(resource.data.agencyId)
+      );
+      allow create: if false;
+      allow update: if isAuthed()
+        && inAgency(resource.data.agencyId)
+        && isAdmin()
+        && agencyIdUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow delete: if isAuthed() && isAgencyAdmin(resource.data.agencyId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SHARED GROUPS — global Facebook group knowledge base, Cloud Function writes
+    // ══════════════════════════════════════════════════════════════════════════
+    match /shared_groups/{groupId} {
+      allow read: if isAuthed();
+      allow write: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
