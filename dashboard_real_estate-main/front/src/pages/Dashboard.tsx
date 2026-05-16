@@ -15,7 +15,7 @@ import AddTaskModal from '../components/modals/AddTaskModal';
 import ImportModal from '../components/modals/ImportModal';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { calculatePipelineStats } from '../utils/analytics';
-import { Loader2, Upload, Edit3, Save, LayoutGrid, Calendar } from 'lucide-react';
+import { Loader2, Upload, Edit3, Save, LayoutGrid, Calendar, RefreshCw } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,10 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { TimeRange, AppUser } from '../types';
 import { getAgencyTeam } from '../services/teamService';
+import { httpsCallable } from 'firebase/functions';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { functions, db } from '../config/firebase';
+import { useSuperAdmin } from '../hooks/useSuperAdmin';
 
 // ─── Default layouts per tab (12-column grid, row-height = 80px) ────────────
 // Finance tab: KPI commissions, financial chart, agency expenses
@@ -56,8 +60,13 @@ const DEFAULT_LAYOUT_OFFICE: LayoutItem[] = [
 export default function Dashboard() {
   const { deals, tasks, leads, properties, loading, agencySettings, rawAgency } = useLiveDashboardData();
   const { userData } = useAuth();
+  const { isSuperAdmin } = useSuperAdmin();
   const { preferences, saveTabLayout, updatePreferences } = usePreferences();
   const navigate = useNavigate();
+
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapToast, setBootstrapToast] = useState('');
+  const [cityMeta, setCityMeta] = useState<Record<string, { propertiesBootstrapped?: boolean; propertiesLastDailySync?: { toDate: () => Date } }>>({});
 
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -201,6 +210,34 @@ export default function Dashboard() {
     }));
   }, [currentLayout, isEditing]);
 
+  useEffect(() => {
+    const cities: string[] = rawAgency?.settings?.activeGlobalCities ?? [];
+    if (!cities.length) return;
+    const unsubs = cities.map(city =>
+      onSnapshot(doc(db, 'cities', city), snap => {
+        setCityMeta(prev => ({ ...prev, [city]: snap.data() as any }));
+      })
+    );
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawAgency?.settings?.activeGlobalCities?.join(',')]);
+
+  const handleBootstrap = async () => {
+    setBootstrapping(true);
+    try {
+      const fn = httpsCallable(functions, 'properties-bootstrapCityProperties');
+      const result = await fn({}) as any;
+      const total = (result.data.results as any[]).reduce((s: number, r: any) => s + (r.imported ?? 0), 0);
+      setBootstrapToast(`יובאו ${total} נכסים בהצלחה`);
+      setTimeout(() => setBootstrapToast(''), 5000);
+    } catch (err: any) {
+      setBootstrapToast(err?.message || 'שגיאה בייבוא נכסים');
+      setTimeout(() => setBootstrapToast(''), 5000);
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center min-h-[500px]">
@@ -313,6 +350,53 @@ export default function Dashboard() {
         <div className="mb-4 px-4 py-2.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-sm text-blue-400 flex items-center gap-2 shadow-[0_0_10px_rgba(59,130,246,0.1)]">
           <Edit3 size={14} className="shrink-0" />
           מצב עריכה פעיל — גרור ושנה גודל ווידג'טים לפי רצונך, לאחר מכן לחץ <strong className="mr-1 text-blue-300">"שמור עיצוב"</strong>.
+        </div>
+      )}
+
+      {/* ── Bootstrap Banner ─────────────────────────────────────────── */}
+      {!isSuperAdmin && (() => {
+        const cities: string[] = rawAgency?.settings?.activeGlobalCities ?? [];
+        if (!cities.length || cities.some(c => !(c in cityMeta))) return null;
+        const allBootstrapped = cities.every(c => cityMeta[c]?.propertiesBootstrapped);
+        const lastSync = cities
+          .map(c => cityMeta[c]?.propertiesLastDailySync?.toDate())
+          .filter(Boolean)
+          .sort((a, b) => b!.getTime() - a!.getTime())[0];
+
+        if (allBootstrapped) {
+          return (
+            <div className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 text-slate-400 rounded-xl px-4 py-2.5 mb-4 text-sm">
+              <RefreshCw size={14} className="text-green-400 shrink-0" />
+              <span className="font-medium text-slate-300">✅ מסונכרן מיד2 ומדלן</span>
+              {lastSync && (
+                <span className="text-slate-500 text-xs">
+                  · עודכן {lastSync.toLocaleDateString('he-IL')} {lastSync.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-4 bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-3 mb-4">
+            <div className="flex-1">
+              <p className="font-semibold text-sm text-blue-300">ייבוא ראשוני של נכסים מהשוק</p>
+              <p className="text-xs text-blue-400/80 mt-0.5">יובאו עד 300 נכסים מיד2 ומדלן עבור הערים: {cities.join(', ')}</p>
+            </div>
+            <button
+              onClick={handleBootstrap}
+              disabled={bootstrapping}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0"
+            >
+              {bootstrapping ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {bootstrapping ? 'מייבא...' : 'ייבוא ראשוני'}
+            </button>
+          </div>
+        );
+      })()}
+      {bootstrapToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-xl">
+          {bootstrapToast}
         </div>
       )}
 

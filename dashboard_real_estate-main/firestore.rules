@@ -582,6 +582,15 @@ service cloud.firestore {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // FACEBOOK LEADS — global seller posts imported from Facebook groups.
+    // Written by Cloud Functions (Admin SDK) only. Any authenticated user reads.
+    // ══════════════════════════════════════════════════════════════════════════
+    match /facebook_leads/{leadId} {
+      allow read: if isAuthed();
+      allow write: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // SHARED GROUPS — global Facebook group knowledge base, Cloud Function writes
     // ══════════════════════════════════════════════════════════════════════════
     match /shared_groups/{groupId} {

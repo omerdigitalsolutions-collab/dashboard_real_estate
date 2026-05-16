@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles, Calendar, ShieldCheck } from 'lucide-react';
+import { Plus, Search, Trash2, Upload, MessageCircle, LayoutGrid, List, Building2, User as UserIcon, Pencil, Building, Handshake, ArrowUpDown, Phone, Sparkles, Calendar, ShieldCheck, Loader2, RefreshCw } from 'lucide-react';
 import { useAgents, useLeads, useDeals, useAgency } from '../hooks/useFirestoreData';
 import { useLiveDashboardData } from '../hooks/useLiveDashboardData';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,9 @@ import { deleteProperty, updateProperty } from '../services/propertyService';
 import { normalizeCity } from '../utils/stringUtils';
 import { translatePropertyKind } from '../utils/formatters';
 import { COMMERCIAL_PROPERTY_TYPES } from '../utils/constants';
+import { httpsCallable } from 'firebase/functions';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { functions, db } from '../config/firebase';
 
 export default function Properties() {
     const { properties: agencyProperties = [], loading: agencyLoading } = useLiveDashboardData();
@@ -66,6 +69,8 @@ export default function Properties() {
     const [selectedPropertyIds, setSelectedPropertyIds] = useState<Set<string>>(new Set());
     const [propertiesToCreateDeal, setPropertiesToCreateDeal] = useState<Property[]>([]);
     const [toast, setToast] = useState('');
+    const [bootstrapping, setBootstrapping] = useState(false);
+    const [cityMeta, setCityMeta] = useState<Record<string, { propertiesBootstrapped?: boolean; propertiesLastDailySync?: { toDate: () => Date } }>>({});
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -216,6 +221,34 @@ export default function Properties() {
             alert('שגיאה בשיתוף הנכס');
         } finally {
             setTimeout(() => setToast(''), 3000);
+        }
+    };
+
+    useEffect(() => {
+        const cities: string[] = agency?.settings?.activeGlobalCities ?? [];
+        if (!cities.length) return;
+        const unsubs = cities.map(city =>
+            onSnapshot(doc(db, 'cities', city), snap => {
+                setCityMeta(prev => ({ ...prev, [city]: snap.data() as any }));
+            })
+        );
+        return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [agency?.settings?.activeGlobalCities?.join(',')]);
+
+    const handleBootstrap = async () => {
+        setBootstrapping(true);
+        try {
+            const fn = httpsCallable(functions, 'properties-bootstrapCityProperties');
+            const result = await fn({}) as any;
+            const total = (result.data.results as any[]).reduce((s, r) => s + (r.imported ?? 0), 0);
+            setToast(`יובאו ${total} נכסים בהצלחה`);
+            setTimeout(() => setToast(''), 5000);
+        } catch (err: any) {
+            setToast(err?.message || 'שגיאה בייבוא נכסים');
+            setTimeout(() => setToast(''), 5000);
+        } finally {
+            setBootstrapping(false);
         }
     };
 
@@ -951,6 +984,49 @@ export default function Properties() {
 
                 {/* Content Area */}
                 <div className="p-4 bg-slate-50/50 min-h-[400px]">
+                    {/* Bootstrap banner — only in general tab, non-superadmin */}
+                    {mainFilter === 'general' && !isSuperAdmin && (() => {
+                        const cities: string[] = agency?.settings?.activeGlobalCities ?? [];
+                        if (!cities.length) return null;
+                        // Wait until all city docs have loaded before showing any banner
+                        if (cities.some(c => !(c in cityMeta))) return null;
+                        const allBootstrapped = cities.every(c => cityMeta[c]?.propertiesBootstrapped);
+                        const lastSync = cities
+                            .map(c => cityMeta[c]?.propertiesLastDailySync?.toDate())
+                            .filter(Boolean)
+                            .sort((a, b) => b!.getTime() - a!.getTime())[0];
+
+                        if (allBootstrapped) {
+                            return (
+                                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-2.5 mb-4 text-sm">
+                                    <RefreshCw size={14} className="text-green-500 shrink-0" />
+                                    <span className="font-medium">✅ מסונכרן מיד2 ומדלן</span>
+                                    {lastSync && (
+                                        <span className="text-slate-400 text-xs">
+                                            · עודכן {lastSync.toLocaleDateString('he-IL')} {lastSync.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div className="flex items-center gap-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3 mb-4">
+                                <div className="flex-1">
+                                    <p className="font-semibold text-sm">ייבוא ראשוני של נכסים מהשוק</p>
+                                    <p className="text-xs text-blue-600 mt-0.5">יובאו נכסים מיד2 ומדלן עבור הערים: {cities.join(', ')}</p>
+                                </div>
+                                <button
+                                    onClick={handleBootstrap}
+                                    disabled={bootstrapping}
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0"
+                                >
+                                    {bootstrapping ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                    {bootstrapping ? 'מייבא...' : 'ייבוא ראשוני'}
+                                </button>
+                            </div>
+                        );
+                    })()}
                     {propertiesLoading ? (
                         <div className="text-center text-slate-400 text-sm py-12">טוען נתונים...</div>
                     ) : sorted.length === 0 ? (
@@ -1013,6 +1089,11 @@ export default function Properties() {
                                                 {prop.isGlobalCityProperty && (
                                                     <span className="flex items-center gap-1 bg-cyan-600/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
                                                         🔍 מאגר ציבורי
+                                                    </span>
+                                                )}
+                                                {prop.isNew && (
+                                                    <span className="flex items-center gap-1 bg-green-600/90 backdrop-blur-md text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm animate-pulse">
+                                                        ✨ חדש
                                                     </span>
                                                 )}
                                             </div>

@@ -39,6 +39,7 @@ export interface Agency {
         themeColor?: string;
         customDealStages?: CustomDealStage[];
         activeGlobalCities?: string[]; // Multiple service regions to pull global properties from
+        activeProCities?: string[];    // Cities enrolled for Pro WhatsApp notifications
         franchisePercent?: number;     // % of each deal commission paid to franchisor
         monthlyFranchiseFee?: number;  // Fixed monthly fee paid to franchisor (₪)
     };
@@ -56,6 +57,7 @@ export interface Agency {
         strictness: 'strict' | 'flexible';
     };
     facebookScraper?: FacebookScraperConfig;
+    lastActiveAt?: Timestamp;
     createdAt: Timestamp;
 }
 
@@ -240,6 +242,9 @@ export interface Property {
     yad2Link?: string;
     listingUrl?: string;
     leadId?: string;
+    isNew?: boolean;
+    addedToHomerAt?: Timestamp;
+    publishedAt?: Timestamp;
 
     address: {
         city: string;
@@ -298,6 +303,7 @@ export interface Property {
     originalSource?: string;
     externalLink?: string;
     listingId?: string;
+    agentListing?: boolean;
     hasAgent?: boolean;
 
     // Collaboration fields
@@ -629,4 +635,22 @@ export interface FBGroupSearchResult {
     followerText: string | null;
     isPrivate: boolean;
     description: string;
+}
+
+export interface FacebookLead {
+    id: string;
+    city: string;
+    propertyId: string;
+    publisherName: string;
+    phone: string | null;
+    text: string;
+    postUrl: string;
+    thumbnail: string | null;
+    publishedAt: Timestamp | string | null;
+    sourceGroup: string;
+    groupName: string;
+    source: string;
+    status: 'new' | 'contacted' | 'irrelevant';
+    lastSeenAt?: Timestamp;
+    createdAt: Timestamp;
 }

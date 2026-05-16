@@ -28,6 +28,7 @@ import {
     Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { CustomPlanBuilder } from '../components/CustomPlanBuilder';
 
 export default function LandingPage() {
     const { userData } = useAuth();
@@ -719,6 +720,11 @@ export default function LandingPage() {
                                 </div>
                             );
                         })}
+                    </div>
+
+                    {/* Dynamic Add-on Pricing Calculator */}
+                    <div className="mt-16 px-4">
+                        <CustomPlanBuilder />
                     </div>
 
                     {/* Global Limit Disclaimer - Simple Version */}

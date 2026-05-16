@@ -1,5 +1,5 @@
 import { HttpsError } from 'firebase-functions/v2/https';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { CallableRequest } from 'firebase-functions/v2/https';
 
 const db = getFirestore();
@@ -52,11 +52,18 @@ export async function validateUserAuth(request: CallableRequest<any>): Promise<A
         throw new HttpsError('permission-denied', 'Your account has been suspended.');
     }
 
-    return {
+    const result = {
         uid,
         agencyId: userData.agencyId,
         role: userData.role || 'agent',
         isActive: true, // We already threw an error if it was false on line 51
         email
     };
+
+    // Non-blocking activity ping — drives dailyCityPropertiesSync city filtering
+    db.collection('agencies').doc(userData.agencyId).update({
+        lastActiveAt: FieldValue.serverTimestamp(),
+    }).catch(() => {});
+
+    return result;
 }

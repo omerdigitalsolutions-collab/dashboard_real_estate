@@ -38,6 +38,9 @@ import { getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewPrope
 import { onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking } from './properties/matchmaking';
 import { processNaturalLanguageSearch } from './properties/processNaturalLanguageSearch';
 import { importPropertyFromUrl } from './properties/importPropertyFromUrl';
+import { bootstrapCityProperties } from './properties/bootstrapCityProperties';
+import { dailyCityPropertiesSync } from './properties/dailyCityPropertiesSync';
+import { resetIsNew } from './properties/resetIsNew';
 
 // ── Leads Module ──────────────────────────────────────────────────────────────
 import { webhookReceiveLead } from './leads/webhookReceiveLead';
@@ -99,6 +102,8 @@ import { superAdminImportGlobalPropertiesV2, superAdminGetImportMappingV2, super
 // ── Facebook Module ────────────────────────────────────────────────────────────
 import { searchFBGroups } from './facebook/searchGroups';
 import { refreshFBCookies } from './facebook/refreshCookies';
+import { bootstrapFBSellers } from './facebook/bootstrapFBSellers';
+import { dailyFBSync } from './facebook/dailyFBSync';
 
 // ── Scheduled Jobs ─────────────────────────────────────────────────────────────
 import { checkTrialExpiry } from './scheduled/checkTrialExpiry';
@@ -126,7 +131,7 @@ export const agencies = { createAgencyAccount, checkPhoneAvailable, captureLead 
 export const users = { inviteAgent, sendAgentInvite, updateAgentRole, toggleAgentStatus, deleteAgent, completeAgentSetup, addAgentManually, generateAgencyJoinCode, saveAgencyJoinCode, joinWithCode, claimInviteToken, updateAgentAvailability };
 export const distribution = { distributeLead, distributeProperty };
 export const tasks = { cleanupTasksOnLeadDelete, cleanupTasksOnPropertyDelete };
-export const properties = { getLiveProperties, addProperty, updateProperty, claimProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl };
+export const properties = { getLiveProperties, addProperty, updateProperty, claimProperty, deleteProperty, getCoordinates, getAddressSuggestions, getPlaceDetails, geocodeNewProperty, onPropertyCreatedMatchmaking, onGlobalPropertyCreatedMatchmaking, onWhatsappPropertyCreatedMatchmaking, processNaturalLanguageSearch, importPropertyFromUrl, bootstrapCityProperties };
 export const leads = { webhookReceiveLead, addLead, updateLead, getLiveLeads, matchPropertiesForLead };
 export const catalogs = { generateCatalog, updateCatalog: updateCatalogCF, getLiveProperties: catalogsGetLiveProperties, onPropertyLiked };
 export const alerts = { triggerSystemAlert };
@@ -154,7 +159,7 @@ export const superadmin = {
     superAdminCleanExistingDescriptionsV2
 };
 
-export const facebook = { searchFBGroups, refreshFBCookies };
+export const facebook = { searchFBGroups, refreshFBCookies, bootstrapFBSellers };
 
 export const deals = { addDeal, updateDeal, deleteDeal };
 
@@ -162,7 +167,7 @@ export const contracts = { signDeal, onContractInstanceSigned };
 
 export const billing = { onSubscriptionRequestCreated, onNewAgencyRegistered };
 
-export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign, syncCalendar, facebookScanner };
+export const scheduled = { checkTrialExpiry, checkTrialExpiryAlerts, weeklyFollowUp, followUpCampaign, syncCalendar, facebookScanner, dailyCityPropertiesSync, resetIsNew, dailyFBSync };
 
 export { stripeWebhookHandler as stripeWebhook } from './stripeWebhook';
 export { maxPaymentWebhook } from './maxWebhook';

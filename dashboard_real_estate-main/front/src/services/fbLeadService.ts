@@ -7,10 +7,11 @@ import {
     doc,
     updateDoc,
     serverTimestamp,
+    limit,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../config/firebase';
-import { FBLead, FBLeadStatus, FacebookScraperConfig, FBGroupSearchResult } from '../types';
+import { FBLead, FBLeadStatus, FacebookScraperConfig, FBGroupSearchResult, FacebookLead } from '../types';
 
 /**
  * Real-time listener for an agency's scraped Facebook leads, newest first.
@@ -54,4 +55,30 @@ export async function searchFBGroups(
     );
     const result = await fn({ query });
     return result.data;
+}
+
+export async function bootstrapFBSellers(): Promise<{
+    results: { city: string; status: 'imported' | 'cached' | 'error'; imported?: number }[];
+}> {
+    const fn = httpsCallable(
+        getFunctions(undefined, 'europe-west1'),
+        'facebook-bootstrapFBSellers'
+    );
+    const result = await fn({});
+    return result.data as any;
+}
+
+export function getLiveFacebookLeadsByCity(
+    city: string,
+    callback: (leads: FacebookLead[]) => void
+): () => void {
+    const q = query(
+        collection(db, 'facebook_leads'),
+        where('city', '==', city),
+        orderBy('createdAt', 'desc'),
+        limit(100)
+    );
+    return onSnapshot(q, (snap) => {
+        callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as FacebookLead)));
+    });
 }
